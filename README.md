@@ -1,92 +1,272 @@
-# streambet_api
+# Streambet Backend
 
+This is the backend for the Streambet platform, a live betting application that combines livestreamed entertainment with real-time wagering using virtual tokens.
 
+## Tech Stack
 
-## Getting started
+- NestJS with TypeScript
+- PostgreSQL with TypeORM
+- Redis for caching
+- WebSockets for real-time communication
+- JWT for authentication
+- Stripe for payments
+- Google OAuth for social login
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Getting Started
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### Prerequisites
 
-## Add your files
+- Node.js (v18+)
+- PostgreSQL
+- Redis
+- Docker (optional, for containerization)
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+### Environment Setup
+
+Create a `.env.development` file in the root directory with the following variables:
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.revyrie.co/revyrieai/streambet_api.git
-git branch -M main
-git push -uf origin main
+# Server
+NODE_ENV=development
+PORT=3000
+CLIENT_URL=http://localhost:3000
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_DATABASE=streambet_dev
+
+# JWT
+JWT_SECRET=your_jwt_secret_key
+JWT_EXPIRES_IN=1d
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+
+# Stripe
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
 ```
 
-## Integrate with your tools
+### Installation
 
-- [ ] [Set up project integrations](https://gitlab.revyrie.co/revyrieai/streambet_api/-/settings/integrations)
+```bash
+# Install dependencies
+npm install
 
-## Collaborate with your team
+# Run the development server
+npm run start:dev
+```
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### Docker Setup
 
-## Test and Deploy
+To run the application using Docker:
 
-Use the built-in continuous integration in GitLab.
+```bash
+# Build and start containers
+docker-compose up -d
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+# Stop containers
+docker-compose down
+```
 
-***
+## API Documentation
 
-# Editing this README
+The API documentation is automatically generated using Swagger/OpenAPI.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+After starting the application, visit:
+```
+http://localhost:3000/api/docs
+```
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+This interactive documentation provides:
+- Detailed endpoint descriptions
+- Request/response schemas
+- Ability to test endpoints directly from the browser
+- Authentication support
 
-## Name
-Choose a self-explaining name for your project.
+## Database Management
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Setup
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Before running the application, make sure you have PostgreSQL running with a database created matching your configuration:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```sql
+CREATE DATABASE streambet_dev;
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+### Migrations
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+Database migrations are handled using TypeORM. Here are the main commands:
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+# Generate a migration from entity changes
+npm run migration:generate --name=YourMigrationName
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Create an empty migration file
+npm run migration:create --name=YourMigrationName
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+# Run pending migrations
+npm run migration:run
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+# Revert the most recent migration
+npm run migration:revert
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+# Generate and run initial migration (first-time setup)
+npm run db:sync
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+See `src/database/README.md` for more detailed instructions on working with migrations.
 
-## License
-For open source projects, say how it is licensed.
+## API Endpoints
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### Authentication
+
+- `POST /api/auth/register` - Register a new user
+- `POST /api/auth/login` - Login with email and password
+- `GET /api/auth/me` - Get current user profile
+- `GET /api/auth/google` - Google OAuth login
+- `GET /api/auth/google/callback` - Google OAuth callback
+
+### Betting
+
+- `GET /api/betting/streams` - Get all active streams
+- `GET /api/betting/streams/:id` - Get stream details
+- `GET /api/betting/streams/:id/betting-variables` - Get betting options for a stream
+- `POST /api/betting/place-bet` - Place a bet
+- `DELETE /api/betting/bets/:id` - Cancel a bet
+- `GET /api/betting/user-bets` - Get user's betting history
+
+### Wallets
+
+- `GET /api/wallets/balance` - Get user's wallet balance
+- `GET /api/wallets/transactions` - Get user's transaction history
+
+### Payments
+
+- `POST /api/payments/create-checkout-session` - Create a Stripe checkout session
+- `POST /api/payments/webhook` - Stripe webhook endpoint
+- `POST /api/payments/auto-reload` - Set up auto-reload for betting
+
+### Admin
+
+- `POST /api/admin/streams` - Create a new stream
+- `PATCH /api/admin/streams/:id/status` - Update stream status
+- `POST /api/admin/betting-variables` - Create betting options
+- `PATCH /api/admin/betting-variables/:id/lock` - Lock betting
+- `POST /api/admin/betting-variables/:id/declare-winner` - Declare a winner
+- `GET /api/admin/users` - Get all users
+- `PATCH /api/admin/users/:id/wallet` - Adjust user's wallet balance
+
+## WebSocket Events
+
+### Client to Server
+
+- `joinStream` - Join a stream room
+- `leaveStream` - Leave a stream room
+- `placeBet` - Place a bet in real-time
+- `sendChatMessage` - Send a chat message
+
+### Server to Client
+
+- `joinedStream` - Confirmation of joining a stream
+- `bettingUpdate` - Updates on betting statistics
+- `chatMessage` - New chat message
+- `bettingLocked` - Betting has been locked
+- `winnerDeclared` - Winner has been declared
+- `notification` - User-specific notifications
+
+## CI/CD Pipeline
+
+The application uses GitLab CI/CD for automated testing, building, and deployment to AWS ECS. The pipeline is configured to deploy to different environments based on the branch:
+
+- `dev` branch → Development environment
+- `qa` branch → QA environment
+- `staging` branch → Staging environment
+- `prod` branch → Production environment (manual deployment)
+
+### Pipeline Stages
+
+1. **Validate**: Runs linting to ensure code quality
+2. **Test**: Runs unit tests with temporary PostgreSQL and Redis instances
+3. **Build**: Builds Docker image and pushes to AWS ECR
+4. **Deploy**: Updates ECS task definition and deploys to the corresponding environment
+
+### AWS Integration
+
+The pipeline integrates with AWS services:
+
+- **AWS Parameter Store**: Fetches environment-specific configuration (database credentials, API keys, etc.)
+- **AWS ECR**: Stores Docker images for each environment
+- **AWS ECS**: Runs the application containers
+
+### Required AWS Resources
+
+Before using the pipeline, ensure the following AWS resources are set up:
+
+1. **ECR Repository**: `streambet-backend`
+2. **ECS Clusters**: One for each environment (`streambet-dev`, `streambet-qa`, `streambet-staging`, `streambet-prod`)
+3. **ECS Task Definitions**: One for each environment (`streambet-backend-dev`, `streambet-backend-qa`, etc.)
+4. **ECS Services**: One for each environment
+
+### Required GitLab Variables
+
+Set the following variables in GitLab CI/CD settings:
+
+- `AWS_ACCESS_KEY_ID`: AWS access key with necessary permissions
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key
+- `AWS_ACCOUNT_ID`: Your AWS account ID
+
+### Parameter Store Structure
+
+Parameters should be organized in the Parameter Store with the following path structure:
+
+```
+/streambet/dev/DB_HOST
+/streambet/dev/DB_PORT
+/streambet/dev/DB_USERNAME
+...and so on
+```
+
+For each environment (dev, qa, staging, prod).
+
+## AWS Infrastructure Setup
+
+The AWS infrastructure is currently set up manually. The following resources are required:
+
+### ECR Repository
+- Create a repository named `streambet-backend` to store Docker images
+
+### ECS Clusters
+- Create clusters for each environment: `streambet-dev`, `streambet-qa`, `streambet-staging`, `streambet-prod`
+
+### ECS Task Definitions
+- Create task definitions for each environment with the following configuration:
+  - Family: `streambet-backend-{env}` (e.g., `streambet-backend-dev`)
+  - Network mode: `awsvpc`
+  - CPU: `256`
+  - Memory: `512`
+  - Container name: `streambet-backend`
+  - Container port: `3000`
+  - Environment variables:
+    - `NODE_ENV`: environment name (`dev`, `qa`, `staging`, `prod`)
+    - `AWS_REGION`: your AWS region
+
+### ECS Services
+- Create services for each environment linked to the corresponding task definition and cluster
+- Configure networking with appropriate security groups and subnets
+
+### IAM Roles
+- Create an execution role for ECS tasks with permissions to pull from ECR and access CloudWatch logs
+- Create a task role with permissions to access AWS Parameter Store
+
+### Parameter Store
+- Create parameters for each environment (see Parameter Store Structure above)
