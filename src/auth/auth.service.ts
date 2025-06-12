@@ -12,7 +12,6 @@ import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
-import { ConfigService } from '@nestjs/config';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -29,27 +28,44 @@ export class AuthService {
     private usersService: UsersService,
     private walletsService: WalletsService,
     private jwtService: JwtService,
-    private configService: ConfigService,
   ) {}
 
   async register(
     registerDto: RegisterDto,
   ): Promise<{ user: User; accessToken: string }> {
-    const { username, email, password, tosAccepted } = registerDto;
-
+    const {
+      email,
+      password,
+      profileImageUrl,
+      isOlder,
+      tosAccepted,
+      username,
+      lastKnownIP,
+    } = registerDto;
+    if (!isOlder) {
+      throw new BadRequestException(
+        'Access is restricted to individuals who are 18 years of age or older.',
+      );
+    }
     if (!tosAccepted) {
-      throw new BadRequestException('Terms of Service must be accepted');
+      throw new BadRequestException(
+        'Please accept the Terms of Service to continue.',
+      );
     }
 
     // Check if user with email or username already exists
     const existingEmail = await this.usersService.findByEmail(email);
     if (existingEmail) {
-      throw new ConflictException('Email already in use');
+      throw new ConflictException(
+        'This email address is already associated with an existing account',
+      );
     }
 
     const existingUsername = await this.usersService.findByUsername(username);
     if (existingUsername) {
-      throw new ConflictException('Username already taken');
+      throw new ConflictException(
+        'The chosen username is unavailable. Please select a different one.',
+      );
     }
 
     // Hash password
@@ -61,9 +77,11 @@ export class AuthService {
       username,
       email,
       password: hashedPassword,
-      tosAccepted: true,
-      tosAcceptedAt: new Date(),
+      profile_image_url: profileImageUrl,
+      tos_acceptance_timestamp: new Date(),
+      account_creation_date: new Date(),
       role: UserRole.USER,
+      last_known_ip: lastKnownIP,
     });
 
     // Create wallet for the user
