@@ -4,7 +4,7 @@ import { config } from 'dotenv';
 import { join } from 'path';
 
 // Load environment variables from .env file
-config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
+config({ path: '.env' });
 
 // Create configuration service to read environment variables
 const configService = new ConfigService();
