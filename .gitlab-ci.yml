@@ -1,0 +1,154 @@
+stages:
+  - validate
+  - test
+  - build
+  - deploy
+
+variables:
+  AWS_REGION: us-east-1  # Change to your AWS region
+  ECR_REPOSITORY: streambet-backend
+  DOCKER_TLS_CERTDIR: "/certs"
+  NODE_ENV: production
+
+# Cache dependencies between jobs
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+
+# Template for environment-specific configuration
+.environment_config:
+  before_script:
+    - |
+      # Install AWS CLI and other necessary tools
+      apk add --no-cache aws-cli jq curl
+
+      # Get environment variables from AWS Parameter Store
+      export $(aws ssm get-parameters-by-path \
+        --region $AWS_REGION \
+        --path "/streambet/$CI_ENVIRONMENT_NAME/" \
+        --with-decryption \
+        --recursive \
+        --query "Parameters[*].[Name,Value]" \
+        --output text | sed 's|/streambet/'"$CI_ENVIRONMENT_NAME"'/||' | tr '\t' '=' | tr '\n' ' ')
+
+# Lint and validate stage
+lint:
+  stage: validate
+  image: node:18-alpine
+  script:
+    - npm ci
+    - npm run lint
+  only:
+    - dev
+    - qa
+    - staging
+    - prod
+
+# Run tests
+test:
+  stage: test
+  image: node:18-alpine
+  services:
+    - postgres:14-alpine
+    - redis:alpine
+  variables:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: streambet_test
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_USERNAME: postgres
+    DB_PASSWORD: postgres
+    DB_DATABASE: streambet_test
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  script:
+    - npm ci
+    - npm run test
+  only:
+    - dev
+    - qa
+    - staging
+    - prod
+
+# Build Docker image and push to ECR
+build:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  extends: .environment_config
+  script:
+    - |
+      # Login to AWS ECR
+      aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      
+      # Build the Docker image with environment-specific tag
+      docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA .
+      docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-latest
+      
+      # Push Docker image to ECR
+      docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA
+      docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-latest
+  only:
+    - dev
+    - qa
+    - staging
+    - prod
+
+# Deploy templates for different environments
+.deploy_template: &deploy_definition
+  stage: deploy
+  image: 
+    name: amazon/aws-cli
+    entrypoint: [""]
+  extends: .environment_config
+  script:
+    - |
+      # Update ECS task definition with new image
+      TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition streambet-backend-$CI_ENVIRONMENT_NAME --region $AWS_REGION)
+      
+      # Create new task definition revision with the new image
+      NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA" '.taskDefinition | .containerDefinitions[0].image = $IMAGE | {containerDefinitions: .containerDefinitions, family: .family, taskRoleArn: .taskRoleArn, executionRoleArn: .executionRoleArn, networkMode: .networkMode, volumes: .volumes, placementConstraints: .placementConstraints, requiresCompatibilities: .requiresCompatibilities, cpu: .cpu, memory: .memory}')
+      
+      # Register the new task definition
+      aws ecs register-task-definition --region $AWS_REGION --cli-input-json "$NEW_TASK_DEFINITION"
+      
+      # Update the service to use the new task definition
+      aws ecs update-service --cluster streambet-$CI_ENVIRONMENT_NAME --service streambet-backend-$CI_ENVIRONMENT_NAME --task-definition streambet-backend-$CI_ENVIRONMENT_NAME --force-new-deployment --region $AWS_REGION
+      
+      echo "Deployment to $CI_ENVIRONMENT_NAME environment initiated"
+
+# Dev deployment
+deploy:dev:
+  <<: *deploy_definition
+  environment:
+    name: dev
+  only:
+    - dev
+
+# QA deployment
+deploy:qa:
+  <<: *deploy_definition
+  environment:
+    name: qa
+  only:
+    - qa
+
+# Staging deployment
+deploy:staging:
+  <<: *deploy_definition
+  environment:
+    name: staging
+  only:
+    - staging
+
+# Production deployment
+deploy:prod:
+  <<: *deploy_definition
+  environment:
+    name: prod
+  only:
+    - prod
+  when: manual  # Manual deployment for production 
