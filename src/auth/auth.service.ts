@@ -96,20 +96,24 @@ export class AuthService {
   async login(
     loginDto: LoginDto,
   ): Promise<{ user: User; accessToken: string }> {
-    const { email, password } = loginDto;
+    const { identifier, password } = loginDto;
 
     // Find user by email
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailOrUsername(identifier);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(
+        `We couldn't find an account with the provided username or email.`,
+      );
     }
 
     // Check if password is correct
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(
+        'The password you entered is incorrect. Give it another try.',
+      );
     }
 
     // Update last login
