@@ -72,7 +72,7 @@ export class AuthController {
     };
   }
 
-  @Post('username')
+  @Get('username')
   async usernameExists(@Body() usernameDto: UserNameDto) {
     const username = usernameDto.username;
     await this.authService.usernameExists(username);
