@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -180,5 +182,14 @@ export class AuthService {
     const accessToken = this.generateToken(user);
 
     return { user, accessToken };
+  }
+  async usernameExists(username: string) {
+    const existingUsername = await this.usersService.findByUsername(username);
+    if (existingUsername) {
+      throw new ConflictException(
+        'The chosen username is unavailable. Please select a different one.',
+      );
+    }
+    throw new HttpException('Username is available', HttpStatus.OK);
   }
 }

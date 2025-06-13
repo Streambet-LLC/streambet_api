@@ -12,6 +12,20 @@ import {
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
+export class UserNameDto {
+  @ApiProperty({
+    description: 'Username of the user',
+    example: 'johndoe',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsDefined()
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message:
+      'Username can only contain alphanumeric characters, underscores, and hyphens',
+  })
+  username: string;
+}
 export class RegisterDto {
   @ApiProperty({
     description: 'Email address of the user',
