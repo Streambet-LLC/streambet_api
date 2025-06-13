@@ -9,7 +9,11 @@ import {
   Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto, UserRegistrationResponseDto } from './dto/register.dto';
+import {
+  RegisterDto,
+  UserNameDto,
+  UserRegistrationResponseDto,
+} from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
@@ -79,6 +83,12 @@ export class AuthController {
    * @param loginDto - The login details including email and password.
    * @returns The user details along with an access token.
    */
+  @Get('username')
+  async usernameExists(@Body() usernameDto: UserNameDto) {
+    const username = usernameDto.username;
+    await this.authService.usernameExists(username);
+  }
+
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({
     status: 409,
