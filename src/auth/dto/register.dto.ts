@@ -88,3 +88,20 @@ export class RegisterDto {
   @IsIP()
   lastKnownIP?: string;
 }
+
+export class UserRegistrationResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  username: string;
+
+  @ApiProperty()
+  email: string;
+
+  @ApiProperty()
+  accessToken: string;
+
+  @ApiProperty()
+  role: string;
+}

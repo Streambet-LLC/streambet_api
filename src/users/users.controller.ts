@@ -5,6 +5,7 @@ import {
   Body,
   UseGuards,
   Request,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
@@ -16,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
+import { UserProfileResponseDto } from './dto/response.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -26,19 +28,36 @@ interface RequestWithUser extends Request {
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-
-  @ApiOperation({ summary: 'Get current user profile' })
+  /**
+   * Retrieves the profile of the currently logged-in user.
+   * @param req - The request object containing user information.
+   * @returns The user profile details.
+   */
+  @ApiOperation({
+    summary: 'Get all users',
+    description: 'This endpoint retrieves a list of all registered users.',
+  })
+  @ApiOperation({
+    summary: 'Get current login user details',
+    description:
+      'This endpoint retrieves the profile of the currently logged-in user.',
+  })
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',
-    type: User,
+    type: [UserProfileResponseDto],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getProfile(@Request() req: RequestWithUser): Promise<User> {
-    return this.usersService.findOne(req.user.id);
+  getProfile(@Request() req: RequestWithUser) {
+    const data = this.usersService.findOne(req.user.id);
+    return {
+      data,
+      message: 'User profile retrieved successfully',
+      statusCode: HttpStatus.OK,
+    };
   }
 
   @ApiOperation({ summary: 'Update user profile' })
@@ -76,7 +95,7 @@ export class UsersController {
   updateProfile(
     @Request() req: RequestWithUser,
     @Body() updateData: Partial<User>,
-  ): Promise<User> {
+  ) {
     // Remove sensitive fields that shouldn't be updated directly
     const {
       password: _password,

@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  HttpCode,
   HttpStatus,
   UseGuards,
   Request,
@@ -10,7 +9,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, UserRegistrationResponseDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
@@ -21,6 +20,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { User } from '../users/entities/user.entity';
 
@@ -42,64 +42,66 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
   ) {}
+  /**
+   * Registers a new user with the provided registration details.
+   * @param registerDto - The registration details including  email, password, profileImageUrl, isOlder, tosAccepted, username, lastKnownIP,
+   * @returns The created user details along with an access token.
+   */
 
-  @ApiOperation({ summary: 'Register a new user' })
-  @ApiResponse({
-    status: 201,
-    description: 'User successfully registered',
-    schema: {
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        username: { type: 'string' },
-        email: { type: 'string' },
-        accessToken: { type: 'string' },
-      },
-    },
-  })
   @ApiResponse({ status: 400, description: 'Bad request - validation error' })
   @ApiResponse({
     status: 409,
     description: 'Conflict - Email or username already exists',
   })
+  @ApiOperation({
+    summary: 'Register a new user',
+    description:
+      'This endpoint allows users to register by providing their email, password, profileImageUrl(optional), isOlder, tosAccepted, username, lastKnownIP(optional). It returns the created user details along with an access token.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'User created successfully.',
+    type: UserRegistrationResponseDto,
+  })
+  @ApiBody({ type: RegisterDto })
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
-    const { user, accessToken } = await this.authService.register(registerDto);
+    const data = await this.authService.register(registerDto);
     return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      accessToken,
+      data,
+      message: 'User registered successfully',
+      statusCode: HttpStatus.CREATED,
     };
   }
 
-  @ApiOperation({ summary: 'Login with email and password' })
+  /**
+   * Logs in a user with the provided email and password.
+   * @param loginDto - The login details including email and password.
+   * @returns The user details along with an access token.
+   */
+  @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({
-    status: 200,
-    description: 'User successfully logged in',
-    schema: {
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        username: { type: 'string' },
-        email: { type: 'string' },
-        role: { type: 'string' },
-        accessToken: { type: 'string' },
-      },
-    },
+    status: 409,
+    description: 'Conflict - Invalid credentials',
+  })
+  @ApiOperation({
+    summary: 'Login a user',
+    description:
+      'This endpoint allows users to log in by providing their email/username and password. It returns the user details along with an access token.',
   })
   @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid credentials',
+    status: 201,
+    description: 'User login successfully.',
+    type: UserRegistrationResponseDto,
   })
-  @HttpCode(HttpStatus.OK)
+  @ApiBody({ type: LoginDto })
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
-    const { user, accessToken } = await this.authService.login(loginDto);
+    const data = await this.authService.login(loginDto);
     return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      accessToken,
+      data,
+      message: 'User logged in successfully',
+      statusCode: HttpStatus.OK,
     };
   }
 

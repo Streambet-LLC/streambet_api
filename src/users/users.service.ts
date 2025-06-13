@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { UserProfileResponseDto } from './dto/response.dto';
 
 @Injectable()
 export class UsersService {
@@ -15,13 +16,29 @@ export class UsersService {
       order: { createdAt: 'DESC' },
     });
   }
-
-  async findOne(id: string): Promise<User> {
-    const user = await this.usersRepository.findOne({ where: { id } });
-    if (!user) {
-      throw new NotFoundException('The requested user could not be located.');
+  /**
+   * Retrieves a user by their ID.
+   * @param id - The ID of the user to retrieve.
+   * @returns The user details or throws NotFoundException if not found.
+   */
+  async findOne(id: string): Promise<UserProfileResponseDto> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { id } });
+      if (!user) {
+        throw new NotFoundException('The requested user could not be located.');
+      }
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        profileImageUrl: user.profile_image_url,
+        lastKnownIP: user.last_known_ip,
+      };
+    } catch (e) {
+      console.error(`Error finding user with ID ${id}:`, e);
+      throw new NotFoundException(`Error finding user with ID ${id}`);
     }
-    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -44,7 +61,10 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async update(id: string, userData: Partial<User>): Promise<User> {
+  async update(
+    id: string,
+    userData: Partial<User>,
+  ): Promise<UserProfileResponseDto> {
     await this.usersRepository.update({ id }, userData);
     return this.findOne(id);
   }

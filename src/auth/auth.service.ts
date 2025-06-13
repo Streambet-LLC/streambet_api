@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, UserRegistrationResponseDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
@@ -30,99 +30,123 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  /**
+   * Registers a new user with the provided registration details.
+   * @param registerDto - The registration details including email, password, profileImageUrl, isOlder, tosAccepted, username, lastKnownIP.
+   * @returns The created user details along with an access token.
+   */
   async register(
     registerDto: RegisterDto,
-  ): Promise<{ user: User; accessToken: string }> {
-    const {
-      email,
-      password,
-      profileImageUrl,
-      isOlder,
-      tosAccepted,
-      username,
-      lastKnownIP,
-    } = registerDto;
-    if (!isOlder) {
-      throw new BadRequestException(
-        'Access is restricted to individuals who are 18 years of age or older.',
-      );
+  ): Promise<UserRegistrationResponseDto> {
+    try {
+      const {
+        email,
+        password,
+        profileImageUrl,
+        isOlder,
+        tosAccepted,
+        username,
+        lastKnownIP,
+      } = registerDto;
+      if (!isOlder) {
+        throw new BadRequestException(
+          'Access is restricted to individuals who are 18 years of age or older.',
+        );
+      }
+      if (!tosAccepted) {
+        throw new BadRequestException(
+          'Please accept the Terms of Service to continue.',
+        );
+      }
+
+      // Check if user with email or username already exists
+      const existingEmail = await this.usersService.findByEmail(email);
+      if (existingEmail) {
+        throw new ConflictException(
+          'This email address is already associated with an existing account',
+        );
+      }
+
+      const existingUsername = await this.usersService.findByUsername(username);
+      if (existingUsername) {
+        throw new ConflictException(
+          'The chosen username is unavailable. Please select a different one.',
+        );
+      }
+
+      // Hash password
+      const salt = await bcrypt.genSalt();
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create user
+      const user = await this.usersService.create({
+        username,
+        email,
+        password: hashedPassword,
+        profile_image_url: profileImageUrl,
+        tos_acceptance_timestamp: new Date(),
+        account_creation_date: new Date(),
+        role: UserRole.USER,
+        last_known_ip: lastKnownIP,
+      });
+
+      // Create wallet for the user
+      await this.walletsService.create(user.id);
+
+      // Generate JWT
+      const accessToken = this.generateToken(user);
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        accessToken,
+      };
+    } catch (e) {
+      console.error('Error in AuthService.register:', e);
+      throw new BadRequestException('An error occurred during registration.');
     }
-    if (!tosAccepted) {
-      throw new BadRequestException(
-        'Please accept the Terms of Service to continue.',
-      );
-    }
-
-    // Check if user with email or username already exists
-    const existingEmail = await this.usersService.findByEmail(email);
-    if (existingEmail) {
-      throw new ConflictException(
-        'This email address is already associated with an existing account',
-      );
-    }
-
-    const existingUsername = await this.usersService.findByUsername(username);
-    if (existingUsername) {
-      throw new ConflictException(
-        'The chosen username is unavailable. Please select a different one.',
-      );
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create user
-    const user = await this.usersService.create({
-      username,
-      email,
-      password: hashedPassword,
-      profile_image_url: profileImageUrl,
-      tos_acceptance_timestamp: new Date(),
-      account_creation_date: new Date(),
-      role: UserRole.USER,
-      last_known_ip: lastKnownIP,
-    });
-
-    // Create wallet for the user
-    await this.walletsService.create(user.id);
-
-    // Generate JWT
-    const accessToken = this.generateToken(user);
-
-    return { user, accessToken };
   }
 
-  async login(
-    loginDto: LoginDto,
-  ): Promise<{ user: User; accessToken: string }> {
-    const { identifier, password } = loginDto;
+  /**
+   * Logs in a user with the provided email and password.
+   * @param loginDto - The login details including email/username and password.
+   * @returns The user details along with an access token.
+   */
+  async login(loginDto: LoginDto): Promise<UserRegistrationResponseDto> {
+    try {
+      const { identifier, password } = loginDto;
+      const user = await this.usersService.findByEmailOrUsername(identifier);
 
-    // Find user by email
-    const user = await this.usersService.findByEmailOrUsername(identifier);
+      if (!user) {
+        throw new UnauthorizedException(
+          `We couldn't find an account with the provided username or email.`,
+        );
+      }
+      const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!user) {
-      throw new UnauthorizedException(
-        `We couldn't find an account with the provided username or email.`,
-      );
+      if (!isPasswordValid) {
+        throw new UnauthorizedException(
+          'The password you entered is incorrect. Give it another try.',
+        );
+      }
+      await this.usersService.update(user.id, { lastLogin: new Date() });
+
+      // Generate JWT
+      const accessToken = this.generateToken(user);
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        accessToken,
+      };
+    } catch (e) {
+      console.error('Error in AuthService.login:', e);
+      throw new BadRequestException('An error occurred during login.');
     }
-
-    // Check if password is correct
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException(
-        'The password you entered is incorrect. Give it another try.',
-      );
-    }
-
-    // Update last login
-    await this.usersService.update(user.id, { lastLogin: new Date() });
-
-    // Generate JWT
-    const accessToken = this.generateToken(user);
-
-    return { user, accessToken };
   }
 
   generateToken(user: User): string {
