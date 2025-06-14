@@ -51,8 +51,8 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getProfile(@Request() req: RequestWithUser) {
-    const data = this.usersService.findOne(req.user.id);
+  async getProfile(@Request() req: RequestWithUser) {
+    const data = await this.usersService.findOne(req.user.id);
     return {
       data,
       message: 'User profile retrieved successfully',

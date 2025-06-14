@@ -95,7 +95,7 @@ export class AuthController {
     description: 'Conflict - Invalid credentials',
   })
   @ApiOperation({
-    summary: 'Login a user',
+    summary: 'Login  user using email or',
     description:
       'This endpoint allows users to log in by providing their email/username and password. It returns the user details along with an access token.',
   })

@@ -52,12 +52,12 @@ export class AuthService {
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
-          'Access is restricted to individuals who are 18 years of age or older.',
+          'You must be over 18 years old to access this service',
         );
       }
       if (!tosAccepted) {
         throw new BadRequestException(
-          'Please accept the Terms of Service to continue.',
+          'Please accept the Terms of Service to continue',
         );
       }
 
@@ -107,7 +107,7 @@ export class AuthService {
       };
     } catch (e) {
       console.error('Error in AuthService.register:', e);
-      throw new BadRequestException('An error occurred during registration.');
+      throw new BadRequestException((e as Error).message);
     }
   }
 
@@ -147,7 +147,7 @@ export class AuthService {
       };
     } catch (e) {
       console.error('Error in AuthService.login:', e);
-      throw new BadRequestException('An error occurred during login.');
+      throw new BadRequestException((e as Error).message);
     }
   }
 
