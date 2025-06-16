@@ -9,6 +9,9 @@ export enum UserRole {
 
 @Entity('users')
 export class User extends BaseEntity {
+  @Column({ length: 255, type: 'varchar', nullable: true })
+  name: string;
+
   @Column({ unique: true, length: 255, type: 'varchar' })
   username: string;
 
@@ -20,54 +23,81 @@ export class User extends BaseEntity {
   password: string;
 
   @Column({ length: 255, type: 'varchar', nullable: true })
-  profile_image_url: string;
+  city: string;
 
-  @Column({ unique: true, length: 255, type: 'varchar', nullable: true })
-  google_id: string;
+  @Column({ length: 255, type: 'varchar', nullable: true })
+  state: string;
 
-  @Column({ nullable: true, type: 'jsonb', default: {} })
-  notification_preferences: string;
+  @Column({
+    length: 255,
+    type: 'varchar',
+    nullable: true,
+    name: 'profile_image_url',
+  })
+  profileImageUrl: string;
+
+  @Column({
+    unique: true,
+    length: 255,
+    type: 'varchar',
+    nullable: true,
+    name: 'google_id',
+  })
+  googleId: string;
+
+  @Column({
+    nullable: true,
+    type: 'jsonb',
+    default: {},
+    name: 'notification_preferences',
+  })
+  notificationPreferences: string;
 
   @Column({
     type: 'timestamp',
     nullable: true,
     default: () => 'CURRENT_TIMESTAMP',
+    name: 'tos_acceptance_timestamp',
   })
-  @Column({ nullable: true })
-  tos_acceptance_timestamp: Date;
+  tosAcceptanceTimestamp: Date;
 
   @Column({
     type: 'timestamp',
     nullable: true,
     default: () => 'CURRENT_TIMESTAMP',
+    name: 'account_creation_date',
   })
-  @Column({ nullable: true, type: 'date' })
-  account_creation_date: Date;
+  accountCreationDate: Date;
 
-  @Column({ nullable: true, type: 'inet' })
-  last_known_ip: string;
+  @Column({ nullable: true, type: 'inet', name: 'last_known_ip' })
+  lastKnownIp: string;
 
-  @Column({ nullable: true, type: 'boolean' })
-  is_suspended: string;
+  @Column({ nullable: true, type: 'boolean', name: 'is_suspended' })
+  isSuspended: string;
 
-  @Column({ nullable: true, type: 'boolean' })
-  is_banned: string;
+  @Column({ nullable: true, type: 'boolean', name: 'is_banned' })
+  isBanned: string;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, name: 'is_google_account' })
   isGoogleAccount: boolean;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'last_login' })
   lastLogin: Date;
 
-  @Column({ type: 'boolean', default: true, nullable: true })
+  @Column({
+    type: 'boolean',
+    default: true,
+    nullable: true,
+    name: 'tos_accepted',
+  })
   tosAccepted: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'tos_accepted_at' })
   tosAcceptedAt: Date;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;
 }

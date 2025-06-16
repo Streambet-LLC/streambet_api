@@ -40,28 +40,28 @@ export class UserResponseDto {
     example: 'https://example.com/images/avatar.png',
     nullable: true,
   })
-  profile_image_url: string;
+  profileImageUrl: string;
 
   @ApiProperty({ example: null, nullable: true })
-  google_id: string | null;
+  googleId: string | null;
 
   @ApiProperty({ example: {}, type: Object })
-  notification_preferences: string;
+  notificationPreferences: string;
 
   @ApiProperty({ example: '2025-06-12T10:27:57.689Z' })
-  tos_acceptance_timestamp: Date;
+  tosAcceptanceTimestamp: Date;
 
   @ApiProperty({ example: '2025-06-12' })
-  account_creation_date: Date;
+  accountCreationDate: Date;
 
   @ApiProperty({ example: null, nullable: true })
-  last_known_ip: string | null;
+  lastKnownIp: string | null;
 
   @ApiProperty({ example: null, nullable: true })
-  is_suspended: string | null;
+  isSuspended: string | null;
 
   @ApiProperty({ example: null, nullable: true })
-  is_banned: string | null;
+  isBanned: string | null;
 
   @ApiProperty({ example: false })
   isGoogleAccount: boolean;

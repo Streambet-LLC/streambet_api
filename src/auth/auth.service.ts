@@ -84,11 +84,11 @@ export class AuthService {
         username,
         email,
         password: hashedPassword,
-        profile_image_url: profileImageUrl,
-        tos_acceptance_timestamp: new Date(),
-        account_creation_date: new Date(),
+        profileImageUrl,
+        tosAcceptanceTimestamp: new Date(),
+        accountCreationDate: new Date(),
         role: UserRole.USER,
-        last_known_ip: lastKnownIp,
+        lastKnownIp,
       });
 
       // Create wallet for the user

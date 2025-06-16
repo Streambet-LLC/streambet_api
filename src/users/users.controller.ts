@@ -15,9 +15,9 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiBody,
 } from '@nestjs/swagger';
-import { UserProfileResponseDto } from './dto/response.dto';
+import { UserProfileResponseDto } from './dto/user.response.dto';
+import { ProfileUpdateDto } from './dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -60,27 +60,16 @@ export class UsersController {
     };
   }
 
-  @ApiOperation({ summary: 'Update user profile' })
-  @ApiBody({
-    schema: {
-      properties: {
-        username: { type: 'string', description: 'Username' },
-        email: {
-          type: 'string',
-          format: 'email',
-          description: 'Email address',
-        },
-        profile: {
-          type: 'object',
-          properties: {
-            displayName: { type: 'string' },
-            bio: { type: 'string' },
-            avatarUrl: { type: 'string' },
-          },
-          description: 'User profile information',
-        },
-      },
-    },
+  /**
+   * Updates the profile of the currently logged-in user.
+   * @param req - The request object containing user information.
+   * @param profileUpdateDto - The data to update the user profile.
+   * @returns The updated user profile details.
+   */
+  @ApiOperation({
+    summary: 'Update user profile',
+    description:
+      'This endpoint updates the profile of the currently logged-in user.',
   })
   @ApiResponse({
     status: 200,
@@ -92,17 +81,18 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Patch('me')
-  updateProfile(
+  async updateProfile(
     @Request() req: RequestWithUser,
-    @Body() updateData: Partial<User>,
+    @Body() profileUpdateDto: ProfileUpdateDto,
   ) {
-    // Remove sensitive fields that shouldn't be updated directly
-    const {
-      password: _password,
-      role: _role,
-      isActive: _isActive,
-      ...safeUpdateData
-    } = updateData;
-    return this.usersService.update(req.user.id, safeUpdateData);
+    const data = await this.usersService.profileUpdate(
+      req.user.id,
+      profileUpdateDto,
+    );
+    return {
+      data,
+      message: 'User profile updated successfully',
+      statusCode: HttpStatus.OK,
+    };
   }
 }

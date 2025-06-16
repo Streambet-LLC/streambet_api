@@ -2,7 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import { UserResponseDto } from './dto/response.dto';
+import * as bcrypt from 'bcrypt';
+import { ProfileUpdateDto } from './dto/user.requests.dto';
+import { UserResponseDto } from './dto/user.response.dto';
 
 @Injectable()
 export class UsersService {
@@ -61,5 +63,64 @@ export class UsersService {
   async update(id: string, userData: Partial<User>): Promise<UserResponseDto> {
     await this.usersRepository.update({ id }, userData);
     return this.findOne(id);
+  }
+
+  async profileUpdate(
+    id: string,
+    profileUpdateDto: ProfileUpdateDto,
+  ): Promise<UserResponseDto> {
+    try {
+      const existingUserObj = await this.usersRepository.findOne({
+        where: { id },
+      });
+      if (!existingUserObj) {
+        throw new NotFoundException('User not found');
+      }
+      if (profileUpdateDto?.newPassword) {
+        if (profileUpdateDto?.currentPassword) {
+          if (
+            profileUpdateDto?.currentPassword === profileUpdateDto?.newPassword
+          ) {
+            throw new NotFoundException(
+              'Current password and new password cannot be the same',
+            );
+          }
+          const isCurrentPasswordValid = await bcrypt.compare(
+            profileUpdateDto.currentPassword,
+            existingUserObj.password,
+          );
+          if (!isCurrentPasswordValid) {
+            throw new NotFoundException('Current password is incorrect');
+          }
+          const salt = await bcrypt.genSalt();
+          const hashedNewPassword = await bcrypt.hash(
+            profileUpdateDto.newPassword,
+            salt,
+          );
+          profileUpdateDto.password = hashedNewPassword;
+          delete profileUpdateDto.currentPassword;
+          delete profileUpdateDto.newPassword;
+        } else {
+          throw new NotFoundException(
+            'Current password is required to update the password',
+          );
+        }
+      }
+      if (profileUpdateDto?.username) {
+        const existingUserWithUsername = await this.findByUsername(
+          profileUpdateDto.username,
+        );
+        if (existingUserWithUsername && existingUserWithUsername.id !== id) {
+          throw new NotFoundException(
+            'Username already exists. Please choose a different username.',
+          );
+        }
+      }
+      await this.usersRepository.update({ id }, profileUpdateDto);
+      return this.findOne(id);
+    } catch (e) {
+      console.error(`Error updating profile for user with ID ${id}:`, e);
+      throw new NotFoundException((e as Error).message);
+    }
   }
 }
