@@ -166,7 +166,7 @@ export class AuthController {
     // Redirect to frontend with token
     const clientUrl = this.configService.get<string>(
       'CLIENT_URL',
-      'http://localhost:3000',
+      'http://localhost:8080',
     );
 
     await Promise.resolve(); // Add await to satisfy linter
