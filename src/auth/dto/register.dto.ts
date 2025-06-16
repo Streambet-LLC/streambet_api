@@ -100,7 +100,7 @@ export class RegisterDto {
   })
   @IsOptional()
   @IsIP()
-  lastKnownIP?: string;
+  lastKnownIp?: string;
 }
 
 export class UserRegistrationResponseDto {

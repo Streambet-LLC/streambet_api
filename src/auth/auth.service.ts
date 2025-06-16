@@ -47,7 +47,7 @@ export class AuthService {
         isOlder,
         tosAccepted,
         username,
-        lastKnownIP,
+        lastKnownIp,
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
@@ -88,7 +88,7 @@ export class AuthService {
         tos_acceptance_timestamp: new Date(),
         account_creation_date: new Date(),
         role: UserRole.USER,
-        last_known_ip: lastKnownIP,
+        last_known_ip: lastKnownIp,
       });
 
       // Create wallet for the user
