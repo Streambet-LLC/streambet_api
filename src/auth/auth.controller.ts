@@ -7,6 +7,7 @@ import {
   Request,
   Get,
   Res,
+  Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -84,9 +85,10 @@ export class AuthController {
    * @returns The user details along with an access token.
    */
   @Get('username')
-  async usernameExists(@Body() usernameDto: UserNameDto) {
+  async usernameExists(@Query() usernameDto: UserNameDto) {
     const username = usernameDto.username;
-    await this.authService.usernameExists(username);
+    const data = await this.authService.usernameExists(username);
+    return data;
   }
 
   @ApiResponse({ status: 400, description: 'Bad request' })

@@ -3,7 +3,6 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
-  HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -213,11 +212,33 @@ export class AuthService {
   }
   async usernameExists(username: string) {
     const existingUsername = await this.usersService.findByUsername(username);
+
     if (existingUsername) {
-      throw new ConflictException(
-        'The chosen username is unavailable. Please select a different one.',
-      );
+      const suggestion = await this.generateUsernameSuggestion(username);
+      return {
+        status: HttpStatus.OK,
+        message:
+          'The chosen username is unavailable. Please select a different one.',
+        is_available: false,
+        suggestion,
+      };
     }
-    throw new HttpException('Username is available', HttpStatus.OK);
+
+    return {
+      status: HttpStatus.OK,
+      message: 'Username is available',
+      is_available: true,
+    };
+  }
+
+  private async generateUsernameSuggestion(
+    baseUsername: string,
+  ): Promise<string> {
+    for (let i = 0; i < 10; i++) {
+      const suggestion = `${baseUsername}${Math.floor(100 + Math.random() * 900)}`;
+      const exists = await this.usersService.findByUsername(suggestion);
+      if (!exists) return suggestion;
+    }
+    return `${baseUsername}_${Date.now()}`;
   }
 }
