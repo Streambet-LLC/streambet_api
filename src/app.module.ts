@@ -17,6 +17,8 @@ import throttleConfig from './config/throttle.config';
 import appConfig from './config/app.config';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AssetsModule } from './assets/assets.module';
+import fileConfig from './config/file.config';
 
 @Module({
   imports: [
@@ -27,6 +29,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
         authConfig,
         throttleConfig,
         appConfig,
+        fileConfig,
       ] as ConfigFactory[],
     }),
     TypeOrmModule.forRootAsync({
@@ -62,6 +65,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
       }),
     }),
     AuthModule,
+    AssetsModule,
     UsersModule,
     AdminModule,
     BettingModule,
