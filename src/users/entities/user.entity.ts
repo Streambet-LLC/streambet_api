@@ -70,4 +70,11 @@ export class User extends BaseEntity {
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  @Exclude()
+  refreshToken: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  refreshTokenExpiresAt: Date;
 }

@@ -16,7 +16,11 @@ export const configValidationSchema = Joi.object({
 
   // JWT
   JWT_SECRET: Joi.string().required(),
-  JWT_EXPIRES_IN: Joi.string().default('1d'),
+  JWT_EXPIRES_IN: Joi.string(),
+
+  // Refresh Token
+  REFRESH_TOKEN_SECRET: Joi.string().required(),
+  REFRESH_TOKEN_EXPIRES_IN: Joi.string(),
 
   // Google OAuth
   GOOGLE_CLIENT_ID: Joi.string().required(),

@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -21,6 +22,7 @@ interface GoogleProfile {
     givenName: string;
     familyName?: string;
   };
+  profileImageUrl: string;
 }
 
 @Injectable()
@@ -29,12 +31,13 @@ export class AuthService {
     private usersService: UsersService,
     private walletsService: WalletsService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   /**
    * Registers a new user with the provided registration details.
    * @param registerDto - The registration details including email, password, profileImageUrl, isOlder, tosAccepted, username, lastKnownIP.
-   * @returns The created user details along with an access token.
+   * @returns The created user details along with an access token and refresh token.
    */
   async register(
     registerDto: RegisterDto,
@@ -94,8 +97,9 @@ export class AuthService {
       // Create wallet for the user
       await this.walletsService.create(user.id);
 
-      // Generate JWT
+      // Generate tokens
       const accessToken = this.generateToken(user);
+      const refreshToken = await this.generateRefreshToken(user);
 
       return {
         id: user.id,
@@ -103,6 +107,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         accessToken,
+        refreshToken,
       };
     } catch (e) {
       console.error('Error in AuthService.register:', e);
@@ -113,7 +118,7 @@ export class AuthService {
   /**
    * Logs in a user with the provided email and password.
    * @param loginDto - The login details including email/username and password.
-   * @returns The user details along with an access token.
+   * @returns The user details along with an access token and refresh token.
    */
   async login(loginDto: LoginDto): Promise<UserRegistrationResponseDto> {
     try {
@@ -134,8 +139,9 @@ export class AuthService {
       }
       await this.usersService.update(user.id, { lastLogin: new Date() });
 
-      // Generate JWT
+      // Generate tokens
       const accessToken = this.generateToken(user);
+      const refreshToken = await this.generateRefreshToken(user);
 
       return {
         id: user.id,
@@ -143,6 +149,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         accessToken,
+        refreshToken,
       };
     } catch (e) {
       console.error('Error in AuthService.login:', e);
@@ -150,20 +157,20 @@ export class AuthService {
     }
   }
 
-  generateToken(user: User): string {
-    const payload: JwtPayload = {
-      sub: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    };
-
-    return this.jwtService.sign(payload);
-  }
-
-  verifyToken(token: string): JwtPayload | null {
+  /**
+   * Verifies a JWT refresh token.
+   * @param token - The refresh token to verify.
+   * @returns The decoded payload or null if invalid.
+   */
+  verifyRefreshToken(token: string): JwtPayload | null {
     try {
-      const payload = this.jwtService.verify<JwtPayload>(token);
+      const refreshTokenSecret = this.configService.get<string>(
+        'auth.refreshTokenSecret',
+      );
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: refreshTokenSecret,
+      });
+
       if (
         !payload.sub ||
         !payload.username ||
@@ -179,11 +186,84 @@ export class AuthService {
     }
   }
 
+  /**
+   * Logs out a user by invalidating their refresh token.
+   * @param userId - The user ID.
+   */
+  async logout(userId: string): Promise<void> {
+    try {
+      await this.usersService.update(userId, {
+        refreshToken: null,
+        refreshTokenExpiresAt: null,
+      });
+    } catch (e) {
+      console.error('Error in AuthService.logout:', e);
+      throw new BadRequestException('Error during logout');
+    }
+  }
+
+  generateToken(user: User): string {
+    const payload: JwtPayload = {
+      sub: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    };
+
+    return this.jwtService.sign(payload);
+  }
+
+  async generateRefreshToken(user: User): Promise<string> {
+    const payload: JwtPayload = {
+      sub: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    };
+
+    const refreshTokenSecret = this.configService.get<string>(
+      'auth.refreshTokenSecret',
+    );
+    const refreshTokenExpiresIn = this.configService.get<string>(
+      'auth.refreshTokenExpiresIn',
+    );
+
+    // Generate JWT refresh token
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: refreshTokenSecret,
+      expiresIn: refreshTokenExpiresIn,
+    });
+
+    // Calculate expiration date for database storage
+    const expiresAt = new Date();
+    if (refreshTokenExpiresIn.includes('d')) {
+      const days = parseInt(refreshTokenExpiresIn.replace('d', ''));
+      expiresAt.setDate(expiresAt.getDate() + days);
+    } else if (refreshTokenExpiresIn.includes('h')) {
+      const hours = parseInt(refreshTokenExpiresIn.replace('h', ''));
+      expiresAt.setHours(expiresAt.getHours() + hours);
+    } else if (refreshTokenExpiresIn.includes('m')) {
+      const minutes = parseInt(refreshTokenExpiresIn.replace('m', ''));
+      expiresAt.setMinutes(expiresAt.getMinutes() + minutes);
+    } else if (refreshTokenExpiresIn.includes('s')) {
+      const seconds = parseInt(refreshTokenExpiresIn.replace('s', ''));
+      expiresAt.setSeconds(expiresAt.getSeconds() + seconds);
+    }
+
+    // Save refresh token to database
+    await this.usersService.update(user.id, {
+      refreshToken,
+      refreshTokenExpiresAt: expiresAt,
+    });
+
+    return refreshToken;
+  }
+
   // Method for Google OAuth validation - will be expanded later
   async validateOAuthUser(
     profile: GoogleProfile,
-  ): Promise<{ user: User; accessToken: string }> {
-    const { email, name } = profile;
+  ): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    const { email, name, profileImageUrl } = profile;
 
     let user = await this.usersService.findByEmail(email);
 
@@ -197,20 +277,23 @@ export class AuthService {
         tosAcceptedAt: new Date(),
         role: UserRole.USER,
         password: '',
+        profile_image_url: profileImageUrl,
+        account_creation_date: new Date(),
+        tos_acceptance_timestamp: new Date(),
+        lastLogin: new Date(),
       });
 
       // Create wallet for the user
       await this.walletsService.create(user.id);
     }
 
-    // Update last login
-    await this.usersService.update(user.id, { lastLogin: new Date() });
-
-    // Generate JWT
+    // Generate tokens
     const accessToken = this.generateToken(user);
-
-    return { user, accessToken };
+    const refreshToken = await this.generateRefreshToken(user);
+    await this.usersService.update(user.id, { lastLogin: new Date() });
+    return { user, accessToken, refreshToken };
   }
+
   async usernameExists(username: string) {
     const existingUsername = await this.usersService.findByUsername(username);
 
