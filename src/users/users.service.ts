@@ -55,6 +55,16 @@ export class UsersService {
     });
   }
 
+  async findByRefreshToken(refreshToken: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { refreshToken },
+    });
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+
   async create(userData: Partial<User>): Promise<User> {
     const user = this.usersRepository.create(userData);
     return this.usersRepository.save(user);

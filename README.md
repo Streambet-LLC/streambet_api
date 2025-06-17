@@ -42,6 +42,10 @@ DB_DATABASE=streambet_dev
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=1d
 
+# Refresh Token
+REFRESH_TOKEN_SECRET=your_refresh_token_secret_key
+REFRESH_TOKEN_EXPIRES_IN=30d
+
 # Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
@@ -83,11 +87,13 @@ docker-compose down
 The API documentation is automatically generated using Swagger/OpenAPI.
 
 After starting the application, visit:
+
 ```
 http://localhost:3000/api/docs
 ```
 
 This interactive documentation provides:
+
 - Detailed endpoint descriptions
 - Request/response schemas
 - Ability to test endpoints directly from the browser
@@ -103,9 +109,90 @@ Before running the application, make sure you have PostgreSQL running with a dat
 CREATE DATABASE streambet_dev;
 ```
 
-### Migrations
+### Automatic Database Synchronization
 
-Database migrations are handled using TypeORM. Here are the main commands:
+The application supports automatic database schema synchronization, which automatically creates/updates database tables based on your entity definitions without requiring manual migrations.
+
+#### Environment Variables
+
+Add these to your `.env` file:
+
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_NAME=streambet_dev
+DB_SYNC=true          # Enable automatic schema synchronization
+DB_LOGGING=true       # Enable SQL query logging
+DB_DROP_SCHEMA=false  # Drop and recreate schema (use with caution!)
+```
+
+#### Available Commands
+
+```bash
+# Start development server with auto-sync enabled
+npm run db:sync
+
+# Start production server with auto-sync enabled
+npm run db:sync:prod
+
+# Reset database (drops all tables and recreates them)
+npm run db:reset
+```
+
+#### How It Works
+
+When `DB_SYNC=true`:
+
+1. **Entity Changes**: Any changes to your TypeORM entities (adding fields, changing types, etc.) will automatically be reflected in the database
+2. **Table Creation**: New entities will automatically create corresponding tables
+3. **Column Updates**: Modified entity properties will update existing table columns
+4. **Index Updates**: Changes to entity decorators will update database indexes
+
+#### When to Use Auto-Sync
+
+✅ **Development**: Perfect for rapid development and prototyping
+✅ **Testing**: Great for test environments where you need fresh schemas
+✅ **Small Projects**: Suitable for projects with simple database requirements
+
+❌ **Production**: Not recommended for production environments
+❌ **Complex Migrations**: Not suitable for complex data transformations
+❌ **Team Development**: Can cause conflicts in team environments
+
+#### Example: Adding a New Field
+
+1. **Update Entity**:
+
+```typescript
+// src/users/entities/user.entity.ts
+@Entity()
+export class User extends BaseEntity {
+  // ... existing fields
+
+  @Column({ nullable: true })
+  phoneNumber: string; // New field
+}
+```
+
+2. **Start Server**:
+
+```bash
+npm run db:sync
+```
+
+3. **Result**: The `phoneNumber` column is automatically added to the `users` table!
+
+#### Safety Features
+
+- **Logging**: When `DB_LOGGING=true`, all SQL operations are logged
+- **Validation**: TypeORM validates entity definitions before applying changes
+- **Error Handling**: Invalid schema changes will prevent the application from starting
+
+### Migrations (Alternative Approach)
+
+For production environments or when you need more control, you can use traditional migrations:
 
 ```bash
 # Generate a migration from entity changes
@@ -119,9 +206,6 @@ npm run migration:run
 
 # Revert the most recent migration
 npm run migration:revert
-
-# Generate and run initial migration (first-time setup)
-npm run db:sync
 ```
 
 See `src/database/README.md` for more detailed instructions on working with migrations.
@@ -132,9 +216,92 @@ See `src/database/README.md` for more detailed instructions on working with migr
 
 - `POST /api/auth/register` - Register a new user
 - `POST /api/auth/login` - Login with email and password
+- `POST /api/auth/refresh` - Refresh access token using refresh token
+- `POST /api/auth/logout` - Logout and invalidate refresh token
 - `GET /api/auth/me` - Get current user profile
 - `GET /api/auth/google` - Google OAuth login
 - `GET /api/auth/google/callback` - Google OAuth callback
+
+## Authentication & Refresh Tokens
+
+The application uses JWT (JSON Web Tokens) for authentication with JWT refresh token support for enhanced security.
+
+### Token Types
+
+1. **Access Token**: Short-lived JWT token (default: 7 days) used for API authentication
+2. **Refresh Token**: Long-lived JWT token (default: 30 days) used to obtain new access tokens
+
+### Authentication Flow
+
+1. **Login/Register**: User receives both access token and refresh token (both are JWT tokens)
+2. **API Requests**: Include access token in Authorization header: `Bearer <access_token>`
+3. **Token Refresh**: When access token expires, use refresh token to get new tokens
+4. **Logout**: Invalidates refresh token on server side
+
+### Security Features
+
+- **Separate Secrets**: Access tokens and refresh tokens use different JWT secrets
+- **Database Validation**: Refresh tokens are validated against the database to prevent reuse
+- **Automatic Expiration**: Expired refresh tokens are automatically cleaned up
+- **Token Rotation**: Each refresh operation generates new access and refresh tokens
+- **Guard Protection**: Refresh token endpoint is protected by RefreshTokenGuard for enhanced security
+
+### Guard Architecture
+
+The refresh token endpoint uses a dedicated `RefreshTokenGuard` that:
+
+1. **Extracts Token**: Gets the refresh token from the request body
+2. **JWT Verification**: Validates the JWT refresh token signature and expiration
+3. **User Validation**: Ensures the user exists and is active
+4. **Database Check**: Verifies the token matches the one stored in the database
+5. **Expiration Check**: Validates the database expiration timestamp
+6. **User Injection**: Attaches the validated user to the request for use in the controller
+
+This approach provides multiple layers of security and ensures that only valid, non-expired refresh tokens can be used to obtain new access tokens.
+
+### Example Usage
+
+```bash
+# Login
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"identifier": "user@example.com", "password": "password123"}'
+
+# Response includes both tokens
+{
+  "data": {
+    "id": "user-id",
+    "username": "username",
+    "email": "user@example.com",
+    "role": "user",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "abc123def456..."
+  },
+  "message": "User logged in successfully",
+  "statusCode": 200
+}
+
+# Use access token for API requests
+curl -X GET http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Refresh tokens when access token expires
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "abc123def456..."}'
+
+# Logout (invalidates refresh token)
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### Google OAuth
+
+Google OAuth also supports refresh tokens. After successful Google authentication, users receive both access and refresh tokens via the callback URL:
+
+```
+http://localhost:8080/auth/google-callback?token=<access_token>&refreshToken=<refresh_token>
+```
 
 ### Betting
 
@@ -243,12 +410,15 @@ For each environment (dev, qa, staging, prod).
 The AWS infrastructure is currently set up manually. The following resources are required:
 
 ### ECR Repository
+
 - Create a repository named `streambet-backend` to store Docker images
 
 ### ECS Clusters
+
 - Create clusters for each environment: `streambet-dev`, `streambet-qa`, `streambet-staging`, `streambet-prod`
 
 ### ECS Task Definitions
+
 - Create task definitions for each environment with the following configuration:
   - Family: `streambet-backend-{env}` (e.g., `streambet-backend-dev`)
   - Network mode: `awsvpc`
@@ -261,12 +431,15 @@ The AWS infrastructure is currently set up manually. The following resources are
     - `AWS_REGION`: your AWS region
 
 ### ECS Services
+
 - Create services for each environment linked to the corresponding task definition and cluster
 - Configure networking with appropriate security groups and subnets
 
 ### IAM Roles
+
 - Create an execution role for ECS tasks with permissions to pull from ECR and access CloudWatch logs
 - Create a task role with permissions to access AWS Parameter Store
 
 ### Parameter Store
+
 - Create parameters for each environment (see Parameter Store Structure above)

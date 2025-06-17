@@ -16,7 +16,9 @@ import {
   UserRegistrationResponseDto,
 } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -38,6 +40,7 @@ interface RequestWithUser extends Request {
 interface GoogleAuthResponse {
   user: User;
   accessToken: string;
+  refreshToken: string;
 }
 
 @ApiTags('auth')
@@ -97,7 +100,7 @@ export class AuthController {
     description: 'Conflict - Invalid credentials',
   })
   @ApiOperation({
-    summary: 'Login  user using email or',
+    summary: 'Login user using email or username',
     description:
       'This endpoint allows users to log in by providing their email/username and password. It returns the user details along with an access token.',
   })
@@ -113,6 +116,62 @@ export class AuthController {
     return {
       data,
       message: 'User logged in successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+    type: UserRegistrationResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or expired refresh token',
+  })
+  @ApiBody({ type: RefreshTokenDto })
+  @UseGuards(RefreshTokenGuard)
+  @Post('refresh')
+  async refreshToken(@Request() req: RequestWithUser) {
+    // User is already validated by RefreshTokenGuard
+    const newAccessToken = this.authService.generateToken(req.user);
+    const newRefreshToken = await this.authService.generateRefreshToken(
+      req.user,
+    );
+
+    const data = {
+      id: req.user.id,
+      username: req.user.username,
+      email: req.user.email,
+      role: req.user.role,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    };
+
+    return {
+      data,
+      message: 'Token refreshed successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({ summary: 'Logout user and invalidate refresh token' })
+  @ApiResponse({
+    status: 200,
+    description: 'User logged out successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or expired token',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Request() req: RequestWithUser) {
+    await this.authService.logout(req.user.id);
+    return {
+      message: 'User logged out successfully',
       statusCode: HttpStatus.OK,
     };
   }
@@ -152,7 +211,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Handle Google OAuth2 callback' })
   @ApiResponse({
     status: 302,
-    description: 'Redirects to frontend with authentication token',
+    description: 'Redirects to frontend with authentication tokens',
   })
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
@@ -160,18 +219,29 @@ export class AuthController {
     @Request() req: { user: GoogleAuthResponse },
     @Res() res: Response,
   ): Promise<void> {
-    // After successful Google authentication, redirect to frontend with token
-    const { accessToken } = req.user;
+    try {
+      // After successful Google authentication, redirect to frontend with tokens
+      const { accessToken, refreshToken } = req.user;
 
-    // Redirect to frontend with token
-    const clientUrl = this.configService.get<string>(
-      'CLIENT_URL',
-      'http://localhost:8080',
-    );
+      // Redirect to frontend with tokens
+      const clientUrl = this.configService.get<string>(
+        'app.clientUrl',
+        'http://localhost:8080',
+      );
 
-    await Promise.resolve(); // Add await to satisfy linter
-    return res.redirect(
-      `${clientUrl}/auth/google-callback?token=${accessToken}`,
-    );
+      await Promise.resolve(); // Add await to satisfy linter
+      return res.redirect(
+        `${clientUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`,
+      );
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      const clientUrl = this.configService.get<string>(
+        'app.clientUrl',
+        'http://localhost:8080',
+      );
+      return res.redirect(
+        `${clientUrl}/auth/google-callback?error=oauth_failed`,
+      );
+    }
   }
 }

@@ -117,5 +117,8 @@ export class UserRegistrationResponseDto {
   accessToken: string;
 
   @ApiProperty()
+  refreshToken: string;
+
+  @ApiProperty()
   role: string;
 }

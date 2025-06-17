@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
+import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { UsersModule } from '../users/users.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { AuthController } from './auth.controller';
@@ -16,9 +17,9 @@ import { MailService } from 'src/mails/mail.service';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.get<string>('auth.jwtSecret'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1d'),
+          expiresIn: configService.get<string>('auth.jwtExpiresIn'),
         },
       }),
     }),
@@ -26,7 +27,13 @@ import { MailService } from 'src/mails/mail.service';
     WalletsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, MailService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    RefreshTokenGuard,
+    MailService,
+  ],
   exports: [PassportModule, JwtModule, AuthService],
 })
 export class AuthModule {}

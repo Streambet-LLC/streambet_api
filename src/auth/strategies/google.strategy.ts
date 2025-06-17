@@ -11,6 +11,7 @@ interface GoogleUser {
     givenName: string;
     familyName?: string;
   };
+  profileImageUrl: string;
 }
 
 @Injectable()
@@ -19,10 +20,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const clientID = configService.get<string>('auth.google.clientID');
+    const clientSecret = configService.get<string>('auth.google.clientSecret');
+    const callbackURL = configService.get<string>('auth.google.callbackURL');
+
     super({
-      clientID: configService.get<string>('GOOGLE_CLIENT_ID') || '',
-      clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET') || '',
-      callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL') || '',
+      clientID: clientID || '',
+      clientSecret: clientSecret || '',
+      callbackURL: callbackURL || '',
       scope: ['email', 'profile'],
       passReqToCallback: false,
     });
@@ -42,6 +47,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     const googleUser: GoogleUser = {
       email: profile.emails[0].value,
+      profileImageUrl: profile.photos[0].value,
       name: {
         givenName: profile.name.givenName,
         familyName: profile.name.familyName,
@@ -49,12 +55,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     };
 
     try {
-      const { user: createdUser, accessToken: token } =
-        await this.authService.validateOAuthUser(googleUser);
+      const {
+        user: createdUser,
+        accessToken: token,
+        refreshToken: userRefreshToken,
+      } = await this.authService.validateOAuthUser(googleUser);
 
       done(null, {
         ...createdUser,
         accessToken: token,
+        refreshToken: userRefreshToken,
       });
     } catch (error) {
       done(error as Error, null);
