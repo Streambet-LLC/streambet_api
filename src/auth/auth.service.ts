@@ -281,9 +281,9 @@ export class AuthService {
         tosAcceptedAt: new Date(),
         role: UserRole.USER,
         password: '',
-        profile_image_url: profileImageUrl,
-        account_creation_date: new Date(),
-        tos_acceptance_timestamp: new Date(),
+        profileImageUrl,
+        accountCreationDate: new Date(),
+        tosAcceptanceTimestamp: new Date(),
         lastLogin: new Date(),
       });
 

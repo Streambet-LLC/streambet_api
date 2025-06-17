@@ -191,7 +191,12 @@ export class AuthController {
   getProfile(@Request() req: RequestWithUser) {
     // The user is automatically injected into the request by the JwtAuthGuard
     const { password: _unused, ...result } = req.user;
-    return result;
+
+    return {
+      data: result,
+      message: 'User profile retrieved successfully',
+      statusCode: HttpStatus.OK,
+    };
   }
 
   @ApiOperation({ summary: 'Initiate Google OAuth2 authentication flow' })
