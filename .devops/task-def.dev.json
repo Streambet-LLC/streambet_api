@@ -1,0 +1,15 @@
+{
+  "family": "myapp-dev",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "myapp",
+      "image": "<IMAGE_URI>",
+      "portMappings": [{ "containerPort": 3000 }]
+    }
+  ]
+}
