@@ -196,6 +196,7 @@ export class AuthService {
         tosAccepted: true,
         tosAcceptedAt: new Date(),
         role: UserRole.USER,
+        password: '',
       });
 
       // Create wallet for the user
