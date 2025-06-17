@@ -10,7 +10,7 @@ export const getTypeOrmConfig = (
   port: configService.get('DB_PORT'),
   username: configService.get('DB_USERNAME'),
   password: configService.get('DB_PASSWORD'),
-  database: configService.get('DB_NAME'),
+  database: configService.get('DB_DATABASE'),
   entities: [join(__dirname, '../**/*.entity{.ts,.js}')],
   synchronize: configService.get('NODE_ENV') !== 'production',
   logging: configService.get('NODE_ENV') === 'development',

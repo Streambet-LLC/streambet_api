@@ -46,6 +46,7 @@ import fileConfig from './config/file.config';
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: configService.get('database.synchronize'),
           logging: configService.get('database.logging'),
+          dropSchema: configService.get('database.dropSchema'),
         }) as DataSourceOptions,
       dataSourceFactory: async (options) => {
         const dataSource = await new DataSource(options).initialize();

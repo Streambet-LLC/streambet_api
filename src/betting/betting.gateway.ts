@@ -67,7 +67,7 @@ export class BettingGateway
       }
 
       // Verify token and get user
-      const decoded = this.authService.verifyToken(token);
+      const decoded = this.authService.verifyRefreshToken(token);
       if (!decoded) {
         client.disconnect();
         await Promise.resolve();

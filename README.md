@@ -109,9 +109,90 @@ Before running the application, make sure you have PostgreSQL running with a dat
 CREATE DATABASE streambet_dev;
 ```
 
-### Migrations
+### Automatic Database Synchronization
 
-Database migrations are handled using TypeORM. Here are the main commands:
+The application supports automatic database schema synchronization, which automatically creates/updates database tables based on your entity definitions without requiring manual migrations.
+
+#### Environment Variables
+
+Add these to your `.env` file:
+
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_NAME=streambet_dev
+DB_SYNC=true          # Enable automatic schema synchronization
+DB_LOGGING=true       # Enable SQL query logging
+DB_DROP_SCHEMA=false  # Drop and recreate schema (use with caution!)
+```
+
+#### Available Commands
+
+```bash
+# Start development server with auto-sync enabled
+npm run db:sync
+
+# Start production server with auto-sync enabled
+npm run db:sync:prod
+
+# Reset database (drops all tables and recreates them)
+npm run db:reset
+```
+
+#### How It Works
+
+When `DB_SYNC=true`:
+
+1. **Entity Changes**: Any changes to your TypeORM entities (adding fields, changing types, etc.) will automatically be reflected in the database
+2. **Table Creation**: New entities will automatically create corresponding tables
+3. **Column Updates**: Modified entity properties will update existing table columns
+4. **Index Updates**: Changes to entity decorators will update database indexes
+
+#### When to Use Auto-Sync
+
+✅ **Development**: Perfect for rapid development and prototyping
+✅ **Testing**: Great for test environments where you need fresh schemas
+✅ **Small Projects**: Suitable for projects with simple database requirements
+
+❌ **Production**: Not recommended for production environments
+❌ **Complex Migrations**: Not suitable for complex data transformations
+❌ **Team Development**: Can cause conflicts in team environments
+
+#### Example: Adding a New Field
+
+1. **Update Entity**:
+
+```typescript
+// src/users/entities/user.entity.ts
+@Entity()
+export class User extends BaseEntity {
+  // ... existing fields
+
+  @Column({ nullable: true })
+  phoneNumber: string; // New field
+}
+```
+
+2. **Start Server**:
+
+```bash
+npm run db:sync
+```
+
+3. **Result**: The `phoneNumber` column is automatically added to the `users` table!
+
+#### Safety Features
+
+- **Logging**: When `DB_LOGGING=true`, all SQL operations are logged
+- **Validation**: TypeORM validates entity definitions before applying changes
+- **Error Handling**: Invalid schema changes will prevent the application from starting
+
+### Migrations (Alternative Approach)
+
+For production environments or when you need more control, you can use traditional migrations:
 
 ```bash
 # Generate a migration from entity changes
@@ -125,9 +206,6 @@ npm run migration:run
 
 # Revert the most recent migration
 npm run migration:revert
-
-# Generate and run initial migration (first-time setup)
-npm run db:sync
 ```
 
 See `src/database/README.md` for more detailed instructions on working with migrations.
