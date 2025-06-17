@@ -19,9 +19,31 @@ import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AssetsModule } from './assets/assets.module';
 import fileConfig from './config/file.config';
-
+import { MailerModule } from '@nestjs-modules/mailer';
+import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter';
+import { join } from 'path';
 @Module({
   imports: [
+    MailerModule.forRoot({
+      transport: {
+        host: 'email-smtp.us-east-1.amazonaws.com',
+        port: Number('465'),
+        auth: {
+          user: 'AKIA3EXTNMBYM4ZV4DTA',
+          pass: 'BDumyyg2G+SkEG4jYk4SUVomXkjHWqJxUDmZI4b1LRlJ',
+        },
+      },
+      defaults: {
+        from: 'revyriedev@gmail.com',
+      },
+      template: {
+        dir: join(__dirname, '..', 'templates'), // Path to EJS templates
+        adapter: new EjsAdapter(),
+        options: {
+          strict: true,
+        },
+      },
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -71,6 +93,7 @@ import fileConfig from './config/file.config';
     BettingModule,
     WalletsModule,
     PaymentsModule,
+    MailerModule,
   ],
   controllers: [AppController],
   providers: [
@@ -82,5 +105,8 @@ import fileConfig from './config/file.config';
   ],
 })
 export class AppModule {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) {
+    // ✅ Console log environment variables here
+    console.log('MAIL_HOST:', process.env.MAIL_HOST);
+  }
 }

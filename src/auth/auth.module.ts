@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { MailService } from 'src/mails/mail.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { AuthService } from './auth.service';
     WalletsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, MailService],
   exports: [PassportModule, JwtModule, AuthService],
 })
 export class AuthModule {}

@@ -13,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
+import { MailService } from 'src/mails/mail.service';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -29,6 +30,7 @@ export class AuthService {
     private usersService: UsersService,
     private walletsService: WalletsService,
     private jwtService: JwtService,
+    private mailService: MailService,
   ) {}
 
   /**
@@ -96,7 +98,9 @@ export class AuthService {
 
       // Generate JWT
       const accessToken = this.generateToken(user);
-
+      await this.mailService.sendWelcomeEmail('shremareshma@gmail.com', {
+        name: user.name,
+      });
       return {
         id: user.id,
         username: user.username,
