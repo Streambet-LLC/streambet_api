@@ -29,24 +29,12 @@ variables:
       fi
 
 .build_template: &build_template
+  <<: *before_script_template
   image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
   stage: build
   artifacts:
     reports:
       dotenv: image.env
-  before_script:
-    - |
-      if [[ "$ACCOUNT_OWNER" == "revyrie" ]]; then
-        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_REVYRIE
-        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_REVYRIE
-        export AWS_DEFAULT_REGION=$REGION_REVYRIE
-        export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_REVYRIE
-      else
-        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_CLIENT
-        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_CLIENT
-        export AWS_DEFAULT_REGION=$REGION_CLIENT
-        export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_CLIENT
-      fi
   script:
     - echo "🔐 Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
@@ -57,7 +45,7 @@ variables:
 
 .validate_template: &validate_template
   <<: *before_script_template
-  image: amazon/aws-cli:latest
+  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
@@ -69,7 +57,7 @@ variables:
 
 .deploy_template: &deploy_template
   <<: *before_script_template
-  image: amazon/aws-cli:latest
+  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
