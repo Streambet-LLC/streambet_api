@@ -20,7 +20,7 @@ stages:
 
 .build_template: &build_template
   <<: *before_script_template
-  image: docker:24.0.5
+  image: mesosphere/aws-cli
   services:
     - docker:24.0.5-dind
   stage: build
