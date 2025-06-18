@@ -29,11 +29,28 @@ stages:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
   script:
+    # --- START OF ADDITION/MODIFICATION FOR ROBUSTNESS ---
+    - echo "Waiting for Docker daemon to be ready..."
+    - |
+      # Loop to wait for the Docker daemon to become available.
+      # This is crucial in Docker-in-Docker setups as the 'dind' service
+      # might take a moment to fully initialize and listen for connections.
+      for i in $(seq 1 10); do
+        docker info >/dev/null 2>&1 && break
+        echo "Attempt $i: Docker daemon not ready yet. Waiting..."
+        sleep 1
+      done
+      if ! docker info >/dev/null 2>&1; then
+        echo "Error: Docker daemon did not become ready after multiple attempts."
+        exit 1
+      fi
+      echo "Docker daemon is ready."
+    # --- END OF ADDITION/MODIFICATION ---
     - echo "🔧 Installing AWS CLI v1 (Alpine compatible)"
     - apk add --no-cache python3 py3-pip
     - pip3 install awscli
     - aws --version
-    - echo "🔐 Logging in to ECR"
+    - echo "Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
     - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
     - docker build -t $IMAGE_TAG .
