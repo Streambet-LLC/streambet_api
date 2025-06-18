@@ -22,10 +22,12 @@ stages:
   <<: *before_script_template
   image: docker:24.0.5
   services:
-    - docker:24.0.5-dind
+    - name: docker:24.0.5-dind
+      command: ["--tls=false"]
   variables:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_HOST: tcp://docker:2375
+    DOCKER_DRIVER: overlay2
   stage: build
   before_script:
     - apk add --no-cache aws-cli
