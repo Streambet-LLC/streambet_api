@@ -1,154 +1,191 @@
 stages:
-  - validate
-  - test
   - build
+  - validate
   - deploy
 
-variables:
-  AWS_REGION: us-east-1  # Change to your AWS region
-  ECR_REPOSITORY: streambet-backend
-  DOCKER_TLS_CERTDIR: "/certs"
-  NODE_ENV: production
-
-# Cache dependencies between jobs
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - node_modules/
-
-# Template for environment-specific configuration
-.environment_config:
+.before_script_template: &before_script_template
   before_script:
     - |
-      # Install AWS CLI and other necessary tools
-      apk add --no-cache aws-cli jq curl
+      if [[ "$ACCOUNT_OWNER" == "revyrie" ]]; then
+        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_REVYRIE
+        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_REVYRIE
+        export AWS_DEFAULT_REGION=$REGION_REVYRIE
+        export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_REVYRIE
+      else
+        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_CLIENT
+        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_CLIENT
+        export AWS_DEFAULT_REGION=$REGION_CLIENT
+        export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_CLIENT
+      fi
 
-      # Get environment variables from AWS Parameter Store
-      export $(aws ssm get-parameters-by-path \
-        --region $AWS_REGION \
-        --path "/streambet/$CI_ENVIRONMENT_NAME/" \
-        --with-decryption \
-        --recursive \
-        --query "Parameters[*].[Name,Value]" \
-        --output text | sed 's|/streambet/'"$CI_ENVIRONMENT_NAME"'/||' | tr '\t' '=' | tr '\n' ' ')
-
-# Lint and validate stage
-lint:
-  stage: validate
-  image: node:18-alpine
-  script:
-    - npm ci
-    - npm run lint
-  only:
-    - dev
-    - qa
-    - staging
-    - prod
-
-# Run tests
-test:
-  stage: test
-  image: node:18-alpine
+.build_template: &build_template
+  <<: *before_script_template
+  image: docker:24.0.5
   services:
-    - postgres:14-alpine
-    - redis:alpine
-  variables:
-    POSTGRES_USER: postgres
-    POSTGRES_PASSWORD: postgres
-    POSTGRES_DB: streambet_test
-    DB_HOST: postgres
-    DB_PORT: 5432
-    DB_USERNAME: postgres
-    DB_PASSWORD: postgres
-    DB_DATABASE: streambet_test
-    REDIS_HOST: redis
-    REDIS_PORT: 6379
-  script:
-    - npm ci
-    - npm run test
-  only:
-    - dev
-    - qa
-    - staging
-    - prod
-
-# Build Docker image and push to ECR
-build:
+    - docker:24.0.5-dind
   stage: build
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
-  extends: .environment_config
+  variables:
+    DOCKER_DRIVER: overlay2
   script:
-    - |
-      # Login to AWS ECR
-      aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-      
-      # Build the Docker image with environment-specific tag
-      docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA .
-      docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-latest
-      
-      # Push Docker image to ECR
-      docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA
-      docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-latest
-  only:
-    - dev
-    - qa
-    - staging
-    - prod
+    - echo "🔐 Logging in to ECR"
+    - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+    - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+    - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
+  artifacts:
+    reports:
+      dotenv: image.env
 
-# Deploy templates for different environments
-.deploy_template: &deploy_definition
+.validate_template: &validate_template
+  <<: *before_script_template
+  image: amazon/aws-cli:2
+  stage: validate
+  script:
+    - echo "🔍 Validating ECS task def for $DEPLOY_ENV"
+    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json --dry-run
+
+.deploy_template: &deploy_template
+  <<: *before_script_template
+  image: amazon/aws-cli:2
   stage: deploy
-  image: 
-    name: amazon/aws-cli
-    entrypoint: [""]
-  extends: .environment_config
   script:
-    - |
-      # Update ECS task definition with new image
-      TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition streambet-backend-$CI_ENVIRONMENT_NAME --region $AWS_REGION)
-      
-      # Create new task definition revision with the new image
-      NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$CI_ENVIRONMENT_NAME-$CI_COMMIT_SHORT_SHA" '.taskDefinition | .containerDefinitions[0].image = $IMAGE | {containerDefinitions: .containerDefinitions, family: .family, taskRoleArn: .taskRoleArn, executionRoleArn: .executionRoleArn, networkMode: .networkMode, volumes: .volumes, placementConstraints: .placementConstraints, requiresCompatibilities: .requiresCompatibilities, cpu: .cpu, memory: .memory}')
-      
-      # Register the new task definition
-      aws ecs register-task-definition --region $AWS_REGION --cli-input-json "$NEW_TASK_DEFINITION"
-      
-      # Update the service to use the new task definition
-      aws ecs update-service --cluster streambet-$CI_ENVIRONMENT_NAME --service streambet-backend-$CI_ENVIRONMENT_NAME --task-definition streambet-backend-$CI_ENVIRONMENT_NAME --force-new-deployment --region $AWS_REGION
-      
-      echo "Deployment to $CI_ENVIRONMENT_NAME environment initiated"
+    - echo "🚀 Deploying to ECS - $DEPLOY_ENV"
+    - sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
+    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
+    - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
 
-# Dev deployment
-deploy:dev:
-  <<: *deploy_definition
-  environment:
-    name: dev
-  only:
-    - dev
+# === ENV: DEV ===
+build_dev:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: dev
+    ECR_REPO_NAME: myapp-dev
+  only: [dev]
 
-# QA deployment
-deploy:qa:
-  <<: *deploy_definition
-  environment:
-    name: qa
-  only:
-    - qa
+validate_dev:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: dev
+  dependencies: [build_dev]
+  only: [dev]
 
-# Staging deployment
-deploy:staging:
-  <<: *deploy_definition
-  environment:
-    name: staging
-  only:
-    - staging
+deploy_dev:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: dev
+    ECS_SERVICE_NAME: myapp-dev
+    CLUSTER_NAME: revyrie-cluster
+  dependencies: [validate_dev]
+  only: [dev]
 
-# Production deployment
-deploy:prod:
-  <<: *deploy_definition
-  environment:
-    name: prod
-  only:
-    - prod
-  when: manual  # Manual deployment for production 
+# === ENV: QA ===
+build_qa:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: qa
+    ECR_REPO_NAME: myapp-qa
+  only: [qa]
+
+validate_qa:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: qa
+  dependencies: [build_qa]
+  only: [qa]
+
+deploy_qa:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: qa
+    ECS_SERVICE_NAME: myapp-qa
+    CLUSTER_NAME: revyrie-cluster
+  dependencies: [validate_qa]
+  only: [qa]
+
+# === ENV: BETA ===
+build_beta:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: beta
+    ECR_REPO_NAME: myapp-beta
+  only: [beta]
+
+validate_beta:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: beta
+  dependencies: [build_beta]
+  only: [beta]
+
+deploy_beta:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: revyrie
+    DEPLOY_ENV: beta
+    ECS_SERVICE_NAME: myapp-beta
+    CLUSTER_NAME: revyrie-cluster
+  dependencies: [validate_beta]
+  only: [beta]
+
+# === ENV: STAG ===
+build_stag:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+    ECR_REPO_NAME: myapp-stag
+  only: [stag]
+
+validate_stag:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+  dependencies: [build_stag]
+  only: [stag]
+
+deploy_stag:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+    ECS_SERVICE_NAME: myapp-stag
+    CLUSTER_NAME: client-cluster
+  dependencies: [validate_stag]
+  only: [stag]
+
+# === ENV: PROD ===
+build_prod:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+    ECR_REPO_NAME: myapp-prod
+  only: [prod]
+
+validate_prod:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+  dependencies: [build_prod]
+  only: [prod]
+
+deploy_prod:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+    ECS_SERVICE_NAME: myapp-prod
+    CLUSTER_NAME: client-cluster
+  dependencies: [validate_prod]
+  only: [prod]
