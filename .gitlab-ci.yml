@@ -30,15 +30,14 @@ stages:
     DOCKER_TLS_CERTDIR: ""         # Disable TLS or DinD won't be accessible
     DOCKER_DRIVER: overlay2
   script:
-    - apk add --no-cache python3 py3-pip
-    - pip3 install awscli
-    - echo "Logging in to ECR"
-    - aws ecr get-login-password --region $AWS_DEFAULT_REGION \
-        | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-    - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
-    - docker build -t $IMAGE_TAG .
-    - docker push $IMAGE_TAG
-    - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
+  - apk add --no-cache python3 py3-pip
+  - pip3 install awscli
+  - echo "Logging in to ECR"
+  - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+  - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
+  - docker build -t $IMAGE_TAG .
+  - docker push $IMAGE_TAG
+  - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
   artifacts:
     reports:
       dotenv: image.env
