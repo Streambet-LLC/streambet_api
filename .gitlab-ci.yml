@@ -30,7 +30,7 @@ variables:
 
 .build_template: &build_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:latest
   stage: build
   artifacts:
     reports:
@@ -45,7 +45,7 @@ variables:
 
 .validate_template: &validate_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:latest
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
@@ -57,7 +57,7 @@ variables:
 
 .deploy_template: &deploy_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:latest
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
