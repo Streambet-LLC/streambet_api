@@ -20,14 +20,14 @@ stages:
 
 .build_template: &build_template
   <<: *before_script_template
-  image: docker:24.0.5
+  image: amazon/aws-cli:2.13.6
   services:
     - docker:24.0.5-dind
   stage: build
   variables:
     DOCKER_DRIVER: overlay2
   script:
-    - echo "🔐 Logging in to ECR"
+    - echo "Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
     - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
     - docker build -t $IMAGE_TAG .
@@ -42,15 +42,15 @@ stages:
   image: amazon/aws-cli:2
   stage: validate
   script:
-    - echo "🔍 Validating ECS task def for $DEPLOY_ENV"
-    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json --dry-run
+    - echo "Validating ECS task def for $DEPLOY_ENV"
+    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
 
 .deploy_template: &deploy_template
   <<: *before_script_template
   image: amazon/aws-cli:2
   stage: deploy
   script:
-    - echo "🚀 Deploying to ECS - $DEPLOY_ENV"
+    - echo "Deploying to ECS - $DEPLOY_ENV"
     - sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
     - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
     - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
@@ -69,7 +69,9 @@ validate_dev:
   variables:
     ACCOUNT_OWNER: revyrie
     DEPLOY_ENV: dev
-  dependencies: [build_dev]
+  needs:
+    - job: build_dev
+      artifacts: true
   only: [dev]
 
 deploy_dev:
@@ -79,7 +81,10 @@ deploy_dev:
     DEPLOY_ENV: dev
     ECS_SERVICE_NAME: myapp-dev
     CLUSTER_NAME: revyrie-cluster
-  dependencies: [validate_dev]
+  needs:
+    - job: build_dev
+      artifacts: true
+    - job: validate_dev
   only: [dev]
 
 # === ENV: QA ===
@@ -96,7 +101,9 @@ validate_qa:
   variables:
     ACCOUNT_OWNER: revyrie
     DEPLOY_ENV: qa
-  dependencies: [build_qa]
+  needs:
+    - job: build_qa
+      artifacts: true
   only: [qa]
 
 deploy_qa:
@@ -106,7 +113,10 @@ deploy_qa:
     DEPLOY_ENV: qa
     ECS_SERVICE_NAME: myapp-qa
     CLUSTER_NAME: revyrie-cluster
-  dependencies: [validate_qa]
+  needs:
+    - job: build_qa
+      artifacts: true
+    - job: validate_qa
   only: [qa]
 
 # === ENV: BETA ===
@@ -123,7 +133,9 @@ validate_beta:
   variables:
     ACCOUNT_OWNER: revyrie
     DEPLOY_ENV: beta
-  dependencies: [build_beta]
+  needs:
+    - job: build_beta
+      artifacts: true
   only: [beta]
 
 deploy_beta:
@@ -133,7 +145,10 @@ deploy_beta:
     DEPLOY_ENV: beta
     ECS_SERVICE_NAME: myapp-beta
     CLUSTER_NAME: revyrie-cluster
-  dependencies: [validate_beta]
+  needs:
+    - job: build_beta
+      artifacts: true
+    - job: validate_beta
   only: [beta]
 
 # === ENV: STAG ===
@@ -150,7 +165,9 @@ validate_stag:
   variables:
     ACCOUNT_OWNER: client
     DEPLOY_ENV: stag
-  dependencies: [build_stag]
+  needs:
+    - job: build_stag
+      artifacts: true
   only: [stag]
 
 deploy_stag:
@@ -160,7 +177,10 @@ deploy_stag:
     DEPLOY_ENV: stag
     ECS_SERVICE_NAME: myapp-stag
     CLUSTER_NAME: client-cluster
-  dependencies: [validate_stag]
+  needs:
+    - job: build_stag
+      artifacts: true
+    - job: validate_stag
   only: [stag]
 
 # === ENV: PROD ===
@@ -177,7 +197,9 @@ validate_prod:
   variables:
     ACCOUNT_OWNER: client
     DEPLOY_ENV: prod
-  dependencies: [build_prod]
+  needs:
+    - job: build_prod
+      artifacts: true
   only: [prod]
 
 deploy_prod:
@@ -187,5 +209,8 @@ deploy_prod:
     DEPLOY_ENV: prod
     ECS_SERVICE_NAME: myapp-prod
     CLUSTER_NAME: client-cluster
-  dependencies: [validate_prod]
+  needs:
+    - job: build_prod
+      artifacts: true
+    - job: validate_prod
   only: [prod]
