@@ -20,7 +20,7 @@ stages:
 
 .build_template: &build_template
   <<: *before_script_template
-  image: amazon/aws-cli:2
+  image: amazon/aws-cli:latest
   stage: build
   script:
     - echo "🔐 Logging in to ECR"
@@ -35,7 +35,7 @@ stages:
 
 .validate_template: &validate_template
   <<: *before_script_template
-  image: amazon/aws-cli:2
+  image: amazon/aws-cli:latest
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
@@ -43,7 +43,7 @@ stages:
 
 .deploy_template: &deploy_template
   <<: *before_script_template
-  image: amazon/aws-cli:2
+  image: amazon/aws-cli:latest
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
