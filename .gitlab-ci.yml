@@ -25,6 +25,8 @@ stages:
     - docker:24.0.5-dind
   stage: build
   variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""  # Disable TLS to allow plain TCP (required for DinD)
     DOCKER_DRIVER: overlay2
   script:
     - apk add --no-cache python3 py3-pip
@@ -38,6 +40,7 @@ stages:
   artifacts:
     reports:
       dotenv: image.env
+
 
 .validate_template: &validate_template
   <<: *before_script_template
