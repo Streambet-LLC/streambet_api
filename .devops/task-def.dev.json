@@ -36,6 +36,9 @@
     { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_SECRET" },
     { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/dev/GOOGLE_CALLBACK_URL" },
 
+    { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/dev/STRIPE_SECRET_KEY" },
+    { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/dev/STRIPE_WEBHOOK_SECRET" },
+
     { "name": "FILE_DRIVER", "valueFrom": "/streambet/dev/FILE_DRIVER" },
     { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/dev/ACCESS_KEY_ID" },
     { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/dev/SECRET_ACCESS_KEY" },
