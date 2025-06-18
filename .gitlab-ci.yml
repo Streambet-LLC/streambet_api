@@ -27,14 +27,11 @@ stages:
   variables:
     DOCKER_DRIVER: overlay2
   script:
-  - echo "🔧 Installing AWS CLI"
-  - apk add --no-cache curl unzip
-  - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-  - unzip awscliv2.zip
-  - ./aws/install
-  - export PATH=$PATH:/usr/local/bin
+  - echo "🔧 Installing AWS CLI v1 (Alpine compatible)"
+  - apk add --no-cache python3 py3-pip
+  - pip3 install awscli
   - aws --version
-  - echo "Logging in to ECR"
+  - echo "🔐 Logging in to ECR"
   - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
   - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
   - docker build -t $IMAGE_TAG .
