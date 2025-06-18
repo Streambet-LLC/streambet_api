@@ -20,17 +20,8 @@ stages:
 
 .build_template: &build_template
   <<: *before_script_template
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
+  image: amazon/aws-cli:2
   stage: build
-  variables:
-    DOCKER_DRIVER: overlay2
-  before_script:
-  # Install AWS CLI via pip (simpler than downloading zip)
-    - apk add --no-cache python3 py3-pip
-    - pip3 install --no-cache-dir awscli
-    - aws --version
   script:
     - echo "🔐 Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
