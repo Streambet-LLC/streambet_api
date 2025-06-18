@@ -23,6 +23,9 @@ stages:
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
   stage: build
   before_script:
     - apk add --no-cache aws-cli
