@@ -2,6 +2,7 @@
 node_modules
 dist
 DevOps
+.devops
 *.log
 package-lock.json
 !production.json
