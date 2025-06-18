@@ -25,36 +25,14 @@ stages:
     - docker:24.0.5-dind
   stage: build
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
   script:
-    - echo "💡 Waiting for Docker daemon to be ready..."
-    - |
-      for i in $(seq 1 10); do
-        if docker info >/dev/null 2>&1; then
-          echo "✅ Docker daemon is ready after attempt $i."
-          break
-        fi
-        echo "Attempt $i: Docker daemon not ready yet. Waiting..."
-        sleep 1
-      done
-      # --- START OF MODIFICATION FOR VERBOSE DEBUGGING ---
-      # This will output detailed error if docker info still fails after the loop
-      echo "--- Final Docker Daemon Status Check ---"
-      docker info || { echo "FAILURE: Docker daemon could not be reached."; exit 1; }
-      echo "--- End Final Check ---"
-      # --- END OF MODIFICATION FOR VERBOSE DEBUGGING ---
-      echo "🔧 Installing AWS CLI v1 (Alpine compatible)"
-      apk add --no-cache python3 py3-pip
-      pip3 install awscli
-      aws --version
-      echo "🔐 Logging in to ECR"
-      aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-      export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
-      docker build -t $IMAGE_TAG .
-      docker push $IMAGE_TAG
-      echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
+    - echo "🔐 Logging in to ECR"
+    - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+    - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+    - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
   artifacts:
     reports:
       dotenv: image.env
