@@ -50,7 +50,7 @@ variables:
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
     - sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
-    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json --dry-run
+    - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
   artifacts:
     paths:
       - .devops/task-def.$DEPLOY_ENV.json
