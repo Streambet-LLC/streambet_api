@@ -19,15 +19,20 @@ stages:
       fi
 
 .build_template: &build_template
-  image: docker:latest
+  image: docker:20.10.24
   services:
-    - docker:dind
+    - docker:20.10.24-dind
+      alias: docker
+      command: ["--tls=false"]
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
   stage: build
+  artifacts:
+    reports:
+      dotenv: image.env
   before_script:
+    - apk add --no-cache aws-cli
     - |
       if [[ "$ACCOUNT_OWNER" == "revyrie" ]]; then
         export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_REVYRIE
@@ -40,19 +45,6 @@ stages:
         export AWS_DEFAULT_REGION=$REGION_CLIENT
         export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_CLIENT
       fi
-    - apk add --no-cache aws-cli
-    - |
-      echo "Waiting for Docker daemon..."
-      retries=0
-      while ! docker info &>/dev/null; do
-        if [ $retries -ge 30 ]; then
-          echo "Docker daemon failed to start."
-          exit 1
-        fi
-        retries=$((retries+1))
-        sleep 1
-      done
-      echo "Docker daemon is ready."
   script:
     - echo "🔐 Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
@@ -67,7 +59,11 @@ stages:
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
+    - sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
     - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json --dry-run
+  artifacts:
+    paths:
+      - .devops/task-def.$DEPLOY_ENV.json
 
 .deploy_template: &deploy_template
   <<: *before_script_template
@@ -75,7 +71,6 @@ stages:
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
-    - sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
     - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
     - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
 
