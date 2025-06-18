@@ -19,16 +19,15 @@ stages:
       fi
 
 .build_template: &build_template
-  image: docker:20.10.24
+  image: docker:20.10.16
   services:
-    - name: docker:20.10.24-dind
+    - name: docker:20.10.16-dind
       alias: docker
-      command: ["--tls=false", "--host=tcp://0.0.0.0:2375", "--insecure-registry=0.0.0.0/0"]
   variables:
-    DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
-    DOCKER_TLS_VERIFY: ""
+    DOCKER_BUILDKIT: 1
+    DOCKER_HOST: tcp://docker:2375
   stage: build
   artifacts:
     reports:
@@ -47,8 +46,6 @@ stages:
         export AWS_DEFAULT_REGION=$REGION_CLIENT
         export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_CLIENT
       fi
-    - echo "Waiting for Docker daemon to be ready..."
-    - timeout 30 sh -c 'until docker info; do sleep 1; done'
   script:
     - echo "🔐 Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
