@@ -14,6 +14,34 @@
             ],
             "essential": true,
             "environment": [],
+            "secrets": [
+    { "name": "NODE_ENV", "valueFrom": "/streambet/dev/NODE_ENV" },
+    { "name": "PORT", "valueFrom": "/streambet/dev/PORT" },
+    { "name": "CLIENT_URL", "valueFrom": "/streambet/dev/CLIENT_URL" },
+    { "name": "ENABLE_API_LOGGING", "valueFrom": "/streambet/dev/ENABLE_API_LOGGING" },
+    { "name": "ENABLE_DETAILED_LOGGING", "valueFrom": "/streambet/dev/ENABLE_DETAILED_LOGGING" },
+
+    { "name": "DB_HOST", "valueFrom": "/streambet/dev/DB_HOST" },
+    { "name": "DB_PORT", "valueFrom": "/streambet/dev/DB_PORT" },
+    { "name": "DB_USERNAME", "valueFrom": "/streambet/dev/DB_USERNAME" },
+    { "name": "DB_PASSWORD", "valueFrom": "/streambet/dev/DB_PASSWORD" },
+    { "name": "DB_DATABASE", "valueFrom": "/streambet/dev/DB_DATABASE" },
+
+    { "name": "JWT_SECRET", "valueFrom": "/streambet/dev/JWT_SECRET" },
+    { "name": "JWT_EXPIRES_IN", "valueFrom": "/streambet/dev/JWT_EXPIRES_IN" },
+    { "name": "REFRESH_TOKEN_SECRET", "valueFrom": "/streambet/dev/REFRESH_TOKEN_SECRET" },
+    { "name": "REFRESH_TOKEN_EXPIRES_IN", "valueFrom": "/streambet/dev/REFRESH_TOKEN_EXPIRES_IN" },
+
+    { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_ID" },
+    { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_SECRET" },
+    { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/dev/GOOGLE_CALLBACK_URL" },
+
+    { "name": "FILE_DRIVER", "valueFrom": "/streambet/dev/FILE_DRIVER" },
+    { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/dev/ACCESS_KEY_ID" },
+    { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/dev/SECRET_ACCESS_KEY" },
+    { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/dev/AWS_DEFAULT_S3_BUCKET" },
+    { "name": "AWS_S3_REGION", "valueFrom": "/streambet/dev/AWS_S3_REGION" }
+            ],
             "mountPoints": [],
             "volumesFrom": [],
             "logConfiguration": {
