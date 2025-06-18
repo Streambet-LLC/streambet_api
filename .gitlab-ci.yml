@@ -22,11 +22,12 @@ stages:
   <<: *before_script_template
   image: docker:24.0.5
   services:
-    - docker:24.0.5-dind
+    - name: docker:24.0.5-dind
+      alias: docker
   stage: build
   variables:
     DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""    # disable TLS so client and dind can talk
+    DOCKER_TLS_CERTDIR: ""  # disables TLS
     DOCKER_DRIVER: overlay2
   script:
     - echo "🔐 Logging in to ECR"
@@ -34,14 +35,18 @@ stages:
     - pip install awscli
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
     - export IMAGE_TAG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$CI_COMMIT_SHORT_SHA"
-    - docker info  # ✅ optional sanity check
+    - docker info  # optional, for checking daemon connection
     - docker build -t $IMAGE_TAG .
     - docker push $IMAGE_TAG
     - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
   artifacts:
     reports:
       dotenv: image.env
-
+  tags:
+    - docker  # optional: depending on your runner tag
+  services:
+    - docker:24.0.5-dind
+ 
 .validate_template: &validate_template
   <<: *before_script_template
   image: amazon/aws-cli:2
