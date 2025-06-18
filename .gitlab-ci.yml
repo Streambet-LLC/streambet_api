@@ -42,8 +42,6 @@ stages:
   artifacts:
     reports:
       dotenv: image.env
-  tags:
-    - docker  # optional: depending on your runner tag
   services:
     - docker:24.0.5-dind
  
