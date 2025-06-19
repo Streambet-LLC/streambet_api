@@ -1,6 +1,21 @@
-import { IsString, MinLength, Matches, IsOptional } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { Exclude } from 'class-transformer';
+import {
+  IsString,
+  MinLength,
+  Matches,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  IsNumber,
+  IsDateString,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Exclude, Transform, TransformFnParams } from 'class-transformer';
+export type Range = [number, number];
+export type Sort = [string, 'DESC' | 'ASC'];
+export const transformFilterParam = (value: any): string | string[] =>
+  value.length > 0
+    ? value.map((item: string) => item.trim().toLowerCase())
+    : value;
 
 export class ProfileUpdateDto {
   @ApiProperty({
@@ -78,4 +93,132 @@ export class ProfileUpdateDto {
   @Exclude()
   @IsOptional()
   password?: string;
+}
+
+export class AdminFilterDto {
+  @ApiProperty({
+    required: false,
+    default: '[0,24]',
+    description: 'Number of records eg: [0,24]',
+  })
+  @IsString()
+  @IsOptional()
+  public range?: string;
+
+  @ApiProperty({
+    required: false,
+    default: '["createdAt","DESC"]',
+    description: 'Sort order for the list, eg: ["createdAt","DESC"]',
+  })
+  @IsString()
+  @IsOptional()
+  public sort?: string;
+}
+
+export class FilterDto {
+  @ApiProperty({ description: 'Search by name', required: false })
+  @IsString()
+  @IsOptional()
+  q: string;
+
+  @ApiProperty({ description: 'Filter by created_at', required: false })
+  @IsString()
+  @IsOptional()
+  @IsDateString()
+  created_at_gte: Date;
+
+  @ApiProperty({ description: 'Filter by created_at', required: false })
+  @IsString()
+  @IsOptional()
+  @IsDateString()
+  created_at_lte: Date;
+
+  @ApiProperty({ description: 'Filter by status', required: false })
+  @IsNumber()
+  @IsOptional()
+  status: number;
+
+  @ApiProperty({ description: 'Filter By ids', required: false })
+  @IsArray()
+  @IsOptional()
+  id: number[];
+
+  @ApiProperty({ description: 'Display At', required: false })
+  @IsString()
+  @IsOptional()
+  display_at: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    default: 'true',
+    enum: ['true', 'false'],
+    description:
+      'Pass with parameter false if you want the results without pagination',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: TransformFnParams) =>
+    value && value === 'false' ? false : true,
+  )
+  getAll?: boolean;
+}
+
+export class PaginationFilterDto {
+  @ApiProperty({
+    required: false,
+    default: '[0,24]',
+    description: 'Number of records eg: [0,24]',
+  })
+  @Transform(
+    ({ value }: TransformFnParams): Range =>
+      typeof value === 'string'
+        ? (JSON.parse(value) as Range)
+        : (value as Range),
+  )
+  @IsArray()
+  @IsOptional()
+  public range?: Range;
+
+  @ApiProperty({
+    required: false,
+    default: '["created_at","DESC"]',
+    description: 'Sort order for the list, eg: ["created_at","DESC"]',
+  })
+  @Transform(
+    ({ value }: TransformFnParams): Sort =>
+      value && (JSON.parse(value) as Sort),
+  )
+  @IsArray()
+  @IsOptional()
+  public sort?: Sort;
+}
+
+export class UserFilterDto extends AdminFilterDto {
+  @ApiProperty({
+    description: `
+  Filter params pass the data as key value pair
+  eg:
+  {
+    "q": <search_string>first_name,last_name,
+   
+  }
+  `,
+    required: false,
+    default: '{}',
+  })
+  @IsString()
+  public filter: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    default: true,
+    description:
+      'Pass with parameter false if you want the results without pagination',
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: TransformFnParams) =>
+    value && value === 'false' ? false : true,
+  )
+  pagination?: boolean;
 }

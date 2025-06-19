@@ -8,6 +8,8 @@ import {
   Request,
   Patch,
   ForbiddenException,
+  HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -25,7 +27,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
+  ApiOkResponse,
 } from '@nestjs/swagger';
+import { UserFilterDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -161,21 +165,6 @@ export class AdminController {
   }
 
   // User Management
-  @ApiOperation({ summary: 'Get all users' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of users retrieved successfully',
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @Get('users')
-  async getAllUsers(@Request() req: RequestWithUser) {
-    this.ensureAdmin(req.user);
-    return this.usersService.findAll();
-  }
 
   @ApiOperation({ summary: "Adjust user's wallet balance" })
   @ApiParam({ name: 'id', description: 'User ID' })
@@ -209,5 +198,26 @@ export class AdminController {
   ) {
     this.ensureAdmin(req.user);
     return this.walletsService.addFreeTokens(id, amount, description);
+  }
+
+  @ApiOperation({
+    summary: 'List all the users in the System',
+    description:
+      'API to list users details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('users')
+  async getAllUsers(
+    @Request() req: RequestWithUser,
+    @Query() userFilterDto: UserFilterDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const { total, data } = await this.usersService.findAllUser(userFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
   }
 }

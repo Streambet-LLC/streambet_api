@@ -3,7 +3,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
-import { ProfileUpdateDto } from './dto/user.requests.dto';
+import {
+  FilterDto,
+  ProfileUpdateDto,
+  Sort,
+  Range,
+  UserFilterDto,
+} from './dto/user.requests.dto';
 import { UserResponseDto } from './dto/user.response.dto';
 
 @Injectable()
@@ -132,5 +138,54 @@ export class UsersService {
       console.error(`Error updating profile for user with ID ${id}:`, e);
       throw new NotFoundException((e as Error).message);
     }
+  }
+
+  async findAllUser(
+    userFilterDto: UserFilterDto,
+  ): Promise<{ data: User[]; total: number }> {
+    const sort: Sort = userFilterDto.sort
+      ? (JSON.parse(userFilterDto.sort) as Sort)
+      : undefined;
+
+    const filter: FilterDto = userFilterDto.filter
+      ? (JSON.parse(userFilterDto.filter) as FilterDto)
+      : undefined;
+    const range: Range = userFilterDto.range
+      ? (JSON.parse(userFilterDto.range) as Range)
+      : [0, 10];
+    const { pagination = true } = userFilterDto;
+
+    const usersQB = this.usersRepository.createQueryBuilder('u');
+
+    // Filtering by query string (username or email)
+    if (filter.q) {
+      usersQB.andWhere(
+        `(LOWER(u.username) ILIKE LOWER(:q) OR LOWER(u.email) ILIKE LOWER(:q))`,
+        { q: `%${filter.q}%` },
+      );
+    }
+
+    // Sorting logic
+    if (sort) {
+      const [sortColumn, sortOrder] = sort;
+      usersQB.orderBy(
+        `u.${sortColumn}`,
+        sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+      );
+    }
+
+    // Count before applying pagination
+    const total = await usersQB.getCount();
+
+    // Pagination logic
+    if (range && pagination) {
+      const [offset, limit] = range;
+      usersQB.offset(offset).limit(limit);
+    }
+
+    // Fetch paginated or full data
+    const data = await usersQB.getMany();
+
+    return { data, total };
   }
 }
