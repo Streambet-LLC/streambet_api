@@ -62,7 +62,7 @@ variables:
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
     - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
-    - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
+    - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --task-definition $ECS_SERVICE_NAME --desired-count 1 --deployment-configuration maximumPercent=200,minimumHealthyPercent=50
 
 # === ENV: DEV ===
 build_dev:
