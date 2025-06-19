@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   HttpStatus,
+  HttpException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +16,8 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from 'src/mails/mail.service';
+import { EmailsService } from 'src/emails/email.service';
+import { EmailType } from 'src/enums/email-type.enum';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -33,7 +36,7 @@ export class AuthService {
     private walletsService: WalletsService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private mailService: MailService,
+    private emailsService: EmailsService,
   ) {}
 
   /**
@@ -102,9 +105,7 @@ export class AuthService {
       // Generate tokens
       const accessToken = this.generateToken(user);
       const refreshToken = await this.generateRefreshToken(user);
-      //await this.mailService.sendWelcomeEmail('shremareshma@gmail.com', {
-      // name: user.name,
-      //});
+      await this.sendAccountVerificationEmail(user);
       return {
         id: user.id,
         username: user.username,
@@ -335,5 +336,46 @@ export class AuthService {
       if (!exists) return suggestion;
     }
     return `${baseUsername}_${Date.now()}`;
+  }
+
+  public async sendAccountVerificationEmail(user: User) {
+    if (user.email.indexOf('@example.com') !== -1) {
+      return true;
+    }
+    try {
+      //const token = this.generateJwtTokenForEmailValidation(user);
+      const token = 'dfdfsdfs';
+      const hostUrl = this.configService.get<string>('general.hostUrl');
+      const profileLink = this.configService.get<string>(
+        'general.applicationHost',
+      );
+
+      const host = this.configService.get<string>('general.applicationHost');
+      const verifyLink = `${hostUrl}api/auth/verify-email?token=${token}`;
+      console.log(verifyLink, 'verifyLink');
+
+      const emailData = {
+        subject: 'Activate Email',
+        toAddress: [user.email],
+        params: {
+          host,
+          profileLink,
+          title: 'Activation Email',
+          verifyLink,
+          code: 34567,
+          fullName: 'Reshma',
+        },
+      };
+      return await this.emailsService.sendEmailSMTP(
+        emailData,
+        EmailType.AccountVerification,
+      );
+    } catch (e) {
+      console.error('Error in AuthService.sendAccountVerificationEmail:', e);
+      throw new HttpException(
+        'Unable to send verification email. Please try again later',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

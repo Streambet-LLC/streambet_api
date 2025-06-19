@@ -22,28 +22,9 @@ import fileConfig from './config/file.config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter';
 import { join } from 'path';
+import emailConfig from './config/email.config';
 @Module({
   imports: [
-    MailerModule.forRoot({
-      transport: {
-        host: 'email-smtp.us-east-1.amazonaws.com',
-        port: Number('465'),
-        auth: {
-          user: 'AKIA3EXTNMBYM4ZV4DTA',
-          pass: 'BDumyyg2G+SkEG4jYk4SUVomXkjHWqJxUDmZI4b1LRlJ',
-        },
-      },
-      defaults: {
-        from: 'revyriedev@gmail.com',
-      },
-      template: {
-        dir: join(__dirname, '..', 'templates'), // Path to EJS templates
-        adapter: new EjsAdapter(),
-        options: {
-          strict: true,
-        },
-      },
-    }),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -52,6 +33,7 @@ import { join } from 'path';
         throttleConfig,
         appConfig,
         fileConfig,
+        emailConfig,
       ] as ConfigFactory[],
     }),
     TypeOrmModule.forRootAsync({
