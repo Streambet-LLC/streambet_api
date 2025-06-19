@@ -10,11 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import {
-  RegisterDto,
-  UserNameDto,
-  UserRegistrationResponseDto,
-} from './dto/register.dto';
+
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -28,8 +24,16 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { User } from '../users/entities/user.entity';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import {
+  RegisterDto,
+  UserNameDto,
+  UserRegistrationResponseDto,
+} from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -248,5 +252,52 @@ export class AuthController {
         `${clientUrl}/auth/google-callback?error=oauth_failed`,
       );
     }
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Request password reset',
+    description: "Send a password reset link to the user's email",
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Password reset email sent successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error sending password reset email',
+  })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({
+    summary: 'Reset password',
+    description: 'Reset password using the token received via email',
+  })
+  @ApiQuery({
+    name: 'token',
+    required: true,
+    description: 'Reset token received via email',
+    type: String,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Password reset successful',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid token or passwords do not match',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error resetting password',
+  })
+  async resetPassword(
+    @Query('token') token: string,
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ) {
+    return this.authService.resetPassword(token, resetPasswordDto);
   }
 }

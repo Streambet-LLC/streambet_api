@@ -17,7 +17,7 @@ import { UserResponseDto } from './dto/user.response.dto';
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
+    private readonly usersRepository: Repository<User>,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -35,7 +35,7 @@ export class UsersService {
       const user = await this.usersRepository.findOne({ where: { id } });
       if (!user) {
         throw new NotFoundException(
-          'we couldn’t find a user matching that information',
+          `we couldn't find a user matching that information`,
         );
       }
       const { password: _unused, ...sanitizedUser } = user;
@@ -57,9 +57,7 @@ export class UsersService {
     });
   }
   async findByUsername(username: string): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: { username: ILike(username) },
-    });
+    return this.usersRepository.findOne({ where: { username } });
   }
 
   async findByRefreshToken(refreshToken: string): Promise<User | null> {
@@ -211,5 +209,11 @@ export class UsersService {
       : 'User deactivated successfully';
 
     return { result: !!affected, message };
+  }
+
+  async updatePassword(userId: string, hashedPassword: string): Promise<void> {
+    await this.usersRepository.update(userId, {
+      password: hashedPassword,
+    });
   }
 }

@@ -17,5 +17,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/account_verification.ejs',
       schemaPath: './src/templates/account_verification.json',
     },
+    password_reset: {
+      templatePath: './src/templates/password_reset.ejs',
+      schemaPath: './src/templates/password_reset.json',
+    },
   },
 }));

@@ -8,8 +8,9 @@ import {
   IsDefined,
   IsOptional,
   IsIP,
+  IsDate,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UserNameDto {
@@ -101,6 +102,15 @@ export class RegisterDto {
   @IsOptional()
   @IsIP()
   lastKnownIp?: string;
+
+  @ApiProperty({
+    description: 'Date of birth (must be 8 years or older)',
+    example: '2010-01-01',
+  })
+  @Type(() => Date)
+  @IsDate()
+  @IsNotEmpty()
+  dob: Date;
 }
 
 export class UserRegistrationResponseDto {

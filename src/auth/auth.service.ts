@@ -18,6 +18,9 @@ import { ConfigService } from '@nestjs/config';
 import { MailService } from 'src/mails/mail.service';
 import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { JsonWebTokenError } from 'jsonwebtoken';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -39,6 +42,21 @@ export class AuthService {
     private emailsService: EmailsService,
   ) {}
 
+  private calculateAge(birthDate: Date): number {
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  }
+
   /**
    * Registers a new user with the provided registration details.
    * @param registerDto - The registration details including email, password, profileImageUrl, isOlder, tosAccepted, username, lastKnownIP.
@@ -56,6 +74,7 @@ export class AuthService {
         tosAccepted,
         username,
         lastKnownIp,
+        dob,
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
@@ -65,6 +84,15 @@ export class AuthService {
       if (!tosAccepted) {
         throw new BadRequestException(
           'Please accept the Terms of Service to continue',
+        );
+      }
+
+      // Check if user is at least 8 years old
+      const age = this.calculateAge(dob);
+      if (age < 17) {
+        throw new HttpException(
+          'User must be at least 18 years old to register',
+          HttpStatus.BAD_REQUEST,
         );
       }
 
@@ -97,6 +125,7 @@ export class AuthService {
         accountCreationDate: new Date(),
         role: UserRole.USER,
         lastKnownIp,
+        dateOfBirth: dob,
       });
 
       // Create wallet for the user
@@ -374,6 +403,102 @@ export class AuthService {
       console.error('Error in AuthService.sendAccountVerificationEmail:', e);
       throw new HttpException(
         'Unable to send verification email. Please try again later',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const { identifier } = forgotPasswordDto;
+
+    // Find user by email or username
+    const user = await this.usersService.findByEmailOrUsername(identifier);
+
+    if (!user) {
+      // Return success even if user not found to prevent email/username enumeration
+      return {
+        message:
+          'If the account exists, you will receive password reset instructions.',
+        statusCode: HttpStatus.OK,
+      };
+    }
+
+    // Generate password reset token (valid for 1 hour)
+    const token = this.jwtService.sign(
+      { sub: user.id },
+      {
+        secret: this.configService.get('auth.jwt.secret'),
+        expiresIn: '1h',
+      },
+    );
+
+    // Create reset link
+    const resetLink = `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}`;
+
+    try {
+      // Send password reset email
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [user.email],
+          subject: 'Reset Your Password',
+          params: {
+            fullName: user.name || user.username,
+            resetLink,
+          },
+        },
+        'password_reset',
+      );
+
+      return {
+        message:
+          'If the account exists, you will receive password reset instructions.',
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      throw new HttpException(
+        'Unable to send password reset email. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async resetPassword(token: string, resetPasswordDto: ResetPasswordDto) {
+    // Verify passwords match
+
+    try {
+      // Verify token and extract user ID
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get('auth.jwt.secret'),
+      });
+
+      // Get user
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) {
+        throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(
+        resetPasswordDto.newPassword,
+        10,
+      );
+
+      // Update password
+      await this.usersService.updatePassword(user.id, hashedPassword);
+
+      return {
+        message: 'Password has been reset successfully',
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      if (error instanceof JsonWebTokenError) {
+        throw new HttpException(
+          'Invalid or expired reset token',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      throw new HttpException(
+        'Error resetting password',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

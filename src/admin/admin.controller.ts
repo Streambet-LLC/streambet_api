@@ -10,6 +10,7 @@ import {
   ForbiddenException,
   HttpStatus,
   Query,
+  Delete,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -29,8 +30,11 @@ import {
   ApiParam,
   ApiBody,
   ApiOkResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import { AdminService } from './admin.service';
+import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -46,6 +50,7 @@ export class AdminController {
     private readonly bettingService: BettingService,
     private readonly usersService: UsersService,
     private readonly walletsService: WalletsService,
+    private readonly adminService: AdminService,
   ) {}
 
   // Helper method to check if user is admin
@@ -297,5 +302,20 @@ export class AdminController {
       data,
       total,
     };
+  }
+
+  @ApiOperation({ summary: 'Soft delete a user' })
+  @ApiOkResponse({
+    description: 'User has been successfully soft deleted',
+    type: User,
+  })
+  @ApiNotFoundResponse({
+    description: 'User not found',
+  })
+  @Delete('users/soft-delete/:userId')
+  async softDeleteUser(
+    @Query() softDeleteUserDto: SoftDeleteUserDto,
+  ): Promise<User> {
+    return this.adminService.softDeleteUser(softDeleteUserDto.userId);
   }
 }

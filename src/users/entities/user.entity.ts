@@ -98,13 +98,23 @@ export class User extends BaseEntity {
   @Column({ type: 'timestamp', nullable: true, name: 'tos_accepted_at' })
   tosAcceptedAt: Date;
 
-  @Column({ type: 'boolean', default: true, name: 'is_active' })
+  @Column({ default: true, name: 'is_active', type: 'boolean' })
   isActive: boolean;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, name: 'verification_token' })
   @Exclude()
   refreshToken: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+    name: 'refresh_token_expires_at',
+  })
   refreshTokenExpiresAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'deleted_at' })
+  deletedAt: Date;
+
+  @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
+  dateOfBirth: Date;
 }
