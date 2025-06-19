@@ -28,9 +28,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
-  ApiOkResponse,
+  
 } from '@nestjs/swagger';
-import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import {  UserUpdateDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -38,9 +38,9 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('admin')
-//@ApiBearerAuth()
+@ApiBearerAuth()
 @Controller('admin')
-//@UseGuards(JwtAuthGuard)
+UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private readonly bettingService: BettingService,
