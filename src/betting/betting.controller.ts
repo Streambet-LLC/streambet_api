@@ -10,6 +10,7 @@ import {
   Query,
   ParseBoolPipe,
   DefaultValuePipe,
+  HttpStatus,
 } from '@nestjs/common';
 import { BettingService } from './betting.service';
 import { PlaceBetDto } from './dto/place-bet.dto';
@@ -18,10 +19,11 @@ import { Stream } from './entities/stream.entity';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
 import { User } from '../users/entities/user.entity';
+import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
@@ -44,7 +46,7 @@ export class BettingController {
     type: Boolean,
     description: 'Include ended streams in results',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'List of streams retrieved successfully',
     type: [Stream],
@@ -53,76 +55,101 @@ export class BettingController {
   async findAllStreams(
     @Query('includeEnded', new DefaultValuePipe(false), ParseBoolPipe)
     includeEnded: boolean,
-  ): Promise<Stream[]> {
-    return this.bettingService.findAllStreams(includeEnded);
+  ): Promise<ApiResponse> {
+    const streams = await this.bettingService.findAllStreams(includeEnded);
+    return {
+      message: 'Streams retrieved successfully',
+      status: HttpStatus.OK,
+      data: streams,
+    };
   }
 
   @ApiOperation({ summary: 'Get stream by ID' })
   @ApiParam({ name: 'id', description: 'Stream ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Stream details retrieved successfully',
     type: Stream,
   })
-  @ApiResponse({ status: 404, description: 'Stream not found' })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
   @Get('streams/:id')
-  async findStreamById(@Param('id') id: string): Promise<Stream> {
-    return this.bettingService.findStreamById(id);
+  async findStreamById(@Param('id') id: string): Promise<ApiResponse> {
+    const stream = await this.bettingService.findStreamById(id);
+    return {
+      message: 'Stream details retrieved successfully',
+      status: HttpStatus.OK,
+      data: stream,
+    };
   }
 
   @ApiOperation({ summary: 'Get betting options for a stream' })
   @ApiParam({ name: 'id', description: 'Stream ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Betting variables retrieved successfully',
     type: [BettingVariable],
   })
-  @ApiResponse({ status: 404, description: 'Stream not found' })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
   @Get('streams/:id/betting-variables')
-  async getStreamBets(@Param('id') id: string): Promise<BettingVariable[]> {
-    return this.bettingService.getStreamBets(id);
+  async getStreamBets(@Param('id') id: string): Promise<ApiResponse> {
+    const bettingVariables = await this.bettingService.getStreamBets(id);
+    return {
+      message: 'Betting options retrieved successfully',
+      status: HttpStatus.OK,
+      data: bettingVariables,
+    };
   }
 
   @ApiOperation({ summary: 'Place a bet' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Bet placed successfully',
     type: Bet,
   })
-  @ApiResponse({ status: 400, description: 'Invalid bet data' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Insufficient funds' })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid bet data' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('place-bet')
   async placeBet(
     @Request() req: RequestWithUser,
     @Body() placeBetDto: PlaceBetDto,
-  ): Promise<Bet> {
-    return this.bettingService.placeBet(req.user.id, placeBetDto);
+  ): Promise<ApiResponse> {
+    const bet = await this.bettingService.placeBet(req.user.id, placeBetDto);
+    return {
+      message: 'Bet placed successfully',
+      status: HttpStatus.CREATED,
+      data: bet,
+    };
   }
 
   @ApiOperation({ summary: 'Cancel a bet' })
   @ApiParam({ name: 'id', description: 'Bet ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Bet cancelled successfully',
     type: Bet,
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Cannot cancel this bet',
   })
-  @ApiResponse({ status: 404, description: 'Bet not found' })
+  @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Delete('bets/:id')
   async cancelBet(
     @Request() req: RequestWithUser,
     @Param('id') id: string,
-  ): Promise<Bet> {
-    return this.bettingService.cancelBet(req.user.id, id);
+  ): Promise<ApiResponse> {
+    const bet = await this.bettingService.cancelBet(req.user.id, id);
+    return {
+      message: 'Bet cancelled successfully',
+      status: HttpStatus.OK,
+      data: bet,
+    };
   }
 
   @ApiOperation({ summary: "Get user's betting history" })
@@ -132,12 +159,12 @@ export class BettingController {
     type: Boolean,
     description: 'Filter for active bets only',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'User bets retrieved successfully',
     type: [Bet],
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('user-bets')
@@ -145,7 +172,12 @@ export class BettingController {
     @Request() req: RequestWithUser,
     @Query('active', new DefaultValuePipe(false), ParseBoolPipe)
     active: boolean,
-  ): Promise<Bet[]> {
-    return this.bettingService.getUserBets(req.user.id, active);
+  ): Promise<ApiResponse> {
+    const bets = await this.bettingService.getUserBets(req.user.id, active);
+    return {
+      message: 'User betting history retrieved successfully',
+      status: HttpStatus.OK,
+      data: bets,
+    };
   }
 }
