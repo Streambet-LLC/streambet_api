@@ -28,9 +28,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
-  
+  ApiOkResponse,
 } from '@nestjs/swagger';
-import {  UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -40,7 +40,7 @@ interface RequestWithUser extends Request {
 @ApiTags('admin')
 @ApiBearerAuth()
 @Controller('admin')
-UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private readonly bettingService: BettingService,
@@ -215,26 +215,6 @@ export class AdminController {
   }
 
   // User Management
-  @ApiOperation({ summary: 'Get all users' })
-  @SwaggerApiResponse({
-    status: 200,
-    description: 'List of users retrieved successfully',
-  })
-  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
-  @SwaggerApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @Get('users')
-  async getAllUsers(@Request() req: RequestWithUser): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const users = await this.usersService.findAll();
-    return {
-      message: 'Users retrieved successfully',
-      status: HttpStatus.OK,
-      data: users,
-    };
-  }
 
   @ApiOperation({ summary: "Adjust user's wallet balance" })
   @ApiParam({ name: 'id', description: 'User ID' })
@@ -295,6 +275,27 @@ export class AdminController {
       statusCode: HttpStatus.OK,
       message,
       data: result,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'List all the users in the System',
+    description:
+      'API to list users details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('users')
+  async getAllUsers(
+    @Request() req: RequestWithUser,
+    @Query() userFilterDto: UserFilterDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const { total, data } = await this.usersService.findAllUser(userFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
     };
   }
 }
