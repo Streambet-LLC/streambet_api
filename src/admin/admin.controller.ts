@@ -10,6 +10,7 @@ import {
   ForbiddenException,
   HttpStatus,
   Query,
+  HttpStatus,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -20,10 +21,11 @@ import { CreateStreamDto } from '../betting/dto/create-stream.dto';
 import { CreateBettingVariableDto } from '../betting/dto/create-betting-variable.dto';
 import { StreamStatus } from '../betting/entities/stream.entity';
 import { BettingVariableStatus } from '../betting/entities/betting-variable.entity';
+import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiBearerAuth,
   ApiParam,
   ApiBody,
@@ -56,9 +58,12 @@ export class AdminController {
 
   // Stream Management
   @ApiOperation({ summary: 'Create a new stream' })
-  @ApiResponse({ status: 201, description: 'Stream created successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Stream created successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
@@ -66,9 +71,14 @@ export class AdminController {
   async createStream(
     @Request() req: RequestWithUser,
     @Body() createStreamDto: CreateStreamDto,
-  ) {
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.bettingService.createStream(createStreamDto);
+    const stream = await this.bettingService.createStream(createStreamDto);
+    return {
+      message: 'Successfully created stream',
+      status: HttpStatus.CREATED,
+      data: stream,
+    };
   }
 
   @ApiOperation({ summary: 'Update stream status' })
@@ -84,87 +94,148 @@ export class AdminController {
       },
     },
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Stream status updated successfully',
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  @ApiResponse({ status: 404, description: 'Stream not found' })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
   @Patch('streams/:id/status')
   async updateStreamStatus(
     @Request() req: RequestWithUser,
     @Param('id') id: string,
     @Body('status') status: StreamStatus,
-  ) {
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.bettingService.updateStreamStatus(id, status);
+    const updatedStream = await this.bettingService.updateStreamStatus(
+      id,
+      status,
+    );
+    return {
+      message: 'Stream status updated successfully',
+      status: HttpStatus.OK,
+      data: updatedStream,
+    };
   }
 
   // Betting Variable Management
   @ApiOperation({ summary: 'Create betting options' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Betting variable created successfully',
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  @ApiResponse({ status: 404, description: 'Stream not found' })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
   @Post('betting-variables')
   async createBettingVariable(
     @Request() req: RequestWithUser,
     @Body() createBettingVariableDto: CreateBettingVariableDto,
-  ) {
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.bettingService.createBettingVariable(createBettingVariableDto);
+    const bettingVariable = await this.bettingService.createBettingVariable(
+      createBettingVariableDto,
+    );
+    return {
+      message: 'Betting variable created successfully',
+      status: HttpStatus.CREATED,
+      data: bettingVariable,
+    };
   }
 
   @ApiOperation({ summary: 'Lock betting' })
   @ApiParam({ name: 'id', description: 'Betting variable ID' })
-  @ApiResponse({ status: 200, description: 'Betting locked successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Betting locked successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  @ApiResponse({ status: 404, description: 'Betting variable not found' })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Betting variable not found',
+  })
   @Patch('betting-variables/:id/lock')
-  async lockBetting(@Request() req: RequestWithUser, @Param('id') id: string) {
+  async lockBetting(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.bettingService.updateBettingVariableStatus(
+    const lockedBetting = await this.bettingService.updateBettingVariableStatus(
       id,
       BettingVariableStatus.LOCKED,
     );
+    return {
+      message: 'Betting locked successfully',
+      status: HttpStatus.OK,
+      data: lockedBetting,
+    };
   }
 
   @ApiOperation({ summary: 'Declare a winner' })
   @ApiParam({ name: 'id', description: 'Betting variable ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Winner declared and payouts processed successfully',
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  @ApiResponse({ status: 404, description: 'Betting variable not found' })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Betting variable not found',
+  })
   @Post('betting-variables/:id/declare-winner')
   async declareWinner(
     @Request() req: RequestWithUser,
     @Param('id') id: string,
-  ) {
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.bettingService.declareWinner(req.user.id, id, req.user);
+    const result = await this.bettingService.declareWinner(
+      req.user.id,
+      id,
+      req.user,
+    );
+    return {
+      message: 'Winner declared and payouts processed successfully',
+      status: HttpStatus.OK,
+      data: result,
+    };
   }
 
   // User Management
+  @ApiOperation({ summary: 'Get all users' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'List of users retrieved successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @Get('users')
+  async getAllUsers(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const users = await this.usersService.findAll();
+    return {
+      message: 'Users retrieved successfully',
+      status: HttpStatus.OK,
+      data: users,
+    };
+  }
 
   @ApiOperation({ summary: "Adjust user's wallet balance" })
   @ApiParam({ name: 'id', description: 'User ID' })
@@ -179,45 +250,33 @@ export class AdminController {
       },
     },
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Wallet balance adjusted successfully',
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  @ApiResponse({ status: 404, description: 'User not found' })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
   @Patch('users/:id/wallet')
   async adjustWallet(
     @Request() req: RequestWithUser,
     @Param('id') id: string,
     @Body('amount') amount: number,
     @Body('description') description: string,
-  ) {
+  ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    return this.walletsService.addFreeTokens(id, amount, description);
-  }
-
-  @ApiOperation({
-    summary: 'List all the users in the System',
-    description:
-      'API to list users details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
-  })
-  @ApiOkResponse({ type: UserFilterDto })
-  @Get('users')
-  async getAllUsers(
-    @Request() req: RequestWithUser,
-    @Query() userFilterDto: UserFilterDto,
-  ) {
-    this.ensureAdmin(req.user);
-    const { total, data } = await this.usersService.findAllUser(userFilterDto);
+    const wallet = await this.walletsService.addFreeTokens(
+      id,
+      amount,
+      description,
+    );
     return {
-      statusCode: HttpStatus.OK,
-      message: 'Successfully Listed',
-      data,
-      total,
+      message: 'Wallet balance adjusted successfully',
+      status: HttpStatus.OK,
+      data: wallet,
     };
   }
 }
