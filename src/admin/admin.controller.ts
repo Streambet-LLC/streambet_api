@@ -286,9 +286,9 @@ export class AdminController {
   @Patch('users')
   async updateUserStatus(
     @Body() userUpdateDto: UserUpdateDto,
-    //@Request() req: RequestWithUser,
+    @Request() req: RequestWithUser,
   ) {
-    //this.ensureAdmin(req.user);
+    this.ensureAdmin(req.user);
     const { result, message } =
       await this.usersService.updateUserStatus(userUpdateDto);
     return {
