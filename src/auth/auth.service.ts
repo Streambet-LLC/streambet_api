@@ -102,9 +102,9 @@ export class AuthService {
       // Generate tokens
       const accessToken = this.generateToken(user);
       const refreshToken = await this.generateRefreshToken(user);
-      await this.mailService.sendWelcomeEmail('shremareshma@gmail.com', {
-        name: user.name,
-      });
+      //await this.mailService.sendWelcomeEmail('shremareshma@gmail.com', {
+      // name: user.name,
+      //});
       return {
         id: user.id,
         username: user.username,
@@ -134,6 +134,13 @@ export class AuthService {
           `We couldn't find an account with the provided username or email.`,
         );
       }
+
+      if (!user.isActive) {
+        throw new UnauthorizedException(
+          'Your account is not active. Please contact support.',
+        );
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {

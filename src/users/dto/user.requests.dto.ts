@@ -7,6 +7,9 @@ import {
   IsArray,
   IsNumber,
   IsDateString,
+  IsDefined,
+  IsNotEmpty,
+  IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform, TransformFnParams } from 'class-transformer';
@@ -221,4 +224,22 @@ export class UserFilterDto extends AdminFilterDto {
     value && value === 'false' ? false : true,
   )
   pagination?: boolean;
+}
+export class UserUpdateDto {
+  @ApiProperty({
+    description: 'User Id of the user',
+  })
+  @IsDefined()
+  @IsNotEmpty()
+  @IsEnum([true, false])
+  @IsBoolean()
+  userStatus: boolean;
+
+  @ApiProperty({
+    description: 'Pass true for activate and false for deactivate user ',
+  })
+  @IsDefined()
+  @IsNotEmpty()
+  @IsString()
+  userId: string;
 }

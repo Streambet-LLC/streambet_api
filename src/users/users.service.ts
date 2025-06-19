@@ -9,6 +9,7 @@ import {
   Sort,
   Range,
   UserFilterDto,
+  UserUpdateDto,
 } from './dto/user.requests.dto';
 import { UserResponseDto } from './dto/user.response.dto';
 
@@ -187,5 +188,28 @@ export class UsersService {
     const data = await usersQB.getMany();
 
     return { data, total };
+  }
+
+  async updateUserStatus(
+    userUpdateDto: UserUpdateDto,
+  ): Promise<{ result: boolean; message: string } | undefined> {
+    const { userId, userStatus } = userUpdateDto;
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Update Users table to activate user and sconst et status
+    const { affected } = await this.usersRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ isActive: userStatus })
+      .where('id = :userId', { userId })
+      .execute();
+    const message = userStatus
+      ? 'User activated successfully'
+      : 'User deactivated successfully';
+
+    return { result: !!affected, message };
   }
 }

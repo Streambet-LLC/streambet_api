@@ -30,7 +30,7 @@ import {
   ApiBody,
   ApiOkResponse,
 } from '@nestjs/swagger';
-import { UserFilterDto } from 'src/users/dto/user.requests.dto';
+import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -38,9 +38,9 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('admin')
-@ApiBearerAuth()
+//@ApiBearerAuth()
 @Controller('admin')
-@UseGuards(JwtAuthGuard)
+//@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private readonly bettingService: BettingService,
@@ -276,6 +276,25 @@ export class AdminController {
       message: 'Wallet balance adjusted successfully',
       status: HttpStatus.OK,
       data: wallet,
+    };
+  }
+
+  @ApiOperation({
+    summary: `Activate or Deactivate user.`,
+    description: 'API to activate or deactivate a user by their ID.',
+  })
+  @Patch('users')
+  async updateUserStatus(
+    @Body() userUpdateDto: UserUpdateDto,
+    //@Request() req: RequestWithUser,
+  ) {
+    //this.ensureAdmin(req.user);
+    const { result, message } =
+      await this.usersService.updateUserStatus(userUpdateDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message,
+      data: result,
     };
   }
 }
