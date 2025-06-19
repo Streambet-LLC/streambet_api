@@ -9,6 +9,7 @@ import {
   Patch,
   ForbiddenException,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -27,7 +28,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiBody,
+  ApiOkResponse,
 } from '@nestjs/swagger';
+import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -212,26 +215,6 @@ export class AdminController {
   }
 
   // User Management
-  @ApiOperation({ summary: 'Get all users' })
-  @SwaggerApiResponse({
-    status: 200,
-    description: 'List of users retrieved successfully',
-  })
-  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
-  @SwaggerApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @Get('users')
-  async getAllUsers(@Request() req: RequestWithUser): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const users = await this.usersService.findAll();
-    return {
-      message: 'Users retrieved successfully',
-      status: HttpStatus.OK,
-      data: users,
-    };
-  }
 
   @ApiOperation({ summary: "Adjust user's wallet balance" })
   @ApiParam({ name: 'id', description: 'User ID' })
@@ -273,6 +256,46 @@ export class AdminController {
       message: 'Wallet balance adjusted successfully',
       status: HttpStatus.OK,
       data: wallet,
+    };
+  }
+
+  @ApiOperation({
+    summary: `Activate or Deactivate user.`,
+    description: 'API to activate or deactivate a user by their ID.',
+  })
+  @Patch('users')
+  async updateUserStatus(
+    @Body() userUpdateDto: UserUpdateDto,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureAdmin(req.user);
+    const { result, message } =
+      await this.usersService.updateUserStatus(userUpdateDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message,
+      data: result,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'List all the users in the System',
+    description:
+      'API to list users details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('users')
+  async getAllUsers(
+    @Request() req: RequestWithUser,
+    @Query() userFilterDto: UserFilterDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const { total, data } = await this.usersService.findAllUser(userFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
     };
   }
 }
