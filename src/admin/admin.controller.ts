@@ -10,7 +10,6 @@ import {
   ForbiddenException,
   HttpStatus,
   Query,
-  HttpStatus,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
