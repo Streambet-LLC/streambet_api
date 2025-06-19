@@ -1,6 +1,7 @@
 import { BaseEntity } from '../../common/entities/base.entity';
-import { Entity, Column } from 'typeorm';
+import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { Wallet } from 'src/wallets/entities/wallet.entity';
 
 export enum UserRole {
   USER = 'user',
@@ -117,4 +118,7 @@ export class User extends BaseEntity {
 
   @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
   dateOfBirth: Date;
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet: Wallet;
 }

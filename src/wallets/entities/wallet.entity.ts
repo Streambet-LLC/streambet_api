@@ -22,4 +22,7 @@ export class Wallet extends BaseEntity {
 
   @Column({ type: 'integer', nullable: true })
   autoReloadAmount: number;
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet: Wallet;
 }

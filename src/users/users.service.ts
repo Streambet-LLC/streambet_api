@@ -154,7 +154,9 @@ export class UsersService {
       : [0, 10];
     const { pagination = true } = userFilterDto;
 
-    const usersQB = this.usersRepository.createQueryBuilder('u');
+    const usersQB = this.usersRepository
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.wallet', 'wallet');
 
     // Filtering by query string (username or email)
     if (filter.q) {
@@ -172,7 +174,7 @@ export class UsersService {
         sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
       );
     }
-
+    usersQB.andWhere('u.is_active = :isActive', { isActive: true });
     // Count before applying pagination
     const total = await usersQB.getCount();
 
