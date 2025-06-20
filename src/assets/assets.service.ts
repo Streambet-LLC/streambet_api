@@ -33,7 +33,10 @@ export class AssetsService {
       );
       return uploadResult;
     } catch (e) {
-      throw new BadRequestException('Error while upload file', e);
+      throw new BadRequestException(
+        `Error while uploading file: ${e.message}`,
+        e,
+      );
     }
   }
 }
