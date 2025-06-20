@@ -105,7 +105,7 @@ export class UsersService {
             profileUpdateDto?.currentPassword === profileUpdateDto?.newPassword
           ) {
             throw new NotFoundException(
-              'Current password and new password cannot be the same',
+              'Old password and new password cannot be the same',
             );
           }
           const isCurrentPasswordValid = await bcrypt.compare(
@@ -113,7 +113,7 @@ export class UsersService {
             existingUserObj.password,
           );
           if (!isCurrentPasswordValid) {
-            throw new NotFoundException('Current password is incorrect');
+            throw new NotFoundException('Old password is incorrect');
           }
           const salt = await bcrypt.genSalt();
           const hashedNewPassword = await bcrypt.hash(
@@ -125,7 +125,7 @@ export class UsersService {
           delete profileUpdateDto.newPassword;
         } else {
           throw new NotFoundException(
-            'Current password is required to update the password',
+            'Old password is required to update the password',
           );
         }
       }
