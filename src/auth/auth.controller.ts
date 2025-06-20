@@ -225,6 +225,8 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     try {
+      // Log the user object for debugging
+      console.log('Google callback user:', req.user);
       // After successful Google authentication, redirect to frontend with tokens
       const { accessToken, refreshToken } = req.user;
 

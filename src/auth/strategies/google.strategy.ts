@@ -24,6 +24,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const clientSecret = configService.get<string>('auth.google.clientSecret');
     const callbackURL = configService.get<string>('auth.google.callbackURL');
 
+    // Log Google OAuth config for debugging (mask clientSecret)
+    console.log('Google OAuth config:', {
+      clientID,
+      clientSecret: clientSecret ? 'set' : 'not set',
+      callbackURL,
+    });
+
     super({
       clientID: clientID || '',
       clientSecret: clientSecret || '',

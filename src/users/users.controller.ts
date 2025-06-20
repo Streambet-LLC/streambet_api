@@ -73,7 +73,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 200,
-    description: 'User profile updated successfully',
+    description: 'User profile updated successfull',
     type: User,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
