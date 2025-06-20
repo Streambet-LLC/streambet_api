@@ -102,6 +102,9 @@ export class User extends BaseEntity {
   @Column({ default: true, name: 'is_active', type: 'boolean' })
   isActive: boolean;
 
+  @Column({ default: true, name: 'is_verify', type: 'boolean' })
+  isVerify: boolean;
+
   @Column({ type: 'text', nullable: true, name: 'verification_token' })
   @Exclude()
   refreshToken: string;

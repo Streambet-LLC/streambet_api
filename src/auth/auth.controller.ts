@@ -34,6 +34,7 @@ import {
   UserRegistrationResponseDto,
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { userVerificationDto } from './dto/verify-password.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -276,12 +277,6 @@ export class AuthController {
     summary: 'Reset password',
     description: 'Reset password using the token received via email',
   })
-  @ApiQuery({
-    name: 'token',
-    required: true,
-    description: 'Reset token received via email',
-    type: String,
-  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Password reset successful',
@@ -294,10 +289,28 @@ export class AuthController {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
     description: 'Error resetting password',
   })
-  async resetPassword(
-    @Query('token') token: string,
-    @Body() resetPasswordDto: ResetPasswordDto,
-  ) {
-    return this.authService.resetPassword(token, resetPasswordDto);
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('verify-email')
+  @ApiOperation({
+    summary: 'Verify email',
+    description: 'Verify email using the token received via email',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'User Verification successful',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid token ',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error while verifying user',
+  })
+  async verifyUser(@Body() userVerificationDto: userVerificationDto) {
+    return this.authService.verifyUser(userVerificationDto);
   }
 }

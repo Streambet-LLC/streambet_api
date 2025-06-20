@@ -24,4 +24,13 @@ export class ResetPasswordDto {
       'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
   })
   newPassword: string;
+
+  @ApiProperty({
+    description: 'Token for the account',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsDefined()
+  token: string;
 }

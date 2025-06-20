@@ -21,6 +21,7 @@ import { EmailType } from 'src/enums/email-type.enum';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
+import { userVerificationDto } from './dto/verify-password.dto';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -373,7 +374,13 @@ export class AuthService {
     }
     try {
       //const token = this.generateJwtTokenForEmailValidation(user);
-      const token = 'dfdfsdfs';
+      const token = this.jwtService.sign(
+        { sub: user.id },
+        {
+          secret: this.configService.get('auth.jwt.secret'),
+          expiresIn: '1d',
+        },
+      );
       const hostUrl = this.configService.get<string>('general.hostUrl');
       const profileLink = this.configService.get<string>(
         'general.applicationHost',
@@ -381,7 +388,6 @@ export class AuthService {
 
       const host = this.configService.get<string>('general.applicationHost');
       const verifyLink = `${hostUrl}api/auth/verify-email?token=${token}`;
-      console.log(verifyLink, 'verifyLink');
 
       const emailData = {
         subject: 'Activate Email',
@@ -407,7 +413,41 @@ export class AuthService {
       );
     }
   }
+  async verifyUser(userVerificationDto: userVerificationDto) {
+    // Verify passwords match
+    const { token } = userVerificationDto;
+    try {
+      // Verify token and extract user ID
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get('auth.jwt.secret'),
+      });
 
+      // Get user
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) {
+        throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
+      }
+
+      // Update password
+      await this.usersService.verifyUser(user.id);
+
+      return {
+        message: 'User Verified successfully',
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      if (error instanceof JsonWebTokenError) {
+        throw new HttpException(
+          'Invalid or expired reset token',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      throw new HttpException(
+        'Error while verifying user',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { identifier } = forgotPasswordDto;
 
@@ -462,8 +502,9 @@ export class AuthService {
     }
   }
 
-  async resetPassword(token: string, resetPasswordDto: ResetPasswordDto) {
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
     // Verify passwords match
+    const { token } = resetPasswordDto;
 
     try {
       // Verify token and extract user ID

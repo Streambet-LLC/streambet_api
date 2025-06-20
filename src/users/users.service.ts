@@ -218,4 +218,10 @@ export class UsersService {
       password: hashedPassword,
     });
   }
+
+  async verifyUser(userId: string): Promise<void> {
+    await this.usersRepository.update(userId, {
+      isVerify: true,
+    });
+  }
 }
