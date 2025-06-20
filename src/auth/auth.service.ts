@@ -150,9 +150,10 @@ export class AuthService {
   /**
    * Logs in a user with the provided email and password.
    * @param loginDto - The login details including email/username and password.
+   * @param rememberMe - Optional rememberMe parameter to set access token expiry to 30 days if true, otherwise use the default from config.
    * @returns The user details along with an access token and refresh token.
    */
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, rememberMe?: boolean) {
     try {
       const { identifier, password } = loginDto;
       const user = await this.usersService.findByEmailOrUsername(identifier);
@@ -185,7 +186,14 @@ export class AuthService {
       await this.usersService.update(user.id, { lastLogin: new Date() });
 
       // Generate tokens
-      const accessToken = this.generateToken(user);
+      let accessToken: string;
+      if (rememberMe) {
+        accessToken = this.generateToken(user, '30d');
+      } else {
+        const defaultExpiry =
+          this.configService.get<string>('auth.jwtExpiresIn');
+        accessToken = this.generateToken(user, defaultExpiry);
+      }
       const refreshToken = await this.generateRefreshToken(user);
 
       return {
@@ -247,7 +255,7 @@ export class AuthService {
     }
   }
 
-  generateToken(user: User): string {
+  generateToken(user: User, expiresIn?: string): string {
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
@@ -255,6 +263,9 @@ export class AuthService {
       role: user.role,
     };
 
+    if (expiresIn) {
+      return this.jwtService.sign(payload, { expiresIn });
+    }
     return this.jwtService.sign(payload);
   }
 

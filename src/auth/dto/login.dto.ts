@@ -17,4 +17,11 @@ export class LoginDto {
   @IsNotEmpty({ message: 'Password must not be empty.' })
   @IsDefined({ message: 'Password is required.' })
   password: string;
+
+  @ApiProperty({
+    description: 'Set to true to keep the user logged in for 30 days',
+    required: false,
+    default: false,
+  })
+  remember_me?: boolean;
 }
