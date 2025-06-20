@@ -227,28 +227,49 @@ export class AuthController {
     try {
       // Log the user object for debugging
       console.log('Google callback user:', req.user);
-      // After successful Google authentication, redirect to frontend with tokens
+      console.log('Available keys:', Object.keys(req.user || {}));
+
+      // Verify tokens exist
+      if (!req.user?.accessToken || !req.user?.refreshToken) {
+        console.error('Missing tokens in callback:', {
+          hasAccessToken: !!req.user?.accessToken,
+          hasRefreshToken: !!req.user?.refreshToken,
+          userKeys: Object.keys(req.user || {}),
+        });
+        throw new Error('Missing authentication tokens');
+      }
+
       const { accessToken, refreshToken } = req.user;
 
-      // Redirect to frontend with tokens
+      // Get client URL from config
       const clientUrl = this.configService.get<string>(
         'app.clientUrl',
         'http://localhost:8080',
       );
 
-      await Promise.resolve(); // Add await to satisfy linter
-      return res.redirect(
-        `${clientUrl}auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`,
-      );
+      // Ensure proper URL formatting
+      const baseUrl = clientUrl.endsWith('/')
+        ? clientUrl.slice(0, -1)
+        : clientUrl;
+      const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
+
+      console.log('Redirecting to:', redirectUrl);
+
+      return res.redirect(redirectUrl);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
+
       const clientUrl = this.configService.get<string>(
         'app.clientUrl',
         'http://localhost:8080',
       );
-      return res.redirect(
-        `${clientUrl}/auth/google-callback?error=oauth_failed`,
-      );
+
+      const baseUrl = clientUrl.endsWith('/')
+        ? clientUrl.slice(0, -1)
+        : clientUrl;
+      const errorUrl = `${baseUrl}/auth/google-callback?error=oauth_failed`;
+
+      return res.redirect(errorUrl);
     }
   }
 }
