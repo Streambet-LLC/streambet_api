@@ -398,7 +398,7 @@ export class AuthService {
           title: 'Activation Email',
           verifyLink,
           code: '',
-          fullName: 'Reshma',
+          fullName: user.name || user.username,
         },
       };
       return await this.emailsService.sendEmailSMTP(
