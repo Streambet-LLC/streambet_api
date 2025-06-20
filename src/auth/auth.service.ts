@@ -168,11 +168,6 @@ export class AuthService {
           'Your account is not active. Please contact support.',
         );
       }
-      if (!user.isActive) {
-        throw new UnauthorizedException(
-          'Your account is not active. Please contact support.',
-        );
-      }
 
       if (!user.isVerify) {
         await this.sendAccountVerificationEmail(user);
@@ -391,7 +386,6 @@ export class AuthService {
       );
       const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
-        'email.APPLICATION_HOST',
         'email.APPLICATION_HOST',
       );
 
