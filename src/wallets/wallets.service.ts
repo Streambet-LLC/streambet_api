@@ -205,17 +205,30 @@ export class WalletsService {
     userId: string,
     amount: number,
     description: string,
+    currencyType: CurrencyType,
+    transactionType: TransactionType,
   ): Promise<Wallet> {
+    const wallet = await this.findByUserId(userId);
+    if (!wallet) {
+      throw new NotFoundException(
+        `Wallet for user with ID ${userId} not found`,
+      );
+    }
     // Ensure amount is positive for admin updates
     if (amount <= 0) {
-      throw new BadRequestException('Amount must be positive');
+      throw new BadRequestException('Invalid Amount');
     }
-    return this.updateBalance(
+    if (currencyType === CurrencyType.FREE_TOKENS) {
+      await this.walletsRepository.update(userId, { freeTokens: amount });
+    }
+    const transaction = this.transactionsRepository.create({
       userId,
-      amount,
-      CurrencyType.FREE_TOKENS,
-      TransactionType.ADMIN_CREDIT,
+      type: transactionType,
+      currencyType,
+      amount: wallet.freeTokens,
+      balanceAfter: amount,
       description,
-    );
+    });
+    return wallet;
   }
 }

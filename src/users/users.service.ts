@@ -32,15 +32,23 @@ export class UsersService {
    */
   async findOne(id: string): Promise<UserResponseDto> {
     try {
-      const user = await this.usersRepository.findOne({ where: { id } });
+      const user = await this.usersRepository.findOne({
+        where: { id },
+        relations: ['wallet'],
+      });
       if (!user) {
         throw new NotFoundException(
           `we couldn't find a user matching that information`,
         );
       }
-      const { password: _unused, ...sanitizedUser } = user;
+
+      const { password: _unused, wallet, ...sanitizedUser } = user;
+      const result = {
+        ...sanitizedUser,
+        wallet_balance: user.wallet?.freeTokens ?? 0,
+      };
       // Exclude password from the response
-      return sanitizedUser;
+      return result;
     } catch (e) {
       console.error(`Error finding user with ID ${id}:`, e);
       throw new NotFoundException((e as Error).message);
