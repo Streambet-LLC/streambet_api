@@ -174,7 +174,7 @@ export class UsersService {
         sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
       );
     }
-    usersQB.andWhere('u.is_active = :isActive', { isActive: true });
+    usersQB.andWhere('u.is_deleted IS NOT NULL');
     // Count before applying pagination
     const total = await usersQB.getCount();
 

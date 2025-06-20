@@ -410,10 +410,6 @@ export class AuthService {
       );
     } catch (e) {
       console.error('Error in AuthService.sendAccountVerificationEmail:', e);
-      throw new HttpException(
-        'Unable to send verification email. Please try again later',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
     }
   }
   async verifyUser(userVerificationDto: userVerificationDto) {
