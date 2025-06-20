@@ -381,12 +381,12 @@ export class AuthService {
           expiresIn: '1d',
         },
       );
-      const hostUrl = this.configService.get<string>('general.hostUrl');
+      const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
-        'general.applicationHost',
+        'email.APPLICATION_HOST',
       );
 
-      const host = this.configService.get<string>('general.applicationHost');
+      const host = this.configService.get<string>('email.APPLICATION_HOST');
       const verifyLink = `${hostUrl}api/auth/verify-email?token=${token}`;
 
       const emailData = {
@@ -397,7 +397,7 @@ export class AuthService {
           profileLink,
           title: 'Activation Email',
           verifyLink,
-          code: 34567,
+          code: '',
           fullName: 'Reshma',
         },
       };
