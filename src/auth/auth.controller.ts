@@ -238,7 +238,7 @@ export class AuthController {
 
       await Promise.resolve(); // Add await to satisfy linter
       return res.redirect(
-        `${clientUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`,
+        `${clientUrl}auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`,
       );
     } catch (error) {
       console.error('Google OAuth callback error:', error);
