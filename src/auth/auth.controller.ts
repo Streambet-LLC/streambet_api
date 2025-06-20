@@ -257,9 +257,6 @@ export class AuthController {
         ? clientUrl.slice(0, -1)
         : clientUrl;
       const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
-
-      console.log('Redirecting to:', redirectUrl);
-
       return res.redirect(redirectUrl);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
