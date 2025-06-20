@@ -390,7 +390,9 @@ export class AuthService {
         },
       );
       const hostUrl = this.configService.get<string>('email.HOST_URL');
+      const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
+        'email.APPLICATION_HOST',
         'email.APPLICATION_HOST',
       );
 
