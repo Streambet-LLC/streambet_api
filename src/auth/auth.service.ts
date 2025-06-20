@@ -152,7 +152,7 @@ export class AuthService {
    * @param loginDto - The login details including email/username and password.
    * @returns The user details along with an access token and refresh token.
    */
-  async login(loginDto: LoginDto): Promise<UserRegistrationResponseDto> {
+  async login(loginDto: LoginDto) {
     try {
       const { identifier, password } = loginDto;
       const user = await this.usersService.findByEmailOrUsername(identifier);
@@ -389,7 +389,6 @@ export class AuthService {
           expiresIn: '1d',
         },
       );
-      const hostUrl = this.configService.get<string>('email.HOST_URL');
       const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
         'email.APPLICATION_HOST',
