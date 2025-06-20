@@ -46,7 +46,6 @@ export class AdminService {
     // Set deletion fields
     user.email = updatedEmail;
     user.username = updatedUsername;
-    user.isActive = false;
     user.deletedAt = new Date();
 
     // Save the updated user
