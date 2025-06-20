@@ -51,6 +51,7 @@ export class EmailsService {
 
   public async sendEmailSMTP(payload: EmailPayloadDto, emailtype) {
     const schemaMapping = this.configService.get<string>('email.schemaMapping');
+    console.log(schemaMapping, 'schemaMapping');
     if (this.validSchema(payload, emailtype)) {
       const templatePath = schemaMapping[emailtype]['templatePath'];
       const emailHTML = await this.getHTML(templatePath, payload.params);
