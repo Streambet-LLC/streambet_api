@@ -377,13 +377,15 @@ export class AuthService {
     }
     try {
       //const token = this.generateJwtTokenForEmailValidation(user);
+
       const token = this.jwtService.sign(
         { sub: user.id },
         {
-          secret: this.configService.get('auth.jwt.secret'),
+          secret: this.configService.get('auth.jwtSecret'),
           expiresIn: '1d',
         },
       );
+
       const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
         'email.APPLICATION_HOST',
@@ -418,7 +420,7 @@ export class AuthService {
     try {
       // Verify token and extract user ID
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get('auth.jwt.secret'),
+        secret: this.configService.get('auth.jwtSecret'),
       });
 
       // Get user
@@ -466,7 +468,7 @@ export class AuthService {
     const token = this.jwtService.sign(
       { sub: user.id },
       {
-        secret: this.configService.get('auth.jwt.secret'),
+        secret: this.configService.get('auth.jwtSecret'),
         expiresIn: '1h',
       },
     );
@@ -508,7 +510,7 @@ export class AuthService {
     try {
       // Verify token and extract user ID
       const payload = this.jwtService.verify(token, {
-        secret: this.configService.get('auth.jwt.secret'),
+        secret: this.configService.get('auth.jwtSecret'),
       });
 
       // Get user
