@@ -10,6 +10,7 @@ export enum TransactionType {
   PURCHASE = 'purchase',
   SYSTEM_ADJUSTMENT = 'system_adjustment',
   INITIAL_CREDIT = 'initial_credit',
+  ADMIN_CREDIT = 'admin_credit',
 }
 
 export enum CurrencyType {

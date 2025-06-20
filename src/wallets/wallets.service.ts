@@ -201,4 +201,21 @@ export class WalletsService {
     const transaction = this.transactionsRepository.create(transactionData);
     return this.transactionsRepository.save(transaction);
   }
+  async updateFreeTokensByAdmin(
+    userId: string,
+    amount: number,
+    description: string,
+  ): Promise<Wallet> {
+    // Ensure amount is positive for admin updates
+    if (amount <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+    return this.updateBalance(
+      userId,
+      amount,
+      CurrencyType.FREE_TOKENS,
+      TransactionType.ADMIN_CREDIT,
+      description,
+    );
+  }
 }

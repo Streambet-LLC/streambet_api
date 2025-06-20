@@ -35,6 +35,7 @@ import {
 import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
+import { AddFreeTokenDto } from './dto/free-token-update.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -317,5 +318,24 @@ export class AdminController {
     @Query() softDeleteUserDto: SoftDeleteUserDto,
   ): Promise<User> {
     return this.adminService.softDeleteUser(softDeleteUserDto.userId);
+  }
+
+  @ApiOperation({
+    summary: `Add free token .`,
+    description: 'API to add free token by admin.',
+  })
+  @Patch('tokens/free')
+  async addFreeToken(
+    @Body() addFreeTokenDto: AddFreeTokenDto,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureAdmin(req.user);
+    const data =
+      await this.adminService.updateFreeTokensByAdmin(addFreeTokenDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully updated free tokens',
+      data,
+    };
   }
 }

@@ -1,10 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
+import {
+  CurrencyType,
+  TransactionType,
+} from 'src/wallets/entities/transaction.entity';
+import { Wallet } from 'src/wallets/entities/wallet.entity';
+import { AddFreeTokenDto } from './dto/free-token-update.dto';
 
 @Injectable()
 export class AdminService {
@@ -50,5 +60,23 @@ export class AdminService {
 
     // Save the updated user
     return this.userRepository.save(user);
+  }
+
+  async updateFreeTokensByAdmin(
+    addFreeTokenDto: AddFreeTokenDto,
+  ): Promise<Wallet> {
+    const { userId, amount } = addFreeTokenDto;
+    // Ensure amount is positive for admin updates
+    if (amount <= 0) {
+      throw new BadRequestException('Plz enter valid amount ');
+    }
+    const description = `Admin credit adjustment of ${amount} free tokens for user ${userId}`;
+    return this.walletsService.updateBalance(
+      userId,
+      amount,
+      CurrencyType.FREE_TOKENS,
+      TransactionType.ADMIN_CREDIT,
+      description,
+    );
   }
 }
