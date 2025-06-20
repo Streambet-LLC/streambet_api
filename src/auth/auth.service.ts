@@ -133,16 +133,13 @@ export class AuthService {
       await this.walletsService.create(user.id);
 
       // Generate tokens
-      const accessToken = this.generateToken(user);
-      const refreshToken = await this.generateRefreshToken(user);
+
       await this.sendAccountVerificationEmail(user);
       return {
         id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
-        accessToken,
-        refreshToken,
       };
     } catch (e) {
       console.error('Error in AuthService.register:', e);
@@ -171,7 +168,18 @@ export class AuthService {
           'Your account is not active. Please contact support.',
         );
       }
+      if (!user.isActive) {
+        throw new UnauthorizedException(
+          'Your account is not active. Please contact support.',
+        );
+      }
 
+      if (!user.isVerify) {
+        await this.sendAccountVerificationEmail(user);
+        throw new UnauthorizedException(
+          'Your account is not verified. Please check your email for verification instructions.',
+        );
+      }
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
@@ -387,7 +395,7 @@ export class AuthService {
       );
 
       const host = this.configService.get<string>('email.APPLICATION_HOST');
-      const verifyLink = `${hostUrl}api/auth/verify-email?token=${token}`;
+      const verifyLink = `${hostUrl}/auth/verify-email?token=${token}`;
 
       const emailData = {
         subject: 'Activate Email',

@@ -124,11 +124,5 @@ export class UserRegistrationResponseDto {
   email: string;
 
   @ApiProperty()
-  accessToken: string;
-
-  @ApiProperty()
-  refreshToken: string;
-
-  @ApiProperty()
   role: string;
 }
