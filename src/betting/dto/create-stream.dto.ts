@@ -19,11 +19,11 @@ export class CreateStreamDto {
   @IsNotEmpty()
   kickEmbedUrl: string;
 
-  @IsUrl()
+  @IsString()
   @IsOptional()
   thumbnailUrl?: string;
 
   @IsDateString()
   @IsOptional()
-  scheduledStartTime?: Date;
+  scheduledStartTime?: string;
 }
