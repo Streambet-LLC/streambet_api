@@ -13,7 +13,12 @@
         }
       ],
       "essential": true,
-      "environment": [],
+      "environment": [
+        {
+          "name": "DB_HOST",
+          "value": "db-private.revyrie.co"
+        }
+      ],
       "secrets": [
         { "name": "NODE_ENV", "valueFrom": "/streambet/dev/NODE_ENV" },
         { "name": "PORT", "valueFrom": "/streambet/dev/PORT" },
@@ -27,7 +32,6 @@
           "valueFrom": "/streambet/dev/ENABLE_DETAILED_LOGGING"
         },
 
-        { "name": "DB_HOST", "valueFrom": "/streambet/dev/DB_HOST" },
         { "name": "DB_PORT", "valueFrom": "/streambet/dev/DB_PORT" },
         { "name": "DB_USERNAME", "valueFrom": "/streambet/dev/DB_USERNAME" },
         { "name": "DB_PASSWORD", "valueFrom": "/streambet/dev/DB_PASSWORD" },
