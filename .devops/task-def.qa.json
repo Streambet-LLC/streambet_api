@@ -1,39 +1,110 @@
 {
-    "containerDefinitions": [
+  "containerDefinitions": [
+    {
+      "name": "streambet-dev",
+      "image": "<IMAGE_URI>",
+      "cpu": 256,
+      "memory": 512,
+      "portMappings": [
         {
-            "name": "streambet-qa",
-            "image": "766088405104.dkr.ecr.us-west-1.amazonaws.com/streambet-qa",
-            "cpu": 256,
-            "memory": 512,
-            "portMappings": [
-                {
-                    "containerPort": 3000,
-                    "hostPort": 3000,
-                    "protocol": "tcp"
-                }
-            ],
-            "essential": true,
-            "environment": [],
-            "mountPoints": [],
-            "volumesFrom": [],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/streambet-qa",
-                    "awslogs-region": "us-west-1",
-                    "awslogs-stream-prefix": "ecs"
-                }
-            },
-            "systemControls": []
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
         }
-    ],
-    "family": "streambet-qa",
-    "networkMode": "awsvpc",
-    "volumes": [],
-    "requiresCompatibilities": [
-        "FARGATE"
-    ],
-    "cpu": "256",
-    "memory": "512",
-    "executionRoleArn": "arn:aws:iam::766088405104:role/ecsTaskExecutionRole"
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "NODE_ENV", "value": "development" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "ENABLE_API_LOGGING", "value": "true" },
+        { "name": "ENABLE_DETAILED_LOGGING", "value": "true" },
+        { "name": "DB_HOST", "value": "db-private.revyrie.co" },
+        { "name": "DB_PORT", "value": "5432" },
+        { "name": "JWT_EXPIRES_IN", "value": "1d" },
+        { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
+        { "name": "FILE_DRIVER", "value": "s3" }
+      ],
+      "secrets": [
+        { "name": "CLIENT_URL", "valueFrom": "/streambet/dev/CLIENT_URL" },
+
+        { "name": "DB_USERNAME", "valueFrom": "/streambet/dev/DB_USERNAME" },
+        { "name": "DB_PASSWORD", "valueFrom": "/streambet/dev/DB_PASSWORD" },
+        { "name": "DB_DATABASE", "valueFrom": "/streambet/dev/DB_DATABASE" },
+
+        { "name": "JWT_SECRET", "valueFrom": "/streambet/dev/JWT_SECRET" },
+        { "name": "REFRESH_TOKEN_SECRET", "valueFrom": "/streambet/dev/REFRESH_TOKEN_SECRET" },
+
+        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_ID" },
+        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_SECRET" },
+        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/dev/GOOGLE_CALLBACK_URL" },
+
+        { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/dev/STRIPE_SECRET_KEY" },
+        { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/dev/STRIPE_WEBHOOK_SECRET" },
+
+        { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/dev/ACCESS_KEY_ID" },
+        { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/dev/SECRET_ACCESS_KEY" },
+        { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/dev/AWS_DEFAULT_S3_BUCKET" },
+        { "name": "AWS_S3_REGION", "valueFrom": "/streambet/dev/AWS_S3_REGION" },
+
+        {
+          "name": "AWS_SMTP_USER",
+          "valueFrom": "/streambet/dev/AWS_SMTP_USER"
+        },
+        {
+          "name": "AWS_SMTP_PASSWORD",
+          "valueFrom": "/streambet/dev/AWS_SMTP_PASSWORD"
+        },
+        {
+          "name": "AWS_SMTP_HOST",
+          "valueFrom": "/streambet/dev/AWS_SMTP_HOST"
+        },
+        {
+          "name": "AWS_SMTP_PORT",
+          "valueFrom": "/streambet/dev/AWS_SMTP_PORT"
+        },
+        {
+          "name": "MAIL_DEFAULT_NAME",
+          "valueFrom": "/streambet/dev/MAIL_DEFAULT_NAME"
+        },
+        {
+          "name": "MAIL_DEFAULT_EMAIL",
+          "valueFrom": "/streambet/dev/MAIL_DEFAULT_EMAIL"
+        },
+        { "name": "MAIL_SECURE", "valueFrom": "/streambet/dev/MAIL_SECURE" },
+        {
+          "name": "AWS_SMTP_REGION",
+          "valueFrom": "/streambet/dev/AWS_SMTP_REGION"
+        },
+        {
+          "name": "MAIL_REQUIRE_TLS",
+          "valueFrom": "/streambet/dev/MAIL_REQUIRE_TLS"
+        },
+        {
+          "name": "AWS_EMAIL_FROM",
+          "valueFrom": "/streambet/dev/AWS_EMAIL_FROM"
+        },
+        { "name": "HOSTED", "valueFrom": "/streambet/dev/HOSTED" },
+        { "name": "APP_HOST_URL", "valueFrom": "/streambet/qa/APP_HOST_URL" }
+
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/streambet-dev",
+          "awslogs-region": "us-west-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "streambet-dev",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::766088405104:role/ecsTaskExecutionRole"
 }
