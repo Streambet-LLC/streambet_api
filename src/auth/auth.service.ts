@@ -153,9 +153,9 @@ export class AuthService {
    * @param rememberMe - Optional rememberMe parameter to set access token expiry to 30 days if true, otherwise use the default from config.
    * @returns The user details along with an access token and refresh token.
    */
-  async login(loginDto: LoginDto, rememberMe?: boolean) {
+  async login(loginDto: LoginDto) {
     try {
-      const { identifier, password } = loginDto;
+      const { identifier, password, remember_me } = loginDto;
       const user = await this.usersService.findByEmailOrUsername(identifier);
 
       if (!user) {
@@ -187,7 +187,7 @@ export class AuthService {
 
       // Generate tokens
       let accessToken: string;
-      if (rememberMe) {
+      if (remember_me === true) {
         accessToken = this.generateToken(user, '30d');
       } else {
         const defaultExpiry =
