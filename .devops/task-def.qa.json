@@ -1,7 +1,7 @@
 {
   "containerDefinitions": [
     {
-      "name": "streambet-dev",
+      "name": "streambet-qa",
       "image": "<IMAGE_URI>",
       "cpu": 256,
       "memory": 512,
@@ -25,26 +25,26 @@
         { "name": "FILE_DRIVER", "value": "s3" }
       ],
       "secrets": [
-        { "name": "CLIENT_URL", "valueFrom": "/streambet/dev/CLIENT_URL" },
+        { "name": "CLIENT_URL", "valueFrom": "/streambet/qa/CLIENT_URL" },
 
-        { "name": "DB_USERNAME", "valueFrom": "/streambet/dev/DB_USERNAME" },
-        { "name": "DB_PASSWORD", "valueFrom": "/streambet/dev/DB_PASSWORD" },
-        { "name": "DB_DATABASE", "valueFrom": "/streambet/dev/DB_DATABASE" },
+        { "name": "DB_USERNAME", "valueFrom": "/streambet/qa/DB_USERNAME" },
+        { "name": "DB_PASSWORD", "valueFrom": "/streambet/qa/DB_PASSWORD" },
+        { "name": "DB_DATABASE", "valueFrom": "/streambet/qa/DB_DATABASE" },
 
-        { "name": "JWT_SECRET", "valueFrom": "/streambet/dev/JWT_SECRET" },
-        { "name": "REFRESH_TOKEN_SECRET", "valueFrom": "/streambet/dev/REFRESH_TOKEN_SECRET" },
+        { "name": "JWT_SECRET", "valueFrom": "/streambet/qa/JWT_SECRET" },
+        { "name": "REFRESH_TOKEN_SECRET", "valueFrom": "/streambet/qa/REFRESH_TOKEN_SECRET" },
 
-        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_ID" },
-        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/dev/GOOGLE_CLIENT_SECRET" },
-        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/dev/GOOGLE_CALLBACK_URL" },
+        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/qa/GOOGLE_CLIENT_ID" },
+        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/qa/GOOGLE_CLIENT_SECRET" },
+        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/qa/GOOGLE_CALLBACK_URL" },
 
-        { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/dev/STRIPE_SECRET_KEY" },
-        { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/dev/STRIPE_WEBHOOK_SECRET" },
+        { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/qa/STRIPE_SECRET_KEY" },
+        { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/qa/STRIPE_WEBHOOK_SECRET" },
 
-        { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/dev/ACCESS_KEY_ID" },
-        { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/dev/SECRET_ACCESS_KEY" },
-        { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/dev/AWS_DEFAULT_S3_BUCKET" },
-        { "name": "AWS_S3_REGION", "valueFrom": "/streambet/dev/AWS_S3_REGION" },
+        { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/qa/ACCESS_KEY_ID" },
+        { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/qa/SECRET_ACCESS_KEY" },
+        { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/qa/AWS_DEFAULT_S3_BUCKET" },
+        { "name": "AWS_S3_REGION", "valueFrom": "/streambet/qa/AWS_S3_REGION" },
 
         {
           "name": "AWS_SMTP_USER",
@@ -92,7 +92,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/streambet-dev",
+          "awslogs-group": "/ecs/streambet-qa",
           "awslogs-region": "us-west-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -100,7 +100,7 @@
       "systemControls": []
     }
   ],
-  "family": "streambet-dev",
+  "family": "streambet-qa",
   "networkMode": "awsvpc",
   "volumes": [],
   "requiresCompatibilities": ["FARGATE"],
