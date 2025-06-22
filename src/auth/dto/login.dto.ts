@@ -1,4 +1,10 @@
-import { IsDefined, IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsDefined,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -23,5 +29,7 @@ export class LoginDto {
     required: false,
     default: false,
   })
+  @IsOptional()
+  @IsBoolean()
   remember_me?: boolean;
 }
