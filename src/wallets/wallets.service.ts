@@ -218,10 +218,11 @@ export class WalletsService {
     if (amount <= 0) {
       throw new BadRequestException('Invalid Amount');
     }
+
     if (currencyType === CurrencyType.FREE_TOKENS) {
-      await this.walletsRepository.update(userId, { freeTokens: amount });
+      await this.walletsRepository.update(wallet.id, { freeTokens: amount });
     }
-    const transaction = this.transactionsRepository.create({
+    this.transactionsRepository.create({
       userId,
       type: transactionType,
       currencyType,
@@ -229,6 +230,6 @@ export class WalletsService {
       balanceAfter: amount,
       description,
     });
-    return wallet;
+    return await this.findByUserId(userId);
   }
 }
