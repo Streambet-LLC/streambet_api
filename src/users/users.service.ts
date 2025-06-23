@@ -183,6 +183,7 @@ export class UsersService {
       );
     }
     usersQB.andWhere('u.deleted_at IS  NULL');
+    usersQB.andWhere('u.role = :role', { role: 'user' });
     // Count before applying pagination
     const total = await usersQB.getCount();
 
