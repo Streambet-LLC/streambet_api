@@ -1,6 +1,6 @@
+import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
-import { BettingVariable } from './betting-variable.entity';
 
 export enum StreamStatus {
   SCHEDULED = 'scheduled',

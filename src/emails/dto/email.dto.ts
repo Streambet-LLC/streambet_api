@@ -9,8 +9,8 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import { transformFilterParam } from 'src/common/filters/filter.dto';
 import { EmailType } from 'src/enums/email-type.enum';
-import { transformFilterParam } from 'src/users/dto/user.requests.dto';
 
 export class EmailTypeDto {
   @ApiProperty({

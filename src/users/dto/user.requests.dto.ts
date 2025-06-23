@@ -13,12 +13,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform, TransformFnParams } from 'class-transformer';
-export type Range = [number, number];
-export type Sort = [string, 'DESC' | 'ASC'];
-export const transformFilterParam = (value: any): string | string[] =>
-  value.length > 0
-    ? value.map((item: string) => item.trim().toLowerCase())
-    : value;
+import { AdminFilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 
 export class ProfileUpdateDto {
   @ApiProperty({
@@ -96,26 +91,6 @@ export class ProfileUpdateDto {
   @Exclude()
   @IsOptional()
   password?: string;
-}
-
-export class AdminFilterDto {
-  @ApiProperty({
-    required: false,
-    default: '[0,24]',
-    description: 'Number of records eg: [0,24]',
-  })
-  @IsString()
-  @IsOptional()
-  public range?: string;
-
-  @ApiProperty({
-    required: false,
-    default: '["createdAt","DESC"]',
-    description: 'Sort order for the list, eg: ["createdAt","DESC"]',
-  })
-  @IsString()
-  @IsOptional()
-  public sort?: string;
 }
 
 export class FilterDto {

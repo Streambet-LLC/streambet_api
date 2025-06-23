@@ -20,9 +20,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AssetsModule } from './assets/assets.module';
 import fileConfig from './config/file.config';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { EjsAdapter } from '@nestjs-modules/mailer/dist/adapters/ejs.adapter';
-import { join } from 'path';
 import emailConfig from './config/email.config';
+import { StreamModule } from './stream/stream.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -77,6 +77,7 @@ import emailConfig from './config/email.config';
     WalletsModule,
     PaymentsModule,
     MailerModule,
+    StreamModule,
   ],
   controllers: [AppController],
   providers: [
