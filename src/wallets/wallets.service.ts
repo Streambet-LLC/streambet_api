@@ -221,7 +221,7 @@ export class WalletsService {
     if (currencyType === CurrencyType.FREE_TOKENS) {
       await this.walletsRepository.update(userId, { freeTokens: amount });
     }
-    const transaction = this.transactionsRepository.create({
+    this.transactionsRepository.create({
       userId,
       type: transactionType,
       currencyType,

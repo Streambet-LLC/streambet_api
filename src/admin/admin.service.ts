@@ -71,12 +71,12 @@ export class AdminService {
       throw new BadRequestException('Plz enter valid amount ');
     }
     const description = `Admin credit adjustment of ${amount} free tokens for user ${userId}`;
-    return this.walletsService.updateBalance(
+    return this.walletsService.updateFreeTokensByAdmin(
       userId,
       amount,
+      description,
       CurrencyType.FREE_TOKENS,
       TransactionType.ADMIN_CREDIT,
-      description,
     );
   }
 }
