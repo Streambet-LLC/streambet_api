@@ -1,7 +1,7 @@
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { Wallet } from 'src/wallets/entities/wallet.entity';
+import { Wallet } from '../../wallets/entities/wallet.entity';
 
 export enum UserRole {
   USER = 'user',
