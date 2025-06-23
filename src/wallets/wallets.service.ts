@@ -230,6 +230,6 @@ export class WalletsService {
       balanceAfter: amount,
       description,
     });
-    return wallet;
+    return await this.findByUserId(userId);
   }
 }
