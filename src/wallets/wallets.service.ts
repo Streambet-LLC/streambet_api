@@ -218,8 +218,9 @@ export class WalletsService {
     if (amount <= 0) {
       throw new BadRequestException('Invalid Amount');
     }
+
     if (currencyType === CurrencyType.FREE_TOKENS) {
-      await this.walletsRepository.update(userId, { freeTokens: amount });
+      await this.walletsRepository.update(wallet.id, { freeTokens: amount });
     }
     this.transactionsRepository.create({
       userId,
