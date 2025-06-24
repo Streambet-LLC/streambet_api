@@ -16,7 +16,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
 } from '@nestjs/swagger';
-import { HomeStreamListFilterDto } from './dto/list-stream.dto';
+import { StreamFilterDto } from './dto/list-stream.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -45,14 +45,13 @@ export class StreamController {
     description:
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
-  @ApiOkResponse({ type: HomeStreamListFilterDto })
+  @ApiOkResponse({ type: StreamFilterDto })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('home')
-  async getAllUsers(@Query() homeStreamListFilterDto: HomeStreamListFilterDto) {
-    const { total, data } = await this.streamService.homePageStreamList(
-      homeStreamListFilterDto,
-    );
+  async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
+    const { total, data } =
+      await this.streamService.homePageStreamList(streamFilterDto);
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',

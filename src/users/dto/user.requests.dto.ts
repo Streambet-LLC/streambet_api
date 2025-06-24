@@ -93,54 +93,6 @@ export class ProfileUpdateDto {
   password?: string;
 }
 
-export class FilterDto {
-  @ApiProperty({ description: 'Search by name', required: false })
-  @IsString()
-  @IsOptional()
-  q: string;
-
-  @ApiProperty({ description: 'Filter by created_at', required: false })
-  @IsString()
-  @IsOptional()
-  @IsDateString()
-  created_at_gte: Date;
-
-  @ApiProperty({ description: 'Filter by created_at', required: false })
-  @IsString()
-  @IsOptional()
-  @IsDateString()
-  created_at_lte: Date;
-
-  @ApiProperty({ description: 'Filter by status', required: false })
-  @IsNumber()
-  @IsOptional()
-  status: number;
-
-  @ApiProperty({ description: 'Filter By ids', required: false })
-  @IsArray()
-  @IsOptional()
-  id: number[];
-
-  @ApiProperty({ description: 'Display At', required: false })
-  @IsString()
-  @IsOptional()
-  display_at: string;
-
-  @ApiPropertyOptional({
-    type: String,
-    default: 'true',
-    enum: ['true', 'false'],
-    description:
-      'Pass with parameter false if you want the results without pagination',
-  })
-  @IsOptional()
-  @IsBoolean()
-  @Transform(({ value }: TransformFnParams) =>
-    value && value === 'false' ? false : true,
-  )
-  getAll?: boolean;
-}
-
 export class PaginationFilterDto {
   @ApiProperty({
     required: false,
