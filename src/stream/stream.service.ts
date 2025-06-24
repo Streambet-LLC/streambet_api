@@ -65,7 +65,7 @@ export class StreamService {
     return { data, total };
   }
 
-  async allStremsForAdmin(
+  async allStreamsForAdmin(
     streamFilterDto: StreamFilterDto,
   ): Promise<{ data: Stream[]; total: number }> {
     const sort: Sort = streamFilterDto.sort

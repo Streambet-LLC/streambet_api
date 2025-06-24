@@ -350,13 +350,13 @@ export class AdminController {
   })
   @ApiOkResponse({ type: UserFilterDto })
   @Get('streams')
-  async allStremsForAdmin(
+  async allStreamsForAdmin(
     @Request() req: RequestWithUser,
     @Query() streamFilterDto: StreamFilterDto,
   ) {
     this.ensureAdmin(req.user);
     const { total, data } =
-      await this.streamService.allStremsForAdmin(streamFilterDto);
+      await this.streamService.allStreamsForAdmin(streamFilterDto);
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
