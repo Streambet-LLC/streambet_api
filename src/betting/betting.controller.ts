@@ -15,7 +15,6 @@ import {
 import { BettingService } from './betting.service';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Stream } from './entities/stream.entity';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
 import { User } from '../users/entities/user.entity';
@@ -28,6 +27,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { Stream } from 'src/stream/entities/stream.entity';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
