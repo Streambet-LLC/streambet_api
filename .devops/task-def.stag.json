@@ -93,7 +93,7 @@
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/streambet-stag",
-          "awslogs-region": "us-west-1",
+          "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
       },
