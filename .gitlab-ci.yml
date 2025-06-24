@@ -117,4 +117,30 @@ deploy_qa:
     CLUSTER_NAME: revyrie-cluster
   dependencies: [validate_qa]
   only: [qa]
-  
+
+# === ENV: Stag ===
+build_stag:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+    ECR_REPO_NAME: streambet-stag
+  only: [stag]
+
+validate_stag:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+  dependencies: [build_stag]
+  only: [stag]
+
+deploy_stag:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: stag
+    ECS_SERVICE_NAME: streambet-stag
+    CLUSTER_NAME: streambet-cluster
+  dependencies: [validate_stag]
+  only: [stag]
