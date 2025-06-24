@@ -26,4 +26,8 @@ export class CreateStreamDto {
   @IsDateString()
   @IsOptional()
   scheduledStartTime?: string;
+
+  @IsDateString()
+  @IsOptional()
+  endTime?: string;
 }
