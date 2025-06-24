@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
-import { Stream, StreamStatus } from './entities/stream.entity';
 import {
   BettingVariable,
   BettingVariableStatus,
@@ -18,6 +17,7 @@ import { CreateBettingVariableDto } from './dto/create-betting-variable.dto';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
+import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 
 @Injectable()
 export class BettingService {

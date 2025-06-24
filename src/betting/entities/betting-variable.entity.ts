@@ -1,7 +1,7 @@
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
-import { Stream } from './stream.entity';
 import { Bet } from './bet.entity';
+import { Stream } from 'src/stream/entities/stream.entity';
 
 export enum BettingVariableStatus {
   ACTIVE = 'active',

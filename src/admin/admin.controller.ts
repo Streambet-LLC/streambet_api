@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, UserRole } from '../users/entities/user.entity';
 import { CreateStreamDto } from '../betting/dto/create-stream.dto';
 import { CreateBettingVariableDto } from '../betting/dto/create-betting-variable.dto';
-import { StreamStatus } from '../betting/entities/stream.entity';
+
 import { BettingVariableStatus } from '../betting/entities/betting-variable.entity';
 import { ApiResponse } from '../common/types/api-response.interface';
 import {
@@ -36,6 +36,7 @@ import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { AddFreeTokenDto } from './dto/free-token-update.dto';
+import { StreamStatus } from 'src/stream/entities/stream.entity';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
