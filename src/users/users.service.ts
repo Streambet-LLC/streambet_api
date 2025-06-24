@@ -64,7 +64,9 @@ export class UsersService {
     });
   }
   async findByUsername(username: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { username } });
+    return this.usersRepository.findOne({
+      where: { username: ILike(username) },
+    });
   }
 
   async findByRefreshToken(refreshToken: string): Promise<User | null> {
