@@ -22,7 +22,12 @@
         { "name": "DB_PORT", "value": "5432" },
         { "name": "JWT_EXPIRES_IN", "value": "1d" },
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
-        { "name": "FILE_DRIVER", "value": "s3" }
+        { "name": "FILE_DRIVER", "value": "s3" },
+        { "name": "AWS_SMTP_PORT", "value": "465" },
+        { "name": "MAIL_DEFAULT_NAME", "value": "smtp-streambet" },
+        { "name": "MAIL_SECURE", "value": "true" },
+        { "name": "MAIL_REQUIRE_TLS", "value": "true" },
+        { "name": "HOSTED", "value": "false" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },
@@ -46,44 +51,12 @@
         { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/stag/AWS_DEFAULT_S3_BUCKET" },
         { "name": "AWS_S3_REGION", "valueFrom": "/streambet/stag/AWS_S3_REGION" },
 
-        {
-          "name": "AWS_SMTP_USER",
-          "valueFrom": "/streambet/stag/AWS_SMTP_USER"
-        },
-        {
-          "name": "AWS_SMTP_PASSWORD",
-          "valueFrom": "/streambet/stag/AWS_SMTP_PASSWORD"
-        },
-        {
-          "name": "AWS_SMTP_HOST",
-          "valueFrom": "/streambet/stag/AWS_SMTP_HOST"
-        },
-        {
-          "name": "AWS_SMTP_PORT",
-          "valueFrom": "/streambet/stag/AWS_SMTP_PORT"
-        },
-        {
-          "name": "MAIL_DEFAULT_NAME",
-          "valueFrom": "/streambet/stag/MAIL_DEFAULT_NAME"
-        },
-        {
-          "name": "MAIL_DEFAULT_EMAIL",
-          "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL"
-        },
-        { "name": "MAIL_SECURE", "valueFrom": "/streambet/stag/MAIL_SECURE" },
-        {
-          "name": "AWS_SMTP_REGION",
-          "valueFrom": "/streambet/stag/AWS_SMTP_REGION"
-        },
-        {
-          "name": "MAIL_REQUIRE_TLS",
-          "valueFrom": "/streambet/stag/MAIL_REQUIRE_TLS"
-        },
-        {
-          "name": "AWS_EMAIL_FROM",
-          "valueFrom": "/streambet/stag/AWS_EMAIL_FROM"
-        },
-        { "name": "HOSTED", "valueFrom": "/streambet/stag/HOSTED" },
+        { "name": "AWS_SMTP_USER", "valueFrom": "/streambet/stag/AWS_SMTP_USER" },
+        { "name": "AWS_SMTP_PASSWORD", "valueFrom": "/streambet/stag/AWS_SMTP_PASSWORD" },
+        { "name": "AWS_SMTP_HOST", "valueFrom": "/streambet/stag/AWS_SMTP_HOST" },
+        { "name": "MAIL_DEFAULT_EMAIL", "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL" },
+        { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
+        { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" }
 
       ],
