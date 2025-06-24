@@ -146,7 +146,26 @@ export class AuthService {
       throw new BadRequestException((e as Error).message);
     }
   }
+  async checkValidUser(user) {
+    if (!user) {
+      throw new UnauthorizedException(
+        `We couldn't find an account with the provided username or email.`,
+      );
+    }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Your account is not active. Please contact support.',
+      );
+    }
+
+    if (!user.isVerify) {
+      await this.sendAccountVerificationEmail(user);
+      throw new UnauthorizedException(
+        'Your account is not verified. Please check your email for verification instructions.',
+      );
+    }
+  }
   /**
    * Logs in a user with the provided email and password.
    * @param loginDto - The login details including email/username and password.
@@ -158,24 +177,7 @@ export class AuthService {
       const { identifier, password, remember_me } = loginDto;
       const user = await this.usersService.findByEmailOrUsername(identifier);
 
-      if (!user) {
-        throw new UnauthorizedException(
-          `We couldn't find an account with the provided username or email.`,
-        );
-      }
-
-      if (!user.isActive) {
-        throw new UnauthorizedException(
-          'Your account is not active. Please contact support.',
-        );
-      }
-
-      if (!user.isVerify) {
-        await this.sendAccountVerificationEmail(user);
-        throw new UnauthorizedException(
-          'Your account is not verified. Please check your email for verification instructions.',
-        );
-      }
+      await this.checkValidUser(user);
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
@@ -330,6 +332,7 @@ export class AuthService {
         email,
         isGoogleAccount: true,
         tosAccepted: true,
+        isVerify: true,
         tosAcceptedAt: new Date(),
         role: UserRole.USER,
         password: '',
@@ -338,11 +341,9 @@ export class AuthService {
         tosAcceptanceTimestamp: new Date(),
         lastLogin: new Date(),
       });
-
       // Create wallet for the user
       await this.walletsService.create(user.id);
     }
-
     // Generate tokens
     const accessToken = this.generateToken(user);
     const refreshToken = await this.generateRefreshToken(user);
@@ -425,6 +426,7 @@ export class AuthService {
       console.error('Error in AuthService.sendAccountVerificationEmail:', e);
     }
   }
+
   async verifyUser(userVerificationDto: userVerificationDto) {
     // Verify passwords match
     const { token } = userVerificationDto;
@@ -465,16 +467,7 @@ export class AuthService {
 
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier);
-
-    if (!user) {
-      // Return success even if user not found to prevent email/username enumeration
-      return {
-        message:
-          'If the account exists, you will receive password reset instructions.',
-        statusCode: HttpStatus.OK,
-      };
-    }
-
+    await this.checkValidUser(user);
     // Generate password reset token (valid for 1 hour)
     const token = this.jwtService.sign(
       { sub: user.id },
@@ -502,8 +495,7 @@ export class AuthService {
       );
 
       return {
-        message:
-          'If the account exists, you will receive password reset instructions.',
+        message: `A password reset link has been sent to your registered email starting with '${user.email.slice(0, 3)}****'.`,
         statusCode: HttpStatus.OK,
       };
     } catch (error) {
