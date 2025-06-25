@@ -68,7 +68,7 @@ export class AdminService {
     const { userId, amount } = addFreeTokenDto;
     // Ensure amount is positive for admin updates
     if (amount <= 0) {
-      throw new BadRequestException('Plz enter valid amount ');
+      throw new BadRequestException('Invalid amount');
     }
     const description = `Admin credit adjustment of ${amount} free tokens for user ${userId}`;
     return this.walletsService.updateFreeTokensByAdmin(
