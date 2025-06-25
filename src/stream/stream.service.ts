@@ -2,10 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Stream } from './entities/stream.entity';
-import {
-  HomeStreamListFilterDto,
-  StreamFilterDto,
-} from './dto/list-stream.dto';
+import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 
 @Injectable()
