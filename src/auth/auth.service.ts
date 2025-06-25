@@ -467,8 +467,14 @@ export class AuthService {
 
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier);
+    if (user.isGoogleAccount) {
+      throw new UnauthorizedException(
+        'This account was created using Google Sign-In. Please continue logging in with Google.',
+      );
+    }
     await this.checkValidUser(user);
     // Generate password reset token (valid for 1 hour)
+
     const token = this.jwtService.sign(
       { sub: user.id },
       {
