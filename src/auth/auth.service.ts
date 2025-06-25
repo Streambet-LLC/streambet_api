@@ -397,7 +397,6 @@ export class AuthService {
           expiresIn: '1d',
         },
       );
-      console.log(token);
       const hostUrl = this.configService.get<string>('email.HOST_URL');
       const profileLink = this.configService.get<string>(
         'email.APPLICATION_HOST',
