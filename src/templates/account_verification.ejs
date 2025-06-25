@@ -4,149 +4,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Public+Sans&display=swap" rel="stylesheet" />
+  <title>Verify Email - Streambet</title>
   <style>
-    *,
-    *::before,
-    *::after {
-      padding: 0;
-      margin: 0;
-      box-sizing: border-box;
-      font-family: 'Bebas Neue', sans-serif !important;
-      font-family: 'Public Sans', sans-serif !important;
-    }
-
-    body {
-      width: 100%;
-      background-color: #f9f9f9;
-    }
-
-    table {
-      margin: 0 auto;
-      width: 663px;
-      border: 0;
-      border-collapse: collapse;
-    }
-
-    tbody {
-      background-color: #ffffff;
-    }
-
-    tfoot {
-      background-color: #0a0f16 !important;
-      width: 100%;
-    }
-
-    .color1 {
-      background-color: #843ce8;
-      height: 9px;
-      width: 33.33%;
-      display: inline-block;
-    }
-
-    .color2 {
-      background-color: #0fa79c;
-      height: 9px;
-      width: 33.33%;
-      display: inline-block;
-    }
-
-    .color3 {
-      background-color: #27005c;
-      height: 9px;
-      width: 33.33%;
-      display: inline-block;
-    }
-
-    .header-img {
-      object-fit: contain;
-      width: 100%;
-    }
-
-    .text {
-      color: #0c1523;
-      font-size: 18px;
-      font-weight: 400;
-      line-height: 34px;
-      font-style: normal;
-    }
-
-    .white {
-      color: #ffffff;
-    }
-
-    .bold {
-      font-weight: 700;
-    }
-
-    .content {
-      padding: 4% 7.5% 0;
-    }
-
-    @media (max-width: 700px) {
-      table {
-        width: 100%;
-      }
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   </style>
 </head>
 
-<body style="width: 100%; background-color: #f9f9f9">
-  <table style="margin: 0 auto; width: 663px; border: 0; border-collapse: collapse">
-    <thead>
-      <tr>
-        <th>
-          <img style="object-fit: contain; width: 100%" alt="verify account"
-            src="https://d1oegzdy2qnz41.cloudfront.net/assets/a5af1439-25e5-430f-add7-b66ecac7b00b-1.png" />
-        </th>
-      </tr>
-    </thead>
+<body style="margin:0;padding:0;background-color:#000000;font-family:'Inter',sans-serif;color:#FFFFFF;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+    style="background-color:#000000;margin:0;padding:0;width:100%;">
+    <tr>
+      <td>
+        <div class="container" style="max-width:100%;margin:0 auto;padding:40px 20px;">
+          <!-- Logo -->
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:60px;">
+            <tr>
+              <td align="center">
+                <img
+                  src="https://streambets3dev.s3.us-east-1.amazonaws.com/logo/f4b3d93d-afc0-4987-bfe4-3d5950dafb05-Frame%201%20%281%29.png"
+                  alt="Streambet Logo" width="280" style="display:block;width:280px;height:auto;" />
+              </td>
+            </tr>
+          </table>
 
-    <tbody style="background-color: #ffffff">
-      <tr>
-        <td style="padding: 4% 7.5% 0">
-          <h2 style="
-                color: #0c1523;
-                font-weight: 700;
-                line-height: 34px;
-                font-style: normal;
-                font-size: 38px;
-              ">
-            Hi <%= params.fullName %>,
-          </h2>
-          <br /><br />
-          <p style="
-                color: #0c1523;
-                font-size: 18px;
-                font-weight: 700;
-                line-height: 34px;
-                font-style: normal;
-              ">
-            Thank you for choosing Streambet!
-          </p>
-          <br />
-          <p style="
-                color: #0c1523;
-                font-size: 18px;
-                font-weight: 400;
-                line-height: 34px;
-                font-style: normal;
-              ">
-            To verify your email address and enhance your account security, <br />
-            please use thefollowing one-time verification code:<a href="<%= params.verifyLink %>"
-              style="color: #000; text-decoration: underline">click here</a>
-          </p>
-          <br />
-        </td>
-      </tr>
+          <!-- Heading -->
+          <h1 class="heading"
+            style="text-align:center;font-size:38px;font-weight:600;color:#FFFFFF;margin-bottom:40px;font-family:'Inter',sans-serif;">
+            Welcome to <span style="color:rgba(189,255,0,1);">Streambet</span></h1>
 
+          <!-- Box -->
+          <div class="box"
+            style="background-color:#181818;border-radius:16px;border:1px solid #2C2C2C;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
+            <div class="box-content" style="max-width:700px;margin:0 auto;color:#FFFFFF;">
+              <p
+                style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform: capitalize;">
+                Hi <%= params.fullName %>,</p>
+              <p style="font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;">
+                Thank you for signing up!<br>To complete your registration, please verify your email address.</p>
+              <a href="<%= params.verifyLink %>" class="btn"
+                style="padding:14px 24px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Verify
+                Email Address</a>
+              <p
+                style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;">
+                Thanks and welcome aboard,<br /><b>The Streambet Team</b></p>
+            </div>
+          </div>
 
-
-    </tbody>
-
-
+          <!-- Footer -->
+          <div class="footer"
+            style="margin-top:60px;font-size:14px;text-align:center;color:#FFFFFF;font-family:'Inter',sans-serif;">©
+            Streambet 2025</div>
+        </div>
+      </td>
+    </tr>
   </table>
 </body>
 
