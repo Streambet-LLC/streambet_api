@@ -37,6 +37,8 @@ import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { StreamStatus } from 'src/stream/entities/stream.entity';
+import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
+import { StreamService } from 'src/stream/stream.service';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -53,6 +55,7 @@ export class AdminController {
     private readonly usersService: UsersService,
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
+    private readonly streamService: StreamService,
   ) {}
 
   // Helper method to check if user is admin
@@ -337,6 +340,28 @@ export class AdminController {
       statusCode: HttpStatus.OK,
       message: 'Successfully updated free tokens',
       data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'List all the streams in the System',
+    description:
+      'API to list stream details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('streams')
+  async allStreamsForAdmin(
+    @Request() req: RequestWithUser,
+    @Query() streamFilterDto: StreamFilterDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const { total, data } =
+      await this.streamService.allStreamsForAdmin(streamFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
     };
   }
 }

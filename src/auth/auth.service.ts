@@ -146,7 +146,7 @@ export class AuthService {
       throw new BadRequestException((e as Error).message);
     }
   }
-  async checkValidUser(user) {
+  private async checkValidUser(user: User | null): Promise<void> {
     if (!user) {
       throw new UnauthorizedException(
         `We couldn't find an account with the provided username or email.`,
