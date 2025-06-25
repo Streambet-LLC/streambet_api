@@ -89,8 +89,5 @@ import { StreamModule } from './stream/stream.module';
   ],
 })
 export class AppModule {
-  constructor(private dataSource: DataSource) {
-    // ✅ Console log environment variables here
-    console.log('MAIL_HOST:', process.env.MAIL_HOST);
-  }
+  constructor(private dataSource: DataSource) {}
 }
