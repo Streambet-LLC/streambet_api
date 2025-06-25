@@ -140,7 +140,7 @@ export class AdminController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({
     status: 403,
-    description: 'Forbidden - Admin access required',
+    description: 'Forbidden- Admin access required',
   })
   @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
   @Post('betting-variables')
