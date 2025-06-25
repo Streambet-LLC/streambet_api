@@ -4,13 +4,12 @@ import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
-  FilterDto,
   ProfileUpdateDto,
   UserFilterDto,
   UserUpdateDto,
 } from './dto/user.requests.dto';
 import { UserResponseDto } from './dto/user.response.dto';
-import { Range, Sort } from 'src/common/filters/filter.dto';
+import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 
 @Injectable()
 export class UsersService {
