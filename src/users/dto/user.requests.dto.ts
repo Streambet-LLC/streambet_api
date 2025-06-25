@@ -57,11 +57,11 @@ export class ProfileUpdateDto {
   @IsString()
   @IsOptional()
   @MinLength(8, {
-    message: 'Current Password must be at least 8 characters long',
+    message: 'Old Password must be at least 8 characters long',
   })
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message:
-      'Current Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
+      'Old Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
   })
   currentPassword?: string;
 

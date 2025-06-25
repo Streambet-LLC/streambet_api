@@ -181,7 +181,7 @@ export class AuthController {
     };
   }
 
-  @ApiOperation({ summary: 'Get the current user profile' })
+  @ApiOperation({ summary: 'Get the Old user profile' })
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',
