@@ -18,6 +18,7 @@ import { PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
+import { PlatformName } from '../enums/platform-name.enum';
 
 @Injectable()
 export class BettingService {
@@ -32,9 +33,37 @@ export class BettingService {
     private dataSource: DataSource,
   ) {}
 
+  // Utility function to detect platform from URL
+  private detectPlatformFromUrl(url: string): PlatformName | null {
+    const platformKeywords: Record<PlatformName, string[]> = {
+      [PlatformName.Kick]: ['kick.com', 'kick'],
+      [PlatformName.Youtube]: ['youtube.com', 'youtu.be', 'youtube'],
+      [PlatformName.Twitch]: ['twitch.tv', 'twitch.com', 'twitch'],
+      [PlatformName.Vimeo]: ['vimeo.com', 'vimeo'],
+    };
+    const urlLower = url.toLowerCase();
+    for (const [platform, keywords] of Object.entries(platformKeywords)) {
+      if (keywords.some((keyword) => urlLower.includes(keyword))) {
+        return platform as PlatformName;
+      }
+    }
+    return null;
+  }
+
   // Stream Management
   async createStream(createStreamDto: CreateStreamDto): Promise<Stream> {
     const stream = this.streamsRepository.create(createStreamDto);
+
+    // Auto-detect platform from embeddedUrl if provided
+    if (createStreamDto.embeddedUrl) {
+      const detectedPlatform = this.detectPlatformFromUrl(
+        createStreamDto.embeddedUrl,
+      );
+      if (detectedPlatform) {
+        stream.platformName = detectedPlatform;
+      }
+    }
+
     return this.streamsRepository.save(stream);
   }
 
