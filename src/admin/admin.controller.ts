@@ -342,7 +342,18 @@ export class AdminController {
       data,
     };
   }
-
+  /**
+   * Retrieves a paginated and filtered list of streams for the admin view.
+   * Supports optional text search, status-based filtering, sorting, and pagination.
+   *
+   * @param streamFilterDto - DTO containing optional filters such as query string (q),
+   *                          stream status, sorting, and pagination range.
+   *
+   * @returns A Promise resolving to an object containing:
+   *          - data: An array of streams with selected fields (id, name, status, viewerCount).
+   *          - total: Total number of streams matching the filter criteria.
+   * @author Reshma M S
+   */
   @ApiOperation({
     summary: 'List all the streams in the System',
     description:
