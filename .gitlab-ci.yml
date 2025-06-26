@@ -63,6 +63,14 @@ variables:
     - echo "Deploying to ECS - $DEPLOY_ENV"
     - aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
     - aws ecs update-service --cluster $CLUSTER_NAME --service $ECS_SERVICE_NAME --task-definition $ECS_SERVICE_NAME --desired-count 1 --deployment-configuration maximumPercent=200,minimumHealthyPercent=50
+    - echo "Waiting for ECS service deployment to stabilize..."
+
+# Wait for service to stabilize
+    - >
+      aws ecs wait services-stable \
+        --cluster $CLUSTER_NAME \
+        --services $ECS_SERVICE_NAME
+    - echo "Deployment complete and stable."
 
 # === ENV: DEV ===
 build_dev:
