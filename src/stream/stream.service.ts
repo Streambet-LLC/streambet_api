@@ -108,7 +108,7 @@ export class StreamService {
       const { pagination = true, streamStatus } = streamFilterDto;
 
       const streamQB = this.streamsRepository.createQueryBuilder('s');
-      if (filter.q) {
+      if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
         });
@@ -171,6 +171,10 @@ export class StreamService {
       }
       return stream;
     } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw e;
+      }
+
       Logger.error('Unable to retrieve stream details', e);
       throw new HttpException(
         `Unable to retrieve stream details at the moment. Please try again later`,
