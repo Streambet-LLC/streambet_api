@@ -17,7 +17,7 @@ export class CreateStreamDto {
 
   @IsUrl()
   @IsNotEmpty()
-  kickEmbedUrl: string;
+  embeddedUrl?: string;
 
   @IsString()
   @IsOptional()
