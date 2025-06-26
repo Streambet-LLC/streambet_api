@@ -66,10 +66,15 @@ variables:
     - echo "Waiting for ECS service deployment to stabilize..."
 
 # Wait for service to stabilize
+
     - >
       aws ecs wait services-stable \
-        --cluster $CLUSTER_NAME \
-        --services $ECS_SERVICE_NAME
+      --cluster $CLUSTER_NAME \
+      --services $ECS_SERVICE_NAME || {
+        echo "Service failed to stabilize"
+        aws ecs describe-services --cluster $CLUSTER_NAME --services $ECS_SERVICE_NAME
+        exit 1
+      }
     - echo "Deployment complete and stable."
 
 # === ENV: DEV ===
