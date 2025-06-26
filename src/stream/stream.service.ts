@@ -65,7 +65,8 @@ export class StreamService {
       streamQB
         .select('s.id', 'id')
         .addSelect('s.name', 'streamName')
-        .addSelect('s.thumbnailUrl', 'thumbnailURL');
+        .addSelect('s.thumbnailUrl', 'thumbnailURL')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime');
       const total = await streamQB.getCount();
       const data = await streamQB.getRawMany();
 
