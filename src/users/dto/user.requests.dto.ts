@@ -5,8 +5,6 @@ import {
   IsOptional,
   IsBoolean,
   IsArray,
-  IsNumber,
-  IsDateString,
   IsDefined,
   IsNotEmpty,
   IsEnum,
@@ -50,34 +48,34 @@ export class ProfileUpdateDto {
   username?: string;
 
   @ApiProperty({
-    description: 'Currnet Password for the account',
+    description: 'Old password for the account',
     example: 'StrongP@ss123',
     minLength: 8,
   })
   @IsString()
   @IsOptional()
   @MinLength(8, {
-    message: 'Old Password must be at least 8 characters long',
+    message: 'Old password must be at least 8 characters long',
   })
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message:
-      'Old Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
+      'Old password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
   })
   currentPassword?: string;
 
   @ApiProperty({
-    description: 'New Password for the account',
+    description: 'New password for the account',
     example: 'StrongP@ss123',
     minLength: 8,
   })
   @IsString()
   @IsOptional()
   @MinLength(8, {
-    message: 'New Password must be at least 8 characters long',
+    message: 'New password must be at least 8 characters long',
   })
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message:
-      'New Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
+      'New password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
   })
   newPassword?: string;
 
@@ -91,54 +89,6 @@ export class ProfileUpdateDto {
   @Exclude()
   @IsOptional()
   password?: string;
-}
-
-export class FilterDto {
-  @ApiProperty({ description: 'Search by name', required: false })
-  @IsString()
-  @IsOptional()
-  q: string;
-
-  @ApiProperty({ description: 'Filter by created_at', required: false })
-  @IsString()
-  @IsOptional()
-  @IsDateString()
-  created_at_gte: Date;
-
-  @ApiProperty({ description: 'Filter by created_at', required: false })
-  @IsString()
-  @IsOptional()
-  @IsDateString()
-  created_at_lte: Date;
-
-  @ApiProperty({ description: 'Filter by status', required: false })
-  @IsNumber()
-  @IsOptional()
-  status: number;
-
-  @ApiProperty({ description: 'Filter By ids', required: false })
-  @IsArray()
-  @IsOptional()
-  id: number[];
-
-  @ApiProperty({ description: 'Display At', required: false })
-  @IsString()
-  @IsOptional()
-  display_at: string;
-
-  @ApiPropertyOptional({
-    type: String,
-    default: 'true',
-    enum: ['true', 'false'],
-    description:
-      'Pass with parameter false if you want the results without pagination',
-  })
-  @IsOptional()
-  @IsBoolean()
-  @Transform(({ value }: TransformFnParams) =>
-    value && value === 'false' ? false : true,
-  )
-  getAll?: boolean;
 }
 
 export class PaginationFilterDto {
