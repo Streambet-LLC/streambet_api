@@ -160,8 +160,9 @@ export class StreamService {
         where: { id },
         select: {
           id: true,
-          kickEmbedUrl: true,
+          embeddedUrl: true,
           name: true,
+          platformName: true,
         },
       });
 
