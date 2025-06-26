@@ -81,6 +81,8 @@ export class StreamController {
     status: 200,
     description: 'Stream details retrieved successfully',
   })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get('/:id')
   async findStreamById(@Param('id') id: string) {
     const stream = await this.streamService.findStreamById(id);
