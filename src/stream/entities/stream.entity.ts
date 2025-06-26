@@ -16,11 +16,14 @@ export class Stream extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column()
-  kickEmbedUrl: string;
+  @Column({ nullable: true })
+  embeddedUrl: string;
 
   @Column({ nullable: true })
   thumbnailUrl: string;
+
+  @Column({ nullable: true })
+  platformName: string;
 
   @Column({
     type: 'enum',
