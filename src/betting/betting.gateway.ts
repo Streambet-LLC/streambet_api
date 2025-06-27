@@ -149,7 +149,7 @@ export class BettingGateway
 
       // Broadcast updated betting information to all clients in the stream
       this.server
-        .to(`stream_${bettingVariable.streamId}`)
+        .to(`stream_${bettingVariable.stream.id}`)
         .emit('bettingUpdate', {
           bettingVariableId: bet.bettingVariableId,
           totalBetsAmount: bettingVariable.totalBetsAmount,
@@ -165,7 +165,7 @@ export class BettingGateway
       };
 
       void this.server
-        .to(`stream_${bettingVariable.streamId}`)
+        .to(`stream_${bettingVariable.stream.id}`)
         .emit('chatMessage', chatMessage);
 
       // Confirm to the client that their bet was placed

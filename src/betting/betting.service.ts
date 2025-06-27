@@ -6,11 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
-import {
-  BettingVariable,
-  BettingVariableStatus,
-} from './entities/betting-variable.entity';
-import { Bet, BetStatus } from './entities/bet.entity';
+import { BettingVariable } from './entities/betting-variable.entity';
+import { Bet } from './entities/bet.entity';
+import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
+import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
 import { CreateStreamDto } from './dto/create-stream.dto';
 import { CreateBettingVariableDto } from './dto/create-betting-variable.dto';
@@ -172,7 +171,7 @@ export class BettingService {
 
     // Check if user already has an active bet (MVP restriction)
     const existingBet = await this.betsRepository.findOne({
-      where: { userId, status: BetStatus.ACTIVE },
+      where: { userId, status: BetStatus.Active },
     });
 
     if (existingBet) {
@@ -233,7 +232,7 @@ export class BettingService {
       throw new NotFoundException(`Bet with ID ${betId} not found`);
     }
 
-    if (bet.status !== BetStatus.ACTIVE) {
+    if (bet.status !== BetStatus.Active) {
       throw new BadRequestException('Only active bets can be canceled');
     }
 
@@ -255,7 +254,7 @@ export class BettingService {
       );
 
       // Update the bet status
-      bet.status = BetStatus.CANCELED;
+      bet.status = BetStatus.Cancelled;
       await this.betsRepository.save(bet);
 
       // Update the betting variable's statistics
@@ -311,7 +310,7 @@ export class BettingService {
       await queryRunner.manager.update(
         BettingVariable,
         {
-          streamId: bettingVariable.streamId,
+          stream: { id: bettingVariable.stream.id },
           id: Not(bettingVariable.id),
           status: BettingVariableStatus.LOCKED,
         },
@@ -321,8 +320,8 @@ export class BettingService {
       // Get all bets for this stream
       const allStreamBets = await queryRunner.manager.find(Bet, {
         where: {
-          bettingVariable: { streamId: bettingVariable.streamId },
-          status: BetStatus.ACTIVE,
+          bettingVariable: { stream: { id: bettingVariable.stream.id } },
+          status: BetStatus.Active,
         },
         relations: ['bettingVariable'],
       });
@@ -358,7 +357,7 @@ export class BettingService {
         const payout = Math.floor(distributablePot * share) + bet.amount; // Return original bet + share of losers' pot
 
         // Update bet status and payout
-        bet.status = BetStatus.WON;
+        bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
         bet.isProcessed = true;
@@ -376,7 +375,7 @@ export class BettingService {
       // Process losing bets
       for (const bet of losingBets) {
         // Update bet status
-        bet.status = BetStatus.LOST;
+        bet.status = BetStatus.Lost;
         bet.payoutAmount = 0;
         bet.processedAt = new Date();
         bet.isProcessed = true;
@@ -407,7 +406,7 @@ export class BettingService {
     const whereClause: Record<string, unknown> = { userId };
 
     if (active) {
-      whereClause.status = BetStatus.ACTIVE;
+      whereClause.status = BetStatus.Active;
     }
 
     return this.betsRepository.find({
@@ -419,7 +418,7 @@ export class BettingService {
 
   async getStreamBets(streamId: string): Promise<BettingVariable[]> {
     return this.bettingVariablesRepository.find({
-      where: { streamId },
+      where: { stream: { id: streamId } },
       relations: ['bets'],
     });
   }

@@ -12,9 +12,15 @@ export class Bet extends BaseEntity {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ name: 'user_id' })
+  userId: string;
+
   @ManyToOne(() => Stream, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'stream_id' })
   stream: Stream;
+
+  @Column({ name: 'stream_id' })
+  streamId: string;
 
   @ManyToOne(() => BettingRound, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'round_id' })
@@ -25,6 +31,9 @@ export class Bet extends BaseEntity {
   })
   @JoinColumn({ name: 'betting_variable_id' })
   bettingVariable: BettingVariable;
+
+  @Column({ name: 'betting_variable_id' })
+  bettingVariableId: string;
 
   @Column({ type: 'bigint' })
   amount: number;
@@ -37,6 +46,15 @@ export class Bet extends BaseEntity {
 
   @Column({ type: 'bigint', default: 0 })
   payout: number;
+
+  @Column({ type: 'bigint', default: 0 })
+  payoutAmount: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  processedAt: Date;
+
+  @Column({ type: 'boolean', default: false })
+  isProcessed: boolean;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;

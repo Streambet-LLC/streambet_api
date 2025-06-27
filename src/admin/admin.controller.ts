@@ -20,7 +20,7 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { CreateStreamDto } from '../betting/dto/create-stream.dto';
 import { CreateBettingVariableDto } from '../betting/dto/create-betting-variable.dto';
 
-import { BettingVariableStatus } from '../betting/entities/betting-variable.entity';
+import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
