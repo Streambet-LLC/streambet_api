@@ -12,7 +12,10 @@ import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
 import { CreateStreamDto } from './dto/create-stream.dto';
-import { CreateBettingVariableDto } from './dto/create-betting-variable.dto';
+import {
+  CreateBettingVariableDto,
+  EditBettingVariableDto,
+} from './dto/create-betting-variable.dto';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -172,6 +175,89 @@ export class BettingService {
     const bettingVariable = await this.findBettingVariableById(id);
     bettingVariable.status = status;
     return this.bettingVariablesRepository.save(bettingVariable);
+  }
+
+  async editBettingVariable(
+    roundId: string,
+    editBettingVariableDto: EditBettingVariableDto,
+  ): Promise<any> {
+    const { roundName, options } = editBettingVariableDto;
+
+    // Get all existing betting variables for this round
+    const existingVariables = await this.bettingVariablesRepository.find({
+      where: { roundId },
+      relations: ['stream'],
+    });
+
+    if (existingVariables.length === 0) {
+      throw new NotFoundException(
+        `No betting variables found for round ${roundId}`,
+      );
+    }
+
+    const stream = existingVariables[0].stream;
+
+    if (stream.status === StreamStatus.ENDED) {
+      throw new BadRequestException(
+        'Cannot edit betting variables for ended streams',
+      );
+    }
+
+    // Separate existing and new options
+    const existingOptions = options.filter((opt) => opt.id);
+    const newOptions = options.filter((opt) => !opt.id);
+
+    // Update existing options
+    for (const option of existingOptions) {
+      const existingVariable = existingVariables.find(
+        (v) => v.id === option.id,
+      );
+      if (existingVariable) {
+        existingVariable.name = option.option;
+        existingVariable.roundName = roundName;
+        await this.bettingVariablesRepository.save(existingVariable);
+      }
+    }
+
+    // Add new options
+    for (const option of newOptions) {
+      const bettingVariable = this.bettingVariablesRepository.create({
+        name: option.option,
+        roundName,
+        roundId,
+        stream: stream,
+      });
+      await this.bettingVariablesRepository.save(bettingVariable);
+    }
+
+    // Remove options that are not in the request
+    const optionIdsToKeep = existingOptions.map((opt) => opt.id);
+    const variablesToDelete = existingVariables.filter(
+      (v) => !optionIdsToKeep.includes(v.id),
+    );
+
+    for (const variable of variablesToDelete) {
+      await this.bettingVariablesRepository.remove(variable);
+    }
+
+    // Get updated variables
+    const updatedVariables = await this.bettingVariablesRepository.find({
+      where: { roundId },
+    });
+
+    // Return grouped response
+    return {
+      streamId: stream.id,
+      roundId,
+      roundName,
+      options: updatedVariables.map((variable) => ({
+        name: variable.name,
+        is_winning_option: variable.is_winning_option,
+        status: variable.status,
+        totalBetsAmount: variable.totalBetsAmount,
+        betCount: variable.betCount,
+      })),
+    };
   }
 
   // Betting Operations
