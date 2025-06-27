@@ -18,6 +18,7 @@ import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class BettingService {
@@ -110,8 +111,8 @@ export class BettingService {
   // Betting Variable Management
   async createBettingVariable(
     createBettingVariableDto: CreateBettingVariableDto,
-  ): Promise<BettingVariable> {
-    const { streamId } = createBettingVariableDto;
+  ): Promise<any> {
+    const { streamId, roundName, options } = createBettingVariableDto;
     const stream = await this.findStreamById(streamId);
 
     if (stream.status === StreamStatus.ENDED) {
@@ -120,10 +121,35 @@ export class BettingService {
       );
     }
 
-    const bettingVariable = this.bettingVariablesRepository.create(
-      createBettingVariableDto,
-    );
-    return this.bettingVariablesRepository.save(bettingVariable);
+    // Generate a roundId for this round
+    const roundId = uuidv4();
+
+    const createdVariables: BettingVariable[] = [];
+
+    for (const option of options) {
+      const bettingVariable = this.bettingVariablesRepository.create({
+        name: option.option,
+        roundName,
+        roundId,
+        stream: stream,
+      });
+      const saved = await this.bettingVariablesRepository.save(bettingVariable);
+      createdVariables.push(saved);
+    }
+
+    // Grouped response
+    return {
+      streamId,
+      roundId,
+      roundName,
+      options: createdVariables.map((variable) => ({
+        name: variable.name,
+        is_winning_option: variable.is_winning_option,
+        status: variable.status,
+        totalBetsAmount: variable.totalBetsAmount,
+        betCount: variable.betCount,
+      })),
+    };
   }
 
   async findBettingVariableById(id: string): Promise<BettingVariable> {

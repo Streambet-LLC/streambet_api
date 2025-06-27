@@ -149,13 +149,13 @@ export class AdminController {
     @Body() createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const bettingVariable = await this.bettingService.createBettingVariable(
+    const grouped = await this.bettingService.createBettingVariable(
       createBettingVariableDto,
     );
     return {
       message: 'Betting variable created successfully',
       status: HttpStatus.CREATED,
-      data: bettingVariable,
+      data: grouped,
     };
   }
 

@@ -3,7 +3,6 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { Stream } from 'src/stream/entities/stream.entity';
-import { BettingRound } from './betting-round.entity';
 import { BetStatus } from '../../enums/bet-status.enum';
 
 @Entity('bets')
@@ -21,10 +20,6 @@ export class Bet extends BaseEntity {
 
   @Column({ name: 'stream_id' })
   streamId: string;
-
-  @ManyToOne(() => BettingRound, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'round_id' })
-  round: BettingRound;
 
   @ManyToOne(() => BettingVariable, (bettingVariable) => bettingVariable.bets, {
     onDelete: 'CASCADE',

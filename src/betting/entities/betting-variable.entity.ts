@@ -1,18 +1,11 @@
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Bet } from './bet.entity';
-import { BettingRound } from './betting-round.entity';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariableStatus } from '../../enums/betting-variable-status.enum';
 
 @Entity('betting_variables')
 export class BettingVariable extends BaseEntity {
-  @ManyToOne(() => BettingRound, (round) => round.bettingVariables, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'round_id' })
-  round: BettingRound;
-
   @ManyToOne(() => Stream, (stream) => stream.bettingVariables, {
     onDelete: 'CASCADE',
   })
@@ -21,6 +14,12 @@ export class BettingVariable extends BaseEntity {
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  roundName: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  roundId: string;
 
   @Column({ type: 'boolean', default: false })
   is_winning_option: boolean;
