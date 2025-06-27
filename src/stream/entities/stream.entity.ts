@@ -1,4 +1,5 @@
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 
@@ -46,4 +47,7 @@ export class Stream extends BaseEntity {
 
   @OneToMany(() => BettingVariable, (variable) => variable.stream)
   bettingVariables: BettingVariable[];
+
+  @OneToMany(() => BettingRound, (round) => round.stream)
+  bettingRounds: BettingRound[];
 }

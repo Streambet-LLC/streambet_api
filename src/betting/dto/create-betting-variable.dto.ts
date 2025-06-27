@@ -36,10 +36,6 @@ export class RoundDto {
 }
 
 export class EditRoundDto {
-  @IsUUID()
-  @IsOptional()
-  roundId?: string; // Optional for existing rounds
-
   @IsString()
   @IsNotEmpty()
   roundName: string;

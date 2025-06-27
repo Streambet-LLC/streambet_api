@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BettingVariable } from './entities/betting-variable.entity';
+import { BettingRound } from './entities/betting-round.entity';
 import { Bet } from './entities/bet.entity';
 import { BettingService } from './betting.service';
 import { BettingController } from './betting.controller';
@@ -12,7 +13,7 @@ import { Stream } from 'src/stream/entities/stream.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Stream, BettingVariable, Bet]),
+    TypeOrmModule.forFeature([BettingVariable, BettingRound, Bet, Stream]),
     WalletsModule,
     UsersModule,
     AuthModule,

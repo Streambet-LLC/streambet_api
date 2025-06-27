@@ -15,6 +15,7 @@ import { CreateStreamDto } from './dto/create-stream.dto';
 import {
   CreateBettingVariableDto,
   EditBettingVariableDto,
+  EditOptionDto,
 } from './dto/create-betting-variable.dto';
 import { PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
@@ -22,6 +23,7 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { v4 as uuidv4 } from 'uuid';
+import { BettingRound } from './entities/betting-round.entity';
 
 @Injectable()
 export class BettingService {
@@ -30,6 +32,8 @@ export class BettingService {
     private streamsRepository: Repository<Stream>,
     @InjectRepository(BettingVariable)
     private bettingVariablesRepository: Repository<BettingVariable>,
+    @InjectRepository(BettingRound)
+    private bettingRoundsRepository: Repository<BettingRound>,
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
@@ -126,16 +130,22 @@ export class BettingService {
 
     const allRounds = [];
 
-    for (const round of rounds) {
-      // Generate a roundId for this round
-      const roundId = uuidv4();
+    for (const roundData of rounds) {
+      // Create betting round
+      const bettingRound = this.bettingRoundsRepository.create({
+        roundName: roundData.roundName,
+        stream: stream,
+        status: BettingVariableStatus.ACTIVE,
+      });
+      const savedRound = await this.bettingRoundsRepository.save(bettingRound);
+
       const createdVariables: BettingVariable[] = [];
 
-      for (const option of round.options) {
+      // Create betting variables for this round
+      for (const option of roundData.options) {
         const bettingVariable = this.bettingVariablesRepository.create({
           name: option.option,
-          roundName: round.roundName,
-          roundId,
+          round: savedRound,
           stream: stream,
         });
         const saved =
@@ -144,9 +154,11 @@ export class BettingService {
       }
 
       allRounds.push({
-        roundId,
-        roundName: round.roundName,
+        roundId: savedRound.id,
+        roundName: savedRound.roundName,
+        status: savedRound.status,
         options: createdVariables.map((variable) => ({
+          id: variable.id,
           name: variable.name,
           is_winning_option: variable.is_winning_option,
           status: variable.status,
@@ -156,7 +168,6 @@ export class BettingService {
       });
     }
 
-    // Return grouped response
     return {
       streamId,
       rounds: allRounds,
@@ -197,63 +208,51 @@ export class BettingService {
       );
     }
 
+    // Get existing rounds for this stream
+    const existingRounds = await this.bettingRoundsRepository.find({
+      where: { streamId },
+      relations: ['bettingVariables'],
+    });
+
     const allRounds = [];
 
-    for (const round of rounds) {
-      if (round.roundId) {
-        // Edit existing round
-        const updatedRound = await this.editSingleRound(round.roundId, round);
-        allRounds.push(updatedRound);
+    for (const roundData of rounds) {
+      // Find existing round by name or create new one
+      let bettingRound = existingRounds.find(
+        (r) => r.roundName === roundData.roundName,
+      );
+
+      if (bettingRound) {
+        // Update existing round
+        bettingRound.roundName = roundData.roundName;
+        await this.bettingRoundsRepository.save(bettingRound);
       } else {
         // Create new round
-        const roundId = uuidv4();
-        const createdVariables: BettingVariable[] = [];
-
-        for (const option of round.options) {
-          const bettingVariable = this.bettingVariablesRepository.create({
-            name: option.option,
-            roundName: round.roundName,
-            roundId,
-            stream: stream,
-          });
-          const saved =
-            await this.bettingVariablesRepository.save(bettingVariable);
-          createdVariables.push(saved);
-        }
-
-        allRounds.push({
-          roundId,
-          roundName: round.roundName,
-          options: createdVariables.map((variable) => ({
-            name: variable.name,
-            is_winning_option: variable.is_winning_option,
-            status: variable.status,
-            totalBetsAmount: variable.totalBetsAmount,
-            betCount: variable.betCount,
-          })),
+        bettingRound = this.bettingRoundsRepository.create({
+          roundName: roundData.roundName,
+          stream: stream,
+          status: BettingVariableStatus.ACTIVE,
         });
+        bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
+
+      // Update options for this round
+      const updatedRound = await this.updateRoundOptions(
+        bettingRound,
+        roundData.options,
+      );
+      allRounds.push(updatedRound);
     }
 
     // Remove rounds that are not in the request
-    const roundIdsToKeep = rounds
-      .filter((r) => r.roundId)
-      .map((r) => r.roundId);
-    const existingRounds = await this.bettingVariablesRepository
-      .createQueryBuilder('bv')
-      .select('DISTINCT bv.roundId', 'roundId')
-      .where('bv.stream.id = :streamId', { streamId })
-      .getRawMany();
+    const roundNamesToKeep = rounds.map((r) => r.roundName);
+    const roundsToDelete = existingRounds.filter(
+      (r) => !roundNamesToKeep.includes(r.roundName),
+    );
 
-    const roundsToDelete = existingRounds
-      .map((r) => r.roundId)
-      .filter((roundId) => !roundIdsToKeep.includes(roundId));
-
-    for (const roundId of roundsToDelete) {
-      const variablesToDelete = await this.bettingVariablesRepository.find({
-        where: { roundId },
-      });
-      await this.bettingVariablesRepository.remove(variablesToDelete);
+    for (const round of roundsToDelete) {
+      await this.bettingVariablesRepository.remove(round.bettingVariables);
+      await this.bettingRoundsRepository.remove(round);
     }
 
     return {
@@ -262,22 +261,17 @@ export class BettingService {
     };
   }
 
-  private async editSingleRound(roundId: string, round: any): Promise<any> {
-    // Get all existing betting variables for this round
+  private async updateRoundOptions(
+    bettingRound: BettingRound,
+    options: EditOptionDto[],
+  ): Promise<any> {
     const existingVariables = await this.bettingVariablesRepository.find({
-      where: { roundId },
-      relations: ['stream'],
+      where: { roundId: bettingRound.id },
     });
 
-    if (existingVariables.length === 0) {
-      throw new NotFoundException(
-        `No betting variables found for round ${roundId}`,
-      );
-    }
-
     // Separate existing and new options
-    const existingOptions = round.options.filter((opt) => opt.id);
-    const newOptions = round.options.filter((opt) => !opt.id);
+    const existingOptions = options.filter((opt) => opt.id);
+    const newOptions = options.filter((opt) => !opt.id);
 
     // Update existing options
     for (const option of existingOptions) {
@@ -286,7 +280,6 @@ export class BettingService {
       );
       if (existingVariable) {
         existingVariable.name = option.option;
-        existingVariable.roundName = round.roundName;
         await this.bettingVariablesRepository.save(existingVariable);
       }
     }
@@ -295,9 +288,8 @@ export class BettingService {
     for (const option of newOptions) {
       const bettingVariable = this.bettingVariablesRepository.create({
         name: option.option,
-        roundName: round.roundName,
-        roundId,
-        stream: existingVariables[0].stream,
+        round: bettingRound,
+        stream: bettingRound.stream,
       });
       await this.bettingVariablesRepository.save(bettingVariable);
     }
@@ -314,13 +306,15 @@ export class BettingService {
 
     // Get updated variables
     const updatedVariables = await this.bettingVariablesRepository.find({
-      where: { roundId },
+      where: { roundId: bettingRound.id },
     });
 
     return {
-      roundId,
-      roundName: round.roundName,
+      roundId: bettingRound.id,
+      roundName: bettingRound.roundName,
+      status: bettingRound.status,
       options: updatedVariables.map((variable) => ({
+        id: variable.id,
         name: variable.name,
         is_winning_option: variable.is_winning_option,
         status: variable.status,
