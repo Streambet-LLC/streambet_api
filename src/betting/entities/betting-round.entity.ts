@@ -15,7 +15,7 @@ export class BettingRound extends BaseEntity {
   @Column({ name: 'stream_id' })
   streamId: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   roundName: string;
 
   @Column({
@@ -23,7 +23,14 @@ export class BettingRound extends BaseEntity {
     enum: BettingVariableStatus,
     default: BettingVariableStatus.ACTIVE,
   })
-  status: BettingVariableStatus;
+  freeTokenStatus: BettingVariableStatus;
+
+  @Column({
+    type: 'enum',
+    enum: BettingVariableStatus,
+    default: BettingVariableStatus.ACTIVE,
+  })
+  coinStatus: BettingVariableStatus;
 
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];

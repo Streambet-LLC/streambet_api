@@ -152,8 +152,11 @@ export class BettingGateway
         .to(`stream_${bettingVariable.stream.id}`)
         .emit('bettingUpdate', {
           bettingVariableId: bet.bettingVariableId,
-          totalBetsAmount: bettingVariable.totalBetsAmount,
-          betCount: bettingVariable.betCount,
+
+          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+          betCountFreeToken: bettingVariable.betCountFreeToken,
+          betCountCoin: bettingVariable.betCountCoin,
         });
 
       // Send a chat message announcing the bet
@@ -222,8 +225,10 @@ export class BettingGateway
       .then((bettingVariable) => {
         this.server.to(`stream_${streamId}`).emit('bettingUpdate', {
           bettingVariableId: bettingVariable.id,
-          totalBetsAmount: bettingVariable.totalBetsAmount,
-          betCount: bettingVariable.betCount,
+          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+          betCountCoin: bettingVariable.betCountCoin,
+          betCountFreeToken: bettingVariable.betCountFreeToken,
           status: bettingVariable.status,
         });
       })

@@ -39,10 +39,16 @@ export class BettingVariable extends BaseEntity {
   status: BettingVariableStatus;
 
   @Column({ type: 'bigint', default: 0 })
-  totalBetsAmount: number;
+  totalBetsTokenAmount: number;
+
+  @Column({ type: 'bigint', default: 0 })
+  totalBetsCoinAmount: number;
 
   @Column({ type: 'int', default: 0 })
-  betCount: number;
+  betCountFreeToken: number;
+
+  @Column({ type: 'int', default: 0 })
+  betCountCoin: number;
 
   @OneToMany(() => Bet, (bet) => bet.bettingVariable)
   bets: Bet[];

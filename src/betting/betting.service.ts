@@ -135,7 +135,8 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        status: BettingVariableStatus.ACTIVE,
+        freeTokenStatus: BettingVariableStatus.ACTIVE,
+        coinStatus: BettingVariableStatus.ACTIVE,
       });
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
@@ -156,14 +157,17 @@ export class BettingService {
       allRounds.push({
         roundId: savedRound.id,
         roundName: savedRound.roundName,
-        status: savedRound.status,
+        freeTokenStatus: savedRound.freeTokenStatus,
+        coinStatus: savedRound.coinStatus,
         options: createdVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
           is_winning_option: variable.is_winning_option,
           status: variable.status,
-          totalBetsAmount: variable.totalBetsAmount,
-          betCount: variable.betCount,
+          totalBetsTokenAmount: variable.totalBetsTokenAmount,
+          totalBetsCoinAmount: variable.totalBetsCoinAmount,
+          betCountFreeToken: variable.betCountFreeToken,
+          betCountCoin: variable.betCountCoin,
         })),
       });
     }
@@ -231,7 +235,8 @@ export class BettingService {
         bettingRound = this.bettingRoundsRepository.create({
           roundName: roundData.roundName,
           stream: stream,
-          status: BettingVariableStatus.ACTIVE,
+          freeTokenStatus: BettingVariableStatus.ACTIVE,
+          coinStatus: BettingVariableStatus.ACTIVE,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -312,14 +317,14 @@ export class BettingService {
     return {
       roundId: bettingRound.id,
       roundName: bettingRound.roundName,
-      status: bettingRound.status,
+      // status: bettingRound.status,
       options: updatedVariables.map((variable) => ({
         id: variable.id,
         name: variable.name,
         is_winning_option: variable.is_winning_option,
         status: variable.status,
-        totalBetsAmount: variable.totalBetsAmount,
-        betCount: variable.betCount,
+        // totalBetsAmount: variable.totalBetsAmount,
+        //  betCount: variable.betCount,
       })),
     };
   }
@@ -380,8 +385,8 @@ export class BettingService {
       const savedBet = await this.betsRepository.save(bet);
 
       // Update the betting variable's statistics
-      bettingVariable.totalBetsAmount += amount;
-      bettingVariable.betCount += 1;
+      //bettingVariable.totalBetsAmount += amount;
+      // bettingVariable.betCount += 1;
       await this.bettingVariablesRepository.save(bettingVariable);
 
       // Commit the transaction
@@ -435,8 +440,8 @@ export class BettingService {
 
       // Update the betting variable's statistics
       const bettingVariable = bet.bettingVariable;
-      bettingVariable.totalBetsAmount -= bet.amount;
-      bettingVariable.betCount -= 1;
+      //bettingVariable.totalBetsAmount -= bet.amount;
+      //  bettingVariable.betCount -= 1;
       await this.bettingVariablesRepository.save(bettingVariable);
 
       // Commit the transaction
