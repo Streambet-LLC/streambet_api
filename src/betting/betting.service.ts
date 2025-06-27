@@ -317,14 +317,17 @@ export class BettingService {
     return {
       roundId: bettingRound.id,
       roundName: bettingRound.roundName,
-      // status: bettingRound.status,
+      coinStatus: bettingRound.coinStatus,
+      freeTokenStatus: bettingRound.freeTokenStatus,
       options: updatedVariables.map((variable) => ({
         id: variable.id,
         name: variable.name,
         is_winning_option: variable.is_winning_option,
         status: variable.status,
-        // totalBetsAmount: variable.totalBetsAmount,
-        //  betCount: variable.betCount,
+        totalBetsCoinAmount: variable.totalBetsCoinAmount,
+        totalBetsTokenAmount: variable.totalBetsTokenAmount,
+        betCountCoin: variable.betCountCoin,
+        betCountFreeToken: variable.betCountFreeToken,
       })),
     };
   }
