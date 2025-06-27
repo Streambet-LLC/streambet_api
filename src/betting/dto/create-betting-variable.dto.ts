@@ -24,11 +24,7 @@ export class EditOptionDto {
   option: string;
 }
 
-export class CreateBettingVariableDto {
-  @IsUUID()
-  @IsNotEmpty()
-  streamId: string;
-
+export class RoundDto {
   @IsString()
   @IsNotEmpty()
   roundName: string;
@@ -39,7 +35,11 @@ export class CreateBettingVariableDto {
   options: OptionDto[];
 }
 
-export class EditBettingVariableDto {
+export class EditRoundDto {
+  @IsUUID()
+  @IsOptional()
+  roundId?: string; // Optional for existing rounds
+
   @IsString()
   @IsNotEmpty()
   roundName: string;
@@ -48,4 +48,26 @@ export class EditBettingVariableDto {
   @ValidateNested({ each: true })
   @Type(() => EditOptionDto)
   options: EditOptionDto[];
+}
+
+export class CreateBettingVariableDto {
+  @IsUUID()
+  @IsNotEmpty()
+  streamId: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoundDto)
+  rounds: RoundDto[];
+}
+
+export class EditBettingVariableDto {
+  @IsUUID()
+  @IsNotEmpty()
+  streamId: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EditRoundDto)
+  rounds: EditRoundDto[];
 }

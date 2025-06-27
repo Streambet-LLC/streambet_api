@@ -115,7 +115,7 @@ export class BettingService {
   async createBettingVariable(
     createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<any> {
-    const { streamId, roundName, options } = createBettingVariableDto;
+    const { streamId, rounds } = createBettingVariableDto;
     const stream = await this.findStreamById(streamId);
 
     if (stream.status === StreamStatus.ENDED) {
@@ -124,34 +124,42 @@ export class BettingService {
       );
     }
 
-    // Generate a roundId for this round
-    const roundId = uuidv4();
+    const allRounds = [];
 
-    const createdVariables: BettingVariable[] = [];
+    for (const round of rounds) {
+      // Generate a roundId for this round
+      const roundId = uuidv4();
+      const createdVariables: BettingVariable[] = [];
 
-    for (const option of options) {
-      const bettingVariable = this.bettingVariablesRepository.create({
-        name: option.option,
-        roundName,
+      for (const option of round.options) {
+        const bettingVariable = this.bettingVariablesRepository.create({
+          name: option.option,
+          roundName: round.roundName,
+          roundId,
+          stream: stream,
+        });
+        const saved =
+          await this.bettingVariablesRepository.save(bettingVariable);
+        createdVariables.push(saved);
+      }
+
+      allRounds.push({
         roundId,
-        stream: stream,
+        roundName: round.roundName,
+        options: createdVariables.map((variable) => ({
+          name: variable.name,
+          is_winning_option: variable.is_winning_option,
+          status: variable.status,
+          totalBetsAmount: variable.totalBetsAmount,
+          betCount: variable.betCount,
+        })),
       });
-      const saved = await this.bettingVariablesRepository.save(bettingVariable);
-      createdVariables.push(saved);
     }
 
-    // Grouped response
+    // Return grouped response
     return {
       streamId,
-      roundId,
-      roundName,
-      options: createdVariables.map((variable) => ({
-        name: variable.name,
-        is_winning_option: variable.is_winning_option,
-        status: variable.status,
-        totalBetsAmount: variable.totalBetsAmount,
-        betCount: variable.betCount,
-      })),
+      rounds: allRounds,
     };
   }
 
@@ -178,11 +186,83 @@ export class BettingService {
   }
 
   async editBettingVariable(
-    roundId: string,
     editBettingVariableDto: EditBettingVariableDto,
   ): Promise<any> {
-    const { roundName, options } = editBettingVariableDto;
+    const { streamId, rounds } = editBettingVariableDto;
+    const stream = await this.findStreamById(streamId);
 
+    if (stream.status === StreamStatus.ENDED) {
+      throw new BadRequestException(
+        'Cannot edit betting variables for ended streams',
+      );
+    }
+
+    const allRounds = [];
+
+    for (const round of rounds) {
+      if (round.roundId) {
+        // Edit existing round
+        const updatedRound = await this.editSingleRound(round.roundId, round);
+        allRounds.push(updatedRound);
+      } else {
+        // Create new round
+        const roundId = uuidv4();
+        const createdVariables: BettingVariable[] = [];
+
+        for (const option of round.options) {
+          const bettingVariable = this.bettingVariablesRepository.create({
+            name: option.option,
+            roundName: round.roundName,
+            roundId,
+            stream: stream,
+          });
+          const saved =
+            await this.bettingVariablesRepository.save(bettingVariable);
+          createdVariables.push(saved);
+        }
+
+        allRounds.push({
+          roundId,
+          roundName: round.roundName,
+          options: createdVariables.map((variable) => ({
+            name: variable.name,
+            is_winning_option: variable.is_winning_option,
+            status: variable.status,
+            totalBetsAmount: variable.totalBetsAmount,
+            betCount: variable.betCount,
+          })),
+        });
+      }
+    }
+
+    // Remove rounds that are not in the request
+    const roundIdsToKeep = rounds
+      .filter((r) => r.roundId)
+      .map((r) => r.roundId);
+    const existingRounds = await this.bettingVariablesRepository
+      .createQueryBuilder('bv')
+      .select('DISTINCT bv.roundId', 'roundId')
+      .where('bv.stream.id = :streamId', { streamId })
+      .getRawMany();
+
+    const roundsToDelete = existingRounds
+      .map((r) => r.roundId)
+      .filter((roundId) => !roundIdsToKeep.includes(roundId));
+
+    for (const roundId of roundsToDelete) {
+      const variablesToDelete = await this.bettingVariablesRepository.find({
+        where: { roundId },
+      });
+      await this.bettingVariablesRepository.remove(variablesToDelete);
+    }
+
+    return {
+      streamId,
+      rounds: allRounds,
+    };
+  }
+
+  private async editSingleRound(roundId: string, round: any): Promise<any> {
     // Get all existing betting variables for this round
     const existingVariables = await this.bettingVariablesRepository.find({
       where: { roundId },
@@ -195,17 +275,9 @@ export class BettingService {
       );
     }
 
-    const stream = existingVariables[0].stream;
-
-    if (stream.status === StreamStatus.ENDED) {
-      throw new BadRequestException(
-        'Cannot edit betting variables for ended streams',
-      );
-    }
-
     // Separate existing and new options
-    const existingOptions = options.filter((opt) => opt.id);
-    const newOptions = options.filter((opt) => !opt.id);
+    const existingOptions = round.options.filter((opt) => opt.id);
+    const newOptions = round.options.filter((opt) => !opt.id);
 
     // Update existing options
     for (const option of existingOptions) {
@@ -214,7 +286,7 @@ export class BettingService {
       );
       if (existingVariable) {
         existingVariable.name = option.option;
-        existingVariable.roundName = roundName;
+        existingVariable.roundName = round.roundName;
         await this.bettingVariablesRepository.save(existingVariable);
       }
     }
@@ -223,9 +295,9 @@ export class BettingService {
     for (const option of newOptions) {
       const bettingVariable = this.bettingVariablesRepository.create({
         name: option.option,
-        roundName,
+        roundName: round.roundName,
         roundId,
-        stream: stream,
+        stream: existingVariables[0].stream,
       });
       await this.bettingVariablesRepository.save(bettingVariable);
     }
@@ -245,11 +317,9 @@ export class BettingService {
       where: { roundId },
     });
 
-    // Return grouped response
     return {
-      streamId: stream.id,
       roundId,
-      roundName,
+      roundName: round.roundName,
       options: updatedVariables.map((variable) => ({
         name: variable.name,
         is_winning_option: variable.is_winning_option,

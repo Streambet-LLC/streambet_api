@@ -227,32 +227,29 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: 'Edit betting options' })
-  @ApiParam({ name: 'roundId', description: 'Round ID' })
+  @ApiOperation({ summary: 'Edit betting options for multiple rounds' })
   @SwaggerApiResponse({
     status: 200,
-    description: 'Betting variable updated successfully',
+    description: 'Betting variables updated successfully',
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({
     status: 403,
     description: 'Forbidden- Admin access required',
   })
-  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
-  @Patch('betting-variables/:roundId')
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('betting-variables')
   async editBettingVariable(
     @Request() req: RequestWithUser,
-    @Param('roundId') roundId: string,
     @Body() editBettingVariableDto: EditBettingVariableDto,
   ): Promise<ApiResponse> {
     // this.ensureAdmin(req.user);
     const grouped = await this.bettingService.editBettingVariable(
-      roundId,
       editBettingVariableDto,
     );
 
     return {
-      message: 'Betting variable updated successfully',
+      message: 'Betting variables updated successfully',
       status: HttpStatus.OK,
       data: grouped,
     };

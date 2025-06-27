@@ -136,6 +136,7 @@ export class AuthController {
     description: 'Unauthorized - Invalid or expired refresh token',
   })
   @ApiBody({ type: RefreshTokenDto })
+  @ApiBearerAuth()
   @UseGuards(RefreshTokenGuard)
   @Post('refresh')
   async refreshToken(@Request() req: RequestWithUser) {
