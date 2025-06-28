@@ -331,15 +331,12 @@ export class BettingService {
       })),
     };
   }
-
-  // Betting Operations
   async placeBet(userId: string, placeBetDto: PlaceBetDto): Promise<Bet> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
 
-    // Find the betting variable
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
-      relations: ['stream'],
+      relations: ['stream', 'round'],
     });
 
     if (!bettingVariable) {
@@ -348,12 +345,10 @@ export class BettingService {
       );
     }
 
-    // Check if betting is still open
-    if (bettingVariable.status !== BettingVariableStatus.ACTIVE) {
-      throw new BadRequestException('Betting is closed for this option');
+    if (!bettingVariable.round) {
+      throw new BadRequestException(`Betting round not found`);
     }
 
-    // Check if user already has an active bet (MVP restriction)
     const existingBet = await this.betsRepository.findOne({
       where: { userId, status: BetStatus.Active },
     });
@@ -364,44 +359,74 @@ export class BettingService {
       );
     }
 
-    // Create the bet in a transaction to ensure consistency
+    // Check round status based on currency type
+    const isActive =
+      currencyType === CurrencyType.FREE_TOKENS
+        ? bettingVariable.round.freeTokenStatus === BettingVariableStatus.ACTIVE
+        : bettingVariable.round.coinStatus === BettingVariableStatus.ACTIVE;
+
+    if (!isActive) {
+      throw new BadRequestException('Betting round is closed');
+    }
+
+    return await this.placeBetWithCurrency(
+      userId,
+      placeBetDto,
+      bettingVariable,
+    );
+  }
+
+  private async placeBetWithCurrency(
+    userId: string,
+    placeBetDto: PlaceBetDto,
+    bettingVariable: BettingVariable,
+  ): Promise<Bet> {
+    const { bettingVariableId, amount, currencyType } = placeBetDto;
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Deduct the amount from the wallet
+      const description = `Bet on ${bettingVariable.name} (${bettingVariable.round.roundName}) in stream ${bettingVariable.stream.name}`;
+
+      // Deduct wallet
       await this.walletsService.deductForBet(
         userId,
         amount,
         currencyType,
-        `Bet on ${bettingVariable.name} in stream ${bettingVariable.stream.name}`,
+        description,
       );
 
-      // Create and save the bet
+      // Create and save bet
       const bet = this.betsRepository.create({
         userId,
+        streamId: bettingVariable.streamId,
         bettingVariableId,
         amount,
       });
 
       const savedBet = await this.betsRepository.save(bet);
 
-      // Update the betting variable's statistics
-      //bettingVariable.totalBetsAmount += amount;
-      // bettingVariable.betCount += 1;
+      // Update statistics
+      if (currencyType === CurrencyType.FREE_TOKENS) {
+        bettingVariable.totalBetsTokenAmount =
+          Number(bettingVariable.totalBetsTokenAmount) + Number(amount);
+        bettingVariable.betCountFreeToken += 1;
+      } else {
+        bettingVariable.totalBetsCoinAmount =
+          Number(bettingVariable.totalBetsCoinAmount) + Number(amount);
+        bettingVariable.betCountCoin += 1;
+      }
+
       await this.bettingVariablesRepository.save(bettingVariable);
 
-      // Commit the transaction
       await queryRunner.commitTransaction();
-
       return savedBet;
     } catch (error) {
-      // Rollback in case of error
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      // Release the query runner
       await queryRunner.release();
     }
   }
