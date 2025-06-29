@@ -183,4 +183,27 @@ export class StreamService {
       );
     }
   }
+  async findStreamDetailsForAdmin(id: string): Promise<Stream> {
+    try {
+      const stream = await this.streamsRepository.findOne({
+        where: { id },
+        relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
+      });
+
+      if (!stream) {
+        throw new NotFoundException(`Stream with ID ${id} not found`);
+      }
+      return stream;
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw e;
+      }
+
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
