@@ -11,6 +11,7 @@ import { Bet } from './entities/bet.entity';
 import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
+import { v4 as uuidv4 } from 'uuid';
 import { CreateStreamDto } from './dto/create-stream.dto';
 import {
   CreateBettingVariableDto,
@@ -23,7 +24,12 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
+<<<<<<< HEAD
 import { BettingGateway } from './betting.gateway';
+import { CancelBetDto } from './dto/cancel-bet.dto';
+=======
+import { CancelBetDto } from './dto/cancel-bet.dto';
+>>>>>>> dev
 
 @Injectable()
 export class BettingService {
@@ -450,10 +456,12 @@ export class BettingService {
     }
   }
 
-  async cancelBet(userId: string, betId: string): Promise<Bet> {
+  async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
+    const { betId, currencyType } = cancelBetDto;
+
     const bet = await this.betsRepository.findOne({
       where: { id: betId, userId },
-      relations: ['bettingVariable', 'bettingVariable.round'],
+      relations: ['bettingVariable', 'bettingVariable.round', 'stream'],
     });
 
     if (!bet) {
@@ -464,79 +472,78 @@ export class BettingService {
       throw new BadRequestException('Only active bets can be canceled');
     }
 
-    // Check if betting is still open for the specific currency type
-    if (bet.currency === CurrencyType.FREE_TOKENS) {
+    // Validate currency type and round status
+    if (currencyType === CurrencyType.FREE_TOKENS) {
       if (
+        bet.currency !== CurrencyType.FREE_TOKENS ||
         bet.bettingVariable.round.freeTokenStatus !==
-        BettingVariableStatus.ACTIVE
+          BettingVariableStatus.ACTIVE
       ) {
-        throw new BadRequestException(
-          'Free token betting is locked or already resolved',
-        );
+        throw new BadRequestException('Betting is locked or already resolved');
       }
-    } else if (bet.currency === CurrencyType.STREAM_COINS) {
+    } else if (currencyType === CurrencyType.STREAM_COINS) {
       if (
+        bet.currency !== CurrencyType.STREAM_COINS ||
         bet.bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE
       ) {
-        throw new BadRequestException(
-          'Stream coin betting is locked or already resolved',
-        );
+        throw new BadRequestException('Betting is locked or already resolved');
       }
+    } else {
+      throw new BadRequestException('Invalid currency type');
     }
 
-    // Cancel the bet in a transaction
+    return await this.handleCancelBet(userId, bet, currencyType);
+  }
+
+  private async handleCancelBet(
+    userId: string,
+    bet: Bet,
+    currencyType: CurrencyType,
+  ): Promise<Bet> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Refund the amount to the wallet with the correct currency type
-      if (bet.currency === CurrencyType.FREE_TOKENS) {
+      const bettingVariable = bet.bettingVariable;
+      const amount = Number(bet.amount);
+
+      // Refund to wallet
+      const refundMessage = `Refund for canceled bet on ${bettingVariable.name} in stream ${bet.stream.name}`;
+
+      if (currencyType === CurrencyType.FREE_TOKENS) {
         await this.walletsService.addFreeTokens(
           userId,
           bet.amount,
-          `Refund for canceled bet on ${bet.bettingVariable.name}`,
+          refundMessage,
         );
-      } else if (bet.currency === CurrencyType.STREAM_COINS) {
+        bettingVariable.totalBetsTokenAmount =
+          Number(bettingVariable.totalBetsTokenAmount) - amount;
+        bettingVariable.betCountFreeToken -= 1;
+      } else {
         await this.walletsService.addStreamCoins(
           userId,
           bet.amount,
-          `Refund for canceled bet on ${bet.bettingVariable.name}`,
+          refundMessage,
         );
-      }
-
-      // Update the bet status
-      bet.status = BetStatus.Cancelled;
-      await queryRunner.manager.save(bet);
-
-      // Update the betting variable's statistics based on currency type
-      const bettingVariable = bet.bettingVariable;
-      if (bet.currency === CurrencyType.FREE_TOKENS) {
-        bettingVariable.totalBetsTokenAmount -= bet.amount;
-        bettingVariable.betCountFreeToken -= 1;
-      } else if (bet.currency === CurrencyType.STREAM_COINS) {
-        bettingVariable.totalBetsCoinAmount -= bet.amount;
+        bettingVariable.totalBetsCoinAmount =
+          Number(bettingVariable.totalBetsCoinAmount) - amount;
         bettingVariable.betCountCoin -= 1;
       }
 
+      // Update bet status
+      bet.status = BetStatus.Cancelled;
+
+      // Save changes within transaction
+      await queryRunner.manager.save(bet);
       await queryRunner.manager.save(bettingVariable);
 
-      // Commit the transaction
       await queryRunner.commitTransaction();
-
-      // Emit real-time update to all clients in the stream
-      this.bettingGateway.emitBettingUpdate(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-      );
-
       return bet;
     } catch (error) {
-      // Rollback in case of error
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      // Release the query runner
       await queryRunner.release();
     }
   }

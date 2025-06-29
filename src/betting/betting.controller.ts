@@ -28,6 +28,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
+import { CancelBetDto } from './dto/cancel-bet.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -125,7 +126,6 @@ export class BettingController {
   }
 
   @ApiOperation({ summary: 'Cancel a bet' })
-  @ApiParam({ name: 'id', description: 'Bet ID' })
   @SwaggerApiResponse({
     status: 200,
     description: 'Bet cancelled successfully',
@@ -139,12 +139,12 @@ export class BettingController {
   @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete('bets/:id')
+  @Delete('bets/cancel')
   async cancelBet(
     @Request() req: RequestWithUser,
-    @Param('id') id: string,
+    @Body() cancelBetDto: CancelBetDto,
   ): Promise<ApiResponse> {
-    const bet = await this.bettingService.cancelBet(req.user.id, id);
+    const bet = await this.bettingService.cancelBet(req.user.id, cancelBetDto);
     return {
       message: 'Bet cancelled successfully',
       status: HttpStatus.OK,

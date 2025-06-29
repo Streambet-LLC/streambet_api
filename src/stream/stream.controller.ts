@@ -52,8 +52,6 @@ export class StreamController {
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
   @ApiOkResponse({ type: StreamFilterDto })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Get('home')
   async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
     const { total, data } =
@@ -75,17 +73,33 @@ export class StreamController {
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
-  @ApiOperation({ summary: 'Get stream by ID' })
-  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @ApiOperation({
+    summary: 'Get stream by ID',
+    description: 'Public API for listing stream details based on stream id',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stream details retrieved successfully',
+  })
+  @Get('/:id')
+  async findStreamById(@Param('id') id: string) {
+    const stream = await this.streamService.findStreamById(id);
+    return {
+      message: 'Stream details retrieved successfully',
+      status: HttpStatus.OK,
+      data: stream,
+    };
+  }
+  @ApiOperation({ summary: 'Get bet round details by strem id' })
   @ApiResponse({
     status: 200,
     description: 'Stream details retrieved successfully',
   })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('/:id')
-  async findStreamById(@Param('id') id: string) {
-    const stream = await this.streamService.findStreamById(id);
+  @Get('bet-round/:id')
+  async findBetRoundDetailsByStreamId(@Param('id') id: string) {
+    const stream = await this.streamService.findBetRoundDetailsByStreamId(id);
     return {
       message: 'Stream details retrieved successfully',
       status: HttpStatus.OK,

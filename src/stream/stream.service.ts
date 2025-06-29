@@ -79,6 +79,19 @@ export class StreamService {
       );
     }
   }
+  private async simplifyStreamResponse(streamData: any) {
+    return {
+      streamId: streamData.id,
+      rounds: streamData.bettingRounds.map((round: any) => ({
+        roundId: round.id,
+        roundName: round.roundName ?? '',
+        options: round.bettingVariables.map((variable: any) => ({
+          id: variable.id,
+          option: variable.name,
+        })),
+      })),
+    };
+  }
 
   /**
    * Retrieves a paginated and filtered list of streams for the admin view.
@@ -182,5 +195,65 @@ export class StreamService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+  async findBetRoundDetailsByStreamId(id: string) {
+    try {
+      const stream = await this.streamsRepository
+        .createQueryBuilder('stream')
+        .leftJoinAndSelect(
+          'stream.bettingRounds',
+          'round',
+          '(round.freeTokenStatus = :freeTokenStatus OR round.coinStatus = :coinStatus)',
+        )
+        .leftJoinAndSelect('round.bettingVariables', 'variable')
+        .where('stream.id = :id', { id })
+        .setParameters({ freeTokenStatus: 'active', coinStatus: 'active' })
+        .getOne();
+
+      if (!stream) {
+        throw new NotFoundException(`Stream with ID ${id} not found`);
+      }
+      let roundTotalBetsTokenAmount: number = 0;
+      let roundTotalBetsCoinAmount: number = 0;
+      if (stream?.bettingRounds) {
+        const rounds = stream.bettingRounds;
+
+        for (const round of rounds) {
+          roundTotalBetsTokenAmount = round.bettingVariables.reduce(
+            (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
+            0,
+          );
+
+          roundTotalBetsCoinAmount = round.bettingVariables.reduce(
+            (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
+            0,
+          );
+        }
+      }
+      const result = {
+        roundTotalBetsTokenAmount,
+        roundTotalBetsCoinAmount,
+        ...stream,
+      };
+      return result;
+    } catch (e) {
+      console.error(e);
+      if (e instanceof NotFoundException) {
+        throw e;
+      }
+
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+  async findStreamDetailsForAdmin(id: string) {
+    const stream = await this.streamsRepository.findOne({
+      where: { id },
+      relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
+    });
+    return await this.simplifyStreamResponse(stream);
   }
 }

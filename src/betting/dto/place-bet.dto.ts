@@ -9,6 +9,7 @@ import { CurrencyType } from '../../wallets/entities/transaction.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PlaceBetDto {
+<<<<<<< HEAD
   @ApiProperty({
     description: 'The ID of the betting variable to place a bet on',
     example: '123e4567-e89b-12d3-a456-426614174000',
@@ -35,6 +36,17 @@ export class PlaceBetDto {
     enum: [CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS],
     enumName: 'CurrencyType',
   })
+=======
+  @ApiProperty()
+  @IsUUID()
+  @IsNotEmpty()
+  bettingVariableId: string;
+  @ApiProperty()
+  @IsNumber()
+  @IsPositive()
+  amount: number;
+  @ApiProperty()
+>>>>>>> dev
   @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
   currencyType: CurrencyType;
 }
