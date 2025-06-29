@@ -287,84 +287,70 @@ export class BettingService {
   private async updateRoundOptions(
     bettingRound: BettingRound,
     options: EditOptionDto[],
-  ): Promise<{
-    roundId: string;
-    roundName: string;
-    coinStatus: BettingVariableStatus;
-    freeTokenStatus: BettingVariableStatus;
-    options: Array<{
-      id: string;
-      name: string;
-      is_winning_option: boolean;
-      status: BettingVariableStatus;
-      totalBetsCoinAmount: number;
-      totalBetsTokenAmount: number;
-      betCountCoin: number;
-      betCountFreeToken: number;
-    }>;
-  }> {
-    const existingVariables = await this.bettingVariablesRepository.find({
-      where: { roundId: bettingRound.id },
-    });
-
-    // Separate existing and new options
-    const existingOptions = options.filter((opt) => opt.id);
-    const newOptions = options.filter((opt) => !opt.id);
-
-    // Update existing options
-    for (const option of existingOptions) {
-      const existingVariable = existingVariables.find(
-        (v) => v.id === option.id,
-      );
-      if (existingVariable) {
-        existingVariable.name = option.option;
-        await this.bettingVariablesRepository.save(existingVariable);
-      }
-    }
-
-    // Add new options
-    for (const option of newOptions) {
-      const bettingVariable = this.bettingVariablesRepository.create({
-        name: option.option,
-        round: bettingRound,
-        stream: bettingRound.stream,
+  ): Promise<any> {
+    {
+      const existingVariables = await this.bettingVariablesRepository.find({
+        where: { roundId: bettingRound.id },
       });
-      await this.bettingVariablesRepository.save(bettingVariable);
+
+      // Separate existing and new options
+      const existingOptions = options.filter((opt) => opt.id);
+      const newOptions = options.filter((opt) => !opt.id);
+
+      // Update existing options
+      for (const option of existingOptions) {
+        const existingVariable = existingVariables.find(
+          (v) => v.id === option.id,
+        );
+        if (existingVariable) {
+          existingVariable.name = option.option;
+          await this.bettingVariablesRepository.save(existingVariable);
+        }
+      }
+
+      // Add new options
+      for (const option of newOptions) {
+        const bettingVariable = this.bettingVariablesRepository.create({
+          name: option.option,
+          round: bettingRound,
+          stream: bettingRound.stream,
+        });
+        await this.bettingVariablesRepository.save(bettingVariable);
+      }
+
+      // Remove options that are not in the request
+      const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
+      const variablesToDelete = existingVariables.filter(
+        (v) => !optionIdsToKeep.includes(v.id),
+      );
+
+      for (const variable of variablesToDelete) {
+        await this.bettingVariablesRepository.remove(variable);
+      }
+
+      // Get updated variables
+      const updatedVariables = await this.bettingVariablesRepository.find({
+        where: { roundId: bettingRound.id },
+      });
+
+      return {
+        roundId: bettingRound.id,
+        roundName: bettingRound.roundName,
+        coinStatus: bettingRound.coinStatus,
+        freeTokenStatus: bettingRound.freeTokenStatus,
+        options: updatedVariables.map((variable) => ({
+          id: variable.id,
+          name: variable.name,
+          is_winning_option: variable.is_winning_option,
+          status: variable.status,
+          totalBetsCoinAmount: variable.totalBetsCoinAmount,
+          totalBetsTokenAmount: variable.totalBetsTokenAmount,
+          betCountCoin: variable.betCountCoin,
+          betCountFreeToken: variable.betCountFreeToken,
+        })),
+      };
     }
-
-    // Remove options that are not in the request
-    const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
-    const variablesToDelete = existingVariables.filter(
-      (v) => !optionIdsToKeep.includes(v.id),
-    );
-
-    for (const variable of variablesToDelete) {
-      await this.bettingVariablesRepository.remove(variable);
-    }
-
-    // Get updated variables
-    const updatedVariables = await this.bettingVariablesRepository.find({
-      where: { roundId: bettingRound.id },
-    });
-
-    return {
-      roundId: bettingRound.id,
-      roundName: bettingRound.roundName,
-      coinStatus: bettingRound.coinStatus,
-      freeTokenStatus: bettingRound.freeTokenStatus,
-      options: updatedVariables.map((variable) => ({
-        id: variable.id,
-        name: variable.name,
-        is_winning_option: variable.is_winning_option,
-        status: variable.status,
-        totalBetsCoinAmount: variable.totalBetsCoinAmount,
-        totalBetsTokenAmount: variable.totalBetsTokenAmount,
-        betCountCoin: variable.betCountCoin,
-        betCountFreeToken: variable.betCountFreeToken,
-      })),
-    };
   }
-
   // Betting Operations
   async placeBet(userId: string, placeBetDto: PlaceBetDto): Promise<Bet> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
