@@ -155,23 +155,48 @@ export class StreamService {
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
-  async findStreamById(id: string): Promise<Stream> {
+  async findStreamById(id: string) {
     try {
-      const stream = await this.streamsRepository.findOne({
-        where: { id },
-        select: {
-          id: true,
-          embeddedUrl: true,
-          name: true,
-          platformName: true,
-        },
-      });
+      const stream = await this.streamsRepository
+        .createQueryBuilder('stream')
+        .leftJoinAndSelect(
+          'stream.bettingRounds',
+          'round',
+          '(round.freeTokenStatus = :freeTokenStatus OR round.coinStatus = :coinStatus)',
+        )
+        .leftJoinAndSelect('round.bettingVariables', 'variable')
+        .where('stream.id = :id', { id })
+        .setParameters({ freeTokenStatus: 'active', coinStatus: 'active' })
+        .getOne();
 
       if (!stream) {
         throw new NotFoundException(`Stream with ID ${id} not found`);
       }
-      return stream;
+      let roundTotalBetsTokenAmount: number;
+      let roundTotalBetsCoinAmount: number;
+      if (stream?.bettingRounds) {
+        const rounds = stream.bettingRounds;
+
+        for (const round of rounds) {
+          roundTotalBetsTokenAmount = round.bettingVariables.reduce(
+            (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
+            0,
+          );
+
+          roundTotalBetsCoinAmount = round.bettingVariables.reduce(
+            (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
+            0,
+          );
+        }
+      }
+      const result = {
+        roundTotalBetsTokenAmount,
+        roundTotalBetsCoinAmount,
+        ...stream,
+      };
+      return result;
     } catch (e) {
+      console.error(e);
       if (e instanceof NotFoundException) {
         throw e;
       }

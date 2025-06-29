@@ -33,7 +33,7 @@ export class Bet extends BaseEntity {
   @Column({ type: 'bigint' })
   amount: number;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar', length: 20, nullable: true })
   currency: string;
 
   @Column({ type: 'enum', enum: BetStatus, default: BetStatus.Active })
