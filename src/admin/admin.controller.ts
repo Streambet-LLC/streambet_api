@@ -425,11 +425,11 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const wallet = await this.streamService.findStreamDetailsForAdmin(id);
+    const data = await this.streamService.findStreamDetailsForAdmin(id);
     return {
       message: 'Successfully fetch Stream details',
       status: HttpStatus.OK,
-      data: wallet,
+      data,
     };
   }
 }

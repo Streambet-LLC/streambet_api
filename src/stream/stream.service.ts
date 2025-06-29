@@ -79,6 +79,19 @@ export class StreamService {
       );
     }
   }
+  private async simplifyStreamResponse(streamData: any) {
+    return {
+      streamId: streamData.id,
+      rounds: streamData.bettingRounds.map((round: any) => ({
+        roundId: round.id,
+        roundName: round.roundName ?? '',
+        options: round.bettingVariables.map((variable: any) => ({
+          id: variable.id,
+          option: variable.name,
+        })),
+      })),
+    };
+  }
 
   /**
    * Retrieves a paginated and filtered list of streams for the admin view.
@@ -235,5 +248,12 @@ export class StreamService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+  async findStreamDetailsForAdmin(id: string) {
+    const stream = await this.streamsRepository.findOne({
+      where: { id },
+      relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
+    });
+    return await this.simplifyStreamResponse(stream);
   }
 }
