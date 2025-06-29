@@ -11,6 +11,7 @@ import { Bet } from './entities/bet.entity';
 import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
+import { v4 as uuidv4 } from 'uuid';
 import { CreateStreamDto } from './dto/create-stream.dto';
 import {
   CreateBettingVariableDto,
