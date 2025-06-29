@@ -97,7 +97,7 @@ export class StreamController {
   })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('/:id')
+  @Get('bet-round/:id')
   async findBetRoundDetailsByStreamId(@Param('id') id: string) {
     const stream = await this.streamService.findBetRoundDetailsByStreamId(id);
     return {
