@@ -213,8 +213,8 @@ export class StreamService {
       if (!stream) {
         throw new NotFoundException(`Stream with ID ${id} not found`);
       }
-      let roundTotalBetsTokenAmount: number;
-      let roundTotalBetsCoinAmount: number;
+      let roundTotalBetsTokenAmount: number = 0;
+      let roundTotalBetsCoinAmount: number = 0;
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
 
