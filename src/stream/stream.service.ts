@@ -183,4 +183,43 @@ export class StreamService {
       );
     }
   }
+  private async simplifyStreamResponse(streamData: any) {
+    return {
+      streamId: streamData.id,
+      rounds: streamData.bettingRounds.map((round: any) => ({
+        roundId: round.id,
+        roundName: round.roundName ?? '',
+        options: round.bettingVariables.map((variable: any) => ({
+          id: variable.id,
+          option: variable.name,
+        })),
+      })),
+    };
+  }
+
+  async findStreamDetailsForAdmin(id: string) {
+    try {
+      const stream = await this.streamsRepository
+        .createQueryBuilder('stream')
+        .leftJoinAndSelect('stream.bettingRounds', 'round')
+        .leftJoinAndSelect('round.bettingVariables', 'variable')
+        .where('stream.id = :id', { id })
+        .getOne();
+
+      if (!stream) {
+        throw new NotFoundException(`Stream with ID ${id} not found`);
+      }
+      return this.simplifyStreamResponse(stream);
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw e;
+      }
+
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

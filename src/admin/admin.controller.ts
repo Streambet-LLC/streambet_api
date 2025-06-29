@@ -406,4 +406,30 @@ export class AdminController {
       total,
     };
   }
+
+  @ApiOperation({ summary: 'Fetch strem details' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Successfully fetch Stream details',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Get('stream/:id')
+  async getStreamDetails(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const wallet = await this.streamService.findStreamDetailsForAdmin(id);
+    return {
+      message: 'Successfully fetch Stream details',
+      status: HttpStatus.OK,
+      data: wallet,
+    };
+  }
 }
