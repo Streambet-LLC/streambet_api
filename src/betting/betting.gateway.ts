@@ -11,9 +11,11 @@ import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { BettingService } from './betting.service';
 import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
+import { CancelBetDto } from './dto/cancel-bet.dto';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { CurrencyType } from '../wallets/entities/transaction.entity';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -199,14 +201,20 @@ export class BettingGateway
   @SubscribeMessage('cancelBet')
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() betId: string,
+    @MessageBody() data: { betId: string; currencyType: CurrencyType },
   ) {
     try {
       // Get user from socket
       const user = client.data.user;
 
+      // Construct the CancelBetDto
+      const cancelBetDto: CancelBetDto = {
+        betId: data.betId,
+        currencyType: data.currencyType,
+      };
+
       // Cancel the bet
-      const bet = await this.bettingService.cancelBet(user.sub, betId);
+      const bet = await this.bettingService.cancelBet(user.sub, cancelBetDto);
 
       // Get the betting variable to determine the stream
       const bettingVariable = await this.bettingService.findBettingVariableById(
@@ -270,10 +278,19 @@ export class BettingGateway
       // Get user from socket
       const user = client.data.user;
 
-      // First cancel the existing bet
+      // First cancel the existing bet - we need to get the bet first to know the currency type
+      const existingBet = await this.bettingService.getBetById(
+        editBetDto.betId,
+      );
+
+      const cancelBetDto: CancelBetDto = {
+        betId: editBetDto.betId,
+        currencyType: existingBet.currency as CurrencyType,
+      };
+
       const cancelledBet = await this.bettingService.cancelBet(
         user.sub,
-        editBetDto.betId,
+        cancelBetDto,
       );
 
       // Then place a new bet with the new parameters

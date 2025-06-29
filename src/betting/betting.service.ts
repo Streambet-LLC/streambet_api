@@ -24,12 +24,8 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
-<<<<<<< HEAD
 import { BettingGateway } from './betting.gateway';
 import { CancelBetDto } from './dto/cancel-bet.dto';
-=======
-import { CancelBetDto } from './dto/cancel-bet.dto';
->>>>>>> dev
 
 @Injectable()
 export class BettingService {
@@ -699,5 +695,18 @@ export class BettingService {
       where: { stream: { id: streamId } },
       relations: ['bets'],
     });
+  }
+
+  async getBetById(betId: string): Promise<Bet> {
+    const bet = await this.betsRepository.findOne({
+      where: { id: betId },
+      relations: ['bettingVariable', 'bettingVariable.round', 'stream'],
+    });
+
+    if (!bet) {
+      throw new NotFoundException(`Bet with ID ${betId} not found`);
+    }
+
+    return bet;
   }
 }
