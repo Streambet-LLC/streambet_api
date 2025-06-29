@@ -151,7 +151,7 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Body() createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<ApiResponse> {
-    // this.ensureAdmin(req.user);
+    this.ensureAdmin(req.user);
     const grouped = await this.bettingService.createBettingVariable(
       createBettingVariableDto,
     );
@@ -243,7 +243,7 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Body() editBettingVariableDto: EditBettingVariableDto,
   ): Promise<ApiResponse> {
-    // this.ensureAdmin(req.user);
+    this.ensureAdmin(req.user);
     const grouped = await this.bettingService.editBettingVariable(
       editBettingVariableDto,
     );

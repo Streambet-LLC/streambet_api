@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { BettingService } from './betting.service';
-import { PlaceBetDto } from './dto/place-bet.dto';
+import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -187,6 +187,149 @@ export class BettingGateway
 
       return {
         event: 'betPlaced',
+        data: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('cancelBet')
+  async handleCancelBet(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() betId: string,
+  ) {
+    try {
+      // Get user from socket
+      const user = client.data.user;
+
+      // Cancel the bet
+      const bet = await this.bettingService.cancelBet(user.sub, betId);
+
+      // Get the betting variable to determine the stream
+      const bettingVariable = await this.bettingService.findBettingVariableById(
+        bet.bettingVariableId,
+      );
+
+      // Broadcast updated betting information to all clients in the stream
+      this.server
+        .to(`stream_${bettingVariable.stream.id}`)
+        .emit('bettingUpdate', {
+          bettingVariableId: bet.bettingVariableId,
+          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+          betCountFreeToken: bettingVariable.betCountFreeToken,
+          betCountCoin: bettingVariable.betCountCoin,
+        });
+
+      // Send a chat message announcing the bet cancellation
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
+        timestamp: new Date(),
+      };
+
+      void this.server
+        .to(`stream_${bettingVariable.stream.id}`)
+        .emit('chatMessage', chatMessage);
+
+      // Confirm to the client that their bet was cancelled
+      return {
+        event: 'betCancelled',
+        data: {
+          bet,
+          success: true,
+        },
+      };
+    } catch (error) {
+      // Send error back to client
+      void client.emit('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        event: 'betCancelled',
+        data: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('editBet')
+  async handleEditBet(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() editBetDto: EditBetDto,
+  ) {
+    try {
+      // Get user from socket
+      const user = client.data.user;
+
+      // First cancel the existing bet
+      const cancelledBet = await this.bettingService.cancelBet(
+        user.sub,
+        editBetDto.betId,
+      );
+
+      // Then place a new bet with the new parameters
+      const newBetDto: PlaceBetDto = {
+        bettingVariableId: editBetDto.newBettingVariableId,
+        amount: editBetDto.newAmount,
+        currencyType: editBetDto.newCurrencyType,
+      };
+
+      const newBet = await this.bettingService.placeBet(user.sub, newBetDto);
+
+      // Get the betting variable to determine the stream
+      const bettingVariable = await this.bettingService.findBettingVariableById(
+        newBet.bettingVariableId,
+      );
+
+      // Broadcast updated betting information to all clients in the stream
+      this.server
+        .to(`stream_${bettingVariable.stream.id}`)
+        .emit('bettingUpdate', {
+          bettingVariableId: newBet.bettingVariableId,
+          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+          betCountFreeToken: bettingVariable.betCountFreeToken,
+          betCountCoin: bettingVariable.betCountCoin,
+        });
+
+      // Send a chat message announcing the bet edit
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: `${user.username} edited their bet from ${cancelledBet.amount} to ${newBet.amount} on ${bettingVariable.name}!`,
+        timestamp: new Date(),
+      };
+
+      void this.server
+        .to(`stream_${bettingVariable.stream.id}`)
+        .emit('chatMessage', chatMessage);
+
+      // Confirm to the client that their bet was edited
+      return {
+        event: 'betEdited',
+        data: {
+          cancelledBet,
+          newBet,
+          success: true,
+        },
+      };
+    } catch (error) {
+      // Send error back to client
+      void client.emit('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        event: 'betEdited',
         data: {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',

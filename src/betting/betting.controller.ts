@@ -100,6 +100,100 @@ export class BettingController {
     };
   }
 
+  @ApiOperation({ summary: 'Get comprehensive betting data for a stream' })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Comprehensive betting data retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        stream: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            status: { type: 'string' },
+            platformName: { type: 'string' },
+            viewerCount: { type: 'number' },
+            scheduledStartTime: { type: 'string', format: 'date-time' },
+            actualStartTime: { type: 'string', format: 'date-time' },
+            endTime: { type: 'string', format: 'date-time' },
+          },
+        },
+        summary: {
+          type: 'object',
+          properties: {
+            totalRounds: { type: 'number' },
+            totalBettingVariables: { type: 'number' },
+            totalBets: { type: 'number' },
+            totalBetsAmount: { type: 'number' },
+            activeBets: { type: 'number' },
+            completedBets: { type: 'number' },
+          },
+        },
+        rounds: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              roundId: { type: 'string' },
+              roundName: { type: 'string' },
+              freeTokenStatus: { type: 'string' },
+              coinStatus: { type: 'string' },
+              bettingVariables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    isWinningOption: { type: 'boolean' },
+                    status: { type: 'string' },
+                    totalBetsTokenAmount: { type: 'number' },
+                    totalBetsCoinAmount: { type: 'number' },
+                    betCountFreeToken: { type: 'number' },
+                    betCountCoin: { type: 'number' },
+                    bets: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string' },
+                          userId: { type: 'string' },
+                          userName: { type: 'string' },
+                          amount: { type: 'number' },
+                          currency: { type: 'string' },
+                          status: { type: 'string' },
+                          payout: { type: 'number' },
+                          payoutAmount: { type: 'number' },
+                          isProcessed: { type: 'boolean' },
+                          processedAt: { type: 'string', format: 'date-time' },
+                          createdAt: { type: 'string', format: 'date-time' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Get('streams/:id/betting-data')
+  async getStreamBettingData(@Param('id') id: string): Promise<ApiResponse> {
+    const bettingData = await this.bettingService.getStreamBettingData(id);
+    return {
+      message: 'Comprehensive betting data retrieved successfully',
+      status: HttpStatus.OK,
+      data: bettingData,
+    };
+  }
+
   @ApiOperation({ summary: 'Place a bet' })
   @SwaggerApiResponse({
     status: 201,

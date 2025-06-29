@@ -4,6 +4,7 @@ import { User } from '../../users/entities/user.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { BetStatus } from '../../enums/bet-status.enum';
+import { CurrencyType } from '../../wallets/entities/transaction.entity';
 
 @Entity('bets')
 export class Bet extends BaseEntity {
@@ -33,8 +34,11 @@ export class Bet extends BaseEntity {
   @Column({ type: 'bigint' })
   amount: number;
 
-  @Column({ type: 'varchar', length: 20 })
-  currency: string;
+  @Column({
+    type: 'enum',
+    enum: CurrencyType,
+  })
+  currency: CurrencyType;
 
   @Column({ type: 'enum', enum: BetStatus, default: BetStatus.Active })
   status: BetStatus;
