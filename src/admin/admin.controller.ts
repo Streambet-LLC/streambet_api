@@ -18,6 +18,7 @@ import { WalletsService } from '../wallets/wallets.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User, UserRole } from '../users/entities/user.entity';
 import { CreateStreamDto } from '../betting/dto/create-stream.dto';
+import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import {
   CreateBettingVariableDto,
   EditBettingVariableDto,
@@ -129,6 +130,37 @@ export class AdminController {
     );
     return {
       message: 'Stream status updated successfully',
+      status: HttpStatus.OK,
+      data: updatedStream,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update stream details' })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @ApiBody({ type: UpdateStreamDto })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('streams/:id')
+  async updateStream(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() updateStreamDto: UpdateStreamDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const updatedStream = await this.streamService.updateStream(
+      id,
+      updateStreamDto,
+    );
+    return {
+      message: 'Stream updated successfully',
       status: HttpStatus.OK,
       data: updatedStream,
     };
