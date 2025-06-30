@@ -439,7 +439,7 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: 'Fetch strem details' })
+  @ApiOperation({ summary: 'Fetch stream details' })
   @ApiParam({ name: 'id', description: 'Stream ID' })
   @SwaggerApiResponse({
     status: 200,

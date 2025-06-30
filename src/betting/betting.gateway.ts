@@ -100,6 +100,24 @@ export class BettingGateway
     console.log(`Client disconnected: ${client.id}`);
   }
 
+  //@UseGuards(WsJwtGuard)
+  // @SubscribeMessage('test')
+  // testStream(
+  //   @ConnectedSocket() client: AuthenticatedSocket,
+  //   @MessageBody() message: string,
+  // ) {
+  //   console.log({ message });
+  //   // Join the stream's room
+  //   client.join(`stream`);
+
+  //   // Let the client know they joined successfully
+  //   client.emit('joinedStream', { time: new Date() });
+
+  //   console.log(`User ${client.data.user.username} joined stream`);
+
+  //   return { event: 'joinedStream', data: { time: new Date() } };
+  // }
+
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinStream')
   handleJoinStream(
@@ -154,7 +172,6 @@ export class BettingGateway
         .to(`stream_${bettingVariable.stream.id}`)
         .emit('bettingUpdate', {
           bettingVariableId: bet.bettingVariableId,
-
           totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
           totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
           betCountFreeToken: bettingVariable.betCountFreeToken,
