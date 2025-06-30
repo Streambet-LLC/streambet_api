@@ -97,8 +97,6 @@ export class StreamController {
     status: 200,
     description: 'Stream details retrieved successfully',
   })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Get('bet-round/:stremId')
   async findBetRoundDetailsByStreamId(
     @Param('stremId') stremId: string,
