@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Stream } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 
 @Injectable()
 export class StreamService {
@@ -255,5 +256,67 @@ export class StreamService {
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
     return await this.simplifyStreamResponse(stream);
+  }
+
+  /**
+   * Updates a stream with the provided data.
+   * Throws a NotFoundException if no stream is found with the given ID.
+   * Logs and throws an HttpException in case of any internal errors during update.
+   *
+   * @param id - The unique identifier of the stream to update.
+   * @param updateStreamDto - DTO containing the fields to update.
+   * @returns A Promise resolving to the updated stream.
+   * @throws NotFoundException | HttpException
+   * @author Assistant
+   */
+  async updateStream(
+    id: string,
+    updateStreamDto: UpdateStreamDto,
+  ): Promise<Stream> {
+    try {
+      const stream = await this.streamsRepository.findOne({
+        where: { id },
+      });
+
+      if (!stream) {
+        throw new NotFoundException(`Stream with ID ${id} not found`);
+      }
+
+      // Update only the provided fields
+      if (updateStreamDto.name !== undefined) {
+        stream.name = updateStreamDto.name;
+      }
+      if (updateStreamDto.description !== undefined) {
+        stream.description = updateStreamDto.description;
+      }
+      if (updateStreamDto.embeddedUrl !== undefined) {
+        stream.embeddedUrl = updateStreamDto.embeddedUrl;
+      }
+      if (updateStreamDto.thumbnailUrl !== undefined) {
+        stream.thumbnailUrl = updateStreamDto.thumbnailUrl;
+      }
+      if (updateStreamDto.status !== undefined) {
+        stream.status = updateStreamDto.status;
+
+        // Handle status-specific time updates
+        if (updateStreamDto.status === 'live' && !stream.actualStartTime) {
+          stream.actualStartTime = new Date();
+        } else if (updateStreamDto.status === 'ended' && !stream.endTime) {
+          stream.endTime = new Date();
+        }
+      }
+
+      return await this.streamsRepository.save(stream);
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw e;
+      }
+
+      Logger.error('Unable to update stream details', e);
+      throw new HttpException(
+        `Unable to update stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }
