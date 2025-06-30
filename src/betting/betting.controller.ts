@@ -12,6 +12,7 @@ import {
   DefaultValuePipe,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiResponse } from '../common/types/api-response.interface';
 import { BettingService } from './betting.service';
 import { CurrencyTypeDto, PlaceBetDto } from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,18 +26,11 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
-  ApiResponse,
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 
-// Define ApiResponse type
-export interface ApiResponse {
-  message: string;
-  status: number;
-  data?: any;
-}
-
+// Define ApiResponse
 // Define the request type with user property
 interface RequestWithUser extends Request {
   user: User;
@@ -189,10 +183,6 @@ export class BettingController {
   }
 
   @ApiOperation({ summary: 'Get Potential winning amound for a round' })
-  @ApiResponse({
-    status: 200,
-    description: 'Potential amount  retrieved successfully',
-  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('potentialAmound/:bVId')
