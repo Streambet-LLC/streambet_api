@@ -408,10 +408,12 @@ export class BettingService {
 
       // Update the betting variable's statistics based on currency type
       if (currencyType === CurrencyType.FREE_TOKENS) {
-        bettingVariable.totalBetsTokenAmount += amount;
+        bettingVariable.totalBetsTokenAmount =
+          Number(bettingVariable.totalBetsTokenAmount) + Number(amount);
         bettingVariable.betCountFreeToken += 1;
       } else if (currencyType === CurrencyType.STREAM_COINS) {
-        bettingVariable.totalBetsCoinAmount += amount;
+        bettingVariable.totalBetsCoinAmount =
+          Number(bettingVariable.totalBetsCoinAmount) + Number(amount);
         bettingVariable.betCountCoin += 1;
       }
 
@@ -680,5 +682,47 @@ export class BettingService {
     }
 
     return bet;
+  }
+  async findPotentialAmound(
+    bettingVariableId: string,
+    userId: string,
+    currencyType: CurrencyTypeDto,
+  ) {
+    try {
+      const bettingVariable = await this.bettingVariablesRepository.findOne({
+        where: {
+          id: bettingVariableId,
+        },
+        relations: ['bets'],
+      });
+      let {
+        totalBetsCoinAmount,
+        totalBetsTokenAmount,
+        betCountCoin,
+        betCountFreeToken,
+      } = bettingVariable;
+
+      totalBetsTokenAmount = Number(totalBetsTokenAmount || 0);
+      totalBetsCoinAmount = Number(totalBetsCoinAmount || 0);
+      betCountFreeToken = Number(betCountFreeToken || 0);
+      betCountCoin = Number(betCountCoin || 0);
+
+      const potentialFreeToken =
+        betCountFreeToken > 0 ? totalBetsTokenAmount / betCountFreeToken : 0;
+
+      const netCoinAmount = totalBetsCoinAmount * 0.85;
+      const potentialCoin = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
+
+      const betAmount = bettingVariable?.bets[0]?.amount;
+      delete bettingVariable?.bets;
+      return {
+        ...bettingVariable,
+        potentialCoin,
+        potentialFreeToken,
+        betAmount,
+      };
+    } catch (e) {
+      console.error(e.message);
+    }
   }
 }

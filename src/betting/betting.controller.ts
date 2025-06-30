@@ -13,12 +13,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { BettingService } from './betting.service';
-import { PlaceBetDto } from './dto/place-bet.dto';
+import { CurrencyTypeDto, PlaceBetDto } from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
 import { User } from '../users/entities/user.entity';
-import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
   ApiOperation,
@@ -26,9 +25,17 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
+
+// Define ApiResponse type
+export interface ApiResponse {
+  message: string;
+  status: number;
+  data?: any;
+}
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -143,7 +150,7 @@ export class BettingController {
   async cancelBet(
     @Request() req: RequestWithUser,
     @Body() cancelBetDto: CancelBetDto,
-  ): Promise<ApiResponse> {
+  ) {
     const bet = await this.bettingService.cancelBet(req.user.id, cancelBetDto);
     return {
       message: 'Bet cancelled successfully',
@@ -172,12 +179,37 @@ export class BettingController {
     @Request() req: RequestWithUser,
     @Query('active', new DefaultValuePipe(false), ParseBoolPipe)
     active: boolean,
-  ): Promise<ApiResponse> {
+  ) {
     const bets = await this.bettingService.getUserBets(req.user.id, active);
     return {
       message: 'User betting history retrieved successfully',
       status: HttpStatus.OK,
       data: bets,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get Potential winning amound for a round' })
+  @ApiResponse({
+    status: 200,
+    description: 'Potential amount  retrieved successfully',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('potentialAmound/:bVId')
+  async findPotentialAmound(
+    @Param('bVId') bVId: string,
+    @Query() currencyType: CurrencyTypeDto,
+    @Request() req: RequestWithUser,
+  ) {
+    const data = await this.bettingService.findPotentialAmound(
+      bVId,
+      req.user.id,
+      currencyType,
+    );
+    return {
+      message: 'Potential amount  retrieved successfully',
+      status: HttpStatus.OK,
+      data: data,
     };
   }
 }

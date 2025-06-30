@@ -4,10 +4,19 @@ import {
   IsUUID,
   IsPositive,
   IsIn,
+  IsOptional,
 } from 'class-validator';
 import { CurrencyType } from '../../wallets/entities/transaction.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
+export class CurrencyTypeDto {
+  @ApiProperty({
+    required: false,
+  })
+  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
+  @IsOptional()
+  currencyType?: CurrencyType;
+}
 export class PlaceBetDto {
   @ApiProperty()
   @IsUUID()
