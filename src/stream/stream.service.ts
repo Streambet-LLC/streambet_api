@@ -83,12 +83,41 @@ export class StreamService {
     }
   }
   private async simplifyStreamResponse(streamData: any) {
+    if (!streamData) return null;
+
+    const {
+      id,
+      description,
+      createdAt,
+      updatedAt,
+      embeddedUrl,
+      thumbnailUrl,
+      platformName,
+      status,
+      scheduledStartTime,
+      actualStartTime,
+      endTime,
+      viewerCount,
+      bettingRounds = [],
+    } = streamData;
+
     return {
-      streamId: streamData.id,
-      rounds: streamData.bettingRounds.map((round: any) => ({
+      streamId: id,
+      description,
+      createdAt,
+      updatedAt,
+      embeddedUrl,
+      thumbnailUrl,
+      platformName,
+      status,
+      scheduledStartTime,
+      actualStartTime,
+      endTime,
+      viewerCount,
+      rounds: bettingRounds.map((round: any) => ({
         roundId: round.id,
         roundName: round.roundName ?? '',
-        options: round.bettingVariables.map((variable: any) => ({
+        options: (round.bettingVariables ?? []).map((variable: any) => ({
           id: variable.id,
           option: variable.name,
         })),
