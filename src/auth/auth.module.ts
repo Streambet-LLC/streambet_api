@@ -9,7 +9,7 @@ import { UsersModule } from '../users/users.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { EmailsService } from 'src/emails/email.service';
+import { EmailsModule } from '../emails/email.module';
 
 @Module({
   imports: [
@@ -25,15 +25,10 @@ import { EmailsService } from 'src/emails/email.service';
     }),
     UsersModule,
     WalletsModule,
+    EmailsModule,
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    EmailsService,
-    JwtStrategy,
-    GoogleStrategy,
-    RefreshTokenGuard,
-  ],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, RefreshTokenGuard],
   exports: [PassportModule, JwtModule, AuthService],
 })
 export class AuthModule {}

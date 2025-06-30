@@ -15,7 +15,6 @@ import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
-import { MailService } from 'src/mails/mail.service';
 import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';

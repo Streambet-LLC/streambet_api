@@ -24,7 +24,6 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
-import { BettingGateway } from './betting.gateway';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 
 @Injectable()
@@ -40,7 +39,6 @@ export class BettingService {
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
     private dataSource: DataSource,
-    private bettingGateway: BettingGateway,
   ) {}
 
   // Utility function to detect platform from URL
@@ -202,20 +200,6 @@ export class BettingService {
     bettingVariable.status = status;
     const updatedVariable =
       await this.bettingVariablesRepository.save(bettingVariable);
-
-    // Emit real-time updates based on status change
-    if (status === BettingVariableStatus.LOCKED) {
-      this.bettingGateway.emitBettingLocked(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-      );
-    } else {
-      // Emit general betting update for other status changes
-      this.bettingGateway.emitBettingUpdate(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-      );
-    }
 
     return updatedVariable;
   }
@@ -435,12 +419,6 @@ export class BettingService {
       // Commit the transaction
       await queryRunner.commitTransaction();
 
-      // Emit real-time update to all clients in the stream
-      this.bettingGateway.emitBettingUpdate(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-      );
-
       return savedBet;
     } catch (error) {
       // Rollback in case of error
@@ -651,13 +629,6 @@ export class BettingService {
 
       // Commit the transaction
       await queryRunner.commitTransaction();
-
-      // Emit real-time winner declaration to all clients in the stream
-      this.bettingGateway.emitWinnerDeclared(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-        bettingVariable.name,
-      );
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
