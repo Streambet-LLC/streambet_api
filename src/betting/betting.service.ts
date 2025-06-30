@@ -294,12 +294,22 @@ export class BettingService {
         }
       }
 
+      // Ensure bettingRound.stream is populated
+      if (!bettingRound.stream) {
+        const roundWithStream = await this.bettingRoundsRepository.findOne({
+          where: { id: bettingRound.id },
+          relations: ['stream'],
+        });
+        bettingRound.stream = roundWithStream?.stream;
+      }
+
       // Add new options
       for (const option of newOptions) {
         const bettingVariable = this.bettingVariablesRepository.create({
           name: option.option,
           round: bettingRound,
           stream: bettingRound.stream,
+          streamId: bettingRound.stream?.id, // Ensure streamId is set
         });
         await this.bettingVariablesRepository.save(bettingVariable);
       }
