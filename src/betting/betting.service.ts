@@ -18,7 +18,7 @@ import {
   EditBettingVariableDto,
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
-import { PlaceBetDto } from './dto/place-bet.dto';
+import { CurrencyTypeDto, PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
@@ -401,6 +401,7 @@ export class BettingService {
         bettingVariableId,
         amount,
         currency: currencyType,
+        stream: { id: bettingVariable.streamId },
       });
 
       const savedBet = await queryRunner.manager.save(bet);
