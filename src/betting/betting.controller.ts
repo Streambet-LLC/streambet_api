@@ -193,7 +193,6 @@ export class BettingController {
   ) {
     const data = await this.bettingService.findPotentialAmound(
       bVId,
-      req.user.id,
       roundIdDto.roundId,
     );
     return {

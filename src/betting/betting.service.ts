@@ -683,7 +683,7 @@ export class BettingService {
 
     return bet;
   }
-  async findPotentialAmound(bVId, userId, roundId) {
+  async findPotentialAmound(bVId, roundId) {
     try {
       const bettingRound = await this.bettingRoundsRepository.findOne({
         where: {
