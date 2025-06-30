@@ -683,46 +683,70 @@ export class BettingService {
 
     return bet;
   }
-  async findPotentialAmound(
-    bettingVariableId: string,
-    userId: string,
-    currencyType: CurrencyTypeDto,
-  ) {
+  async findPotentialAmound(bVId, userId, roundId) {
     try {
+      const bettingRound = await this.bettingRoundsRepository.findOne({
+        where: {
+          id: roundId,
+        },
+        relations: ['bettingVariables'],
+      });
       const bettingVariable = await this.bettingVariablesRepository.findOne({
         where: {
-          id: bettingVariableId,
+          id: bVId,
         },
         relations: ['bets'],
       });
-      let {
-        totalBetsCoinAmount,
-        totalBetsTokenAmount,
-        betCountCoin,
-        betCountFreeToken,
-      } = bettingVariable;
+      console.log(bettingRound, bettingVariable);
 
-      totalBetsTokenAmount = Number(totalBetsTokenAmount || 0);
-      totalBetsCoinAmount = Number(totalBetsCoinAmount || 0);
-      betCountFreeToken = Number(betCountFreeToken || 0);
-      betCountCoin = Number(betCountCoin || 0);
-
-      const potentialFreeToken =
-        betCountFreeToken > 0 ? totalBetsTokenAmount / betCountFreeToken : 0;
-
-      const netCoinAmount = totalBetsCoinAmount * 0.85;
-      const potentialCoin = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
-
-      const betAmount = bettingVariable?.bets[0]?.amount;
-      delete bettingVariable?.bets;
+      const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
+        this.potentialAmountCal(bettingRound, bettingVariable);
       return {
-        ...bettingVariable,
-        potentialCoin,
-        potentialFreeToken,
+        optionName: bettingVariable.name,
+        potentialCoinAmt,
+        potentialFreeTokenAmt,
         betAmount,
       };
     } catch (e) {
       console.error(e.message);
     }
+  }
+  private potentialAmountCal(bettingRound, bettingVariable) {
+    const betAmount = Number(bettingVariable?.bets?.[0]?.amount || 0);
+    const { betCountFreeToken = 0, betCountCoin = 0 } = bettingVariable;
+
+    const bettingVariables = bettingRound?.bettingVariables || [];
+
+    const totalCoinAmount = bettingVariables.reduce(
+      (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
+      0,
+    );
+    const totalTokenAmount = bettingVariables.reduce(
+      (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
+      0,
+    );
+
+    const avgFreeTokenAmt =
+      betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
+    console.log(
+      avgFreeTokenAmt,
+      betCountFreeToken,
+      totalTokenAmount,
+      betCountFreeToken,
+      'ffff',
+    );
+
+    const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
+    console.log(potentialFreeTokenAmt, avgFreeTokenAmt, betAmount, 'dd');
+    const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
+
+    const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
+    const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
+
+    return {
+      potentialCoinAmt,
+      potentialFreeTokenAmt,
+      betAmount,
+    };
   }
 }

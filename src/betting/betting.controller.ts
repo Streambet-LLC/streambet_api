@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiResponse } from '../common/types/api-response.interface';
 import { BettingService } from './betting.service';
-import { CurrencyTypeDto, PlaceBetDto } from './dto/place-bet.dto';
+import { CurrencyTypeDto, PlaceBetDto, RoundIdDto } from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
@@ -188,13 +188,13 @@ export class BettingController {
   @Get('potentialAmound/:bVId')
   async findPotentialAmound(
     @Param('bVId') bVId: string,
-    @Query() currencyType: CurrencyTypeDto,
+    @Query() roundIdDto: RoundIdDto,
     @Request() req: RequestWithUser,
   ) {
     const data = await this.bettingService.findPotentialAmound(
       bVId,
       req.user.id,
-      currencyType,
+      roundIdDto.roundId,
     );
     return {
       message: 'Potential amount  retrieved successfully',
