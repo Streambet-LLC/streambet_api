@@ -88,6 +88,7 @@ export class StreamService {
 
     const {
       id,
+      name,
       description,
       createdAt,
       updatedAt,
@@ -104,6 +105,7 @@ export class StreamService {
 
     return {
       streamId: id,
+      streamName: name,
       description,
       createdAt,
       updatedAt,
