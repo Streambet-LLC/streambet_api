@@ -439,7 +439,11 @@ export class AuthService {
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
       }
-
+      if (user.isVerify)
+        throw new HttpException(
+          'User Already verified',
+          HttpStatus.BAD_REQUEST,
+        );
       // Update password
       await this.usersService.verifyUser(user.id);
 
@@ -454,10 +458,7 @@ export class AuthService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      throw new HttpException(
-        'Error while verifying user',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
