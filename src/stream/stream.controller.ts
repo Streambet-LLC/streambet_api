@@ -6,6 +6,7 @@ import {
   Query,
   HttpStatus,
   Param,
+  Body,
 } from '@nestjs/common';
 import { StreamService } from './stream.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
+import { UserIdDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -97,9 +99,15 @@ export class StreamController {
   })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('bet-round/:id')
-  async findBetRoundDetailsByStreamId(@Param('id') id: string) {
-    const stream = await this.streamService.findBetRoundDetailsByStreamId(id);
+  @Get('bet-round/:stremId')
+  async findBetRoundDetailsByStreamId(
+    @Param('stremId') stremId: string,
+    @Query() userIdDto: UserIdDto,
+  ) {
+    const stream = await this.streamService.findBetRoundDetailsByStreamId(
+      stremId,
+      userIdDto?.userId,
+    );
     return {
       message: 'Stream details retrieved successfully',
       status: HttpStatus.OK,

@@ -232,4 +232,9 @@ export class WalletsService {
     });
     return await this.findByUserId(userId);
   }
+  async walletDetailsByUserId(userId: string) {
+    return await this.walletsRepository.findOne({
+      where: { userId },
+    });
+  }
 }

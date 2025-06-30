@@ -10,12 +10,15 @@ import { Repository } from 'typeorm';
 import { Stream } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { WalletsService } from 'src/wallets/wallets.service';
+import { Wallet } from 'src/wallets/entities/wallet.entity';
 
 @Injectable()
 export class StreamService {
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
+    private walletService: WalletsService,
   ) {}
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -196,8 +199,9 @@ export class StreamService {
       );
     }
   }
-  async findBetRoundDetailsByStreamId(id: string) {
+  async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
     try {
+      let wallet: Wallet;
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
         .leftJoinAndSelect(
@@ -206,12 +210,18 @@ export class StreamService {
           '(round.freeTokenStatus = :freeTokenStatus OR round.coinStatus = :coinStatus)',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
-        .where('stream.id = :id', { id })
-        .setParameters({ freeTokenStatus: 'active', coinStatus: 'active' })
+        .where('stream.id = :streamId', { streamId })
+        .setParameters({
+          freeTokenStatus: 'active',
+          coinStatus: 'active',
+        })
         .getOne();
+      if (userId) {
+        wallet = await this.walletService.walletDetailsByUserId(userId);
+      }
 
       if (!stream) {
-        throw new NotFoundException(`Stream with ID ${id} not found`);
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
       }
       let roundTotalBetsTokenAmount: number = 0;
       let roundTotalBetsCoinAmount: number = 0;
@@ -231,6 +241,7 @@ export class StreamService {
         }
       }
       const result = {
+        walletFreeToken: wallet?.freeTokens || 0,
         roundTotalBetsTokenAmount,
         roundTotalBetsCoinAmount,
         ...stream,
