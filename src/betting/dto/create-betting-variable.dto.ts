@@ -69,6 +69,17 @@ export class RoundDto {
 
 export class EditRoundDto {
   @ApiProperty({
+    description: 'The ID of the existing round (optional for new rounds)',
+    example: '222e3333-e44b-55d3-a456-426614174002',
+    type: 'string',
+    format: 'uuid',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  roundId?: string;
+
+  @ApiProperty({
     description: 'The name of the betting round',
     example: 'Round 1 - First Half',
     type: 'string',

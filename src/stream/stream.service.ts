@@ -335,6 +335,11 @@ export class StreamService {
       if (updateStreamDto.thumbnailUrl !== undefined) {
         stream.thumbnailUrl = updateStreamDto.thumbnailUrl;
       }
+      if (updateStreamDto.scheduledStartTime !== undefined) {
+        stream.scheduledStartTime = new Date(
+          updateStreamDto.scheduledStartTime,
+        );
+      }
       if (updateStreamDto.status !== undefined) {
         stream.status = updateStreamDto.status;
 

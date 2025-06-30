@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsUrl, IsEnum } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { StreamStatus } from '../../stream/entities/stream.entity';
 
@@ -54,4 +60,15 @@ export class UpdateStreamDto {
   @IsEnum(StreamStatus)
   @IsOptional()
   status?: StreamStatus;
+
+  @ApiProperty({
+    description: 'Scheduled start time of the stream',
+    example: '2024-01-01T20:00:00Z',
+    type: 'string',
+    format: 'date-time',
+    required: false,
+  })
+  @IsDateString()
+  @IsOptional()
+  scheduledStartTime?: string;
 }
