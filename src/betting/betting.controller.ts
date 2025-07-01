@@ -188,10 +188,10 @@ export class BettingController {
     };
   }
 
-  @ApiOperation({ summary: 'Get Potential winning amound for a round' })
+  @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('potentialAmound/:roundId')
+  @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string,
     @Request() req: RequestWithUser,
