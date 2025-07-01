@@ -498,7 +498,7 @@ export class BettingService {
 
     // Check if betting is still open for the specific currency type
     if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
+      if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
         const message = await this.bettingStatusMessage(
           bettingVariable.round.status,
         );
@@ -510,7 +510,7 @@ export class BettingService {
         );
       }
     } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
+      if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
         const message = await this.bettingStatusMessage(
           bettingVariable.round.status,
         );
