@@ -137,7 +137,7 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        status: BettingRoundStatus.ACTIVE,
+        status: BettingRoundStatus.CREATED,
       });
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
@@ -239,7 +239,7 @@ export class BettingService {
         bettingRound = this.bettingRoundsRepository.create({
           roundName: roundData.roundName,
           stream: stream,
-          status: BettingRoundStatus.ACTIVE,
+          status: BettingRoundStatus.CREATED,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -388,31 +388,17 @@ export class BettingService {
       );
     }
 
-    // Check if betting is still open for the specific currency type
-    if (currencyType === CurrencyType.FREE_TOKENS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
-        const message = await this.bettingStatusMessage(
-          bettingVariable.round.status,
-        );
-        throw new BadRequestException(message);
-      }
-      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
-        throw new BadRequestException(
-          `This stream is not live. You can only place bets during live streams.`,
-        );
-      }
-    } else if (currencyType === CurrencyType.STREAM_COINS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
-        const message = await this.bettingStatusMessage(
-          bettingVariable.round.status,
-        );
-        throw new BadRequestException(message);
-      }
-      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
-        throw new BadRequestException(
-          `This stream is not live. You can only place bets during live streams.`,
-        );
-      }
+    // Check if betting is still open for the round and stream is live
+    if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
+      const message = await this.bettingStatusMessage(
+        bettingVariable.round.status,
+      );
+      throw new BadRequestException(message);
+    }
+    if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+      throw new BadRequestException(
+        `This stream is not live. You can only place bets during live streams.`,
+      );
     }
 
     // Check if user already has an active bet (MVP restriction)
@@ -447,6 +433,7 @@ export class BettingService {
         amount,
         currency: currencyType,
         stream: { id: bettingVariable.streamId },
+        roundId: bettingVariable.roundId,
       });
 
       const savedBet = await queryRunner.manager.save(bet);
@@ -535,14 +522,14 @@ export class BettingService {
     if (currencyType === CurrencyType.FREE_TOKENS) {
       if (
         bet.currency !== CurrencyType.FREE_TOKENS ||
-        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.OPEN
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
       if (
         bet.currency !== CurrencyType.STREAM_COINS ||
-        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.OPEN
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
@@ -624,21 +611,12 @@ export class BettingService {
   }
 
   // Result Declaration and Payout
-  async declareWinner(
-    adminId: string,
-    variableId: string,
-    user: User,
-  ): Promise<void> {
-    // Check if user is admin
-    if (user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only admins can declare winners');
-    }
-
+  async declareWinner(variableId: string): Promise<void> {
     const bettingVariable = await this.findBettingVariableById(variableId);
 
-    if (bettingVariable.status !== BettingVariableStatus.LOCKED) {
+    if (bettingVariable.round.status !== BettingRoundStatus.LOCKED) {
       throw new BadRequestException(
-        'Betting must be locked before declaring a winner',
+        'Betting round must be locked before declaring a winner',
       );
     }
 
@@ -650,6 +628,7 @@ export class BettingService {
     try {
       // Mark this variable as winner
       bettingVariable.status = BettingVariableStatus.WINNER;
+      bettingVariable.is_winning_option = true;
       await queryRunner.manager.save(bettingVariable);
 
       // Mark all other variables for this stream as losers
@@ -667,6 +646,7 @@ export class BettingService {
       const allStreamBets = await queryRunner.manager.find(Bet, {
         where: {
           bettingVariable: { stream: { id: bettingVariable.stream.id } },
+          roundId: bettingVariable.roundId,
           status: BetStatus.Active,
         },
         relations: ['bettingVariable'],
@@ -681,51 +661,93 @@ export class BettingService {
         (bet) => bet.bettingVariableId !== variableId,
       );
 
-      // Calculate total pot and winning pot
-      const totalWinningBetsAmount = winningBets.reduce(
+      // Separate by currency
+      const winningTokenBets = winningBets.filter(
+        (bet) => bet.currency === CurrencyType.FREE_TOKENS,
+      );
+      const winningCoinBets = winningBets.filter(
+        (bet) => bet.currency === CurrencyType.STREAM_COINS,
+      );
+      const losingTokenBets = losingBets.filter(
+        (bet) => bet.currency === CurrencyType.FREE_TOKENS,
+      );
+      const losingCoinBets = losingBets.filter(
+        (bet) => bet.currency === CurrencyType.STREAM_COINS,
+      );
+
+      // Calculate pots
+      const totalWinningTokenAmount = winningTokenBets.reduce(
         (sum, bet) => sum + bet.amount,
         0,
       );
-
-      const totalLosingBetsAmount = losingBets.reduce(
+      const totalLosingTokenAmount = losingTokenBets.reduce(
         (sum, bet) => sum + bet.amount,
         0,
       );
+      const totalWinningCoinAmount = winningCoinBets.reduce(
+        (sum, bet) => sum + bet.amount,
+        0,
+      );
+      const totalLosingCoinAmount = losingCoinBets.reduce(
+        (sum, bet) => sum + bet.amount,
+        0,
+      );
+      const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
+      const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
 
-      // Apply 15% vig (platform fee)
-      const platformFee = Math.floor(totalLosingBetsAmount * 0.15);
-      const distributablePot = totalLosingBetsAmount - platformFee;
-
-      // Process winning bets
-      for (const bet of winningBets) {
-        // Calculate payout using parimutuel system
-        const share = bet.amount / totalWinningBetsAmount;
-        const payout = Math.floor(distributablePot * share) + bet.amount; // Return original bet + share of losers' pot
-
-        // Update bet status and payout
+      // Process winning token bets (no fee)
+      for (const bet of winningTokenBets) {
+        const share = bet.amount / totalWinningTokenAmount;
+        const payout = Math.floor(totalLosingTokenAmount * share) + bet.amount;
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
-
-        // Credit the user's wallet
         await this.walletsService.creditWinnings(
           bet.userId,
           payout,
-          CurrencyType.FREE_TOKENS, // MVP uses free tokens
+          CurrencyType.FREE_TOKENS,
           `Winnings from bet on ${bettingVariable.name}`,
         );
       }
 
-      // Process losing bets
+      // Process winning coin bets (with 15% fee)
+      for (const bet of winningCoinBets) {
+        const share = bet.amount / totalWinningCoinAmount;
+        const payout = Math.floor(distributableCoinPot * share) + bet.amount;
+        bet.status = BetStatus.Won;
+        bet.payoutAmount = payout;
+        bet.processedAt = new Date();
+        bet.isProcessed = true;
+        await queryRunner.manager.save(bet);
+        await this.walletsService.creditWinnings(
+          bet.userId,
+          payout,
+          CurrencyType.STREAM_COINS,
+          `Winnings from bet on ${bettingVariable.name}`,
+        );
+      }
+
+      // Process losing bets (all)
       for (const bet of losingBets) {
-        // Update bet status
         bet.status = BetStatus.Lost;
         bet.payoutAmount = 0;
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
+      }
+
+      // Set round status to CLOSED for the round belonging to this betting variable
+      let round = bettingVariable.round;
+      if (!round) {
+        round = await this.bettingRoundsRepository.findOne({
+          where: { id: bettingVariable.roundId },
+        });
+      }
+      if (round) {
+        round.status = BettingRoundStatus.CLOSED;
+        await queryRunner.manager.save(round);
       }
 
       // Commit the transaction
