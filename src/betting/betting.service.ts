@@ -225,10 +225,10 @@ export class BettingService {
     const allRounds = [];
 
     for (const roundData of rounds) {
-      // Find existing round by name or create new one
-      let bettingRound = existingRounds.find(
-        (r) => r.roundName === roundData.roundName,
-      );
+      // Find existing round by roundId
+      let bettingRound = roundData.roundId
+        ? existingRounds.find((r) => r.id === roundData.roundId)
+        : undefined;
 
       if (bettingRound) {
         // Update existing round
@@ -253,10 +253,12 @@ export class BettingService {
       allRounds.push(updatedRound);
     }
 
-    // Remove rounds that are not in the request
-    const roundNamesToKeep = rounds.map((r) => r.roundName);
+    // Remove rounds that are not in the request (by roundId)
+    const roundIdsToKeep = rounds
+      .filter((r) => r.roundId)
+      .map((r) => r.roundId);
     const roundsToDelete = existingRounds.filter(
-      (r) => !roundNamesToKeep.includes(r.roundName),
+      (r) => !roundIdsToKeep.includes(r.id),
     );
 
     for (const round of roundsToDelete) {
@@ -279,7 +281,7 @@ export class BettingService {
         where: { roundId: bettingRound.id },
       });
 
-      // Separate existing and new options
+      // Separate existing and new options by id
       const existingOptions = options.filter((opt) => opt.id);
       const newOptions = options.filter((opt) => !opt.id);
 
@@ -314,10 +316,10 @@ export class BettingService {
         await this.bettingVariablesRepository.save(bettingVariable);
       }
 
-      // Remove options that are not in the request
+      // Remove options that are not in the request (by id)
       const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
       const variablesToDelete = existingVariables.filter(
-        (v) => !optionIdsToKeep.includes(v.id),
+        (v) => v.id && !optionIdsToKeep.includes(v.id),
       );
 
       for (const variable of variablesToDelete) {
@@ -347,6 +349,7 @@ export class BettingService {
       };
     }
   }
+
   // Betting Operations
   async placeBet(userId: string, placeBetDto: PlaceBetDto): Promise<Bet> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
