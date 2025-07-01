@@ -248,11 +248,7 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const result = await this.bettingService.declareWinner(
-      req.user.id,
-      id,
-      req.user,
-    );
+    const result = await this.bettingService.declareWinner(id);
     return {
       message: 'Winner declared and payouts processed successfully',
       status: HttpStatus.OK,

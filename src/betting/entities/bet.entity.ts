@@ -5,6 +5,7 @@ import { BettingVariable } from './betting-variable.entity';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { BetStatus } from '../../enums/bet-status.enum';
 import { CurrencyType } from '../../wallets/entities/transaction.entity';
+import { BettingRound } from './betting-round.entity';
 
 @Entity('bets')
 export class Bet extends BaseEntity {
@@ -58,4 +59,11 @@ export class Bet extends BaseEntity {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
+
+  @ManyToOne(() => BettingRound, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'round_id' })
+  round: BettingRound;
+
+  @Column({ name: 'round_id', nullable: true })
+  roundId: string;
 }
