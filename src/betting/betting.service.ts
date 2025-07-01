@@ -790,6 +790,8 @@ export class BettingService {
         },
         relations: ['bettingVariables'],
       });
+      console.log(userId);
+
       const bets = await this.betsRepository
         .createQueryBuilder('bet')
         .leftJoin('bet.bettingVariable', 'bettingVariable')
@@ -809,9 +811,13 @@ export class BettingService {
           'bettingVariable.betCountCoin AS betCountCoin',
         ])
         .getRawOne();
+      if (!bets) {
+        throw new NotFoundException(`No matching bet found for this user`);
+      }
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
       return {
+        betId: bets.id,
         status: bettingRound.status,
         optionName: bets.variableName,
         potentialCoinAmt,
@@ -820,43 +826,51 @@ export class BettingService {
       };
     } catch (e) {
       console.error(e.message);
+      throw new NotFoundException(e.message);
     }
   }
   private potentialAmountCal(bettingRound, bets) {
-    const betAmount = Number(bets?.betamount || 0);
+    try {
+      console.log('ddd', bets);
 
-    const {
-      betcountfreetoken: betCountFreeToken = 0,
-      betcountcoin: betCountCoin = 0,
-    } = bets;
+      const betAmount = Number(bets?.betamount || 0);
 
-    const bettingVariables = bettingRound?.bettingVariables || [];
+      const {
+        betcountfreetoken: betCountFreeToken = 0,
+        betcountcoin: betCountCoin = 0,
+      } = bets;
+      console.log('ddd');
 
-    const totalCoinAmount = bettingVariables.reduce(
-      (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
-      0,
-    );
-    const totalTokenAmount = bettingVariables.reduce(
-      (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
-      0,
-    );
+      const bettingVariables = bettingRound?.bettingVariables || [];
 
-    const avgFreeTokenAmt =
-      betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
+      const totalCoinAmount = bettingVariables.reduce(
+        (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
+        0,
+      );
+      const totalTokenAmount = bettingVariables.reduce(
+        (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
+        0,
+      );
 
-    const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
+      const avgFreeTokenAmt =
+        betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
 
-    const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
+      const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
 
-    const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
+      const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
 
-    const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
+      const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
 
-    return {
-      potentialCoinAmt,
-      potentialFreeTokenAmt,
-      betAmount,
-    };
+      const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
+
+      return {
+        potentialCoinAmt,
+        potentialFreeTokenAmt,
+        betAmount,
+      };
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   async updateRoundStatus(
