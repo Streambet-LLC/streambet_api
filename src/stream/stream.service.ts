@@ -236,13 +236,12 @@ export class StreamService {
         .leftJoinAndSelect(
           'stream.bettingRounds',
           'round',
-          '(round.freeTokenStatus = :freeTokenStatus OR round.coinStatus = :coinStatus)',
+          'round.status = :status',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .where('stream.id = :streamId', { streamId })
         .setParameters({
-          freeTokenStatus: 'active',
-          coinStatus: 'active',
+          status: 'active',
         })
         .getOne();
       if (userId) {

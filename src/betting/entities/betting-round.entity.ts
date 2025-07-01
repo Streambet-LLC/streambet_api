@@ -2,7 +2,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
-import { BettingVariableStatus } from '../../enums/betting-variable-status.enum';
+import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {
@@ -20,17 +20,10 @@ export class BettingRound extends BaseEntity {
 
   @Column({
     type: 'enum',
-    enum: BettingVariableStatus,
-    default: BettingVariableStatus.ACTIVE,
+    enum: BettingRoundStatus,
+    default: BettingRoundStatus.CREATED,
   })
-  freeTokenStatus: BettingVariableStatus;
-
-  @Column({
-    type: 'enum',
-    enum: BettingVariableStatus,
-    default: BettingVariableStatus.ACTIVE,
-  })
-  coinStatus: BettingVariableStatus;
+  status: BettingRoundStatus;
 
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];

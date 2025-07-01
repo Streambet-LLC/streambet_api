@@ -25,6 +25,7 @@ import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
+import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Injectable()
 export class BettingService {
@@ -136,8 +137,7 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        freeTokenStatus: BettingVariableStatus.ACTIVE,
-        coinStatus: BettingVariableStatus.ACTIVE,
+        status: BettingRoundStatus.ACTIVE,
       });
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
@@ -158,8 +158,7 @@ export class BettingService {
       allRounds.push({
         roundId: savedRound.id,
         roundName: savedRound.roundName,
-        freeTokenStatus: savedRound.freeTokenStatus,
-        coinStatus: savedRound.coinStatus,
+        status: savedRound.status,
         options: createdVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -240,8 +239,7 @@ export class BettingService {
         bettingRound = this.bettingRoundsRepository.create({
           roundName: roundData.roundName,
           stream: stream,
-          freeTokenStatus: BettingVariableStatus.ACTIVE,
-          coinStatus: BettingVariableStatus.ACTIVE,
+          status: BettingRoundStatus.ACTIVE,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -347,8 +345,7 @@ export class BettingService {
       return {
         roundId: bettingRound.id,
         roundName: bettingRound.roundName,
-        coinStatus: bettingRound.coinStatus,
-        freeTokenStatus: bettingRound.freeTokenStatus,
+        status: bettingRound.status,
         options: updatedVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -393,11 +390,9 @@ export class BettingService {
 
     // Check if betting is still open for the specific currency type
     if (currencyType === CurrencyType.FREE_TOKENS) {
-      if (
-        bettingVariable.round.freeTokenStatus !== BettingVariableStatus.ACTIVE
-      ) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
         const message = await this.bettingStatusMessage(
-          bettingVariable.round.freeTokenStatus,
+          bettingVariable.round.status,
         );
         throw new BadRequestException(message);
       }
@@ -407,9 +402,9 @@ export class BettingService {
         );
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
-      if (bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
         const message = await this.bettingStatusMessage(
-          bettingVariable.round.coinStatus,
+          bettingVariable.round.status,
         );
         throw new BadRequestException(message);
       }
@@ -503,15 +498,14 @@ export class BettingService {
     if (currencyType === CurrencyType.FREE_TOKENS) {
       if (
         bet.currency !== CurrencyType.FREE_TOKENS ||
-        bet.bettingVariable.round.freeTokenStatus !==
-          BettingVariableStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
       if (
         bet.currency !== CurrencyType.STREAM_COINS ||
-        bet.bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
@@ -769,8 +763,7 @@ export class BettingService {
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bettingVariable);
       return {
-        bettingCoinStatus: bettingRound.coinStatus,
-        bettingFreeTokenStatus: bettingRound.freeTokenStatus,
+        status: bettingRound.status,
         optionName: bettingVariable.name,
         potentialCoinAmt,
         potentialFreeTokenAmt,
