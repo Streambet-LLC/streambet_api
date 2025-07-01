@@ -139,13 +139,13 @@ export class WalletsService {
       // Calculate new balance
       let newBalance: number;
       if (currencyType === CurrencyType.FREE_TOKENS) {
-        newBalance = wallet.freeTokens + amount;
+        newBalance = Number(wallet.freeTokens) + amount;
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient free tokens');
         }
         wallet.freeTokens = newBalance;
       } else {
-        newBalance = wallet.streamCoins + amount;
+        newBalance = Number(wallet.streamCoins) + amount;
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient stream coins');
         }

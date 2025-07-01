@@ -225,10 +225,7 @@ export class StreamService {
       }
 
       Logger.error('Unable to retrieve stream details', e);
-      throw new HttpException(
-        `Unable to retrieve stream details at the moment. Please try again later`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
   async findBetRoundDetailsByStreamId(streamId: string, userId: string) {

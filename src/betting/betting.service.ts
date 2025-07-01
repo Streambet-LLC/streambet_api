@@ -354,9 +354,21 @@ export class BettingService {
     // Find the betting variable with its round
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
-      relations: ['stream', 'round'],
+      relations: ['round', 'round.stream'],
     });
-
+    const checkStrermIdRoundIdValid =
+      await this.bettingVariablesRepository.findOne({
+        where: {
+          id: bettingVariableId,
+          stream: { id: bettingVariable.round.streamId },
+          round: { id: bettingVariable.roundId },
+        },
+      });
+    if (!checkStrermIdRoundIdValid) {
+      throw new NotFoundException(
+        `This betting round is not associated with the current stream. Please check your selection`,
+      );
+    }
     if (!bettingVariable) {
       throw new NotFoundException(
         `Betting variable with ID ${bettingVariableId} not found`,
@@ -368,14 +380,26 @@ export class BettingService {
       if (
         bettingVariable.round.freeTokenStatus !== BettingVariableStatus.ACTIVE
       ) {
+        const message = await this.bettingStatusMessage(
+          bettingVariable.round.freeTokenStatus,
+        );
+        throw new BadRequestException(message);
+      }
+      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
         throw new BadRequestException(
-          'Free token betting is closed for this option',
+          `This stream is not live. You can only place bets during live streams.`,
         );
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
       if (bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE) {
+        const message = await this.bettingStatusMessage(
+          bettingVariable.round.coinStatus,
+        );
+        throw new BadRequestException(message);
+      }
+      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
         throw new BadRequestException(
-          'Stream coin betting is closed for this option',
+          `This stream is not live. You can only place bets during live streams.`,
         );
       }
     }
@@ -402,7 +426,7 @@ export class BettingService {
         userId,
         amount,
         currencyType,
-        `Bet on ${bettingVariable.name} in stream ${bettingVariable.stream.name}`,
+        `Bet on ${bettingVariable.name} in stream ${bettingVariable.round.stream.name}`,
       );
 
       // Create and save the bet
@@ -481,7 +505,24 @@ export class BettingService {
 
     return await this.handleCancelBet(userId, bet, currencyType);
   }
-
+  private async bettingStatusMessage(status: string) {
+    let message: string;
+    switch (status) {
+      case BettingVariableStatus.CANCELLED:
+        message = `This bet has already been cancelled and cannot be processed again.`;
+        break;
+      case BettingVariableStatus.LOCKED:
+        message = `This bet has already been locked and cannot be processed again.`;
+        break;
+      case BettingVariableStatus.LOSER:
+        message = `The result for this bet has already been announced.`;
+        break;
+      case BettingVariableStatus.WINNER:
+        message = `The result for this bet has already been announced.`;
+        break;
+    }
+    return message;
+  }
   private async handleCancelBet(
     userId: string,
     bet: Bet,
@@ -712,6 +753,8 @@ export class BettingService {
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bettingVariable);
       return {
+        bettingCoinStatus: bettingRound.coinStatus,
+        bettingFreeTokenStatus: bettingRound.freeTokenStatus,
         optionName: bettingVariable.name,
         potentialCoinAmt,
         potentialFreeTokenAmt,
