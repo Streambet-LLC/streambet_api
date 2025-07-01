@@ -220,6 +220,7 @@ export class BettingService {
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
       relations: ['bettingVariables'],
+      order: { createdAt: 'ASC' },
     });
 
     const allRounds = [];
@@ -265,6 +266,17 @@ export class BettingService {
       await this.bettingVariablesRepository.remove(round.bettingVariables);
       await this.bettingRoundsRepository.remove(round);
     }
+
+    // Sort allRounds by createdAt ASC
+    allRounds.sort((a, b) => {
+      const roundA = existingRounds.find((r) => r.id === a.roundId);
+      const roundB = existingRounds.find((r) => r.id === b.roundId);
+      if (!roundA || !roundB) return 0;
+      return (
+        new Date(roundA.createdAt).getTime() -
+        new Date(roundB.createdAt).getTime()
+      );
+    });
 
     return {
       streamId,
@@ -329,6 +341,7 @@ export class BettingService {
       // Get updated variables
       const updatedVariables = await this.bettingVariablesRepository.find({
         where: { roundId: bettingRound.id },
+        order: { createdAt: 'ASC' },
       });
 
       return {
