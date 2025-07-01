@@ -790,7 +790,6 @@ export class BettingService {
         },
         relations: ['bettingVariables'],
       });
-      console.log(userId);
 
       const bets = await this.betsRepository
         .createQueryBuilder('bet')
@@ -814,10 +813,12 @@ export class BettingService {
       if (!bets) {
         throw new NotFoundException(`No matching bet found for this user`);
       }
+      console.log(bets);
+
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
       return {
-        betId: bets.id,
+        betId: bets.betid,
         status: bettingRound.status,
         optionName: bets.variablename,
         potentialCoinAmt,
