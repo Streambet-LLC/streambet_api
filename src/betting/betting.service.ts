@@ -819,7 +819,7 @@ export class BettingService {
       return {
         betId: bets.id,
         status: bettingRound.status,
-        optionName: bets.variableName,
+        optionName: bets.variablename,
         potentialCoinAmt,
         potentialFreeTokenAmt,
         betAmount,
