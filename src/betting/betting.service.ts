@@ -813,7 +813,7 @@ export class BettingService {
         this.potentialAmountCal(bettingRound, bets);
       return {
         status: bettingRound.status,
-        optionName: bettingVariable.name,
+        optionName: bets.variableName,
         potentialCoinAmt,
         potentialFreeTokenAmt,
         betAmount,

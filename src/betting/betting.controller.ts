@@ -192,11 +192,11 @@ export class BettingController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('potentialAmound/:roundId')
-  async findPotentialAmound(
+  async findPotentialAmount(
     @Param('roundId') roundId: string,
     @Request() req: RequestWithUser,
   ) {
-    const data = await this.bettingService.findPotentialAmound(
+    const data = await this.bettingService.findPotentialAmount(
       req.user.id,
       roundId,
     );
