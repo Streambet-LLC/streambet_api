@@ -506,7 +506,7 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
   ) {
-    //this.ensureAdmin(req.user);
+    this.ensureAdmin(req.user);
     return this.adminService.getStreamRoundsWithWinners(streamId);
   }
 }
