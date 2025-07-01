@@ -811,4 +811,29 @@ export class BettingService {
       betAmount,
     };
   }
+
+  async updateRoundStatus(
+    roundId: string,
+    newStatus: 'created' | 'open' | 'locked',
+  ): Promise<BettingRound> {
+    const round = await this.bettingRoundsRepository.findOne({
+      where: { id: roundId },
+    });
+    if (!round) {
+      throw new NotFoundException(`Round with ID ${roundId} not found`);
+    }
+    // Only allow: created -> open -> locked
+    const current = round.status;
+    if (
+      (current === 'created' && newStatus === 'open') ||
+      (current === 'open' && newStatus === 'locked')
+    ) {
+      round.status = newStatus as any;
+      return this.bettingRoundsRepository.save(round);
+    } else {
+      throw new BadRequestException(
+        `Invalid status transition from ${current} to ${newStatus}. Allowed: created -> open -> locked.`,
+      );
+    }
+  }
 }

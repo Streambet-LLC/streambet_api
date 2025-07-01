@@ -22,6 +22,7 @@ import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import {
   CreateBettingVariableDto,
   EditBettingVariableDto,
+  UpdateRoundStatusDto,
 } from '../betting/dto/create-betting-variable.dto';
 
 import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
@@ -462,6 +463,41 @@ export class AdminController {
       message: 'Successfully fetch Stream details',
       status: HttpStatus.OK,
       data,
+    };
+  }
+
+  /**
+   * Admin: Update the status of a round (created -> open -> locked, no reverse)
+   */
+  @ApiOperation({ summary: 'Update round status' })
+  @ApiParam({ name: 'roundId', description: 'Round ID' })
+  @ApiBody({ type: UpdateRoundStatusDto })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Round status updated successfully',
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid status transition' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
+  @Patch('rounds/:roundId/status')
+  async updateRoundStatus(
+    @Request() req: RequestWithUser,
+    @Param('roundId') roundId: string,
+    @Body() body: UpdateRoundStatusDto,
+  ): Promise<ApiResponse> {
+    //this.ensureAdmin(req.user);
+    const updatedRound = await this.bettingService.updateRoundStatus(
+      roundId,
+      body.newStatus,
+    );
+    return {
+      message: 'Round status updated successfully',
+      status: HttpStatus.OK,
+      data: updatedRound,
     };
   }
 }

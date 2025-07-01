@@ -170,3 +170,14 @@ export class EditBettingVariableDto {
   @Type(() => EditRoundDto)
   rounds: EditRoundDto[];
 }
+
+export class UpdateRoundStatusDto {
+  @ApiProperty({
+    description: 'The new status for the round',
+    enum: ['created', 'open', 'locked'],
+    example: 'open',
+  })
+  @IsString()
+  @IsNotEmpty()
+  newStatus: 'created' | 'open' | 'locked';
+}
