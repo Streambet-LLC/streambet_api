@@ -831,15 +831,12 @@ export class BettingService {
   }
   private potentialAmountCal(bettingRound, bets) {
     try {
-      console.log('ddd', bets);
-
       const betAmount = Number(bets?.betamount || 0);
 
       const {
         betcountfreetoken: betCountFreeToken = 0,
         betcountcoin: betCountCoin = 0,
       } = bets;
-      console.log('ddd');
 
       const bettingVariables = bettingRound?.bettingVariables || [];
 
@@ -870,6 +867,7 @@ export class BettingService {
       };
     } catch (e) {
       console.error(e);
+      throw new NotFoundException(e.message);
     }
   }
 
