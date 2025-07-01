@@ -3,7 +3,5 @@ export enum BettingRoundStatus {
   OPEN = 'open',
   ACTIVE = 'active',
   LOCKED = 'locked',
-  WINNER = 'winner',
-  LOSER = 'loser',
   CANCELLED = 'cancelled',
 }
