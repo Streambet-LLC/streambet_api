@@ -813,7 +813,6 @@ export class BettingService {
       if (!bets) {
         throw new NotFoundException(`No matching bet found for this user`);
       }
-      console.log(bets);
 
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
