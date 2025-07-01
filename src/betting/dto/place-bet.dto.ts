@@ -17,6 +17,13 @@ export class CurrencyTypeDto {
   @IsOptional()
   currencyType?: CurrencyType;
 }
+
+export class RoundIdDto {
+  @ApiProperty({ required: false })
+  @IsUUID()
+  @IsOptional()
+  roundId?: string;
+}
 export class PlaceBetDto {
   @ApiProperty()
   @IsUUID()
