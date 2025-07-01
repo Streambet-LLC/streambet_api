@@ -689,11 +689,7 @@ export class BettingService {
   async declareWinner(variableId: string): Promise<void> {
     const bettingVariable = await this.findBettingVariableById(variableId);
 
-    if (bettingVariable.round.status !== BettingRoundStatus.LOCKED) {
-      throw new BadRequestException(
-        'Betting round must be locked before declaring a winner',
-      );
-    }
+    this.validateRoundLocked(bettingVariable);
 
     // Process in a transaction
     const queryRunner = this.dataSource.createQueryRunner();
@@ -701,129 +697,51 @@ export class BettingService {
     await queryRunner.startTransaction();
 
     try {
-      // Mark this variable as winner
-      bettingVariable.status = BettingVariableStatus.WINNER;
-      bettingVariable.is_winning_option = true;
-      await queryRunner.manager.save(bettingVariable);
+      await this.markWinnerAndLosers(queryRunner, bettingVariable);
 
-      // Mark all other variables for this stream as losers
-      await queryRunner.manager.update(
-        BettingVariable,
-        {
-          stream: { id: bettingVariable.stream.id },
-          id: Not(bettingVariable.id),
-          status: BettingVariableStatus.LOCKED,
-        },
-        { status: BettingVariableStatus.LOSER },
+      const allStreamBets = await this.fetchActiveBets(
+        queryRunner,
+        bettingVariable,
       );
-
-      // Get all bets for this stream
-      const allStreamBets = await queryRunner.manager.find(Bet, {
-        where: {
-          bettingVariable: { stream: { id: bettingVariable.stream.id } },
-          roundId: bettingVariable.roundId,
-          status: BetStatus.Active,
-        },
-        relations: ['bettingVariable'],
-      });
-
-      // Divide bets into winning and losing bets
-      const winningBets = allStreamBets.filter(
-        (bet) => bet.bettingVariableId === variableId,
+      const {
+        winningBets,
+        losingBets,
+        winningTokenBets,
+        winningCoinBets,
+        losingTokenBets,
+        losingCoinBets,
+      } = this.splitBets(allStreamBets, variableId);
+      const {
+        totalWinningTokenAmount,
+        totalLosingTokenAmount,
+        totalWinningCoinAmount,
+        totalLosingCoinAmount,
+        coinPlatformFee,
+        distributableCoinPot,
+      } = this.calculatePots(
+        winningTokenBets,
+        losingTokenBets,
+        winningCoinBets,
+        losingCoinBets,
       );
 
-      const losingBets = allStreamBets.filter(
-        (bet) => bet.bettingVariableId !== variableId,
+      await this.processWinningTokenBets(
+        queryRunner,
+        winningTokenBets,
+        totalWinningTokenAmount,
+        totalLosingTokenAmount,
+        bettingVariable,
       );
+      await this.processWinningCoinBets(
+        queryRunner,
+        winningCoinBets,
+        totalWinningCoinAmount,
+        distributableCoinPot,
+        bettingVariable,
+      );
+      await this.processLosingBets(queryRunner, losingBets);
 
-      // Separate by currency
-      const winningTokenBets = winningBets.filter(
-        (bet) => bet.currency === CurrencyType.FREE_TOKENS,
-      );
-      const winningCoinBets = winningBets.filter(
-        (bet) => bet.currency === CurrencyType.STREAM_COINS,
-      );
-      const losingTokenBets = losingBets.filter(
-        (bet) => bet.currency === CurrencyType.FREE_TOKENS,
-      );
-      const losingCoinBets = losingBets.filter(
-        (bet) => bet.currency === CurrencyType.STREAM_COINS,
-      );
-
-      // Calculate pots
-      const totalWinningTokenAmount = winningTokenBets.reduce(
-        (sum, bet) => sum + bet.amount,
-        0,
-      );
-      const totalLosingTokenAmount = losingTokenBets.reduce(
-        (sum, bet) => sum + bet.amount,
-        0,
-      );
-      const totalWinningCoinAmount = winningCoinBets.reduce(
-        (sum, bet) => sum + bet.amount,
-        0,
-      );
-      const totalLosingCoinAmount = losingCoinBets.reduce(
-        (sum, bet) => sum + bet.amount,
-        0,
-      );
-      const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
-      const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
-
-      // Process winning token bets (no fee)
-      for (const bet of winningTokenBets) {
-        const share = bet.amount / totalWinningTokenAmount;
-        const payout = Math.floor(totalLosingTokenAmount * share) + bet.amount;
-        bet.status = BetStatus.Won;
-        bet.payoutAmount = payout;
-        bet.processedAt = new Date();
-        bet.isProcessed = true;
-        await queryRunner.manager.save(bet);
-        await this.walletsService.creditWinnings(
-          bet.userId,
-          payout,
-          CurrencyType.FREE_TOKENS,
-          `Winnings from bet on ${bettingVariable.name}`,
-        );
-      }
-
-      // Process winning coin bets (with 15% fee)
-      for (const bet of winningCoinBets) {
-        const share = bet.amount / totalWinningCoinAmount;
-        const payout = Math.floor(distributableCoinPot * share) + bet.amount;
-        bet.status = BetStatus.Won;
-        bet.payoutAmount = payout;
-        bet.processedAt = new Date();
-        bet.isProcessed = true;
-        await queryRunner.manager.save(bet);
-        await this.walletsService.creditWinnings(
-          bet.userId,
-          payout,
-          CurrencyType.STREAM_COINS,
-          `Winnings from bet on ${bettingVariable.name}`,
-        );
-      }
-
-      // Process losing bets (all)
-      for (const bet of losingBets) {
-        bet.status = BetStatus.Lost;
-        bet.payoutAmount = 0;
-        bet.processedAt = new Date();
-        bet.isProcessed = true;
-        await queryRunner.manager.save(bet);
-      }
-
-      // Set round status to CLOSED for the round belonging to this betting variable
-      let round = bettingVariable.round;
-      if (!round) {
-        round = await this.bettingRoundsRepository.findOne({
-          where: { id: bettingVariable.roundId },
-        });
-      }
-      if (round) {
-        round.status = BettingRoundStatus.CLOSED;
-        await queryRunner.manager.save(round);
-      }
+      await this.closeRound(queryRunner, bettingVariable);
 
       // Commit the transaction
       await queryRunner.commitTransaction();
@@ -834,6 +752,180 @@ export class BettingService {
     } finally {
       // Release the query runner
       await queryRunner.release();
+    }
+  }
+
+  private validateRoundLocked(bettingVariable: BettingVariable) {
+    if (bettingVariable.round.status !== BettingRoundStatus.LOCKED) {
+      throw new BadRequestException(
+        'Betting round must be locked before declaring a winner',
+      );
+    }
+  }
+
+  private async markWinnerAndLosers(
+    queryRunner,
+    bettingVariable: BettingVariable,
+  ) {
+    // Mark this variable as winner
+    bettingVariable.status = BettingVariableStatus.WINNER;
+    bettingVariable.is_winning_option = true;
+    await queryRunner.manager.save(bettingVariable);
+
+    // Mark all other variables for this stream as losers
+    await queryRunner.manager.update(
+      BettingVariable,
+      {
+        stream: { id: bettingVariable.stream.id },
+        id: Not(bettingVariable.id),
+        status: BettingVariableStatus.LOCKED,
+      },
+      { status: BettingVariableStatus.LOSER },
+    );
+  }
+
+  private async fetchActiveBets(queryRunner, bettingVariable: BettingVariable) {
+    return queryRunner.manager.find(Bet, {
+      where: {
+        bettingVariable: { stream: { id: bettingVariable.stream.id } },
+        roundId: bettingVariable.roundId,
+        status: BetStatus.Active,
+      },
+      relations: ['bettingVariable'],
+    });
+  }
+
+  private splitBets(allStreamBets, variableId) {
+    const winningBets = allStreamBets.filter(
+      (bet) => bet.bettingVariableId === variableId,
+    );
+    const losingBets = allStreamBets.filter(
+      (bet) => bet.bettingVariableId !== variableId,
+    );
+    const winningTokenBets = winningBets.filter(
+      (bet) => bet.currency === CurrencyType.FREE_TOKENS,
+    );
+    const winningCoinBets = winningBets.filter(
+      (bet) => bet.currency === CurrencyType.STREAM_COINS,
+    );
+    const losingTokenBets = losingBets.filter(
+      (bet) => bet.currency === CurrencyType.FREE_TOKENS,
+    );
+    const losingCoinBets = losingBets.filter(
+      (bet) => bet.currency === CurrencyType.STREAM_COINS,
+    );
+    return {
+      winningBets,
+      losingBets,
+      winningTokenBets,
+      winningCoinBets,
+      losingTokenBets,
+      losingCoinBets,
+    };
+  }
+
+  private calculatePots(
+    winningTokenBets,
+    losingTokenBets,
+    winningCoinBets,
+    losingCoinBets,
+  ) {
+    const totalWinningTokenAmount = winningTokenBets.reduce(
+      (sum, bet) => sum + bet.amount,
+      0,
+    );
+    const totalLosingTokenAmount = losingTokenBets.reduce(
+      (sum, bet) => sum + bet.amount,
+      0,
+    );
+    const totalWinningCoinAmount = winningCoinBets.reduce(
+      (sum, bet) => sum + bet.amount,
+      0,
+    );
+    const totalLosingCoinAmount = losingCoinBets.reduce(
+      (sum, bet) => sum + bet.amount,
+      0,
+    );
+    const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
+    const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
+    return {
+      totalWinningTokenAmount,
+      totalLosingTokenAmount,
+      totalWinningCoinAmount,
+      totalLosingCoinAmount,
+      coinPlatformFee,
+      distributableCoinPot,
+    };
+  }
+
+  private async processWinningTokenBets(
+    queryRunner,
+    winningTokenBets,
+    totalWinningTokenAmount,
+    totalLosingTokenAmount,
+    bettingVariable,
+  ) {
+    for (const bet of winningTokenBets) {
+      const share = bet.amount / totalWinningTokenAmount;
+      const payout = Math.floor(totalLosingTokenAmount * share) + bet.amount;
+      bet.status = BetStatus.Won;
+      bet.payoutAmount = payout;
+      bet.processedAt = new Date();
+      bet.isProcessed = true;
+      await queryRunner.manager.save(bet);
+      await this.walletsService.creditWinnings(
+        bet.userId,
+        payout,
+        CurrencyType.FREE_TOKENS,
+        `Winnings from bet on ${bettingVariable.name}`,
+      );
+    }
+  }
+
+  private async processWinningCoinBets(
+    queryRunner,
+    winningCoinBets,
+    totalWinningCoinAmount,
+    distributableCoinPot,
+    bettingVariable,
+  ) {
+    for (const bet of winningCoinBets) {
+      const share = bet.amount / totalWinningCoinAmount;
+      const payout = Math.floor(distributableCoinPot * share) + bet.amount;
+      bet.status = BetStatus.Won;
+      bet.payoutAmount = payout;
+      bet.processedAt = new Date();
+      bet.isProcessed = true;
+      await queryRunner.manager.save(bet);
+      await this.walletsService.creditWinnings(
+        bet.userId,
+        payout,
+        CurrencyType.STREAM_COINS,
+        `Winnings from bet on ${bettingVariable.name}`,
+      );
+    }
+  }
+
+  private async processLosingBets(queryRunner, losingBets) {
+    for (const bet of losingBets) {
+      bet.status = BetStatus.Lost;
+      bet.payoutAmount = 0;
+      bet.processedAt = new Date();
+      bet.isProcessed = true;
+      await queryRunner.manager.save(bet);
+    }
+  }
+
+  private async closeRound(queryRunner, bettingVariable: BettingVariable) {
+    let round = bettingVariable.round;
+    if (!round) {
+      round = await this.bettingRoundsRepository.findOne({
+        where: { id: bettingVariable.roundId },
+      });
+    }
+    if (round) {
+      round.status = BettingRoundStatus.CLOSED;
+      await queryRunner.manager.save(round);
     }
   }
 
