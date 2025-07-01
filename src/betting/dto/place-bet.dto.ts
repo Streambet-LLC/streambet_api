@@ -33,6 +33,7 @@ export class PlaceBetDto {
   @IsNumber()
   @IsPositive()
   amount: number;
+
   @ApiProperty()
   @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
   currencyType: CurrencyType;

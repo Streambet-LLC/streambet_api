@@ -18,7 +18,7 @@ import {
   EditBettingVariableDto,
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
-import { CurrencyTypeDto, PlaceBetDto } from './dto/place-bet.dto';
+import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
@@ -477,7 +477,44 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+  async editBet(userId: string, editBetDto: EditBetDto) {
+    const { newCurrencyType, newAmount, newBettingVariableId, betId } =
+      editBetDto;
+    const betDetails = await this.betsRepository.findOne({
+      where: { id: betId },
+    });
+    if (!betDetails) {
+      throw new NotFoundException(`Unable to find the selected bet.`);
+    }
+    const cancelBetDto = {
+      betId,
+      currencyType: betDetails.currency,
+    };
+    const placeBetDto = {
+      bettingVariableId: newBettingVariableId,
+      amount: newAmount,
+      currencyType: newCurrencyType,
+    };
 
+    // Create the bet in a transaction to ensure consistency
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const oldBet = await this.cancelBet(userId, cancelBetDto);
+      const newBet = await this.placeBet(userId, placeBetDto);
+
+      return { oldBet, newBet };
+    } catch (error) {
+      // Rollback in case of error
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      // Release the query runner
+      await queryRunner.release();
+    }
+  }
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
     const { betId, currencyType } = cancelBetDto;
 
@@ -744,7 +781,8 @@ export class BettingService {
 
     return bet;
   }
-  async findPotentialAmound(bVId, roundId) {
+
+  async findPotentialAmount(userId: string, roundId: string) {
     try {
       const bettingRound = await this.bettingRoundsRepository.findOne({
         where: {
@@ -752,64 +790,85 @@ export class BettingService {
         },
         relations: ['bettingVariables'],
       });
-      const bettingVariable = await this.bettingVariablesRepository.findOne({
-        where: {
-          id: bVId,
-        },
-        relations: ['bets'],
-      });
-      console.log(bettingRound, bettingVariable);
+      console.log(userId);
 
+      const bets = await this.betsRepository
+        .createQueryBuilder('bet')
+        .leftJoin('bet.bettingVariable', 'bettingVariable')
+        .leftJoin('bettingVariable.round', 'round')
+        .where('bet.userId = :userId', { userId })
+        .andWhere('round.id = :roundId', { roundId })
+        .select([
+          'bet.id AS betId',
+          'bet.amount AS betAmount',
+          'bet.currency AS betCurrency',
+          'bet.status AS betStatus',
+          'bettingVariable.id AS variableId',
+          'bettingVariable.name AS variableName',
+          'bettingVariable.totalBetsTokenAmount AS variableTotalTokens',
+          'bettingVariable.totalBetsCoinAmount AS variableTotalCoins',
+          'bettingVariable.betCountFreeToken AS betCountFreeToken',
+          'bettingVariable.betCountCoin AS betCountCoin',
+        ])
+        .getRawOne();
+      if (!bets) {
+        throw new NotFoundException(`No matching bet found for this user`);
+      }
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
-        this.potentialAmountCal(bettingRound, bettingVariable);
+        this.potentialAmountCal(bettingRound, bets);
       return {
+        betId: bets.id,
         status: bettingRound.status,
-        optionName: bettingVariable.name,
+        optionName: bets.variablename,
         potentialCoinAmt,
         potentialFreeTokenAmt,
         betAmount,
       };
     } catch (e) {
       console.error(e.message);
+      throw new NotFoundException(e.message);
     }
   }
-  private potentialAmountCal(bettingRound, bettingVariable) {
-    const betAmount = Number(bettingVariable?.bets?.[0]?.amount || 0);
-    const { betCountFreeToken = 0, betCountCoin = 0 } = bettingVariable;
+  private potentialAmountCal(bettingRound, bets) {
+    try {
+      const betAmount = Number(bets?.betamount || 0);
 
-    const bettingVariables = bettingRound?.bettingVariables || [];
+      const {
+        betcountfreetoken: betCountFreeToken = 0,
+        betcountcoin: betCountCoin = 0,
+      } = bets;
 
-    const totalCoinAmount = bettingVariables.reduce(
-      (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
-      0,
-    );
-    const totalTokenAmount = bettingVariables.reduce(
-      (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
-      0,
-    );
+      const bettingVariables = bettingRound?.bettingVariables || [];
 
-    const avgFreeTokenAmt =
-      betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
-    console.log(
-      avgFreeTokenAmt,
-      betCountFreeToken,
-      totalTokenAmount,
-      betCountFreeToken,
-      'ffff',
-    );
+      const totalCoinAmount = bettingVariables.reduce(
+        (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
+        0,
+      );
+      const totalTokenAmount = bettingVariables.reduce(
+        (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
+        0,
+      );
 
-    const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
-    console.log(potentialFreeTokenAmt, avgFreeTokenAmt, betAmount, 'dd');
-    const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
+      const avgFreeTokenAmt =
+        betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
 
-    const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
-    const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
+      const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
 
-    return {
-      potentialCoinAmt,
-      potentialFreeTokenAmt,
-      betAmount,
-    };
+      const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
+
+      const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
+
+      const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
+
+      return {
+        potentialCoinAmt,
+        potentialFreeTokenAmt,
+        betAmount,
+      };
+    } catch (e) {
+      console.error(e);
+      throw new NotFoundException(e.message);
+    }
   }
 
   async updateRoundStatus(
