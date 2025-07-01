@@ -11,10 +11,16 @@ import {
   ParseBoolPipe,
   DefaultValuePipe,
   HttpStatus,
+  Patch,
 } from '@nestjs/common';
 import { ApiResponse } from '../common/types/api-response.interface';
 import { BettingService } from './betting.service';
-import { CurrencyTypeDto, PlaceBetDto, RoundIdDto } from './dto/place-bet.dto';
+import {
+  CurrencyTypeDto,
+  EditBetDto,
+  PlaceBetDto,
+  RoundIdDto,
+} from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
@@ -185,20 +191,43 @@ export class BettingController {
   @ApiOperation({ summary: 'Get Potential winning amound for a round' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('potentialAmound/:bVId')
+  @Get('potentialAmound/:roundId')
   async findPotentialAmound(
-    @Param('bVId') bVId: string,
-    @Query() roundIdDto: RoundIdDto,
+    @Param('roundId') roundId: string,
     @Request() req: RequestWithUser,
   ) {
     const data = await this.bettingService.findPotentialAmound(
-      bVId,
-      roundIdDto.roundId,
+      req.user.id,
+      roundId,
     );
     return {
       message: 'Potential amount  retrieved successfully',
       status: HttpStatus.OK,
       data: data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Edit a bet' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Bet edited successfully',
+    type: Bet,
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid bet data' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('edit-bet')
+  async editBet(
+    @Request() req: RequestWithUser,
+    @Body() editBetDto: EditBetDto,
+  ): Promise<ApiResponse> {
+    const bet = await this.bettingService.editBet(req.user.id, editBetDto);
+    return {
+      message: 'Bet edited successfully',
+      status: HttpStatus.OK,
+      data: bet,
     };
   }
 }
