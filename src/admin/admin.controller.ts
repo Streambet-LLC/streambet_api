@@ -489,7 +489,7 @@ export class AdminController {
     @Param('roundId') roundId: string,
     @Body() body: UpdateRoundStatusDto,
   ): Promise<ApiResponse> {
-    //this.ensureAdmin(req.user);
+    this.ensureAdmin(req.user);
     const updatedRound = await this.bettingService.updateRoundStatus(
       roundId,
       body.newStatus,
@@ -499,5 +499,18 @@ export class AdminController {
       status: HttpStatus.OK,
       data: updatedRound,
     };
+  }
+
+  @ApiOperation({
+    summary: 'Get all rounds for a stream with winners and options',
+  })
+  @ApiParam({ name: 'streamId', description: 'Stream ID' })
+  @Get('streams/:streamId/rounds')
+  async getStreamRoundsWithWinners(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ) {
+    //this.ensureAdmin(req.user);
+    return this.adminService.getStreamRoundsWithWinners(streamId);
   }
 }
