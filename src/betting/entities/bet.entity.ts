@@ -37,6 +37,7 @@ export class Bet extends BaseEntity {
   @Column({
     type: 'enum',
     enum: CurrencyType,
+    nullable: true,
   })
   currency: CurrencyType;
 

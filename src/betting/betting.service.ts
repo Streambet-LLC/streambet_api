@@ -25,6 +25,7 @@ import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
+import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Injectable()
 export class BettingService {
@@ -136,8 +137,7 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        freeTokenStatus: BettingVariableStatus.ACTIVE,
-        coinStatus: BettingVariableStatus.ACTIVE,
+        status: BettingRoundStatus.ACTIVE,
       });
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
@@ -158,8 +158,7 @@ export class BettingService {
       allRounds.push({
         roundId: savedRound.id,
         roundName: savedRound.roundName,
-        freeTokenStatus: savedRound.freeTokenStatus,
-        coinStatus: savedRound.coinStatus,
+        status: savedRound.status,
         options: createdVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -220,6 +219,7 @@ export class BettingService {
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
       relations: ['bettingVariables'],
+      order: { createdAt: 'ASC' },
     });
 
     const allRounds = [];
@@ -239,8 +239,7 @@ export class BettingService {
         bettingRound = this.bettingRoundsRepository.create({
           roundName: roundData.roundName,
           stream: stream,
-          freeTokenStatus: BettingVariableStatus.ACTIVE,
-          coinStatus: BettingVariableStatus.ACTIVE,
+          status: BettingRoundStatus.ACTIVE,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -265,6 +264,17 @@ export class BettingService {
       await this.bettingVariablesRepository.remove(round.bettingVariables);
       await this.bettingRoundsRepository.remove(round);
     }
+
+    // Sort allRounds by createdAt ASC
+    allRounds.sort((a, b) => {
+      const roundA = existingRounds.find((r) => r.id === a.roundId);
+      const roundB = existingRounds.find((r) => r.id === b.roundId);
+      if (!roundA || !roundB) return 0;
+      return (
+        new Date(roundA.createdAt).getTime() -
+        new Date(roundB.createdAt).getTime()
+      );
+    });
 
     return {
       streamId,
@@ -329,13 +339,13 @@ export class BettingService {
       // Get updated variables
       const updatedVariables = await this.bettingVariablesRepository.find({
         where: { roundId: bettingRound.id },
+        order: { createdAt: 'ASC' },
       });
 
       return {
         roundId: bettingRound.id,
         roundName: bettingRound.roundName,
-        coinStatus: bettingRound.coinStatus,
-        freeTokenStatus: bettingRound.freeTokenStatus,
+        status: bettingRound.status,
         options: updatedVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -380,11 +390,9 @@ export class BettingService {
 
     // Check if betting is still open for the specific currency type
     if (currencyType === CurrencyType.FREE_TOKENS) {
-      if (
-        bettingVariable.round.freeTokenStatus !== BettingVariableStatus.ACTIVE
-      ) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
         const message = await this.bettingStatusMessage(
-          bettingVariable.round.freeTokenStatus,
+          bettingVariable.round.status,
         );
         throw new BadRequestException(message);
       }
@@ -394,9 +402,9 @@ export class BettingService {
         );
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
-      if (bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
         const message = await this.bettingStatusMessage(
-          bettingVariable.round.coinStatus,
+          bettingVariable.round.status,
         );
         throw new BadRequestException(message);
       }
@@ -527,15 +535,14 @@ export class BettingService {
     if (currencyType === CurrencyType.FREE_TOKENS) {
       if (
         bet.currency !== CurrencyType.FREE_TOKENS ||
-        bet.bettingVariable.round.freeTokenStatus !==
-          BettingVariableStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
     } else if (currencyType === CurrencyType.STREAM_COINS) {
       if (
         bet.currency !== CurrencyType.STREAM_COINS ||
-        bet.bettingVariable.round.coinStatus !== BettingVariableStatus.ACTIVE
+        bet.bettingVariable.round.status !== BettingRoundStatus.ACTIVE
       ) {
         throw new BadRequestException('Betting is locked or already resolved');
       }
@@ -805,9 +812,8 @@ export class BettingService {
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
       return {
-        bettingCoinStatus: bettingRound.coinStatus,
-        bettingFreeTokenStatus: bettingRound.freeTokenStatus,
-        optionName: bets.variableName,
+        status: bettingRound.status,
+        optionName: bettingVariable.name,
         potentialCoinAmt,
         potentialFreeTokenAmt,
         betAmount,
@@ -851,5 +857,30 @@ export class BettingService {
       potentialFreeTokenAmt,
       betAmount,
     };
+  }
+
+  async updateRoundStatus(
+    roundId: string,
+    newStatus: 'created' | 'open' | 'locked',
+  ): Promise<BettingRound> {
+    const round = await this.bettingRoundsRepository.findOne({
+      where: { id: roundId },
+    });
+    if (!round) {
+      throw new NotFoundException(`Round with ID ${roundId} not found`);
+    }
+    // Only allow: created -> open -> locked
+    const current = round.status;
+    if (
+      (current === 'created' && newStatus === 'open') ||
+      (current === 'open' && newStatus === 'locked')
+    ) {
+      round.status = newStatus as any;
+      return this.bettingRoundsRepository.save(round);
+    } else {
+      throw new BadRequestException(
+        `Invalid status transition from ${current} to ${newStatus}. Allowed: created -> open -> locked.`,
+      );
+    }
   }
 }
