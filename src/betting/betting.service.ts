@@ -486,26 +486,100 @@ export class BettingService {
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
-    const cancelBetDto = {
-      betId,
-      currencyType: betDetails.currency,
-    };
-    const placeBetDto = {
-      bettingVariableId: newBettingVariableId,
-      amount: newAmount,
-      currencyType: newCurrencyType,
-    };
+    const bettingVariable = await this.bettingVariablesRepository.findOne({
+      where: { id: newBettingVariableId },
+      relations: ['round', 'round.stream'],
+    });
+    const checkStrermIdRoundIdValid =
+      await this.bettingVariablesRepository.findOne({
+        where: {
+          id: newBettingVariableId,
+          stream: { id: bettingVariable.round.streamId },
+          round: { id: bettingVariable.roundId },
+        },
+      });
+    if (!checkStrermIdRoundIdValid) {
+      throw new NotFoundException(
+        `This betting round is not associated with the current stream. Please check your selection`,
+      );
+    }
+    if (!bettingVariable) {
+      throw new NotFoundException(
+        `Betting variable with ID ${newBettingVariableId} not found`,
+      );
+    }
 
-    // Create the bet in a transaction to ensure consistency
+    // Check if betting is still open for the specific currency type
+    if (newCurrencyType === CurrencyType.FREE_TOKENS) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
+        const message = await this.bettingStatusMessage(
+          bettingVariable.round.status,
+        );
+        throw new BadRequestException(message);
+      }
+      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+        throw new BadRequestException(
+          `This stream is not live. You can only place bets during live streams.`,
+        );
+      }
+    } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
+      if (bettingVariable.round.status !== BettingRoundStatus.ACTIVE) {
+        const message = await this.bettingStatusMessage(
+          bettingVariable.round.status,
+        );
+        throw new BadRequestException(message);
+      }
+      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+        throw new BadRequestException(
+          `This stream is not live. You can only place bets during live streams.`,
+        );
+      }
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const oldBet = await this.cancelBet(userId, cancelBetDto);
-      const newBet = await this.placeBet(userId, placeBetDto);
+      // Deduct the amount from the wallet
 
-      return { oldBet, newBet };
+      const newAmt = Number(newAmount) - Number(betDetails.amount);
+      await this.walletsService.deductForBet(
+        userId,
+        newAmt,
+        newCurrencyType,
+        `Bet on ${bettingVariable.name} in stream ${bettingVariable.round.stream.name} is edited`,
+      );
+      await this.betsRepository.update(
+        { id: betId },
+        { status: BetStatus.Cancelled },
+      );
+
+      // Create and save the bet
+      const bet = this.betsRepository.create({
+        userId,
+        bettingVariableId: newBettingVariableId,
+        amount: newAmount,
+        currency: newCurrencyType,
+        stream: { id: bettingVariable.round.stream.id },
+      });
+
+      const savedBet = await queryRunner.manager.save(bet);
+      // Update the betting variable's statistics based on currency type
+      if (newCurrencyType === CurrencyType.FREE_TOKENS) {
+        bettingVariable.totalBetsTokenAmount =
+          Number(bettingVariable.totalBetsTokenAmount) +
+          Number(betDetails.amount) -
+          Number(newAmount);
+      } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
+        bettingVariable.totalBetsCoinAmount =
+          Number(bettingVariable.totalBetsCoinAmount) +
+          +Number(betDetails.amount) -
+          Number(newAmount);
+      }
+      await queryRunner.manager.save(bettingVariable);
+      await queryRunner.commitTransaction();
+
+      return savedBet;
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
@@ -515,6 +589,7 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
     const { betId, currencyType } = cancelBetDto;
 
