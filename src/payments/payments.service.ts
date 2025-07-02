@@ -13,9 +13,6 @@ export class PaymentsService {
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
-      {
-        apiVersion: '2025-05-28.basil',
-      },
     );
   }
 
