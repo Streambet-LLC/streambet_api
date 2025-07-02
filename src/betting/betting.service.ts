@@ -474,28 +474,6 @@ export class BettingService {
     try {
       // Deduct the amount from the wallet
 
-      const newAmt = Number(newAmount) - Number(betDetails.amount);
-      await this.walletsService.deductForBet(
-        userId,
-        newAmt,
-        newCurrencyType,
-        `Bet on ${bettingVariable.name} in stream ${bettingVariable.round.stream.name} is edited`,
-      );
-      await this.betsRepository.update(
-        { id: betId },
-        { status: BetStatus.Cancelled },
-      );
-
-      // Create and save the bet
-      const bet = this.betsRepository.create({
-        userId,
-        bettingVariableId: newBettingVariableId,
-        amount: newAmount,
-        currency: newCurrencyType,
-        stream: { id: bettingVariable.round.stream.id },
-      });
-
-      const savedBet = await queryRunner.manager.save(bet);
       // Update the betting variable's statistics based on currency type
 
       // Handle currency type changes and different betting variables
@@ -524,6 +502,28 @@ export class BettingService {
           bettingVariable.betCountCoin += 1;
         }
       }
+      const newAmt = Number(newAmount) - Number(betDetails.amount);
+      await this.walletsService.deductForBet(
+        userId,
+        newAmt,
+        newCurrencyType,
+        `Bet on ${bettingVariable.name} in stream ${bettingVariable.round.stream.name} is edited`,
+      );
+      await this.betsRepository.update(
+        { id: betId },
+        { status: BetStatus.Cancelled },
+      );
+
+      // Create and save the bet
+      const bet = this.betsRepository.create({
+        userId,
+        bettingVariableId: newBettingVariableId,
+        amount: newAmount,
+        currency: newCurrencyType,
+        stream: { id: bettingVariable.round.stream.id },
+      });
+
+      const savedBet = await queryRunner.manager.save(bet);
       await queryRunner.manager.save(bettingVariable);
       await queryRunner.commitTransaction();
       return savedBet;
