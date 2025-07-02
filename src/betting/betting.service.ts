@@ -481,60 +481,8 @@ export class BettingService {
         where: { id: betDetails.bettingVariableId },
       });
 
-      // If changing betting variables, update both old and new variable statistics
-      if (betDetails.bettingVariableId !== newBettingVariableId) {
-        // Update old betting variable statistics (subtract old bet)
-        if (betDetails.currency === CurrencyType.FREE_TOKENS) {
-          oldBettingVariable.totalBetsTokenAmount -= Number(betDetails.amount);
-          oldBettingVariable.betCountFreeToken -= 1;
-        } else {
-          oldBettingVariable.totalBetsCoinAmount -= Number(betDetails.amount);
-          oldBettingVariable.betCountCoin -= 1;
-        }
-        await queryRunner.manager.save(oldBettingVariable);
-
-        // Update new betting variable statistics (add new bet)
-        if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-          bettingVariable.totalBetsTokenAmount += Number(newAmount);
-          bettingVariable.betCountFreeToken += 1;
-        } else {
-          bettingVariable.totalBetsCoinAmount += Number(newAmount);
-          bettingVariable.betCountCoin += 1;
-        }
-      }
-      const newAmt = Number(newAmount) - Number(betDetails.amount);
-      await this.walletsService.deductForBet(
-        userId,
-        newAmt,
-        newCurrencyType,
-        `Bet on ${bettingVariable.name} in stream ${bettingVariable.round.stream.name} is edited`,
-      );
-      await this.betsRepository.update(
-        { id: betId },
-        { status: BetStatus.Cancelled },
-      );
-
-      // Create and save the bet
-      const bet = this.betsRepository.create({
-        userId,
-        bettingVariableId: newBettingVariableId,
-        amount: newAmount,
-        currency: newCurrencyType,
-        stream: { id: bettingVariable.round.stream.id },
-      });
-
-      const savedBet = await queryRunner.manager.save(bet);
-      await queryRunner.manager.save(bettingVariable);
-      await queryRunner.commitTransaction();
-      return savedBet;
-    } catch (error) {
-      // Rollback in case of error
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      // Release the query runner
-      await queryRunner.release();
-    }
+      return oldBettingVariable;
+    } catch (error) {}
   }
 
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
