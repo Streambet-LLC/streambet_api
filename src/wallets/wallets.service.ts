@@ -191,24 +191,32 @@ export class WalletsService {
     transactionFilterDto: TransactionFilterDto,
     userId: string,
   ) {
-    try {
-      const sort: Sort = transactionFilterDto.sort
-        ? (JSON.parse(transactionFilterDto.sort) as Sort)
-        : undefined;
+    let sort: Sort;
+    let filter: FilterDto;
+    let range: Range = [0, 10];
 
-      const filter: FilterDto = transactionFilterDto.filter
-        ? (JSON.parse(transactionFilterDto.filter) as FilterDto)
-        : undefined;
-      const range: Range = transactionFilterDto.range
-        ? (JSON.parse(transactionFilterDto.range) as Range)
-        : [0, 10];
+    try {
+      try {
+        sort = transactionFilterDto.sort
+          ? JSON.parse(transactionFilterDto.sort)
+          : undefined;
+        filter = transactionFilterDto.filter
+          ? JSON.parse(transactionFilterDto.filter)
+          : undefined;
+        range = transactionFilterDto.range
+          ? JSON.parse(transactionFilterDto.range)
+          : [0, 10];
+      } catch (parseError) {
+        throw new BadRequestException('Invalid filter format');
+      }
+
       const { pagination = true, currencyType } = transactionFilterDto;
 
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
       if (filter?.q) {
-        transactionQB.andWhere(`(LOWER(t.name) ILIKE LOWER(:q) )`, {
+        transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
         });
       }

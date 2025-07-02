@@ -18,10 +18,11 @@ export class TransactionFilterDto extends AdminFilterDto {
     default: '{}',
   })
   @IsString()
+  @IsOptional()
   public filter: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: Boolean,
     default: true,
     description:
       'Pass with parameter false if you want the results without pagination',
@@ -36,9 +37,9 @@ export class TransactionFilterDto extends AdminFilterDto {
   @ApiPropertyOptional({
     enum: CurrencyType,
     default: 'stream_coins',
-    description: `available streamStatus -> free_tokens and stream_coins`,
+    description: `available  currencyType -> free_tokens and stream_coins`,
   })
   @IsOptional()
   @IsEnum(CurrencyType)
-  currencyType?: string;
+  currencyType?: CurrencyType;
 }

@@ -48,6 +48,22 @@ export class WalletsController {
 
   @ApiOperation({ summary: "Get user's transaction history" })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction history retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Successfully Listed' },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/Transaction' },
+        },
+        total: { type: 'number', example: 100 },
+      },
+    },
+  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('transactions')
