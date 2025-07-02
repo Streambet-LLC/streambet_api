@@ -450,19 +450,7 @@ export class BettingService {
       where: { id: newBettingVariableId },
       relations: ['round', 'round.stream'],
     });
-    const checkStrermIdRoundIdValid =
-      await this.bettingVariablesRepository.findOne({
-        where: {
-          id: newBettingVariableId,
-          stream: { id: bettingVariable.round.streamId },
-          round: { id: bettingVariable.roundId },
-        },
-      });
-    if (!checkStrermIdRoundIdValid) {
-      throw new NotFoundException(
-        `This betting round is not associated with the current stream. Please check your selection`,
-      );
-    }
+
     if (!bettingVariable) {
       throw new NotFoundException(
         `Betting variable with ID ${newBettingVariableId} not found`,
