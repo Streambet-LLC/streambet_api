@@ -92,18 +92,18 @@ export class StreamController {
       data: stream,
     };
   }
-  @ApiOperation({ summary: 'Get bet round details by strem id' })
+  @ApiOperation({ summary: 'Get bet round details by stream id' })
   @ApiResponse({
     status: 200,
     description: 'Stream details retrieved successfully',
   })
-  @Get('bet-round/:stremId')
+  @Get('bet-round/:streamId')
   async findBetRoundDetailsByStreamId(
-    @Param('stremId') stremId: string,
+    @Param('streamId') streamId: string,
     @Query() userIdDto: UserIdDto,
   ) {
     const stream = await this.streamService.findBetRoundDetailsByStreamId(
-      stremId,
+      streamId,
       userIdDto?.userId,
     );
     return {
