@@ -511,8 +511,8 @@ export class BettingService {
       // Update the betting variable's statistics based on currency type
       if (newCurrencyType === CurrencyType.FREE_TOKENS) {
         bettingVariable.totalBetsTokenAmount =
-          Number(bettingVariable.totalBetsTokenAmount) +
-          Number(betDetails.amount) -
+          Number(bettingVariable.totalBetsTokenAmount) -
+          Number(betDetails.amount) +
           Number(newAmount);
       } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
         bettingVariable.totalBetsCoinAmount =
