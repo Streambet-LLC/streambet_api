@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +14,7 @@ import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
+import { StreamStatus } from './entities/stream.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Injectable()
@@ -373,5 +375,39 @@ export class StreamService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Ends a stream if all its rounds are either CLOSED or CANCELLED.
+   * Throws an error if any round is not in a terminal state.
+   * @param streamId - The ID of the stream to end.
+   * @returns The updated stream entity.
+   */
+  async endStreamIfAllRoundsClosedOrCancelled(
+    streamId: string,
+  ): Promise<Stream> {
+    // Fetch the stream with all its rounds
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+      relations: ['bettingRounds'],
+    });
+    if (!stream) {
+      throw new NotFoundException(`Stream with ID ${streamId} not found`);
+    }
+    // Check all rounds are CLOSED or CANCELLED
+    const allRoundsTerminal = (stream.bettingRounds || []).every(
+      (round) =>
+        round.status === BettingRoundStatus.CLOSED ||
+        round.status === BettingRoundStatus.CANCELLED,
+    );
+    if (!allRoundsTerminal) {
+      throw new BadRequestException(
+        'Cannot end stream: All rounds must be CLOSED or CANCELLED.',
+      );
+    }
+    // Set stream status to ENDED
+    stream.status = StreamStatus.ENDED;
+    stream.endTime = new Date();
+    return this.streamsRepository.save(stream);
   }
 }

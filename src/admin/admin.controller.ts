@@ -507,6 +507,40 @@ export class AdminController {
     @Param('streamId') streamId: string,
   ) {
     this.ensureAdmin(req.user);
-    return this.adminService.getStreamRoundsWithWinners(streamId);
+    const data = await this.adminService.getStreamRoundsWithWinners(streamId);
+    return {
+      message: 'Details fetched successfully',
+      status: HttpStatus.OK,
+      data: data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'End a stream if all rounds are closed or cancelled',
+  })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream ended successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('streams/:id/end')
+  async endStreamById(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const endedStream =
+      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(id);
+    return {
+      message: 'Stream ended successfully',
+      status: HttpStatus.OK,
+      data: endedStream,
+    };
   }
 }
