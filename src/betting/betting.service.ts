@@ -468,32 +468,16 @@ export class BettingService {
         `Betting variable with ID ${newBettingVariableId} not found`,
       );
     }
-
-    // Check if betting is still open for the specific currency type
-    if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
-        const message = await this.bettingStatusMessage(
-          bettingVariable.round.status,
-        );
-        throw new BadRequestException(message);
-      }
-      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
-        throw new BadRequestException(
-          `This stream is not live. You can only place bets during live streams.`,
-        );
-      }
-    } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
-      if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
-        const message = await this.bettingStatusMessage(
-          bettingVariable.round.status,
-        );
-        throw new BadRequestException(message);
-      }
-      if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
-        throw new BadRequestException(
-          `This stream is not live. You can only place bets during live streams.`,
-        );
-      }
+    if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
+      const message = await this.bettingStatusMessage(
+        bettingVariable.round.status,
+      );
+      throw new BadRequestException(message);
+    }
+    if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+      throw new BadRequestException(
+        `This stream is not live. You can only place bets during live streams.`,
+      );
     }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
