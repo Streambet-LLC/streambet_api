@@ -8,13 +8,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Stream } from './entities/stream.entity';
+import { Stream, StreamStatus } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { StreamStatus } from './entities/stream.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Injectable()
@@ -209,7 +208,7 @@ export class StreamService {
   async findStreamById(id: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id },
+        where: { id, status: StreamStatus.LIVE },
         select: {
           id: true,
           embeddedUrl: true,
@@ -219,7 +218,9 @@ export class StreamService {
       });
 
       if (!stream) {
-        throw new NotFoundException(`Stream with ID ${id} not found`);
+        throw new NotFoundException(
+          `Could not find an active stream with the specified ID. Please check the ID and try again.`,
+        );
       }
       return stream;
     } catch (e) {
@@ -239,12 +240,15 @@ export class StreamService {
         .leftJoinAndSelect(
           'stream.bettingRounds',
           'round',
-          'round.status = :status',
+          'round.status = :roundStatus',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .where('stream.id = :streamId', { streamId })
+        .andWhere('stream.status = :streamStatus', {
+          streamStatus: StreamStatus.LIVE,
+        })
         .setParameters({
-          status: 'active',
+          roundStatus: BettingRoundStatus.OPEN,
         })
         .getOne();
       if (userId) {
@@ -252,43 +256,49 @@ export class StreamService {
       }
 
       if (!stream) {
-        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+        throw new NotFoundException(
+          `Could not find a live stream with the specified ID. Please check the ID and try again.`,
+        );
       }
-      let roundTotalBetsTokenAmount: number = 0;
-      let roundTotalBetsCoinAmount: number = 0;
+      let total = { tokenSum: 0, coinSum: 0 };
+
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
 
         for (const round of rounds) {
-          roundTotalBetsTokenAmount = round.bettingVariables.reduce(
-            (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
-            0,
-          );
-
-          roundTotalBetsCoinAmount = round.bettingVariables.reduce(
-            (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
-            0,
-          );
+          if (round.bettingVariables) {
+            const roundTotals = round.bettingVariables.reduce(
+              (acc, variable) => {
+                acc.tokenSum += Number(variable.totalBetsTokenAmount || 0);
+                acc.coinSum += Number(variable.totalBetsCoinAmount || 0);
+                return acc;
+              },
+              { tokenSum: 0, coinSum: 0 },
+            );
+            total.tokenSum += roundTotals.tokenSum;
+            total.coinSum += roundTotals.coinSum;
+          }
         }
       }
+      let {
+        tokenSum: roundTotalBetsTokenAmount,
+        coinSum: roundTotalBetsCoinAmount,
+      } = total;
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
+        walletCoin: wallet?.streamCoins || 0,
         roundTotalBetsTokenAmount,
         roundTotalBetsCoinAmount,
         ...stream,
       };
       return result;
     } catch (e) {
-      console.error(e);
       if (e instanceof NotFoundException) {
         throw e;
       }
 
       Logger.error('Unable to retrieve stream details', e);
-      throw new HttpException(
-        `Unable to retrieve stream details at the moment. Please try again later`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
   async findStreamDetailsForAdmin(id: string) {
