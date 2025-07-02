@@ -29,7 +29,7 @@ export class Stream extends BaseEntity {
   @Column({
     type: 'enum',
     enum: StreamStatus,
-    default: StreamStatus.LIVE,
+    default: StreamStatus.SCHEDULED,
   })
   status: StreamStatus;
 
