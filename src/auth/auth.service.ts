@@ -75,6 +75,7 @@ export class AuthService {
         username,
         lastKnownIp,
         dob,
+        redirect,
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
@@ -133,7 +134,7 @@ export class AuthService {
 
       // Generate tokens
 
-      await this.sendAccountVerificationEmail(user);
+      await this.sendAccountVerificationEmail(user, redirect);
       return {
         id: user.id,
         username: user.username,
@@ -145,7 +146,10 @@ export class AuthService {
       throw new BadRequestException((e as Error).message);
     }
   }
-  private async checkValidUser(user: User | null): Promise<void> {
+  private async checkValidUser(
+    user: User | null,
+    redirect: string | undefined,
+  ): Promise<void> {
     if (!user) {
       throw new UnauthorizedException(
         `We couldn't find an account with the provided username or email.`,
@@ -159,7 +163,7 @@ export class AuthService {
     }
 
     if (!user.isVerify) {
-      await this.sendAccountVerificationEmail(user);
+      await this.sendAccountVerificationEmail(user, redirect);
       throw new UnauthorizedException(
         'Your account is not verified. Please check your email for verification instructions.',
       );
@@ -173,10 +177,10 @@ export class AuthService {
    */
   async login(loginDto: LoginDto) {
     try {
-      const { identifier, password, remember_me } = loginDto;
+      const { identifier, password, remember_me, redirect } = loginDto;
       const user = await this.usersService.findByEmailOrUsername(identifier);
 
-      await this.checkValidUser(user);
+      await this.checkValidUser(user, redirect);
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
@@ -382,7 +386,10 @@ export class AuthService {
     return `${baseUsername}_${Date.now()}`;
   }
 
-  public async sendAccountVerificationEmail(user: User) {
+  public async sendAccountVerificationEmail(
+    user: User,
+    redirect: string | undefined,
+  ) {
     if (user.email.indexOf('@example.com') !== -1) {
       return true;
     }
@@ -402,7 +409,10 @@ export class AuthService {
       );
 
       const host = this.configService.get<string>('email.APPLICATION_HOST');
-      const verifyLink = `${hostUrl}/auth/verify-email?token=${token}`;
+
+      const verifyLink = redirect
+        ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
+        : `${hostUrl}/auth/verify-email?token=${token}`;
 
       const emailData = {
         subject: 'Activate Email',
@@ -462,12 +472,12 @@ export class AuthService {
     }
   }
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    const { identifier } = forgotPasswordDto;
+    const { identifier, redirect } = forgotPasswordDto;
 
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier);
 
-    await this.checkValidUser(user);
+    await this.checkValidUser(user, redirect);
     if (user.isGoogleAccount) {
       throw new UnauthorizedException(
         'This account was created using Google Sign-In. Please continue logging in with Google.',
@@ -482,9 +492,9 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-
-    // Create reset link
-    const resetLink = `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}`;
+    const resetLink = redirect
+      ? `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}&redirect=${redirect}`
+      : `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}`;
 
     try {
       // Send password reset email

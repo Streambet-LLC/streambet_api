@@ -32,4 +32,11 @@ export class LoginDto {
   @IsOptional()
   @IsBoolean()
   remember_me?: boolean;
+
+  @ApiProperty({
+    description: 'redirected link',
+  })
+  @IsOptional()
+  @IsString()
+  redirect?: string;
 }
