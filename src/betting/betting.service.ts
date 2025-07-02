@@ -509,20 +509,35 @@ export class BettingService {
 
       const savedBet = await queryRunner.manager.save(bet);
       // Update the betting variable's statistics based on currency type
-      if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-        bettingVariable.totalBetsTokenAmount =
-          Number(bettingVariable.totalBetsTokenAmount) -
-          Number(betDetails.amount) +
-          Number(newAmount);
-      } else if (newCurrencyType === CurrencyType.STREAM_COINS) {
-        bettingVariable.totalBetsCoinAmount =
-          Number(bettingVariable.totalBetsCoinAmount) +
-          +Number(betDetails.amount) -
-          Number(newAmount);
+
+      // Handle currency type changes and different betting variables
+      const oldBettingVariable = await this.bettingVariablesRepository.findOne({
+        where: { id: betDetails.bettingVariableId },
+      });
+
+      // If changing betting variables, update both old and new variable statistics
+      if (betDetails.bettingVariableId !== newBettingVariableId) {
+        // Update old betting variable statistics (subtract old bet)
+        if (betDetails.currency === CurrencyType.FREE_TOKENS) {
+          oldBettingVariable.totalBetsTokenAmount -= Number(betDetails.amount);
+          oldBettingVariable.betCountFreeToken -= 1;
+        } else {
+          oldBettingVariable.totalBetsCoinAmount -= Number(betDetails.amount);
+          oldBettingVariable.betCountCoin -= 1;
+        }
+        await queryRunner.manager.save(oldBettingVariable);
+
+        // Update new betting variable statistics (add new bet)
+        if (newCurrencyType === CurrencyType.FREE_TOKENS) {
+          bettingVariable.totalBetsTokenAmount += Number(newAmount);
+          bettingVariable.betCountFreeToken += 1;
+        } else {
+          bettingVariable.totalBetsCoinAmount += Number(newAmount);
+          bettingVariable.betCountCoin += 1;
+        }
       }
       await queryRunner.manager.save(bettingVariable);
       await queryRunner.commitTransaction();
-
       return savedBet;
     } catch (error) {
       // Rollback in case of error

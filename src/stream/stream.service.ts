@@ -14,7 +14,6 @@ import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { StreamStatus } from './entities/stream.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 @Injectable()
