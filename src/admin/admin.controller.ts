@@ -51,9 +51,9 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('admin')
-//@ApiBearerAuth()
+@ApiBearerAuth()
 @Controller('admin')
-//@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
     private readonly bettingService: BettingService,
