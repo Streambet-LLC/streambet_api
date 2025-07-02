@@ -535,7 +535,7 @@ export class BettingService {
   }
 
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
-    const { betId, currencyType } = cancelBetDto;
+    const { betId } = cancelBetDto;
     const bet = await this.betsRepository.findOne({
       where: { id: betId, userId },
       relations: ['stream'],
