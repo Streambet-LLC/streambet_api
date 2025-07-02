@@ -598,9 +598,12 @@ export class BettingService {
         message = `This bet has already been cancelled and cannot be processed again.`;
         break;
       case BetStatus.Pending:
-        message = `This bet status is pendingand cannot be processed`;
+        message = `This bet status is pending and cannot be processed`;
         break;
-      case BetStatus.Lost || BetStatus.Won:
+      case BetStatus.Lost:
+        message = `The result for this bet has already been announced.`;
+        break;
+      case BetStatus.Won:
         message = `The result for this bet has already been announced.`;
         break;
       default:
