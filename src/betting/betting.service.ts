@@ -440,12 +440,20 @@ export class BettingService {
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
+
     const betDetails = await this.betsRepository.findOne({
-      where: { id: betId },
+      where: { id: betId, userId }, // Add userId for security
     });
+
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
+
+    if (betDetails.status !== BetStatus.Active) {
+      const message = await this.bettingStatusMessage(betDetails.status);
+      throw new BadRequestException(message);
+    }
+
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: newBettingVariableId },
       relations: ['round', 'round.stream'],
@@ -456,33 +464,97 @@ export class BettingService {
         `Betting variable with ID ${newBettingVariableId} not found`,
       );
     }
+
     if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
-      const message = await this.bettingStatusMessage(
+      const message = await this.bettingRoundStatusMessage(
         bettingVariable.round.status,
       );
       throw new BadRequestException(message);
     }
+
     if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
       throw new BadRequestException(
         `This stream is not live. You can only place bets during live streams.`,
       );
     }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Deduct the amount from the wallet
+      // Handle wallet operations for currency/amount changes
+      const amountDiff = Number(newAmount) - Number(betDetails.amount);
 
-      // Update the betting variable's statistics based on currency type
+      if (amountDiff > 0) {
+        await this.walletsService.deductForBet(
+          userId,
+          amountDiff,
+          newCurrencyType,
+          `Additional bet amount for edit: ${amountDiff}`,
+        );
+      } else if (amountDiff < 0) {
+        // Refund difference
+        const refundAmount = Math.abs(amountDiff);
+        if (betDetails.currency === CurrencyType.FREE_TOKENS) {
+          await this.walletsService.addFreeTokens(
+            userId,
+            refundAmount,
+            `Refund from bet edit: ${refundAmount}`,
+          );
+        } else {
+          await this.walletsService.addStreamCoins(
+            userId,
+            refundAmount,
+            `Refund from bet edit: ${refundAmount}`,
+          );
+        }
+      }
 
-      // Handle currency type changes and different betting variables
+      // Update betting variable statistics
       const oldBettingVariable = await this.bettingVariablesRepository.findOne({
         where: { id: betDetails.bettingVariableId },
       });
 
-      return oldBettingVariable;
-    } catch (error) {}
+      // Remove old bet from statistics
+      if (betDetails.currency === CurrencyType.FREE_TOKENS) {
+        oldBettingVariable.totalBetsTokenAmount -= Number(betDetails.amount);
+        oldBettingVariable.betCountFreeToken -= 1;
+      } else {
+        oldBettingVariable.totalBetsCoinAmount -= Number(betDetails.amount);
+        oldBettingVariable.betCountCoin -= 1;
+      }
+
+      // Add new bet to statistics (handle different betting variables)
+      if (newCurrencyType === CurrencyType.FREE_TOKENS) {
+        bettingVariable.totalBetsTokenAmount += Number(newAmount);
+        bettingVariable.betCountFreeToken += 1;
+      } else {
+        bettingVariable.totalBetsCoinAmount += Number(newAmount);
+        bettingVariable.betCountCoin += 1;
+      }
+
+      // Update the bet
+      betDetails.amount = newAmount;
+      betDetails.currency = newCurrencyType;
+      betDetails.bettingVariableId = newBettingVariableId;
+      betDetails.roundId = bettingVariable.roundId;
+
+      // Save all changes
+      await queryRunner.manager.save(betDetails);
+      await queryRunner.manager.save(oldBettingVariable);
+      if (oldBettingVariable.id !== bettingVariable.id) {
+        await queryRunner.manager.save(bettingVariable);
+      }
+
+      await queryRunner.commitTransaction();
+      return betDetails;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
@@ -574,7 +646,13 @@ export class BettingService {
     try {
       const { bettingRound, bet } = data;
 
-      const bettingVariable = bettingRound.bettingVariables[0];
+      const bettingVariable = bettingRound.bettingVariables.find(
+        (variable) => variable.id === bet.bettingVariableId,
+      );
+
+      if (!bettingVariable) {
+        throw new NotFoundException('Betting variable not found for this bet');
+      }
 
       const amount = Number(bet.amount);
       const refundMessage = `Refund ${Number(bet.amount)} for canceled bet on ${bettingVariable.name} in stream ${bet.stream.name}(${bettingRound.roundName})`;
