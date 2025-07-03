@@ -720,6 +720,13 @@ export class BettingService {
         console.log('No active bets found for this round');
         await this.closeRound(queryRunner, bettingVariable);
         await queryRunner.commitTransaction();
+        // Emit winner declared event even if no bets (optional)
+        this.bettingGateway.emitWinnerDeclared(
+          bettingVariable.stream.id,
+          bettingVariable.id,
+          bettingVariable.name,
+          [], // No winners
+        );
         return;
       }
 
@@ -774,8 +781,28 @@ export class BettingService {
 
       await this.closeRound(queryRunner, bettingVariable);
 
+      // Fetch winning bets with user info
+      const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          bettingVariableId: variableId,
+          status: BetStatus.Won,
+        },
+        relations: ['user'],
+      });
+      const winners = winningBetsWithUserInfo.map((bet) => ({
+        userId: bet.userId,
+        username: bet.user?.username,
+      }));
+
       // Commit the transaction
       await queryRunner.commitTransaction();
+      // Emit winner declared event
+      this.bettingGateway.emitWinnerDeclared(
+        bettingVariable.stream.id,
+        bettingVariable.id,
+        bettingVariable.name,
+        winners,
+      );
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
@@ -798,6 +825,11 @@ export class BettingService {
       );
     }
 
+    if (bettingVariable.round.status === BettingRoundStatus.CLOSED) {
+      throw new BadRequestException(
+        'This round is already closed. Winner has already been declared for this round.',
+      );
+    }
     if (bettingVariable.round.status !== BettingRoundStatus.LOCKED) {
       throw new BadRequestException(
         'Betting round must be locked before declaring a winner',
@@ -818,9 +850,8 @@ export class BettingService {
     await queryRunner.manager.update(
       BettingVariable,
       {
-        stream: { id: bettingVariable.stream.id },
+        round: { id: bettingVariable.round.id },
         id: Not(bettingVariable.id),
-        status: BettingVariableStatus.LOCKED,
       },
       { status: BettingVariableStatus.LOSER },
     );
@@ -1245,6 +1276,8 @@ export class BettingService {
           relations: ['stream'],
         });
         if (roundWithStream && roundWithStream.streamId) {
+          console.log(1111);
+
           this.bettingGateway.emitBettingLocked(
             roundWithStream.streamId,
             roundId,

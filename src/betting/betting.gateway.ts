@@ -169,7 +169,6 @@ export class BettingGateway
       let roundId: string | undefined;
       let potentialAmountPromise: Promise<any> | undefined;
       let bettingVariable;
-      console.log(2);
 
       try {
         bettingVariable = await bettingVariablePromise;
@@ -511,10 +510,12 @@ export class BettingGateway
     streamId: string,
     bettingVariableId: string,
     winnerName: string,
+    winners: { userId: string; username: string }[],
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
+      winners,
     });
 
     // Send a chat message
