@@ -510,10 +510,12 @@ export class BettingGateway
     streamId: string,
     bettingVariableId: string,
     winnerName: string,
+    winners: { userId: string; username: string }[],
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
+      winners,
     });
 
     // Send a chat message

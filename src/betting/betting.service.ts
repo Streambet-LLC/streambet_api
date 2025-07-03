@@ -725,6 +725,7 @@ export class BettingService {
           bettingVariable.stream.id,
           bettingVariable.id,
           bettingVariable.name,
+          [], // No winners
         );
         return;
       }
@@ -780,6 +781,19 @@ export class BettingService {
 
       await this.closeRound(queryRunner, bettingVariable);
 
+      // Fetch winning bets with user info
+      const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          bettingVariableId: variableId,
+          status: BetStatus.Won,
+        },
+        relations: ['user'],
+      });
+      const winners = winningBetsWithUserInfo.map((bet) => ({
+        userId: bet.userId,
+        username: bet.user?.username,
+      }));
+
       // Commit the transaction
       await queryRunner.commitTransaction();
       // Emit winner declared event
@@ -787,6 +801,7 @@ export class BettingService {
         bettingVariable.stream.id,
         bettingVariable.id,
         bettingVariable.name,
+        winners,
       );
     } catch (error) {
       // Rollback in case of error
