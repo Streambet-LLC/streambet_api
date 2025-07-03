@@ -20,6 +20,6 @@ import { Stream } from 'src/stream/entities/stream.entity';
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway],
-  exports: [BettingService],
+  exports: [BettingService, BettingGateway],
 })
 export class BettingModule {}
