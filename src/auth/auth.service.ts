@@ -569,7 +569,7 @@ export class AuthService {
   async sendWelcomeEmail(user: User) {
     try {
       const loginLink =
-        this.configService.get<string[]>('email.HOST_URL') || [];
+        this.configService.get<string[]>('email.HOST_URL') || '';
 
       await this.emailsService.sendEmailSMTP(
         {
@@ -587,7 +587,7 @@ export class AuthService {
       );
     } catch (error) {
       throw new HttpException(
-        'Unable to send password reset email. Please try again later.',
+        'Unable to send welcome email. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
