@@ -37,6 +37,7 @@ export class StreamFilterDto extends AdminFilterDto {
     enum: StreamStatus,
     default: 'active',
     description: `available streamStatus -> live and scheduled`,
+    required: false,
   })
   @IsOptional()
   @IsEnum(StreamStatus)

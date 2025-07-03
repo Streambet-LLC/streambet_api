@@ -158,15 +158,19 @@ export class StreamService {
         : [0, 10];
       const { pagination = true, streamStatus } = streamFilterDto;
 
-      const streamQB = this.streamsRepository.createQueryBuilder('s');
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.bettingRounds', 'r');
       if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
         });
       }
+
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
       }
+
       if (sort) {
         const [sortColumn, sortOrder] = sort;
         streamQB.orderBy(
@@ -174,11 +178,28 @@ export class StreamService {
           sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
         );
       }
+
       streamQB
         .select('s.id', 'id')
         .addSelect('s.name', 'streamName')
         .addSelect('s.status', 'streamStatus')
-        .addSelect('s.viewerCount', 'viewerCount');
+        .addSelect('s.viewerCount', 'viewerCount')
+        .addSelect(
+          `
+          CASE
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0 THEN '${BettingRoundStatus.OPEN}'
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.LOCKED}'
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CREATED}'
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CANCELLED}'
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CLOSED}'
+            ELSE 'no bet round'
+          END
+          `,
+          'bettingRoundStatus',
+        )
+
+        .groupBy('s.id');
+
       const total = await streamQB.getCount();
       if (pagination && range) {
         const [offset, limit] = range;
@@ -187,7 +208,9 @@ export class StreamService {
       const data = await streamQB.getRawMany();
       return { data, total };
     } catch (e) {
-      Logger.error('Unable to list stream details', e);
+      console.log(e);
+
+      Logger.error(e);
       throw new HttpException(
         `Unable to retrieve stream details at the moment. Please try again later`,
         HttpStatus.INTERNAL_SERVER_ERROR,
