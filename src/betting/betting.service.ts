@@ -1151,20 +1151,8 @@ export class BettingService {
           'bettingVariable.betCountCoin AS betCountCoin',
         ])
         .getRawOne();
-      if (!bets) {
+      if (!bets || bets.betstatus !== BetStatus.Active) {
         throw new NotFoundException(`No matching bet found for this user`);
-      }
-
-      if (bets.betstatus !== BetStatus.Active) {
-        return {
-          betStatus: bets.betStatus || '',
-          betId: bets?.betid || '',
-          status: bettingRound?.status || '',
-          optionName: bets?.variablename || '',
-          potentialCoinAmt: 0,
-          potentialFreeTokenAmt: 0,
-          betAmount: 0,
-        };
       }
 
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
