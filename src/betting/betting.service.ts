@@ -1268,8 +1268,6 @@ export class BettingService {
           relations: ['stream'],
         });
         if (roundWithStream && roundWithStream.streamId) {
-          console.log(1111);
-
           this.bettingGateway.emitBettingLocked(
             roundWithStream.streamId,
             roundId,

@@ -210,6 +210,7 @@ export class BettingGateway
           .emit('bettingUpdate', {
             bettingVariableId: bet.bettingVariableId,
             amount: placeBetDto.amount,
+            currencyType: placeBetDto.currencyType,
             selectedWinner: bettingVariable.name,
             totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
             totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
@@ -345,8 +346,6 @@ export class BettingGateway
     @MessageBody() editBetDto: EditBetDto,
   ) {
     try {
-      console.log(1);
-
       // Get user from socket
       const user = client.data.user;
 
@@ -402,6 +401,7 @@ export class BettingGateway
           .emit('bettingUpdate', {
             bettingVariableId: editedBet.bettingVariableId,
             amount: editedBet.amount,
+            currencyType: editBetDto.newCurrencyType,
             selectedWinner: bettingVariable.name,
             totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
             totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
