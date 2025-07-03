@@ -114,6 +114,13 @@ export class RegisterDto {
   @IsDate()
   @IsNotEmpty()
   dob: Date;
+
+  @ApiProperty({
+    description: 'redirected link',
+  })
+  @IsOptional()
+  @IsString()
+  redirect?: string;
 }
 
 export class UserRegistrationResponseDto {

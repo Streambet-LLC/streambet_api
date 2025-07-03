@@ -1137,6 +1137,7 @@ export class BettingService {
         .leftJoin('bettingVariable.round', 'round')
         .where('bet.userId = :userId', { userId })
         .andWhere('round.id = :roundId', { roundId })
+
         .select([
           'bet.id AS betId',
           'bet.amount AS betAmount',
@@ -1152,6 +1153,18 @@ export class BettingService {
         .getRawOne();
       if (!bets) {
         throw new NotFoundException(`No matching bet found for this user`);
+      }
+
+      if (bets.betstatus !== BetStatus.Active) {
+        return {
+          betStatus: bets.betStatus || '',
+          betId: bets?.betid || '',
+          status: bettingRound?.status || '',
+          optionName: bets?.variablename || '',
+          potentialCoinAmt: 0,
+          potentialFreeTokenAmt: 0,
+          betAmount: 0,
+        };
       }
 
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
@@ -1177,29 +1190,27 @@ export class BettingService {
         betcountfreetoken: betCountFreeToken = 0,
         betcountcoin: betCountCoin = 0,
       } = bets;
-
       const bettingVariables = bettingRound?.bettingVariables || [];
-
-      const totalCoinAmount = bettingVariables.reduce(
-        (sum, variable) => sum + Number(variable.totalBetsCoinAmount || 0),
-        0,
-      );
-      const totalTokenAmount = bettingVariables.reduce(
-        (sum, variable) => sum + Number(variable.totalBetsTokenAmount || 0),
-        0,
+      const { totalCoinAmount, totalTokenAmount } = bettingVariables.reduce(
+        (totals, variable) => {
+          totals.totalCoinAmount += Number(variable.totalBetsCoinAmount || 0);
+          totals.totalTokenAmount += Number(variable.totalBetsTokenAmount || 0);
+          return totals;
+        },
+        { totalCoinAmount: 0, totalTokenAmount: 0 },
       );
 
       const avgFreeTokenAmt =
-        betCountFreeToken > 0 ? totalTokenAmount / betCountFreeToken : 0;
-
-      const potentialFreeTokenAmt = Math.abs(avgFreeTokenAmt - betAmount);
-
-      const netCoinAmount = totalCoinAmount * 0.85; // After 15% platform fee
+        betCountFreeToken > 0
+          ? (totalTokenAmount - Number(bets.variabletotaltokens)) /
+            betCountFreeToken
+          : 0;
+      const potentialFreeTokenAmt = avgFreeTokenAmt + betAmount;
+      const netCoinAmount =
+        (totalTokenAmount - Number(bets.variabletotaltokens)) * 0.85;
 
       const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
-
-      const potentialCoinAmt = Math.abs(avgCoinAmt - betAmount);
-
+      const potentialCoinAmt = avgCoinAmt + betAmount;
       return {
         potentialCoinAmt,
         potentialFreeTokenAmt,
