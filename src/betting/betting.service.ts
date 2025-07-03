@@ -1140,11 +1140,11 @@ export class BettingService {
 
         .select([
           'bet.id AS betId',
-          'bet.amount AS betAmount',
-          'bet.currency AS betCurrency',
-          'bet.status AS betStatus',
+          'bet.amount AS betamount',
+          'bet.currency AS betcurrency',
+          'bet.status AS betstatus',
           'bettingVariable.id AS variableId',
-          'bettingVariable.name AS variableName',
+          'bettingVariable.name AS variablename',
           'bettingVariable.totalBetsTokenAmount AS variableTotalTokens',
           'bettingVariable.totalBetsCoinAmount AS variableTotalCoins',
           'bettingVariable.betCountFreeToken AS betCountFreeToken',
