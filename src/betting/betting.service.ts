@@ -1244,8 +1244,6 @@ export class BettingService {
       round.status = newStatus as any;
       const savedRound = await this.bettingRoundsRepository.save(round);
       if (newStatus === BettingRoundStatus.LOCKED) {
-        console.log(newStatus);
-
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
