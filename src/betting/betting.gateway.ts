@@ -8,7 +8,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Inject, forwardRef } from '@nestjs/common';
 import { BettingService } from './betting.service';
 import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
 import { CancelBetDto } from './dto/cancel-bet.dto';
@@ -51,6 +51,7 @@ export class BettingGateway
   server: Server;
 
   constructor(
+    @Inject(forwardRef(() => BettingService))
     private readonly bettingService: BettingService,
     private readonly authService: AuthService,
   ) {}
@@ -488,7 +489,7 @@ export class BettingGateway
   }
 
   // Method to notify users when betting is locked
-  emitBettingLocked(streamId: string, bettingVariableId: string): void {
+  emitBettingLocked(streamId: string, roundId: string): void {
     // Send a chat message
     const chatMessage: ChatMessage = {
       type: 'system',
@@ -498,7 +499,8 @@ export class BettingGateway
     };
 
     void this.server.to(`stream_${streamId}`).emit('bettingLocked', {
-      bettingVariableId,
+      roundId,
+      locked: true,
     });
 
     void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);

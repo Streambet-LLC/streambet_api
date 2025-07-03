@@ -2,7 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -11,7 +12,6 @@ import { Bet } from './entities/bet.entity';
 import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
-import { v4 as uuidv4 } from 'uuid';
 import { CreateStreamDto } from './dto/create-stream.dto';
 import {
   CreateBettingVariableDto,
@@ -20,12 +20,12 @@ import {
 } from './dto/create-betting-variable.dto';
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
-import { User, UserRole } from '../users/entities/user.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { BettingGateway } from './betting.gateway';
 
 @Injectable()
 export class BettingService {
@@ -40,6 +40,8 @@ export class BettingService {
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
     private dataSource: DataSource,
+    @Inject(forwardRef(() => BettingGateway))
+    private readonly bettingGateway: BettingGateway,
   ) {}
 
   // Utility function to detect platform from URL
@@ -1240,7 +1242,22 @@ export class BettingService {
       (current === 'open' && newStatus === 'locked')
     ) {
       round.status = newStatus as any;
-      return this.bettingRoundsRepository.save(round);
+      const savedRound = await this.bettingRoundsRepository.save(round);
+      if (newStatus === BettingRoundStatus.LOCKED) {
+        console.log(newStatus);
+
+        const roundWithStream = await this.bettingRoundsRepository.findOne({
+          where: { id: roundId },
+          relations: ['stream'],
+        });
+        if (roundWithStream && roundWithStream.streamId) {
+          this.bettingGateway.emitBettingLocked(
+            roundWithStream.streamId,
+            roundId,
+          );
+        }
+      }
+      return savedRound;
     } else {
       throw new BadRequestException(
         `Invalid status transition from ${current} to ${newStatus}. Allowed: created -> open -> locked.`,
