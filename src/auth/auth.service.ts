@@ -410,7 +410,6 @@ export class AuthService {
       );
 
       const host = this.configService.get<string>('email.APPLICATION_HOST');
-      redirect = this.isValidRedirectUrl(redirect) ? redirect : undefined;
       const verifyLink = redirect
         ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
         : `${hostUrl}/auth/verify-email?token=${token}`;
@@ -447,6 +446,7 @@ export class AuthService {
 
       // Get user
       const user = await this.usersService.findById(payload.sub);
+
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
       }
@@ -457,7 +457,7 @@ export class AuthService {
         );
       // Update password
       await this.usersService.verifyUser(user.id);
-
+      await this.sendWelcomeEmail(user);
       return {
         message: 'User Verified successfully',
         statusCode: HttpStatus.OK,
@@ -493,7 +493,7 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    redirect = this.isValidRedirectUrl(redirect) ? redirect : undefined;
+
     const resetLink = redirect
       ? `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}&redirect=${redirect}`
       : `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}`;
@@ -521,21 +521,6 @@ export class AuthService {
         'Unable to send password reset email. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
-    }
-  }
-  private isValidRedirectUrl(url: string): boolean {
-    try {
-      const redirectUrl = new URL(url);
-      const allowedHosts =
-        this.configService.get<string[]>('auth.allowedRedirectHosts') || [];
-      return (
-        allowedHosts.includes(redirectUrl.hostname) ||
-        redirectUrl.hostname ===
-          new URL(this.configService.get('email.APPLICATION_HOST')).hostname
-      );
-    } catch (e) {
-      Logger.error(e);
-      return false;
     }
   }
 
@@ -577,6 +562,32 @@ export class AuthService {
       }
       throw new HttpException(
         'Error resetting password',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+  async sendWelcomeEmail(user: User) {
+    try {
+      const loginLink =
+        this.configService.get<string[]>('email.HOST_URL') || [];
+
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [user.email],
+          subject: 'Welcome to StreamBet',
+          params: {
+            fullName: user.name || user.username,
+            loginLink,
+          },
+        },
+        'welcome',
+      );
+      console.log(
+        `A welcome email has been sent to your registered email starting with '${user.email.slice(0, 3)}****'.`,
+      );
+    } catch (error) {
+      throw new HttpException(
+        'Unable to send password reset email. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
