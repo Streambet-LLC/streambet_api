@@ -240,7 +240,7 @@ export class StreamService {
         .leftJoinAndSelect(
           'stream.bettingRounds',
           'round',
-          'round.status = :roundStatus',
+          'round.status IN (:...roundStatuses)',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .where('stream.id = :streamId', { streamId })
@@ -248,7 +248,7 @@ export class StreamService {
           streamStatus: StreamStatus.LIVE,
         })
         .setParameters({
-          roundStatus: BettingRoundStatus.OPEN,
+          roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
         })
         .getOne();
       if (userId) {
