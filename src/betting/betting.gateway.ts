@@ -162,42 +162,77 @@ export class BettingGateway
       // Place the bet
       const bet = await this.bettingService.placeBet(user.sub, placeBetDto);
 
-      // Get the betting variable to determine the stream
-      const bettingVariable = await this.bettingService.findBettingVariableById(
-        bet.bettingVariableId,
-      );
+      // Parallelize fetching bettingVariable and potentialAmount
+      const bettingVariablePromise =
+        this.bettingService.findBettingVariableById(bet.bettingVariableId);
+      let roundId: string | undefined;
+      let potentialAmountPromise: Promise<any> | undefined;
+      let bettingVariable;
+      console.log(2);
 
-      // Broadcast updated betting information to all clients in the stream
-      this.server
-        .to(`stream_${bettingVariable.stream.id}`)
-        .emit('bettingUpdate', {
-          bettingVariableId: bet.bettingVariableId,
-          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-          betCountFreeToken: bettingVariable.betCountFreeToken,
-          betCountCoin: bettingVariable.betCountCoin,
-        });
+      try {
+        bettingVariable = await bettingVariablePromise;
+        roundId = bettingVariable.roundId || bettingVariable.round?.id;
+        if (roundId) {
+          potentialAmountPromise = this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        }
+      } catch (e) {
+        // If bettingVariable fetch fails, log and continue
+        console.error('Error fetching bettingVariable:', e.message);
+      }
+      // Await potentialAmount if needed
+      let potentialAmount = null;
+      if (potentialAmountPromise) {
+        try {
+          potentialAmount = await potentialAmountPromise;
+        } catch (e) {
+          // If potential amount fails, just log and continue
+          console.error('Potential amount error:', e.message);
+        }
+      }
 
-      // Send a chat message announcing the bet
-      const chatMessage: ChatMessage = {
-        type: 'system',
-        username: 'StreambetBot',
-        message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
-        timestamp: new Date(),
-      };
-
-      void this.server
-        .to(`stream_${bettingVariable.stream.id}`)
-        .emit('chatMessage', chatMessage);
-
-      // Confirm to the client that their bet was placed
-      return {
+      // Confirm to the client that their bet was placed (respond ASAP)
+      const response = {
         event: 'betPlaced',
         data: {
           bet,
           success: true,
         },
       };
+
+      // Broadcast updated betting information to all clients in the stream (after response)
+      if (bettingVariable) {
+        this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('bettingUpdate', {
+            bettingVariableId: bet.bettingVariableId,
+            amount: placeBetDto.amount,
+            selectedWinner: bettingVariable.name,
+            totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+            totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+            betCountFreeToken: bettingVariable.betCountFreeToken,
+            betCountCoin: bettingVariable.betCountCoin,
+            potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+            potentialTokenWinningAmount:
+              potentialAmount?.potentialFreeTokenAmt || 0,
+          });
+
+        // Send a chat message announcing the bet
+        const chatMessage: ChatMessage = {
+          type: 'system',
+          username: 'StreambetBot',
+          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+          timestamp: new Date(),
+        };
+        void this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('chatMessage', chatMessage);
+      }
+
+      return response;
     } catch (error) {
       // Send error back to client
       void client.emit('error', {
@@ -237,16 +272,34 @@ export class BettingGateway
       const bettingVariable = await this.bettingService.findBettingVariableById(
         bet.bettingVariableId,
       );
+      const roundId = bettingVariable.roundId || bettingVariable.round?.id;
+      let potentialAmount = null;
+      if (roundId) {
+        try {
+          potentialAmount = await this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        } catch (e) {
+          // If potential amount fails, just log and continue
+          console.error('Potential amount error:', e.message);
+        }
+      }
 
       // Broadcast updated betting information to all clients in the stream
       this.server
         .to(`stream_${bettingVariable.stream.id}`)
         .emit('bettingUpdate', {
           bettingVariableId: bet.bettingVariableId,
+          amount: bet.amount,
+          selectedWinner: bettingVariable.name,
           totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
           totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
           betCountFreeToken: bettingVariable.betCountFreeToken,
           betCountCoin: bettingVariable.betCountCoin,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
         });
 
       // Send a chat message announcing the bet cancellation
@@ -292,70 +345,86 @@ export class BettingGateway
     @MessageBody() editBetDto: EditBetDto,
   ) {
     try {
+      console.log(1);
+
       // Get user from socket
       const user = client.data.user;
 
-      // First cancel the existing bet - we need to get the bet first to know the currency type
-      const existingBet = await this.bettingService.getBetById(
-        editBetDto.betId,
-      );
+      // Edit the bet using the service function
+      const editedBet = await this.bettingService.editBet(user.sub, editBetDto);
 
-      const cancelBetDto: CancelBetDto = {
-        betId: editBetDto.betId,
-        currencyType: existingBet.currency as CurrencyType,
-      };
+      // Start fetching bettingVariable and potentialAmount in parallel
+      const bettingVariablePromise =
+        this.bettingService.findBettingVariableById(
+          editedBet.bettingVariableId,
+        );
+      let roundId: string | undefined;
+      let potentialAmountPromise: Promise<any> | undefined;
+      let bettingVariable;
+      try {
+        bettingVariable = await bettingVariablePromise;
+        roundId = bettingVariable.roundId || bettingVariable.round?.id;
+        if (roundId) {
+          potentialAmountPromise = this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        }
+      } catch (e) {
+        // If bettingVariable fetch fails, log and continue
+        console.error('Error fetching bettingVariable:', e.message);
+      }
 
-      const cancelledBet = await this.bettingService.cancelBet(
-        user.sub,
-        cancelBetDto,
-      );
+      // Await potentialAmount if needed
+      let potentialAmount = null;
+      if (potentialAmountPromise) {
+        try {
+          potentialAmount = await potentialAmountPromise;
+        } catch (e) {
+          // If potential amount fails, just log and continue
+          console.error('Potential amount error:', e.message);
+        }
+      }
 
-      // Then place a new bet with the new parameters
-      const newBetDto: PlaceBetDto = {
-        bettingVariableId: editBetDto.newBettingVariableId,
-        amount: editBetDto.newAmount,
-        currencyType: editBetDto.newCurrencyType,
-      };
-
-      const newBet = await this.bettingService.placeBet(user.sub, newBetDto);
-
-      // Get the betting variable to determine the stream
-      const bettingVariable = await this.bettingService.findBettingVariableById(
-        newBet.bettingVariableId,
-      );
-
-      // Broadcast updated betting information to all clients in the stream
-      this.server
-        .to(`stream_${bettingVariable.stream.id}`)
-        .emit('bettingUpdate', {
-          bettingVariableId: newBet.bettingVariableId,
-          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-          betCountFreeToken: bettingVariable.betCountFreeToken,
-          betCountCoin: bettingVariable.betCountCoin,
-        });
-
-      // Send a chat message announcing the bet edit
-      const chatMessage: ChatMessage = {
-        type: 'system',
-        username: 'StreambetBot',
-        message: `${user.username} edited their bet from ${cancelledBet.amount} to ${newBet.amount} on ${bettingVariable.name}!`,
-        timestamp: new Date(),
-      };
-
-      void this.server
-        .to(`stream_${bettingVariable.stream.id}`)
-        .emit('chatMessage', chatMessage);
-
-      // Confirm to the client that their bet was edited
-      return {
+      // Prepare response for the client ASAP
+      const response = {
         event: 'betEdited',
         data: {
-          cancelledBet,
-          newBet,
+          editedBet,
           success: true,
         },
       };
+
+      // Broadcast updated betting information to all clients in the stream (after response)
+      if (bettingVariable) {
+        this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('bettingUpdate', {
+            bettingVariableId: editedBet.bettingVariableId,
+            amount: editedBet.amount,
+            selectedWinner: bettingVariable.name,
+            totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+            totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+            betCountFreeToken: bettingVariable.betCountFreeToken,
+            betCountCoin: bettingVariable.betCountCoin,
+            potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+            potentialTokenWinningAmount:
+              potentialAmount?.potentialFreeTokenAmt || 0,
+          });
+
+        // Send a chat message announcing the bet edit
+        const chatMessage: ChatMessage = {
+          type: 'system',
+          username: 'StreambetBot',
+          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
+          timestamp: new Date(),
+        };
+        void this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('chatMessage', chatMessage);
+      }
+
+      return response;
     } catch (error) {
       // Send error back to client
       void client.emit('error', {

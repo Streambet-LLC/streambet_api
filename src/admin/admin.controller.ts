@@ -543,4 +543,20 @@ export class AdminController {
       data: endedStream,
     };
   }
+
+  @ApiOperation({ summary: 'Cancel a round and refund all bets' })
+  @ApiParam({ name: 'roundId', description: 'Betting Round ID' })
+  @Patch('rounds/:roundId/cancel')
+  async cancelRoundAndRefund(
+    @Request() req: RequestWithUser,
+    @Param('roundId') roundId: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const result = await this.bettingService.cancelRoundAndRefund(roundId);
+    return {
+      message: 'Round cancelled and all bets refunded',
+      status: HttpStatus.OK,
+      data: result,
+    };
+  }
 }

@@ -1235,4 +1235,63 @@ export class BettingService {
       );
     }
   }
+
+  async cancelRoundAndRefund(
+    roundId: string,
+  ): Promise<{ refundedBets: Bet[] }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      // Fetch the round with variables and bets
+      const round = await this.bettingRoundsRepository.findOne({
+        where: { id: roundId },
+        relations: ['bettingVariables', 'bettingVariables.bets'],
+      });
+      if (!round) {
+        throw new NotFoundException('Betting round not found');
+      }
+      // Set round status to CANCELLED
+      round.status = BettingRoundStatus.CANCELLED;
+      await queryRunner.manager.save(round);
+      const refundedBets: Bet[] = [];
+      // Refund all bets in all variables
+      for (const variable of round.bettingVariables) {
+        // Set variable status to CANCELLED
+        variable.status = BettingVariableStatus.CANCELLED;
+        for (const bet of variable.bets) {
+          if (bet.status !== BetStatus.Active) continue;
+          // Refund to user
+          if (bet.currency === CurrencyType.FREE_TOKENS) {
+            await this.walletsService.addFreeTokens(
+              bet.userId,
+              bet.amount,
+              `Refund for cancelled round ${round.roundName}`,
+            );
+            variable.totalBetsTokenAmount -= Number(bet.amount);
+            variable.betCountFreeToken -= 1;
+          } else if (bet.currency === CurrencyType.STREAM_COINS) {
+            await this.walletsService.addStreamCoins(
+              bet.userId,
+              bet.amount,
+              `Refund for cancelled round ${round.roundName}`,
+            );
+            variable.totalBetsCoinAmount -= Number(bet.amount);
+            variable.betCountCoin -= 1;
+          }
+          bet.status = BetStatus.Cancelled;
+          refundedBets.push(bet);
+          await queryRunner.manager.save(bet);
+        }
+        await queryRunner.manager.save(variable);
+      }
+      await queryRunner.commitTransaction();
+      return { refundedBets };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
