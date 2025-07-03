@@ -5,6 +5,7 @@ import {
   BadRequestException,
   HttpStatus,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -409,7 +410,7 @@ export class AuthService {
       );
 
       const host = this.configService.get<string>('email.APPLICATION_HOST');
-
+      redirect = this.isValidRedirectUrl(redirect) ? redirect : undefined;
       const verifyLink = redirect
         ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
         : `${hostUrl}/auth/verify-email?token=${token}`;
@@ -472,8 +473,8 @@ export class AuthService {
     }
   }
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    const { identifier, redirect } = forgotPasswordDto;
-
+    const { identifier } = forgotPasswordDto;
+    let { redirect } = forgotPasswordDto;
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier);
 
@@ -492,6 +493,7 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
+    redirect = this.isValidRedirectUrl(redirect) ? redirect : undefined;
     const resetLink = redirect
       ? `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}&redirect=${redirect}`
       : `${this.configService.get('email.HOST_URL')}/reset-password?token=${token}`;
@@ -519,6 +521,21 @@ export class AuthService {
         'Unable to send password reset email. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+  private isValidRedirectUrl(url: string): boolean {
+    try {
+      const redirectUrl = new URL(url);
+      const allowedHosts =
+        this.configService.get<string[]>('auth.allowedRedirectHosts') || [];
+      return (
+        allowedHosts.includes(redirectUrl.hostname) ||
+        redirectUrl.hostname ===
+          new URL(this.configService.get('email.APPLICATION_HOST')).hostname
+      );
+    } catch (e) {
+      Logger.error(e);
+      return false;
     }
   }
 
