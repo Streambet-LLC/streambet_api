@@ -1206,8 +1206,9 @@ export class BettingService {
             betCountFreeToken
           : 0;
       const potentialFreeTokenAmt = avgFreeTokenAmt + betAmount;
-      const netCoinAmount =
-        (totalCoinAmount - Number(bets.variabletotalcoins)) * 0.85;
+      const grossCoinAmount = totalCoinAmount - Number(bets.variabletotalcoins);
+      const coinPlatformFee = Math.floor(grossCoinAmount * 0.15);
+      const netCoinAmount = grossCoinAmount - coinPlatformFee;
 
       const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
       const potentialCoinAmt = avgCoinAmt + betAmount;
