@@ -1154,10 +1154,10 @@ export class BettingService {
       if (!bets) {
         throw new NotFoundException(`No matching bet found for this user`);
       }
-      console.log(bets.betstatus, 'bets.betStatus');
 
-      if (bets.betStatus !== BetStatus.Active) {
+      if (bets.betstatus !== BetStatus.Active) {
         return {
+          betStatus: bets.betStatus || '',
           betId: bets?.betid || '',
           status: bettingRound?.status || '',
           optionName: bets?.variablename || '',
@@ -1166,6 +1166,7 @@ export class BettingService {
           betAmount: 0,
         };
       }
+
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
       return {
@@ -1184,6 +1185,7 @@ export class BettingService {
   private potentialAmountCal(bettingRound, bets) {
     try {
       const betAmount = Number(bets?.betamount || 0);
+
       const {
         betcountfreetoken: betCountFreeToken = 0,
         betcountcoin: betCountCoin = 0,
@@ -1197,14 +1199,17 @@ export class BettingService {
         },
         { totalCoinAmount: 0, totalTokenAmount: 0 },
       );
+
       const avgFreeTokenAmt =
         betCountFreeToken > 0
-          ? (totalTokenAmount - betAmount) / betCountFreeToken
+          ? (totalTokenAmount - Number(bets.variabletotaltokens)) /
+            betCountFreeToken
           : 0;
       const potentialFreeTokenAmt = avgFreeTokenAmt + betAmount;
-      const netCoinAmount = totalCoinAmount * 0.85;
-      const avgCoinAmt =
-        betCountCoin > 0 ? (netCoinAmount - betAmount) / betCountCoin : 0;
+      const netCoinAmount =
+        (totalTokenAmount - Number(bets.variabletotaltokens)) * 0.85;
+
+      const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
       const potentialCoinAmt = avgCoinAmt + betAmount;
       return {
         potentialCoinAmt,
@@ -1215,6 +1220,44 @@ export class BettingService {
       console.error(e);
       throw new NotFoundException(e.message);
     }
+  }
+  async declareWinnerddd(
+    winningTokenBets,
+    losingTokenBets,
+    winningCoinBets,
+    losingCoinBets,
+  ): Promise<void> {
+    const safeWinningTokenBets = Array.isArray(winningTokenBets)
+      ? winningTokenBets
+      : [];
+    const safeLosingTokenBets = Array.isArray(losingTokenBets)
+      ? losingTokenBets
+      : [];
+    const safeWinningCoinBets = Array.isArray(winningCoinBets)
+      ? winningCoinBets
+      : [];
+    const safeLosingCoinBets = Array.isArray(losingCoinBets)
+      ? losingCoinBets
+      : [];
+
+    const totalWinningTokenAmount = safeWinningTokenBets.reduce(
+      (sum, bet) => sum + (bet?.amount || 0),
+      0,
+    );
+    const totalLosingTokenAmount = safeLosingTokenBets.reduce(
+      (sum, bet) => sum + (bet?.amount || 0),
+      0,
+    );
+    const totalWinningCoinAmount = safeWinningCoinBets.reduce(
+      (sum, bet) => sum + (bet?.amount || 0),
+      0,
+    );
+    const totalLosingCoinAmount = safeLosingCoinBets.reduce(
+      (sum, bet) => sum + (bet?.amount || 0),
+      0,
+    );
+    const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
+    const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
   }
 
   async updateRoundStatus(
