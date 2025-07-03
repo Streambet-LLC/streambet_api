@@ -1151,7 +1151,7 @@ export class BettingService {
           'bettingVariable.betCountCoin AS betCountCoin',
         ])
         .getRawOne();
-      if (!bets || bets.betstatus !== BetStatus.Active) {
+      if (!bets && bets.betstatus !== BetStatus.Active) {
         throw new NotFoundException(`No matching bet found for this user`);
       }
 
