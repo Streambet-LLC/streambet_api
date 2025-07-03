@@ -1197,6 +1197,7 @@ export class BettingService {
         potentialCoinAmt,
         potentialFreeTokenAmt,
         betAmount,
+        currencyType: bets.betcurrency,
       };
     } catch (e) {
       console.error(e.message);
@@ -1205,8 +1206,16 @@ export class BettingService {
   }
   private potentialAmountCal(bettingRound, bets) {
     try {
+      let freeTokenBetAmount = 0;
+      let coinBetAmount = 0;
       const betAmount = Number(bets?.betamount || 0);
 
+      if (bets.betcurrency === CurrencyType.FREE_TOKENS) {
+        freeTokenBetAmount = betAmount || 0;
+      }
+      if (bets.betcurrency === CurrencyType.STREAM_COINS) {
+        coinBetAmount = betAmount || 0;
+      }
       const {
         betcountfreetoken: betCountFreeToken = 0,
         betcountcoin: betCountCoin = 0,
@@ -1226,13 +1235,12 @@ export class BettingService {
           ? (totalTokenAmount - Number(bets.variabletotaltokens)) /
             betCountFreeToken
           : 0;
-      const potentialFreeTokenAmt = avgFreeTokenAmt + betAmount;
+      const potentialFreeTokenAmt = avgFreeTokenAmt + freeTokenBetAmount;
       const grossCoinAmount = totalCoinAmount - Number(bets.variabletotalcoins);
       const coinPlatformFee = Math.floor(grossCoinAmount * 0.15);
       const netCoinAmount = grossCoinAmount - coinPlatformFee;
-
       const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
-      const potentialCoinAmt = avgCoinAmt + betAmount;
+      const potentialCoinAmt = avgCoinAmt + coinBetAmount;
       return {
         potentialCoinAmt,
         potentialFreeTokenAmt,
