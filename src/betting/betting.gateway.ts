@@ -272,16 +272,34 @@ export class BettingGateway
       const bettingVariable = await this.bettingService.findBettingVariableById(
         bet.bettingVariableId,
       );
+      const roundId = bettingVariable.roundId || bettingVariable.round?.id;
+      let potentialAmount = null;
+      if (roundId) {
+        try {
+          potentialAmount = await this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        } catch (e) {
+          // If potential amount fails, just log and continue
+          console.error('Potential amount error:', e.message);
+        }
+      }
 
       // Broadcast updated betting information to all clients in the stream
       this.server
         .to(`stream_${bettingVariable.stream.id}`)
         .emit('bettingUpdate', {
           bettingVariableId: bet.bettingVariableId,
+          amount: bet.amount,
+          selectedWinner: bettingVariable.name,
           totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
           totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
           betCountFreeToken: bettingVariable.betCountFreeToken,
           betCountCoin: bettingVariable.betCountCoin,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
         });
 
       // Send a chat message announcing the bet cancellation
@@ -327,6 +345,8 @@ export class BettingGateway
     @MessageBody() editBetDto: EditBetDto,
   ) {
     try {
+      console.log(1);
+
       // Get user from socket
       const user = client.data.user;
 
