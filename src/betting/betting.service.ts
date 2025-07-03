@@ -1221,44 +1221,6 @@ export class BettingService {
       throw new NotFoundException(e.message);
     }
   }
-  async declareWinnerddd(
-    winningTokenBets,
-    losingTokenBets,
-    winningCoinBets,
-    losingCoinBets,
-  ): Promise<void> {
-    const safeWinningTokenBets = Array.isArray(winningTokenBets)
-      ? winningTokenBets
-      : [];
-    const safeLosingTokenBets = Array.isArray(losingTokenBets)
-      ? losingTokenBets
-      : [];
-    const safeWinningCoinBets = Array.isArray(winningCoinBets)
-      ? winningCoinBets
-      : [];
-    const safeLosingCoinBets = Array.isArray(losingCoinBets)
-      ? losingCoinBets
-      : [];
-
-    const totalWinningTokenAmount = safeWinningTokenBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
-      0,
-    );
-    const totalLosingTokenAmount = safeLosingTokenBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
-      0,
-    );
-    const totalWinningCoinAmount = safeWinningCoinBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
-      0,
-    );
-    const totalLosingCoinAmount = safeLosingCoinBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
-      0,
-    );
-    const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
-    const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
-  }
 
   async updateRoundStatus(
     roundId: string,
