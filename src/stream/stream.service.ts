@@ -187,11 +187,11 @@ export class StreamService {
         .addSelect(
           `
           CASE
+            WHEN COUNT(r.id) > 0 AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) = COUNT(r.id) THEN '${BettingRoundStatus.CANCELLED}'
+            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CLOSED}'
             WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0 THEN '${BettingRoundStatus.OPEN}'
             WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.LOCKED}'
             WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CREATED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CANCELLED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CLOSED}'
             ELSE 'no bet round'
           END
           `,
