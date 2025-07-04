@@ -1170,7 +1170,7 @@ export class BettingService {
         .leftJoin('bettingVariable.round', 'round')
         .where('bet.userId = :userId', { userId })
         .andWhere('round.id = :roundId', { roundId })
-
+        .andWhere('bet.status = "active"')
         .select([
           'bet.id AS betId',
           'bet.amount AS betamount',
@@ -1276,9 +1276,23 @@ export class BettingService {
           relations: ['stream'],
         });
         if (roundWithStream && roundWithStream.streamId) {
-          this.bettingGateway.emitBettingLocked(
+          this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
+            'locked',
+          );
+        }
+      }
+      if (newStatus === BettingRoundStatus.OPEN) {
+        const roundWithStream = await this.bettingRoundsRepository.findOne({
+          where: { id: roundId },
+          relations: ['stream'],
+        });
+        if (roundWithStream && roundWithStream.streamId) {
+          this.bettingGateway.emitBettingStatus(
+            roundWithStream.streamId,
+            roundId,
+            'open',
           );
         }
       }

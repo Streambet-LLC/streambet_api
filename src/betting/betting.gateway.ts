@@ -200,6 +200,12 @@ export class BettingGateway
         data: {
           bet,
           success: true,
+          currencyType: placeBetDto.currencyType,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: placeBetDto.amount,
+          selectedWinner: bettingVariable?.name || '',
         },
       };
 
@@ -209,16 +215,8 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
             bettingVariableId: bet.bettingVariableId,
-            amount: placeBetDto.amount,
-            currencyType: placeBetDto.currencyType,
-            selectedWinner: bettingVariable.name,
             totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
             totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-            betCountFreeToken: bettingVariable.betCountFreeToken,
-            betCountCoin: bettingVariable.betCountCoin,
-            potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-            potentialTokenWinningAmount:
-              potentialAmount?.potentialFreeTokenAmt || 0,
           });
 
         // Send a chat message announcing the bet
@@ -487,24 +485,6 @@ export class BettingGateway
       );
   }
 
-  // Method to notify users when betting is locked
-  emitBettingLocked(streamId: string, roundId: string): void {
-    // Send a chat message
-    const chatMessage: ChatMessage = {
-      type: 'system',
-      username: 'StreambetBot',
-      message: 'Betting is now locked! No more bets can be placed.',
-      timestamp: new Date(),
-    };
-
-    void this.server.to(`stream_${streamId}`).emit('bettingLocked', {
-      roundId,
-      locked: true,
-    });
-
-    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
-  }
-
   // Method to notify users when a winner is declared
   emitWinnerDeclared(
     streamId: string,
@@ -540,5 +520,56 @@ export class BettingGateway
         authenticatedSocket.emit('notification', notification);
       }
     });
+  }
+
+  /**
+   * Emit a betting status event and corresponding chat message to all clients in the stream.
+   * @param streamId - The stream identifier
+   * @param roundId - The round identifier
+   * @param status - One of: 'open', 'locked', 'closed', 'canceled'
+   */
+  emitBettingStatus(
+    streamId: string,
+    roundId: string,
+    status: 'open' | 'locked' | 'closed' | 'canceled',
+  ): void {
+    let event: string;
+    let message: string;
+    let payload: any;
+
+    switch (status) {
+      case 'open':
+        event = 'bettingOpened';
+        message = 'Betting is now open! Bets can be placed.';
+        payload = { roundId, open: true };
+        break;
+      case 'locked':
+        event = 'bettingLocked';
+        message = 'Betting is now locked! No more bets can be placed.';
+        payload = { roundId, locked: true };
+        break;
+      case 'closed':
+        event = 'bettingClosed';
+        message = 'Betting is now closed!';
+        payload = { roundId, close: true };
+        break;
+      case 'canceled':
+        event = 'bettingCanceled';
+        message = 'Betting is canceled!';
+        payload = { roundId, cancelled: true };
+        break;
+      default:
+        throw new Error('Invalid betting status');
+    }
+
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message,
+      timestamp: new Date(),
+    };
+
+    void this.server.to(`stream_${streamId}`).emit(event, payload);
+    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 }
