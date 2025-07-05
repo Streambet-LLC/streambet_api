@@ -1016,8 +1016,10 @@ export class BettingService {
 
     for (const bet of winningTokenBets) {
       try {
-        const share = bet.amount / totalWinningTokenAmount;
-        const payout = Math.floor(totalLosingTokenAmount * share) + bet.amount;
+        // Equal share for all winners (not proportional to bet amount)
+        const equalShare = 1 / winningTokenBets.length;
+        const payout =
+          Math.floor(totalLosingTokenAmount * equalShare) + bet.amount;
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
@@ -1055,8 +1057,10 @@ export class BettingService {
 
     for (const bet of winningCoinBets) {
       try {
-        const share = bet.amount / totalWinningCoinAmount;
-        const payout = Math.floor(distributableCoinPot * share) + bet.amount;
+        // Equal share for all winners (not proportional to bet amount)
+        const equalShare = 1 / winningCoinBets.length;
+        const payout =
+          Math.floor(distributableCoinPot * equalShare) + bet.amount;
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
@@ -1230,17 +1234,36 @@ export class BettingService {
         { totalCoinAmount: 0, totalTokenAmount: 0 },
       );
 
-      const avgFreeTokenAmt =
+      let potentialFreeTokenAmt = 0;
+      if (
+        bets.betcurrency === CurrencyType.FREE_TOKENS &&
         betCountFreeToken > 0
-          ? (totalTokenAmount - Number(bets.variabletotaltokens)) /
-            betCountFreeToken
-          : 0;
-      const potentialFreeTokenAmt = avgFreeTokenAmt + freeTokenBetAmount;
-      const grossCoinAmount = totalCoinAmount - Number(bets.variabletotalcoins);
-      const coinPlatformFee = Math.floor(grossCoinAmount * 0.15);
-      const netCoinAmount = grossCoinAmount - coinPlatformFee;
-      const avgCoinAmt = betCountCoin > 0 ? netCoinAmount / betCountCoin : 0;
-      const potentialCoinAmt = avgCoinAmt + coinBetAmount;
+      ) {
+        const losingTokenAmount =
+          totalTokenAmount - Number(bets.variabletotaltokens);
+
+        const equalShare = 1 / betCountFreeToken;
+
+        potentialFreeTokenAmt =
+          freeTokenBetAmount + losingTokenAmount * equalShare;
+      } else {
+        potentialFreeTokenAmt = freeTokenBetAmount; // Just return original bet if no other tokens
+      }
+      let potentialCoinAmt = 0;
+      if (bets.betcurrency === CurrencyType.STREAM_COINS && betCountCoin > 0) {
+        const losingCoinAmount =
+          totalCoinAmount - Number(bets.variabletotalcoins);
+
+        // Apply platform fee (15%)
+        const coinPlatformFee = Math.floor(losingCoinAmount * 0.15);
+        const distributableCoinPot = losingCoinAmount - coinPlatformFee;
+        const equalShare = 1 / betCountCoin;
+
+        potentialCoinAmt = coinBetAmount + distributableCoinPot * equalShare;
+      } else {
+        potentialCoinAmt = coinBetAmount; // Just return original bet if no other coins
+      }
+
       return {
         potentialCoinAmt,
         potentialFreeTokenAmt,

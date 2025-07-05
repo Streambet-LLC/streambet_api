@@ -15,6 +15,7 @@ import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { BettingGateway } from 'src/betting/betting.gateway';
 
 @Injectable()
 export class StreamService {
@@ -22,6 +23,7 @@ export class StreamService {
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
     private walletService: WalletsService,
+    private bettingGateway: BettingGateway,
   ) {}
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -430,6 +432,11 @@ export class StreamService {
     // Set stream status to ENDED
     stream.status = StreamStatus.ENDED;
     stream.endTime = new Date();
-    return this.streamsRepository.save(stream);
+    const savedStream = await this.streamsRepository.save(stream);
+
+    // Emit stream end socket event
+    this.bettingGateway.emitStreamEnd(streamId);
+
+    return savedStream;
   }
 }

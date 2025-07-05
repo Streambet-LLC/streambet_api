@@ -230,6 +230,9 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
+
+      client.emit('betPlaced', response);
+
       return response;
     } catch (error) {
       // Send error back to client
@@ -388,8 +391,18 @@ export class BettingGateway
           this.server
             .to(`stream_${bettingVariable.stream.id}`)
             .emit('bettingUpdate', {
+              bettingVariableId: editedBet.bettingVariableId,
+              amount: editedBet.amount,
+              currencyType: editBetDto.newCurrencyType,
+              selectedWinner: bettingVariable.name,
               totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
               totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+              betCountFreeToken: bettingVariable.betCountFreeToken,
+              betCountCoin: bettingVariable.betCountCoin,
+              potentialCoinWinningAmount:
+                potentialAmount?.potentialCoinAmt || 0,
+              potentialTokenWinningAmount:
+                potentialAmount?.potentialFreeTokenAmt || 0,
             });
 
           // Send a chat message announcing the bet edit
@@ -415,7 +428,8 @@ export class BettingGateway
       });
 
       return {
-        event: 'betEdited',
+        ////neeed to change name
+        event: 'editBet',
         data: {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -511,12 +525,12 @@ export class BettingGateway
    * Emit a betting status event and corresponding chat message to all clients in the stream.
    * @param streamId - The stream identifier
    * @param roundId - The round identifier
-   * @param status - One of: 'open', 'locked', 'closed', 'canceled'
+   * @param status - One of: 'open', 'locked', 'canceled'
    */
   emitBettingStatus(
     streamId: string,
     roundId: string,
-    status: 'open' | 'locked' | 'closed' | 'canceled',
+    status: 'open' | 'locked' | 'canceled',
   ): void {
     let event: string;
     let message: string;
@@ -524,7 +538,7 @@ export class BettingGateway
 
     switch (status) {
       case 'open':
-        event = 'bettingOpened';
+        event = 'betOpened';
         message = 'Betting is now open! Bets can be placed.';
         payload = { roundId, open: true };
         break;
@@ -533,19 +547,34 @@ export class BettingGateway
         message = 'Betting is now locked! No more bets can be placed.';
         payload = { roundId, locked: true };
         break;
-      case 'closed':
-        event = 'bettingClosed';
-        message = 'Betting is now closed!';
-        payload = { roundId, close: true };
-        break;
       case 'canceled':
-        event = 'bettingCanceled';
+        event = 'betCancelled';
         message = 'Betting is canceled!';
         payload = { roundId, cancelled: true };
         break;
       default:
         throw new Error('Invalid betting status');
     }
+
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message,
+      timestamp: new Date(),
+    };
+
+    void this.server.to(`stream_${streamId}`).emit(event, payload);
+    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+  }
+
+  /**
+   * Emit a stream end event and corresponding chat message to all clients in the stream.
+   * @param streamId - The stream identifier
+   */
+  emitStreamEnd(streamId: string): void {
+    const event = 'streamEnded';
+    const message = 'Stream has ended!';
+    const payload = { streamId, ended: true };
 
     const chatMessage: ChatMessage = {
       type: 'system',
