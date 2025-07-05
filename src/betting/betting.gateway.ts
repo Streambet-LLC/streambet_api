@@ -16,6 +16,7 @@ import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
+import { WalletsService } from '../wallets/wallets.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -54,6 +55,7 @@ export class BettingGateway
     @Inject(forwardRef(() => BettingService))
     private readonly bettingService: BettingService,
     private readonly authService: AuthService,
+    private readonly walletsService: WalletsService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -163,6 +165,9 @@ export class BettingGateway
       // Place the bet
       const bet = await this.bettingService.placeBet(user.sub, placeBetDto);
 
+      // Get updated wallet balance after bet placement
+      const updatedWallet = await this.walletsService.findByUserId(user.sub);
+
       // Parallelize fetching bettingVariable and potentialAmount
       const bettingVariablePromise =
         this.bettingService.findBettingVariableById(bet.bettingVariableId);
@@ -206,6 +211,10 @@ export class BettingGateway
             potentialAmount?.potentialFreeTokenAmt || 0,
           amount: placeBetDto.amount,
           selectedWinner: bettingVariable?.name || '',
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
         },
       };
 
@@ -266,12 +275,19 @@ export class BettingGateway
       // Cancel the bet
       const bet = await this.bettingService.cancelBet(user.sub, cancelBetDto);
 
+      // Get updated wallet balance after bet cancellation
+      const updatedWallet = await this.walletsService.findByUserId(user.sub);
+
       // Prepare and emit response to client ASAP
       const response = {
         event: 'betCancelled',
         data: {
           bet,
           success: true,
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
         },
       };
       // Start fetching bettingVariable and potentialAmount in parallel (background)
@@ -298,17 +314,8 @@ export class BettingGateway
           this.server
             .to(`stream_${bettingVariable.stream.id}`)
             .emit('bettingUpdate', {
-              bettingVariableId: bet.bettingVariableId,
-              amount: bet.amount,
-              selectedWinner: bettingVariable.name,
               totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
               totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-              betCountFreeToken: bettingVariable.betCountFreeToken,
-              betCountCoin: bettingVariable.betCountCoin,
-              potentialCoinWinningAmount:
-                potentialAmount?.potentialCoinAmt || 0,
-              potentialTokenWinningAmount:
-                potentialAmount?.potentialFreeTokenAmt || 0,
             });
 
           // Send a chat message announcing the bet cancellation
@@ -355,50 +362,53 @@ export class BettingGateway
       // Edit the bet
       const editedBet = await this.bettingService.editBet(user.sub, editBetDto);
 
+      // Get updated wallet balance after bet edit
+      const updatedWallet = await this.walletsService.findByUserId(user.sub);
+
+      // Get betting variable and potential amount for immediate response
+      const bettingVariable = await this.bettingService.findBettingVariableById(
+        editedBet.bettingVariableId,
+      );
+      const roundId = bettingVariable.roundId || bettingVariable.round?.id;
+      let potentialAmount = null;
+      if (roundId) {
+        try {
+          potentialAmount = await this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        } catch (e) {
+          console.error('Potential amount error:', e.message);
+        }
+      }
+
       // Prepare and emit response to client ASAP
       const response = {
-        event: 'editBet',
+        event: 'betEdited',
         data: {
           editedBet,
           success: true,
+          currencyType: editBetDto.newCurrencyType,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: editBetDto.newAmount,
+          selectedWinner: bettingVariable?.name || '',
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
         },
       };
-      // Start fetching bettingVariable and potentialAmount in parallel (background)
+      // Start background tasks for broadcasting updates
       (async () => {
         try {
-          const bettingVariable =
-            await this.bettingService.findBettingVariableById(
-              editedBet.bettingVariableId,
-            );
-          const roundId = bettingVariable.roundId || bettingVariable.round?.id;
-          let potentialAmount = null;
-          if (roundId) {
-            try {
-              potentialAmount = await this.bettingService.findPotentialAmount(
-                user.sub,
-                roundId,
-              );
-            } catch (e) {
-              console.error('Potential amount error:', e.message);
-            }
-          }
-
           // Broadcast updated betting information
           this.server
             .to(`stream_${bettingVariable.stream.id}`)
             .emit('bettingUpdate', {
-              bettingVariableId: editedBet.bettingVariableId,
-              amount: editedBet.amount,
-              currencyType: editBetDto.newCurrencyType,
-              selectedWinner: bettingVariable.name,
               totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
               totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-              betCountFreeToken: bettingVariable.betCountFreeToken,
-              betCountCoin: bettingVariable.betCountCoin,
-              potentialCoinWinningAmount:
-                potentialAmount?.potentialCoinAmt || 0,
-              potentialTokenWinningAmount:
-                potentialAmount?.potentialFreeTokenAmt || 0,
             });
 
           // Send a chat message announcing the bet edit
@@ -425,7 +435,7 @@ export class BettingGateway
 
       return {
         ////neeed to change name
-        event: 'editBet',
+        event: 'betEdited',
         data: {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -544,7 +554,7 @@ export class BettingGateway
         payload = { roundId, locked: true };
         break;
       case 'canceled':
-        event = 'betCancelled';
+        event = 'betCancelledByAdmin';
         message = 'Betting is canceled!';
         payload = { roundId, cancelled: true };
         break;
