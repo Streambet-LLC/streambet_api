@@ -1354,6 +1354,14 @@ export class BettingService {
         await queryRunner.manager.save(variable);
       }
       await queryRunner.commitTransaction();
+      if (round.streamId) {
+        this.bettingGateway.emitBettingStatus(
+          round.streamId,
+          roundId,
+          'canceled',
+        );
+      }
+
       return { refundedBets };
     } catch (error) {
       await queryRunner.rollbackTransaction();

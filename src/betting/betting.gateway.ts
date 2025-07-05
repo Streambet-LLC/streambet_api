@@ -364,8 +364,6 @@ export class BettingGateway
           success: true,
         },
       };
-      client.emit('betEdited', response);
-
       // Start fetching bettingVariable and potentialAmount in parallel (background)
       (async () => {
         try {
@@ -390,18 +388,8 @@ export class BettingGateway
           this.server
             .to(`stream_${bettingVariable.stream.id}`)
             .emit('bettingUpdate', {
-              bettingVariableId: editedBet.bettingVariableId,
-              amount: editedBet.amount,
-              currencyType: editBetDto.newCurrencyType,
-              selectedWinner: bettingVariable.name,
               totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
               totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-              betCountFreeToken: bettingVariable.betCountFreeToken,
-              betCountCoin: bettingVariable.betCountCoin,
-              potentialCoinWinningAmount:
-                potentialAmount?.potentialCoinAmt || 0,
-              potentialTokenWinningAmount:
-                potentialAmount?.potentialFreeTokenAmt || 0,
             });
 
           // Send a chat message announcing the bet edit
