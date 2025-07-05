@@ -230,9 +230,6 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
-
-      client.emit('betPlaced', response);
-
       return response;
     } catch (error) {
       // Send error back to client

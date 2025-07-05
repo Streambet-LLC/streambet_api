@@ -1170,7 +1170,7 @@ export class BettingService {
         .leftJoin('bettingVariable.round', 'round')
         .where('bet.userId = :userId', { userId })
         .andWhere('round.id = :roundId', { roundId })
-        .andWhere('bet.status = "active"')
+        .andWhere('bet.status = :status', { status: BetStatus.Active })
         .select([
           'bet.id AS betId',
           'bet.amount AS betamount',
