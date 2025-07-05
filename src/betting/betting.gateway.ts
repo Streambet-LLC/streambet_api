@@ -357,7 +357,7 @@ export class BettingGateway
 
       // Prepare and emit response to client ASAP
       const response = {
-        event: 'betEdited',
+        event: 'editBet',
         data: {
           editedBet,
           success: true,
