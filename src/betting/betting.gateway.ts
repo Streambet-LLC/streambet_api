@@ -231,8 +231,6 @@ export class BettingGateway
           .emit('chatMessage', chatMessage);
       }
 
-      client.emit('betPlaced', response);
-
       return response;
     } catch (error) {
       // Send error back to client
@@ -276,8 +274,6 @@ export class BettingGateway
           success: true,
         },
       };
-      client.emit('betCancelled', response);
-
       // Start fetching bettingVariable and potentialAmount in parallel (background)
       (async () => {
         try {
