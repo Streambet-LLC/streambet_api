@@ -4,6 +4,7 @@ import {
   BadRequestException,
   forwardRef,
   Inject,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -1191,7 +1192,11 @@ export class BettingService {
         ])
         .getRawOne();
       if (!bets || bets.betstatus !== BetStatus.Active) {
-        throw new NotFoundException(`No matching bet found for this user`);
+        return {
+          data: null,
+          message: 'No matching bet found for this user',
+          status: HttpStatus.OK,
+        };
       }
 
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
