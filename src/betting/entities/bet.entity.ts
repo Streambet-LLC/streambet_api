@@ -2,7 +2,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { BettingVariable } from './betting-variable.entity';
-import { Stream } from 'src/stream/entities/stream.entity';
+import { Stream } from '../../stream/entities/stream.entity';
 import { BetStatus } from '../../enums/bet-status.enum';
 import { CurrencyType } from '../../wallets/entities/transaction.entity';
 import { BettingRound } from './betting-round.entity';

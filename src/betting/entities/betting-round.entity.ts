@@ -2,7 +2,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
-import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { BettingRoundStatus } from '../../enums/round-status.enum';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {

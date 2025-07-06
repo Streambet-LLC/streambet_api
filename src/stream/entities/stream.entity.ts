@@ -1,5 +1,5 @@
-import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
-import { BettingRound } from 'src/betting/entities/betting-round.entity';
+import { BettingVariable } from '../../betting/entities/betting-variable.entity';
+import { BettingRound } from '../../betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 
