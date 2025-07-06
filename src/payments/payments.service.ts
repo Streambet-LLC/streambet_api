@@ -102,6 +102,7 @@ export class PaymentsService {
           userId,
           coins,
           `Purchase of ${packageName} coin package`,
+          'purchase',
         );
       }
     }
@@ -169,6 +170,7 @@ export class PaymentsService {
           userId,
           coins,
           `Auto-reload purchase of ${coins} stream coins`,
+          'purchase',
         );
 
         return { success: true, coins };

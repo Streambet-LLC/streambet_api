@@ -3,14 +3,14 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 export enum TransactionType {
-  DEPOSIT = 'deposit',
-  WITHDRAWAL = 'withdrawal',
-  BET_PLACEMENT = 'bet_placement',
-  BET_WINNINGS = 'bet_winnings',
-  PURCHASE = 'purchase',
-  SYSTEM_ADJUSTMENT = 'system_adjustment',
-  INITIAL_CREDIT = 'initial_credit',
-  ADMIN_CREDIT = 'admin_credit',
+  DEPOSIT = 'Deposit',
+  WITHDRAWAL = 'Withdrawal',
+  BET_PLACEMENT = 'Bet placement',
+  BET_WINNINGS = 'Bet winnings',
+  PURCHASE = 'Purchase coins',
+  REFUND = 'refund',
+  INITIAL_CREDIT = 'Initial credit',
+  ADMIN_CREDIT = 'Admin credit',
 }
 
 export enum CurrencyType {

@@ -509,6 +509,7 @@ export class BettingService {
             userId,
             refundAmount,
             `Refund from bet edit: ${refundAmount}`,
+            'refund',
           );
         }
       }
@@ -673,6 +674,7 @@ export class BettingService {
           userId,
           bet.amount,
           refundMessage,
+          'refund',
         );
         bettingVariable.totalBetsCoinAmount =
           Number(bettingVariable.totalBetsCoinAmount) - amount;
@@ -1444,6 +1446,7 @@ export class BettingService {
               bet.userId,
               bet.amount,
               `Refund for cancelled round ${round.roundName}`,
+              'refund',
             );
             variable.totalBetsCoinAmount -= Number(bet.amount);
             variable.betCountCoin -= 1;

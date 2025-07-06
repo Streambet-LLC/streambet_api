@@ -66,7 +66,7 @@ export class WalletsService {
       userId,
       amount,
       CurrencyType.FREE_TOKENS,
-      TransactionType.SYSTEM_ADJUSTMENT,
+      TransactionType.REFUND,
       description,
     );
   }
@@ -75,12 +75,17 @@ export class WalletsService {
     userId: string,
     amount: number,
     description: string,
+    type: string,
   ): Promise<Wallet> {
+    let addType = TransactionType.PURCHASE;
+    if (type === 'refund') {
+      addType = TransactionType.REFUND;
+    }
     return this.updateBalance(
       userId,
       amount,
       CurrencyType.STREAM_COINS,
-      TransactionType.PURCHASE,
+      addType,
       description,
     );
   }
