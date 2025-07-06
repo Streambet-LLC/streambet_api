@@ -1192,11 +1192,7 @@ export class BettingService {
         ])
         .getRawOne();
       if (!bets || bets.betstatus !== BetStatus.Active) {
-        return {
-          data: null,
-          message: 'No matching bet found for this user',
-          status: HttpStatus.OK,
-        };
+        return null;
       }
 
       const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =

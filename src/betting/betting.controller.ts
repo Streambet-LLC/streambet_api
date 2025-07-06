@@ -200,8 +200,17 @@ export class BettingController {
       req.user.id,
       roundId,
     );
+
+    if (data === null) {
+      return {
+        message: 'No matching bet found for this user',
+        status: HttpStatus.OK,
+        data: null,
+      };
+    }
+
     return {
-      message: 'Potential amount  retrieved successfully',
+      message: 'Potential amount retrieved successfully',
       status: HttpStatus.OK,
       data: data,
     };
