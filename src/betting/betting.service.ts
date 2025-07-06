@@ -1208,6 +1208,84 @@ export class BettingService {
       throw new NotFoundException(e.message);
     }
   }
+
+  async findPotentialAmountsForAllUsers(roundId: string) {
+    try {
+      const bettingRound = await this.bettingRoundsRepository.findOne({
+        where: {
+          id: roundId,
+        },
+        relations: ['bettingVariables'],
+      });
+
+      if (!bettingRound) {
+        throw new NotFoundException(`Round with ID ${roundId} not found`);
+      }
+
+      // Get all active bets for this round
+      const allBets = await this.betsRepository
+        .createQueryBuilder('bet')
+        .leftJoin('bet.bettingVariable', 'bettingVariable')
+        .leftJoin('bettingVariable.round', 'round')
+        .leftJoin('bet.user', 'user')
+        .where('round.id = :roundId', { roundId })
+        .andWhere('bet.status = :status', { status: BetStatus.Active })
+        .select([
+          'bet.id AS betId',
+          'bet.amount AS betamount',
+          'bet.currency AS betcurrency',
+          'bet.status AS betstatus',
+          'bet.userId AS userId',
+          'user.username AS username',
+          'bettingVariable.id AS variableId',
+          'bettingVariable.name AS variablename',
+          'bettingVariable.totalBetsTokenAmount AS variableTotalTokens',
+          'bettingVariable.totalBetsCoinAmount AS variableTotalCoins',
+          'bettingVariable.betCountFreeToken AS betCountFreeToken',
+          'bettingVariable.betCountCoin AS betCountCoin',
+        ])
+        .getRawMany();
+
+      const potentialAmounts = [];
+
+      for (const bet of allBets) {
+        if (bet.betstatus === BetStatus.Active) {
+          try {
+            const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
+              this.potentialAmountCal(bettingRound, bet);
+
+            potentialAmounts.push({
+              userId: bet.userid,
+              username: bet.username,
+              betId: bet.betid,
+              status: bettingRound.status,
+              optionName: bet.variablename,
+              potentialCoinAmt,
+              potentialFreeTokenAmt,
+              betAmount,
+              currencyType: bet.betcurrency,
+              bettingVariableId: bet.variableid,
+            });
+          } catch (e) {
+            console.error(
+              `Error calculating potential amount for user ${bet.userid}:`,
+              e.message,
+            );
+            // Continue with other users even if one fails
+          }
+        }
+      }
+
+      return potentialAmounts;
+    } catch (e) {
+      console.error(
+        'Error finding potential amounts for all users:',
+        e.message,
+      );
+      throw new NotFoundException(e.message);
+    }
+  }
+
   private potentialAmountCal(bettingRound, bets) {
     try {
       let freeTokenBetAmount = 0;
