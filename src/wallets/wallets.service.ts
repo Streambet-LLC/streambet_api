@@ -153,13 +153,13 @@ export class WalletsService {
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient free tokens');
         }
-        wallet.freeTokens = newBalance;
+        wallet.freeTokens = Number(newBalance);
       } else {
         newBalance = Number(wallet.streamCoins) + Number(amount);
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient stream coins');
         }
-        wallet.streamCoins = newBalance;
+        wallet.streamCoins = Number(newBalance);
       }
 
       // Save the updated wallet

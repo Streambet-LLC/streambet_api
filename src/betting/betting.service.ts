@@ -364,7 +364,10 @@ export class BettingService {
   }
 
   // Betting Operations
-  async placeBet(userId: string, placeBetDto: PlaceBetDto): Promise<Bet> {
+  async placeBet(
+    userId: string,
+    placeBetDto: PlaceBetDto,
+  ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -404,6 +407,7 @@ export class BettingService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    let roundIdToUpdate: string | null = null;
     try {
       await this.walletsService.deductForBet(
         userId,
@@ -430,9 +434,9 @@ export class BettingService {
         bettingVariable.betCountCoin += 1;
       }
       await queryRunner.manager.save(bettingVariable);
+      roundIdToUpdate = bettingVariable.roundId;
       await queryRunner.commitTransaction();
-
-      return savedBet;
+      return { bet: savedBet, roundId: roundIdToUpdate };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -485,6 +489,7 @@ export class BettingService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let roundIdToUpdate: string | null = null;
     try {
       // Handle wallet operations for currency/amount changes
       const amountDiff = Number(newAmount) - Number(betDetails.amount);
@@ -522,28 +527,41 @@ export class BettingService {
 
       const isSameOption = oldBettingVariable.id === bettingVariable.id;
 
-      // Remove old bet from statistics
+      // Update totals correctly for same or different option
       if (betDetails.currency === CurrencyType.FREE_TOKENS) {
-        oldBettingVariable.totalBetsTokenAmount =
-          Number(oldBettingVariable.totalBetsTokenAmount) -
-          Number(betDetails.amount);
-        if (!isSameOption) oldBettingVariable.betCountFreeToken -= 1;
+        if (isSameOption) {
+          bettingVariable.totalBetsTokenAmount =
+            Number(bettingVariable.totalBetsTokenAmount) -
+            Number(betDetails.amount) +
+            Number(newAmount);
+        } else {
+          oldBettingVariable.totalBetsTokenAmount =
+            Number(oldBettingVariable.totalBetsTokenAmount) -
+            Number(betDetails.amount);
+          bettingVariable.totalBetsTokenAmount =
+            Number(bettingVariable.totalBetsTokenAmount) + Number(newAmount);
+        }
+        if (!isSameOption) {
+          oldBettingVariable.betCountFreeToken -= 1;
+          bettingVariable.betCountFreeToken += 1;
+        }
       } else {
-        oldBettingVariable.totalBetsCoinAmount =
-          Number(oldBettingVariable.totalBetsCoinAmount) -
-          Number(betDetails.amount);
-        if (!isSameOption) oldBettingVariable.betCountCoin -= 1;
-      }
-
-      // Add new bet to statistics (handle different betting variables)
-      if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-        bettingVariable.totalBetsTokenAmount =
-          Number(bettingVariable.totalBetsTokenAmount) + Number(newAmount);
-        if (!isSameOption) bettingVariable.betCountFreeToken += 1;
-      } else {
-        bettingVariable.totalBetsCoinAmount =
-          Number(bettingVariable.totalBetsCoinAmount) + Number(newAmount);
-        if (!isSameOption) bettingVariable.betCountCoin += 1;
+        if (isSameOption) {
+          bettingVariable.totalBetsCoinAmount =
+            Number(bettingVariable.totalBetsCoinAmount) -
+            Number(betDetails.amount) +
+            Number(newAmount);
+        } else {
+          oldBettingVariable.totalBetsCoinAmount =
+            Number(oldBettingVariable.totalBetsCoinAmount) -
+            Number(betDetails.amount);
+          bettingVariable.totalBetsCoinAmount =
+            Number(bettingVariable.totalBetsCoinAmount) + Number(newAmount);
+        }
+        if (!isSameOption) {
+          oldBettingVariable.betCountCoin -= 1;
+          bettingVariable.betCountCoin += 1;
+        }
       }
 
       // Update the bet
@@ -555,10 +573,9 @@ export class BettingService {
       // Save all changes
       await queryRunner.manager.save(betDetails);
       await queryRunner.manager.save(oldBettingVariable);
-      if (oldBettingVariable.id !== bettingVariable.id) {
-        await queryRunner.manager.save(bettingVariable);
-      }
+      await queryRunner.manager.save(bettingVariable);
 
+      roundIdToUpdate = bettingVariable.roundId;
       await queryRunner.commitTransaction();
       return betDetails;
     } catch (error) {
@@ -566,6 +583,10 @@ export class BettingService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+    // Emit after transaction and release
+    if (roundIdToUpdate) {
+      await this.bettingGateway.emitPotentialAmountsUpdate(roundIdToUpdate);
     }
   }
 
@@ -1030,7 +1051,8 @@ export class BettingService {
         // Equal share for all winners (not proportional to bet amount)
         const equalShare = 1 / winningTokenBets.length;
         const payout =
-          Math.floor(totalLosingTokenAmount * equalShare) + bet.amount;
+          Math.floor(Number(totalLosingTokenAmount) * equalShare) +
+          Number(bet.amount);
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
@@ -1299,6 +1321,7 @@ export class BettingService {
 
   private potentialAmountCal(bettingRound, bets) {
     try {
+      // Always calculate from scratch, never accumulate
       let freeTokenBetAmount = 0;
       let coinBetAmount = 0;
       const betAmount = Number(bets?.betamount || 0);
@@ -1309,49 +1332,47 @@ export class BettingService {
       if (bets.betcurrency === CurrencyType.STREAM_COINS) {
         coinBetAmount = betAmount || 0;
       }
-      const {
-        betcountfreetoken: betCountFreeToken = 0,
-        betcountcoin: betCountCoin = 0,
-      } = bets;
       const bettingVariables = bettingRound?.bettingVariables || [];
-      const { totalCoinAmount, totalTokenAmount } = bettingVariables.reduce(
-        (totals, variable) => {
-          totals.totalCoinAmount += Number(variable.totalBetsCoinAmount || 0);
-          totals.totalTokenAmount += Number(variable.totalBetsTokenAmount || 0);
-          return totals;
-        },
-        { totalCoinAmount: 0, totalTokenAmount: 0 },
+      // Find the user's option in the latest bettingVariables
+      const userOption = bettingVariables.find(
+        (v) => v.id === bets.variableid || v.id === bets.variableId,
       );
+      const userOptionTokenTotal = Number(
+        userOption?.totalBetsTokenAmount || 0,
+      );
+      const userOptionCoinTotal = Number(userOption?.totalBetsCoinAmount || 0);
+      const userOptionTokenCount = Number(userOption?.betCountFreeToken || 0);
+      const userOptionCoinCount = Number(userOption?.betCountCoin || 0);
+      // Calculate losers' pot as the sum of all bets on other options
+      const losersTokenAmount = bettingVariables
+        .filter((v) => v.id !== userOption?.id)
+        .reduce((sum, v) => sum + Number(v.totalBetsTokenAmount || 0), 0);
+      const losersCoinAmount = bettingVariables
+        .filter((v) => v.id !== userOption?.id)
+        .reduce((sum, v) => sum + Number(v.totalBetsCoinAmount || 0), 0);
 
-      let potentialFreeTokenAmt = 0;
+      // --- MAIN LOGIC: always calculate from scratch ---
+      let potentialFreeTokenAmt = freeTokenBetAmount;
       if (
         bets.betcurrency === CurrencyType.FREE_TOKENS &&
-        betCountFreeToken > 0
+        userOptionTokenCount > 0
       ) {
-        const losingTokenAmount =
-          totalTokenAmount - Number(bets.variabletotaltokens);
-
-        const equalShare = 1 / betCountFreeToken;
-
+        const equalShare = 1 / userOptionTokenCount;
         potentialFreeTokenAmt =
-          freeTokenBetAmount + losingTokenAmount * equalShare;
-      } else {
-        potentialFreeTokenAmt = freeTokenBetAmount; // Just return original bet if no other tokens
+          freeTokenBetAmount + losersTokenAmount * equalShare;
       }
-      let potentialCoinAmt = 0;
-      if (bets.betcurrency === CurrencyType.STREAM_COINS && betCountCoin > 0) {
-        const losingCoinAmount =
-          totalCoinAmount - Number(bets.variabletotalcoins);
-
+      let potentialCoinAmt = coinBetAmount;
+      if (
+        bets.betcurrency === CurrencyType.STREAM_COINS &&
+        userOptionCoinCount > 0
+      ) {
         // Apply platform fee (15%)
-        const coinPlatformFee = Math.floor(losingCoinAmount * 0.15);
-        const distributableCoinPot = losingCoinAmount - coinPlatformFee;
-        const equalShare = 1 / betCountCoin;
-
+        const coinPlatformFee = Math.floor(losersCoinAmount * 0.15);
+        const distributableCoinPot = losersCoinAmount - coinPlatformFee;
+        const equalShare = 1 / userOptionCoinCount;
         potentialCoinAmt = coinBetAmount + distributableCoinPot * equalShare;
-      } else {
-        potentialCoinAmt = coinBetAmount; // Just return original bet if no other coins
       }
+      // --- END MAIN LOGIC ---
 
       return {
         potentialCoinAmt,
