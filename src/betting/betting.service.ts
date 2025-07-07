@@ -980,19 +980,19 @@ export class BettingService {
       : [];
 
     const totalWinningTokenAmount = safeWinningTokenBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
+      (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
     const totalLosingTokenAmount = safeLosingTokenBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
+      (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
     const totalWinningCoinAmount = safeWinningCoinBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
+      (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
     const totalLosingCoinAmount = safeLosingCoinBets.reduce(
-      (sum, bet) => sum + (bet?.amount || 0),
+      (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
     const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
@@ -1490,11 +1490,11 @@ export class BettingService {
     });
 
     const totalBetsTokenAmount = bettingVariables.reduce(
-      (sum, v) => sum + Number(v.totalBetsTokenAmount || 0),
+      (sum, v) => Number(sum) + Number(v.totalBetsTokenAmount || 0),
       0,
     );
     const totalBetsCoinAmount = bettingVariables.reduce(
-      (sum, v) => sum + Number(v.totalBetsCoinAmount || 0),
+      (sum, v) => Number(sum) + Number(v.totalBetsCoinAmount || 0),
       0,
     );
 
