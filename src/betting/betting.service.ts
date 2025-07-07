@@ -1356,6 +1356,37 @@ export class BettingService {
     }
   }
 
+  async getRoundTotalAmounts(roundId: string): Promise<{
+    totalCoinAmount: number;
+    totalTokenAmount: number;
+  }> {
+    try {
+      const bettingVariables = await this.bettingVariablesRepository
+        .createQueryBuilder('variable')
+        .leftJoin('variable.round', 'round')
+        .where('round.id = :roundId', { roundId })
+        .select([
+          'variable.totalBetsTokenAmount AS totalBetsTokenAmount',
+          'variable.totalBetsCoinAmount AS totalBetsCoinAmount',
+        ])
+        .getRawMany();
+
+      const totals = bettingVariables.reduce(
+        (acc, variable) => {
+          acc.totalCoinAmount += Number(variable.totalBetsCoinAmount || 0);
+          acc.totalTokenAmount += Number(variable.totalBetsTokenAmount || 0);
+          return acc;
+        },
+        { totalCoinAmount: 0, totalTokenAmount: 0 },
+      );
+
+      return totals;
+    } catch (e) {
+      console.error('Error getting round total amounts:', e.message);
+      return { totalCoinAmount: 0, totalTokenAmount: 0 };
+    }
+  }
+
   async updateRoundStatus(
     roundId: string,
     newStatus: 'created' | 'open' | 'locked',

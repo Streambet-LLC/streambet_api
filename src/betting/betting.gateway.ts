@@ -169,6 +169,11 @@ export class BettingGateway
       ]);
 
       const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
+
+      const roundTotals = roundId
+        ? await this.bettingService.getRoundTotalAmounts(roundId)
+        : { totalCoinAmount: 0, totalTokenAmount: 0 };
+
       let potentialAmount = null;
 
       if (roundId) {
@@ -191,6 +196,10 @@ export class BettingGateway
           potentialAmount?.potentialFreeTokenAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
+        roundTotals: {
+          totalCoinAmount: roundTotals.totalCoinAmount,
+          totalTokenAmount: roundTotals.totalTokenAmount,
+        },
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
           streamCoins: updatedWallet.streamCoins,
@@ -204,8 +213,8 @@ export class BettingGateway
               .to(`stream_${bettingVariable.stream.id}`)
               .emit('bettingUpdate', {
                 bettingVariableId: bet.bettingVariableId,
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+                totalBetsCoinAmount: roundTotals.totalCoinAmount,
+                totalBetsTokenAmount: roundTotals.totalTokenAmount,
               });
 
             await this.sendPersonalizedPotentialAmounts(
@@ -269,16 +278,10 @@ export class BettingGateway
       const backgroundOperations = (async () => {
         try {
           if (bettingVariable) {
-            this.server
-              .to(`stream_${bettingVariable.stream.id}`)
-              .emit('bettingUpdate', {
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-              });
-
-            await this.sendPersonalizedPotentialAmounts(
+            // Use the proper method that fetches fresh data and includes round totals
+            this.emitBettingUpdate(
               bettingVariable.stream.id,
-              roundId,
+              bettingVariable.id,
             );
 
             const chatMessage: ChatMessage = {
@@ -356,16 +359,10 @@ export class BettingGateway
       const backgroundOperations = (async () => {
         try {
           if (bettingVariable) {
-            this.server
-              .to(`stream_${bettingVariable.stream.id}`)
-              .emit('bettingUpdate', {
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-              });
-
-            await this.sendPersonalizedPotentialAmounts(
+            // Use the proper method that fetches fresh data and includes round totals
+            this.emitBettingUpdate(
               bettingVariable.stream.id,
-              roundId,
+              bettingVariable.id,
             );
 
             const chatMessage: ChatMessage = {
@@ -414,16 +411,27 @@ export class BettingGateway
     void this.bettingService
       .findBettingVariableById(bettingVariableId)
       .then(async (bettingVariable) => {
+        const roundId = bettingVariable.roundId || bettingVariable.round?.id;
+        let roundTotals = { totalCoinAmount: 0, totalTokenAmount: 0 };
+
+        if (roundId) {
+          try {
+            roundTotals =
+              await this.bettingService.getRoundTotalAmounts(roundId);
+          } catch (e) {
+            console.error('Error getting round totals:', e.message);
+          }
+        }
+
         this.server.to(`stream_${streamId}`).emit('bettingUpdate', {
           bettingVariableId: bettingVariable.id,
-          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+          totalBetsCoinAmount: roundTotals.totalCoinAmount,
+          totalBetsTokenAmount: roundTotals.totalTokenAmount,
           betCountCoin: bettingVariable.betCountCoin,
           betCountFreeToken: bettingVariable.betCountFreeToken,
           status: bettingVariable.status,
         });
 
-        const roundId = bettingVariable.roundId || bettingVariable.round?.id;
         if (roundId) {
           await this.sendPersonalizedPotentialAmounts(streamId, roundId);
         }
