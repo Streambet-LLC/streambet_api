@@ -40,18 +40,6 @@ interface Notification {
   data?: Record<string, unknown>;
 }
 
-// Define betting operation types
-type BettingOperation = 'placed' | 'cancelled' | 'edited';
-
-// Define background operation context
-interface BackgroundOperationContext {
-  user: JwtPayload;
-  bettingVariable: any;
-  operation: BettingOperation;
-  amount?: number;
-  streamId: string;
-}
-
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -72,23 +60,36 @@ export class BettingGateway
 
   async handleConnection(client: Socket): Promise<void> {
     try {
-      const token = this.extractToken(client);
+      // Extract token from handshake
+      const token =
+        client.handshake.auth.token ||
+        client.handshake.headers.authorization?.split(' ')[1];
+
       if (!token) {
         client.disconnect();
+        await Promise.resolve();
         return;
       }
 
+      // Verify token and get user
       const decoded = this.authService.verifyRefreshToken(token);
       if (!decoded) {
         client.disconnect();
+        await Promise.resolve();
         return;
       }
 
+      // Explicitly cast to JwtPayload since we've already verified it's not null
       const authenticatedSocket = client as AuthenticatedSocket;
-      authenticatedSocket.data = { user: decoded };
+
+      authenticatedSocket.data = {
+        user: decoded,
+      };
 
       console.log(
-        `Client connected: ${client.id}, user: ${decoded.username || 'unknown'}`,
+        `Client connected: ${client.id}, user: ${
+          typeof decoded.username === 'string' ? decoded.username : 'unknown'
+        }`,
       );
     } catch (error) {
       console.error(
@@ -102,15 +103,38 @@ export class BettingGateway
     console.log(`Client disconnected: ${client.id}`);
   }
 
+  //@UseGuards(WsJwtGuard)
+  // @SubscribeMessage('test')
+  // testStream(
+  //   @ConnectedSocket() client: AuthenticatedSocket,
+  //   @MessageBody() message: string,
+  // ) {
+  //   console.log({ message });
+  //   // Join the stream's room
+  //   client.join(`stream`);
+
+  //   // Let the client know they joined successfully
+  //   client.emit('joinedStream', { time: new Date() });
+
+  //   console.log(`User ${client.data.user.username} joined stream`);
+
+  //   return { event: 'joinedStream', data: { time: new Date() } };
+  // }
+
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinStream')
   handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
+    // Join the stream's room
     client.join(`stream_${streamId}`);
+
+    // Let the client know they joined successfully
     client.emit('joinedStream', { streamId });
+
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
+
     return { event: 'joinedStream', data: { streamId } };
   }
 
@@ -120,8 +144,11 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
+    // Leave the stream's room
     client.leave(`stream_${streamId}`);
+
     console.log(`User ${client.data.user.username} left stream ${streamId}`);
+
     return { event: 'leftStream', data: { streamId } };
   }
 
@@ -133,32 +160,77 @@ export class BettingGateway
   ) {
     try {
       const user = client.data.user;
+
       const bet = await this.bettingService.placeBet(user.sub, placeBetDto);
 
-      const { bettingVariable, roundTotals, potentialAmount } =
-        await this.getBettingData(bet.bettingVariableId, user.sub);
+      const [updatedWallet, bettingVariable] = await Promise.all([
+        this.walletsService.findByUserId(user.sub),
+        this.bettingService.findBettingVariableById(bet.bettingVariableId),
+      ]);
 
-      const response = this.buildBetResponse('placed', {
+      const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
+      let potentialAmount = null;
+
+      if (roundId) {
+        try {
+          potentialAmount = await this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        } catch (e) {
+          console.error('Potential amount error:', e.message);
+        }
+      }
+
+      client.emit('betPlaced', {
         bet,
+        success: true,
         currencyType: placeBetDto.currencyType,
+        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialTokenWinningAmount:
+          potentialAmount?.potentialFreeTokenAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
-        potentialAmount,
-        roundTotals,
+        updatedWalletBalance: {
+          freeTokens: updatedWallet.freeTokens,
+          streamCoins: updatedWallet.streamCoins,
+        },
       });
 
-      client.emit('betPlaced', response);
+      const backgroundOperations = (async () => {
+        try {
+          if (bettingVariable) {
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('bettingUpdate', {
+                bettingVariableId: bet.bettingVariableId,
+                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+              });
 
-      // Run background operations
-      this.runBackgroundOperations({
-        user,
-        bettingVariable,
-        operation: 'placed',
-        amount: placeBetDto.amount,
-        streamId: bettingVariable?.stream?.id,
-      });
+            await this.sendPersonalizedPotentialAmounts(
+              bettingVariable.stream.id,
+              roundId,
+            );
+
+            const chatMessage: ChatMessage = {
+              type: 'system',
+              username: 'StreambetBot',
+              message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+              timestamp: new Date(),
+            };
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('chatMessage', chatMessage);
+          }
+        } catch (e) {
+          console.error('Error in background operations:', e.message);
+        }
+      })();
     } catch (error) {
-      this.handleError(client, error);
+      void client.emit('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
@@ -170,14 +242,20 @@ export class BettingGateway
   ) {
     try {
       const user = client.data.user;
+
       const cancelBetDto: CancelBetDto = {
         betId: data.betId,
         currencyType: data.currencyType,
       };
 
       const bet = await this.bettingService.cancelBet(user.sub, cancelBetDto);
-      const { updatedWallet, bettingVariable } =
-        await this.getWalletAndBettingVariable(user.sub, bet.bettingVariableId);
+
+      const [updatedWallet, bettingVariable] = await Promise.all([
+        this.walletsService.findByUserId(user.sub),
+        this.bettingService.findBettingVariableById(bet.bettingVariableId),
+      ]);
+
+      const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
 
       client.emit('betCancelled', {
         bet,
@@ -188,16 +266,42 @@ export class BettingGateway
         },
       });
 
-      // Run background operations
-      this.runBackgroundOperations({
-        user,
-        bettingVariable,
-        operation: 'cancelled',
-        amount: bet.amount,
-        streamId: bettingVariable?.stream?.id,
-      });
+      const backgroundOperations = (async () => {
+        try {
+          if (bettingVariable) {
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('bettingUpdate', {
+                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+              });
+
+            await this.sendPersonalizedPotentialAmounts(
+              bettingVariable.stream.id,
+              roundId,
+            );
+
+            const chatMessage: ChatMessage = {
+              type: 'system',
+              username: 'StreambetBot',
+              message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
+              timestamp: new Date(),
+            };
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('chatMessage', chatMessage);
+          }
+        } catch (e) {
+          console.error(
+            'Error in background bet cancel operations:',
+            e.message,
+          );
+        }
+      })();
     } catch (error) {
-      this.handleError(client, error);
+      client.emit('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
@@ -209,32 +313,79 @@ export class BettingGateway
   ) {
     try {
       const user = client.data.user;
+
       const editedBet = await this.bettingService.editBet(user.sub, editBetDto);
 
-      const { bettingVariable, roundTotals, potentialAmount } =
-        await this.getBettingData(editedBet.bettingVariableId, user.sub);
+      // Get all required data in parallel
+      const [updatedWallet, bettingVariable] = await Promise.all([
+        this.walletsService.findByUserId(user.sub),
+        this.bettingService.findBettingVariableById(
+          editedBet.bettingVariableId,
+        ),
+      ]);
 
-      const response = this.buildBetResponse('edited', {
-        bet: editedBet,
+      const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
+      let potentialAmount = null;
+
+      if (roundId) {
+        try {
+          potentialAmount = await this.bettingService.findPotentialAmount(
+            user.sub,
+            roundId,
+          );
+        } catch (e) {
+          console.error('Potential amount error:', e.message);
+        }
+      }
+
+      client.emit('betEdited', {
+        editedBet,
+        success: true,
         currencyType: editBetDto.newCurrencyType,
+        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialTokenWinningAmount:
+          potentialAmount?.potentialFreeTokenAmt || 0,
         amount: editBetDto.newAmount,
         selectedWinner: bettingVariable?.name || '',
-        potentialAmount,
-        roundTotals,
+        updatedWalletBalance: {
+          freeTokens: updatedWallet.freeTokens,
+          streamCoins: updatedWallet.streamCoins,
+        },
       });
 
-      client.emit('betEdited', response);
+      const backgroundOperations = (async () => {
+        try {
+          if (bettingVariable) {
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('bettingUpdate', {
+                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+              });
 
-      // Run background operations
-      this.runBackgroundOperations({
-        user,
-        bettingVariable,
-        operation: 'edited',
-        amount: editedBet.amount,
-        streamId: bettingVariable?.stream?.id,
-      });
+            await this.sendPersonalizedPotentialAmounts(
+              bettingVariable.stream.id,
+              roundId,
+            );
+
+            const chatMessage: ChatMessage = {
+              type: 'system',
+              username: 'StreambetBot',
+              message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.stream.id}!`,
+              timestamp: new Date(),
+            };
+            this.server
+              .to(`stream_${bettingVariable.stream.id}`)
+              .emit('chatMessage', chatMessage);
+          }
+        } catch (e) {
+          console.error('Error in background bet edit operations:', e.message);
+        }
+      })();
     } catch (error) {
-      this.handleError(client, error);
+      client.emit('error', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
@@ -255,6 +406,7 @@ export class BettingGateway
     };
 
     this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+
     return { event: 'messageSent', data: { success: true } };
   }
 
@@ -262,27 +414,16 @@ export class BettingGateway
     void this.bettingService
       .findBettingVariableById(bettingVariableId)
       .then(async (bettingVariable) => {
-        const roundId = bettingVariable.roundId || bettingVariable.round?.id;
-        let roundTotals = { totalCoinAmount: 0, totalTokenAmount: 0 };
-
-        if (roundId) {
-          try {
-            roundTotals =
-              await this.bettingService.getRoundTotalAmounts(roundId);
-          } catch (e) {
-            console.error('Error getting round totals:', e.message);
-          }
-        }
-
         this.server.to(`stream_${streamId}`).emit('bettingUpdate', {
           bettingVariableId: bettingVariable.id,
-          totalBetsCoinAmount: roundTotals.totalCoinAmount,
-          totalBetsTokenAmount: roundTotals.totalTokenAmount,
+          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
           betCountCoin: bettingVariable.betCountCoin,
           betCountFreeToken: bettingVariable.betCountFreeToken,
           status: bettingVariable.status,
         });
 
+        const roundId = bettingVariable.roundId || bettingVariable.round?.id;
         if (roundId) {
           await this.sendPersonalizedPotentialAmounts(streamId, roundId);
         }
@@ -308,11 +449,19 @@ export class BettingGateway
       winners,
     });
 
-    this.emitSystemChatMessage(streamId, `The winner is: ${winnerName}!`);
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message: `The winner is: ${winnerName}!`,
+      timestamp: new Date(),
+    };
+
+    this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 
   sendUserNotification(userId: string, notification: Notification): void {
     const sockets = this.server.sockets.sockets;
+
     sockets.forEach((socket) => {
       const authenticatedSocket = socket as AuthenticatedSocket;
       if (authenticatedSocket.data?.user?.sub === userId) {
@@ -326,204 +475,97 @@ export class BettingGateway
     roundId: string,
     status: 'open' | 'locked' | 'canceled',
   ): void {
-    const statusConfig = {
-      open: {
-        event: 'betOpened',
-        message: 'Betting is now open! Bets can be placed.',
-      },
-      locked: {
-        event: 'bettingLocked',
-        message: 'Betting is now locked! No more bets can be placed.',
-      },
-      canceled: {
-        event: 'betCancelledByAdmin',
-        message: 'Betting is canceled!',
-      },
-    };
+    let event: string;
+    let message: string;
+    let payload: any;
 
-    const config = statusConfig[status];
-    if (!config) {
-      throw new Error('Invalid betting status');
-    }
-
-    const payload = { roundId, [status]: true };
-    this.server.to(`stream_${streamId}`).emit(config.event, payload);
-    this.emitSystemChatMessage(streamId, config.message);
-  }
-
-  emitStreamEnd(streamId: string): void {
-    const payload = { streamId, ended: true };
-    this.server.to(`stream_${streamId}`).emit('streamEnded', payload);
-    this.emitSystemChatMessage(streamId, 'Stream has ended!');
-  }
-
-  // Private helper methods
-  private extractToken(client: Socket): string | null {
-    return (
-      client.handshake.auth.token ||
-      client.handshake.headers.authorization?.split(' ')[1] ||
-      null
-    );
-  }
-
-  private async getBettingData(bettingVariableId: string, userId: string) {
-    const [bettingVariable, roundTotals] = await Promise.all([
-      this.bettingService.findBettingVariableById(bettingVariableId),
-      this.getRoundTotals(bettingVariableId),
-    ]);
-
-    const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
-    let potentialAmount = null;
-
-    if (roundId) {
-      try {
-        potentialAmount = await this.bettingService.findPotentialAmount(
-          userId,
-          roundId,
-        );
-      } catch (e) {
-        console.error('Potential amount error:', e.message);
-      }
-    }
-
-    return { bettingVariable, roundTotals, potentialAmount };
-  }
-
-  private async getWalletAndBettingVariable(
-    userId: string,
-    bettingVariableId: string,
-  ) {
-    const [updatedWallet, bettingVariable] = await Promise.all([
-      this.walletsService.findByUserId(userId),
-      this.bettingService.findBettingVariableById(bettingVariableId),
-    ]);
-
-    return { updatedWallet, bettingVariable };
-  }
-
-  private async getRoundTotals(bettingVariableId: string) {
-    try {
-      const bettingVariable =
-        await this.bettingService.findBettingVariableById(bettingVariableId);
-      const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
-
-      return roundId
-        ? await this.bettingService.getRoundTotalAmounts(roundId)
-        : { totalCoinAmount: 0, totalTokenAmount: 0 };
-    } catch (e) {
-      console.error('Error getting round totals:', e.message);
-      return { totalCoinAmount: 0, totalTokenAmount: 0 };
-    }
-  }
-
-  private buildBetResponse(operation: BettingOperation, data: any) {
-    const baseResponse = {
-      success: true,
-      currencyType: data.currencyType,
-      potentialCoinWinningAmount: data.potentialAmount?.potentialCoinAmt || 0,
-      potentialTokenWinningAmount:
-        data.potentialAmount?.potentialFreeTokenAmt || 0,
-      amount: data.amount,
-      selectedWinner: data.selectedWinner,
-      roundTotals: {
-        totalCoinAmount: data.roundTotals.totalCoinAmount,
-        totalTokenAmount: data.roundTotals.totalTokenAmount,
-      },
-    };
-
-    if (operation === 'placed') {
-      return { bet: data.bet, ...baseResponse };
-    } else if (operation === 'edited') {
-      return { editedBet: data.bet, ...baseResponse };
-    }
-
-    return baseResponse;
-  }
-
-  private runBackgroundOperations(context: BackgroundOperationContext): void {
-    void (async () => {
-      try {
-        if (context.bettingVariable) {
-          this.emitBettingUpdate(context.streamId, context.bettingVariable.id);
-          this.emitSystemChatMessage(
-            context.streamId,
-            this.buildChatMessage(context),
-          );
-        }
-      } catch (e) {
-        console.error(
-          `Error in background ${context.operation} operations:`,
-          e.message,
-        );
-      }
-    })();
-  }
-
-  private buildChatMessage(context: BackgroundOperationContext): string {
-    const { user, bettingVariable, operation, amount } = context;
-
-    switch (operation) {
-      case 'placed':
-        return `${user.username} placed a bet of ${amount} on ${bettingVariable.name}!`;
-      case 'cancelled':
-        return `${user.username} cancelled their bet of ${amount} on ${bettingVariable.name}!`;
-      case 'edited':
-        return `${user.username} edited their bet to ${amount} on ${bettingVariable.name}!`;
+    switch (status) {
+      case 'open':
+        event = 'betOpened';
+        message = 'Betting is now open! Bets can be placed.';
+        payload = { roundId, open: true };
+        break;
+      case 'locked':
+        event = 'bettingLocked';
+        message = 'Betting is now locked! No more bets can be placed.';
+        payload = { roundId, locked: true };
+        break;
+      case 'canceled':
+        event = 'betCancelledByAdmin';
+        message = 'Betting is canceled!';
+        payload = { roundId, cancelled: true };
+        break;
       default:
-        return `${user.username} performed a betting operation!`;
+        throw new Error('Invalid betting status');
     }
-  }
 
-  private emitSystemChatMessage(streamId: string, message: string): void {
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',
       message,
       timestamp: new Date(),
     };
-    this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+
+    void this.server.to(`stream_${streamId}`).emit(event, payload);
+    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 
-  private handleError(client: AuthenticatedSocket, error: any): void {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    console.error('Gateway error:', errorMessage);
-    client.emit('error', { message: errorMessage });
+  emitStreamEnd(streamId: string): void {
+    const event = 'streamEnded';
+    const message = 'Stream has ended!';
+    const payload = { streamId, ended: true };
+
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message,
+      timestamp: new Date(),
+    };
+
+    void this.server.to(`stream_${streamId}`).emit(event, payload);
+    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 
   private async sendPersonalizedPotentialAmounts(
     streamId: string,
     roundId: string | undefined,
   ): Promise<void> {
-    if (!roundId) return;
+    if (roundId) {
+      try {
+        const potentialAmounts =
+          await this.bettingService.findPotentialAmountsForAllUsers(roundId);
 
-    try {
-      const potentialAmounts =
-        await this.bettingService.findPotentialAmountsForAllUsers(roundId);
-      const userPotentialMap = new Map();
+        // Create a map for faster user lookup
+        const userPotentialMap = new Map();
+        potentialAmounts.forEach((potential) => {
+          userPotentialMap.set(potential.userId, potential);
+        });
 
-      potentialAmounts.forEach((potential) => {
-        userPotentialMap.set(potential.userId, potential);
-      });
+        // Get all sockets in the stream room and send personalized updates
+        const streamRoom = this.server.to(`stream_${streamId}`);
+        const sockets = await streamRoom.fetchSockets();
 
-      const streamRoom = this.server.to(`stream_${streamId}`);
-      const sockets = await streamRoom.fetchSockets();
+        for (const socket of sockets) {
+          const userId = (socket as any).data?.user?.sub;
 
-      for (const socket of sockets) {
-        const userId = (socket as any).data?.user?.sub;
-        if (userId && userPotentialMap.has(userId)) {
-          const potentialAmount = userPotentialMap.get(userId);
-          socket.emit('potentialAmountUpdate', {
-            bettingVariableId: potentialAmount.bettingVariableId,
-            potentialCoinWinningAmount: potentialAmount.potentialCoinAmt,
-            potentialTokenWinningAmount: potentialAmount.potentialFreeTokenAmt,
-            currencyType: potentialAmount.currencyType,
-            optionName: potentialAmount.optionName,
-          });
+          if (userId && userPotentialMap.has(userId)) {
+            const potentialAmount = userPotentialMap.get(userId);
+            socket.emit('potentialAmountUpdate', {
+              bettingVariableId: potentialAmount.bettingVariableId,
+              potentialCoinWinningAmount: potentialAmount.potentialCoinAmt,
+              potentialTokenWinningAmount:
+                potentialAmount.potentialFreeTokenAmt,
+              currencyType: potentialAmount.currencyType,
+              optionName: potentialAmount.optionName,
+            });
+          }
         }
+      } catch (e) {
+        console.error(
+          'Error sending personalized potential amounts:',
+          e.message,
+        );
       }
-    } catch (e) {
-      console.error('Error sending personalized potential amounts:', e.message);
     }
   }
 }
