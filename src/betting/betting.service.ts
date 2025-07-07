@@ -520,22 +520,30 @@ export class BettingService {
         where: { id: betDetails.bettingVariableId },
       });
 
+      const isSameOption = oldBettingVariable.id === bettingVariable.id;
+
       // Remove old bet from statistics
       if (betDetails.currency === CurrencyType.FREE_TOKENS) {
-        oldBettingVariable.totalBetsTokenAmount -= Number(betDetails.amount);
-        oldBettingVariable.betCountFreeToken -= 1;
+        oldBettingVariable.totalBetsTokenAmount =
+          Number(oldBettingVariable.totalBetsTokenAmount) -
+          Number(betDetails.amount);
+        if (!isSameOption) oldBettingVariable.betCountFreeToken -= 1;
       } else {
-        oldBettingVariable.totalBetsCoinAmount -= Number(betDetails.amount);
-        oldBettingVariable.betCountCoin -= 1;
+        oldBettingVariable.totalBetsCoinAmount =
+          Number(oldBettingVariable.totalBetsCoinAmount) -
+          Number(betDetails.amount);
+        if (!isSameOption) oldBettingVariable.betCountCoin -= 1;
       }
 
       // Add new bet to statistics (handle different betting variables)
       if (newCurrencyType === CurrencyType.FREE_TOKENS) {
-        bettingVariable.totalBetsTokenAmount += Number(newAmount);
-        bettingVariable.betCountFreeToken += 1;
+        bettingVariable.totalBetsTokenAmount =
+          Number(bettingVariable.totalBetsTokenAmount) + Number(newAmount);
+        if (!isSameOption) bettingVariable.betCountFreeToken += 1;
       } else {
-        bettingVariable.totalBetsCoinAmount += Number(newAmount);
-        bettingVariable.betCountCoin += 1;
+        bettingVariable.totalBetsCoinAmount =
+          Number(bettingVariable.totalBetsCoinAmount) + Number(newAmount);
+        if (!isSameOption) bettingVariable.betCountCoin += 1;
       }
 
       // Update the bet
@@ -1474,5 +1482,22 @@ export class BettingService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getRoundTotals(roundId: string) {
+    const bettingVariables = await this.bettingVariablesRepository.find({
+      where: { roundId },
+    });
+
+    const totalBetsTokenAmount = bettingVariables.reduce(
+      (sum, v) => sum + Number(v.totalBetsTokenAmount || 0),
+      0,
+    );
+    const totalBetsCoinAmount = bettingVariables.reduce(
+      (sum, v) => sum + Number(v.totalBetsCoinAmount || 0),
+      0,
+    );
+
+    return { totalBetsTokenAmount, totalBetsCoinAmount };
   }
 }

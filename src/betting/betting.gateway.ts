@@ -200,12 +200,22 @@ export class BettingGateway
       const backgroundOperations = (async () => {
         try {
           if (bettingVariable) {
+            // Fetch the latest betting variable from the DB before emitting
+            const updatedBettingVariable =
+              await this.bettingService.findBettingVariableById(
+                bettingVariable.id,
+              );
+            const roundId =
+              updatedBettingVariable.roundId ||
+              updatedBettingVariable.round?.id;
+            const roundTotals =
+              await this.bettingService.getRoundTotals(roundId);
             this.server
               .to(`stream_${bettingVariable.stream.id}`)
               .emit('bettingUpdate', {
-                bettingVariableId: bet.bettingVariableId,
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+                roundId,
+                totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+                totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
               });
 
             await this.sendPersonalizedPotentialAmounts(
@@ -269,11 +279,22 @@ export class BettingGateway
       const backgroundOperations = (async () => {
         try {
           if (bettingVariable) {
+            // Fetch the latest betting variable from the DB before emitting
+            const updatedBettingVariable =
+              await this.bettingService.findBettingVariableById(
+                bettingVariable.id,
+              );
+            const roundId =
+              updatedBettingVariable.roundId ||
+              updatedBettingVariable.round?.id;
+            const roundTotals =
+              await this.bettingService.getRoundTotals(roundId);
             this.server
               .to(`stream_${bettingVariable.stream.id}`)
               .emit('bettingUpdate', {
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+                roundId,
+                totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+                totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
               });
 
             await this.sendPersonalizedPotentialAmounts(
@@ -356,11 +377,22 @@ export class BettingGateway
       const backgroundOperations = (async () => {
         try {
           if (bettingVariable) {
+            // Fetch the latest betting variable from the DB before emitting
+            const updatedBettingVariable =
+              await this.bettingService.findBettingVariableById(
+                bettingVariable.id,
+              );
+            const roundId =
+              updatedBettingVariable.roundId ||
+              updatedBettingVariable.round?.id;
+            const roundTotals =
+              await this.bettingService.getRoundTotals(roundId);
             this.server
               .to(`stream_${bettingVariable.stream.id}`)
               .emit('bettingUpdate', {
-                totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-                totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
+                roundId,
+                totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+                totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
               });
 
             await this.sendPersonalizedPotentialAmounts(
