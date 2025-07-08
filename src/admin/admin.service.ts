@@ -120,8 +120,6 @@ export class AdminService {
         const winnerBetsFreeTokens = winningOptions.flatMap((v) =>
           (v.bets || []).filter((bet) => bet.currency === 'free_tokens'),
         );
-
-        console.log('Winner Bets (Free Tokens):', winnerBetsFreeTokens);
         const winnerBetsStreamCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter((bet) => bet.currency === 'stream_coins'),
         );
