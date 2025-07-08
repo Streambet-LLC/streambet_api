@@ -17,6 +17,7 @@ import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { WalletsService } from '../wallets/wallets.service';
+import { StreamService } from 'src/stream/stream.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -56,6 +57,7 @@ export class BettingGateway
     private readonly bettingService: BettingService,
     private readonly authService: AuthService,
     private readonly walletsService: WalletsService,
+    private readonly streamService: StreamService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -99,7 +101,7 @@ export class BettingGateway
     }
   }
 
-  handleDisconnect(client: Socket): void {
+  async handleDisconnect(client: Socket): Promise<void> {
     console.log(`Client disconnected: ${client.id}`);
   }
 
@@ -123,7 +125,7 @@ export class BettingGateway
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinStream')
-  handleJoinStream(
+  async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
@@ -134,13 +136,13 @@ export class BettingGateway
     client.emit('joinedStream', { streamId });
 
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
-
+    await this.streamService.incrementViewCount(streamId);
     return { event: 'joinedStream', data: { streamId } };
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('leaveStream')
-  handleLeaveStream(
+  async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
@@ -148,7 +150,7 @@ export class BettingGateway
     client.leave(`stream_${streamId}`);
 
     console.log(`User ${client.data.user.username} left stream ${streamId}`);
-
+    await this.streamService.decrementViewCount(streamId);
     return { event: 'leftStream', data: { streamId } };
   }
 

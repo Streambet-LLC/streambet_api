@@ -5,6 +5,8 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -23,6 +25,7 @@ export class StreamService {
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
     private walletService: WalletsService,
+    @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
   ) {}
   /**
@@ -285,7 +288,7 @@ export class StreamService {
           `Could not find a live stream with the specified ID. Please check the ID and try again.`,
         );
       }
-      let total = { tokenSum: 0, coinSum: 0 };
+      const total = { tokenSum: 0, coinSum: 0 };
 
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
@@ -305,7 +308,7 @@ export class StreamService {
           }
         }
       }
-      let {
+      const {
         tokenSum: roundTotalBetsTokenAmount,
         coinSum: roundTotalBetsCoinAmount,
       } = total;
@@ -438,5 +441,22 @@ export class StreamService {
     this.bettingGateway.emitStreamEnd(streamId);
 
     return savedStream;
+  }
+
+  async incrementViewCount(streamId: string) {
+    await this.streamsRepository
+      .createQueryBuilder()
+      .update(Stream)
+      .set({ viewerCount: () => 'viewerCount + 1' })
+      .where('id = :id', { id: streamId })
+      .execute();
+  }
+  async decrementViewCount(streamId: string) {
+    await this.streamsRepository
+      .createQueryBuilder()
+      .update(Stream)
+      .set({ viewerCount: () => 'viewerCount - 1' })
+      .where('id = :id', { id: streamId })
+      .execute();
   }
 }
