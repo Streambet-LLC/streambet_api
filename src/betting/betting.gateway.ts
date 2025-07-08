@@ -136,7 +136,15 @@ export class BettingGateway
     client.emit('joinedStream', { streamId });
 
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
-    await this.streamService.incrementViewCount(streamId);
+    try {
+      await this.streamService.incrementViewCount(streamId);
+    } catch (error) {
+      console.error(
+        `Failed to increment view count for stream ${streamId}:`,
+        error,
+      );
+    }
+
     return { event: 'joinedStream', data: { streamId } };
   }
 
@@ -150,7 +158,15 @@ export class BettingGateway
     client.leave(`stream_${streamId}`);
 
     console.log(`User ${client.data.user.username} left stream ${streamId}`);
-    await this.streamService.decrementViewCount(streamId);
+    try {
+      await this.streamService.decrementViewCount(streamId);
+    } catch (error) {
+      console.error(
+        `Failed to decrement view count for stream ${streamId}:`,
+        error,
+      );
+    }
+
     return { event: 'leftStream', data: { streamId } };
   }
 

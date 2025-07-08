@@ -444,19 +444,43 @@ export class StreamService {
   }
 
   async incrementViewCount(streamId: string) {
-    await this.streamsRepository
-      .createQueryBuilder()
-      .update(Stream)
-      .set({ viewerCount: () => 'viewerCount + 1' })
-      .where('id = :id', { id: streamId })
-      .execute();
+    try {
+      const result = await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ viewerCount: () => 'viewerCount + 1' })
+        .where('id = :id', { id: streamId })
+        .execute();
+
+      if (result.affected === 0) {
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+      }
+    } catch (error) {
+      Logger.error(
+        `Failed to increment view count for stream ${streamId}`,
+        error,
+      );
+      throw error;
+    }
   }
   async decrementViewCount(streamId: string) {
-    await this.streamsRepository
-      .createQueryBuilder()
-      .update(Stream)
-      .set({ viewerCount: () => 'viewerCount - 1' })
-      .where('id = :id', { id: streamId })
-      .execute();
+    try {
+      const result = await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ viewerCount: () => 'GREATEST(viewerCount - 1, 0)' })
+        .where('id = :id', { id: streamId })
+        .execute();
+
+      if (result.affected === 0) {
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+      }
+    } catch (error) {
+      Logger.error(
+        `Failed to decrement view count for stream ${streamId}`,
+        error,
+      );
+      throw error;
+    }
   }
 }
