@@ -120,6 +120,8 @@ export class AdminService {
         const winnerBetsFreeTokens = winningOptions.flatMap((v) =>
           (v.bets || []).filter((bet) => bet.currency === 'free_tokens'),
         );
+
+        console.log('Winner Bets (Free Tokens):', winnerBetsFreeTokens);
         const winnerBetsStreamCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter((bet) => bet.currency === 'stream_coins'),
         );
@@ -148,11 +150,11 @@ export class AdminService {
         winners.streamCoins = Array.from(winnerUsersMapStreamCoins.values());
         // Calculate winnerAmount (sum of payouts for this round's winning bets)
         const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
-          (sum, bet) => sum + (bet.payoutAmount || 0),
+          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
         const winnerAmountStreamCoins = winnerBetsStreamCoins.reduce(
-          (sum, bet) => sum + (bet.payoutAmount || 0),
+          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
         winnerAmount.freeTokens = winnerAmountFreeTokens
