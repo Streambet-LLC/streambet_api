@@ -124,14 +124,20 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
-      rounds: bettingRounds.map((round: any) => ({
-        roundId: round.id,
-        roundName: round.roundName ?? '',
-        options: (round.bettingVariables ?? []).map((variable: any) => ({
-          id: variable.id,
-          option: variable.name,
+      rounds: (bettingRounds ?? [])
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )
+        .map((round: any) => ({
+          roundId: round.id,
+          roundName: round.roundName ?? '',
+          createdAt: round.createdAt ?? '',
+          options: (round.bettingVariables ?? []).map((variable: any) => ({
+            id: variable.id,
+            option: variable.name,
+          })),
         })),
-      })),
     };
   }
 
