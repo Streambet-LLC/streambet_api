@@ -852,21 +852,43 @@ export class BettingService {
     }
   }
   private async creditAmountVoidCase(bets) {
+    if (!bets || !Array.isArray(bets) || bets.length === 0) {
+      console.log('No bets to refund in void case');
+      return;
+    }
+
     for (const bet of bets) {
-      const userId = bet.userId;
-      const amount = Number(bet.amount);
-      const currency = bet.currency;
-      const transactionType = TransactionType.REFUND;
-      const description = `${amount} has been refunded as the bet was closed with no winners.`;
-      await this.walletsService.updateBalance(
-        userId,
-        amount,
-        currency,
-        transactionType,
-        description,
-      );
+      try {
+        if (!bet || !bet.userId || !bet.amount || !bet.currency) {
+          console.log('Invalid bet found in void case refund:', bet);
+          continue;
+        }
+
+        const userId = bet.userId;
+        const amount = Number(bet.amount);
+        const currency = bet.currency;
+        const transactionType = TransactionType.REFUND;
+        const description = `${amount} ${currency} refunded - bet round closed with no winners.`;
+
+        await this.walletsService.updateBalance(
+          userId,
+          amount,
+          currency,
+          transactionType,
+          description,
+        );
+
+        // Update bet status within transaction
+      } catch (error) {
+        console.error(
+          `Error processing void case refund for bet ${bet?.id}:`,
+          error,
+        );
+        throw error;
+      }
     }
   }
+
   private validateRoundLocked(bettingVariable: BettingVariable) {
     if (!bettingVariable) {
       throw new BadRequestException('Betting variable is required');
