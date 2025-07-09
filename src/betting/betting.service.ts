@@ -20,7 +20,10 @@ import {
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
-import { CurrencyType } from '../wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  TransactionType,
+} from '../wallets/entities/transaction.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
@@ -809,6 +812,9 @@ export class BettingService {
       // Process losing bets
       if (losingBets.length > 0) {
         await this.processLosingBets(queryRunner, losingBets);
+        if (winningTokenBets.length === 0 || winningCoinBets.length === 0) {
+          await this.creditAmountVoidCase(losingTokenBets);
+        }
       }
 
       await this.closeRound(queryRunner, bettingVariable);
@@ -845,7 +851,22 @@ export class BettingService {
       await queryRunner.release();
     }
   }
-
+  private async creditAmountVoidCase(bets) {
+    for (const bet of bets) {
+      const userId = bet.userId;
+      const amount = Number(bet.amount);
+      const currency = bet.currency;
+      const transactionType = TransactionType.REFUND;
+      const description = `${amount} has been refunded as the bet was closed with no winners.`;
+      await this.walletsService.updateBalance(
+        userId,
+        amount,
+        currency,
+        transactionType,
+        description,
+      );
+    }
+  }
   private validateRoundLocked(bettingVariable: BettingVariable) {
     if (!bettingVariable) {
       throw new BadRequestException('Betting variable is required');
