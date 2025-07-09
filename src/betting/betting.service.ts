@@ -812,8 +812,11 @@ export class BettingService {
       // Process losing bets
       if (losingBets.length > 0) {
         await this.processLosingBets(queryRunner, losingBets);
-        if (winningTokenBets.length === 0 || winningCoinBets.length === 0) {
+        if (winningTokenBets.length === 0) {
           await this.creditAmountVoidCase(losingTokenBets);
+        }
+        if (winningCoinBets.length === 0) {
+          await this.creditAmountVoidCase(losingCoinBets);
         }
       }
 
