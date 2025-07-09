@@ -127,8 +127,6 @@ export class AdminService {
         // Remove duplicate users (in case a user bet multiple times)
         const winnerUsersMapFreeTokens = new Map();
         for (const bet of winnerBetsFreeTokens) {
-          console.log(bet, 'bet');
-
           if (
             bet.user &&
             !winnerUsersMapFreeTokens.has(bet.user.id) &&
@@ -151,11 +149,8 @@ export class AdminService {
             });
           }
         }
-
         winners.freeTokens = Array.from(winnerUsersMapFreeTokens.values());
         winners.streamCoins = Array.from(winnerUsersMapStreamCoins.values());
-        console.log(winners, 'winners');
-
         // Calculate winnerAmount (sum of payouts for this round's winning bets)
         const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
