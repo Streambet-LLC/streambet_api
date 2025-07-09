@@ -15,6 +15,7 @@ import {
 } from 'src/wallets/entities/transaction.entity';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { AddFreeTokenDto } from './dto/free-token-update.dto';
+import { BetStatus } from 'src/enums/bet-status.enum';
 
 @Injectable()
 export class AdminService {
@@ -126,7 +127,13 @@ export class AdminService {
         // Remove duplicate users (in case a user bet multiple times)
         const winnerUsersMapFreeTokens = new Map();
         for (const bet of winnerBetsFreeTokens) {
-          if (bet.user && !winnerUsersMapFreeTokens.has(bet.user.id)) {
+          console.log(bet, 'bet');
+
+          if (
+            bet.user &&
+            !winnerUsersMapFreeTokens.has(bet.user.id) &&
+            bet.status === BetStatus.Won
+          ) {
             winnerUsersMapFreeTokens.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
@@ -144,8 +151,11 @@ export class AdminService {
             });
           }
         }
+
         winners.freeTokens = Array.from(winnerUsersMapFreeTokens.values());
         winners.streamCoins = Array.from(winnerUsersMapStreamCoins.values());
+        console.log(winners, 'winners');
+
         // Calculate winnerAmount (sum of payouts for this round's winning bets)
         const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
