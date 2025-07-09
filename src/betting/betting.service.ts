@@ -813,10 +813,10 @@ export class BettingService {
       if (losingBets.length > 0) {
         await this.processLosingBets(queryRunner, losingBets);
         if (winningTokenBets.length === 0) {
-          await this.creditAmountVoidCase(losingTokenBets);
+          await this.creditAmountVoidCase(queryRunner, losingTokenBets);
         }
         if (winningCoinBets.length === 0) {
-          await this.creditAmountVoidCase(losingCoinBets);
+          await this.creditAmountVoidCase(queryRunner, losingCoinBets);
         }
       }
 
@@ -854,7 +854,7 @@ export class BettingService {
       await queryRunner.release();
     }
   }
-  private async creditAmountVoidCase(bets) {
+  private async creditAmountVoidCase(queryRunner, bets) {
     if (!bets || !Array.isArray(bets) || bets.length === 0) {
       console.log('No bets to refund in void case');
       return;
@@ -880,7 +880,7 @@ export class BettingService {
           transactionType,
           description,
         );
-
+        await queryRunner.manager.save(bet);
         // Update bet status within transaction
       } catch (error) {
         console.error(
