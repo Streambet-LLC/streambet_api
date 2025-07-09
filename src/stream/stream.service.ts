@@ -428,14 +428,14 @@ export class StreamService {
       throw new NotFoundException(`Stream with ID ${streamId} not found`);
     }
     // Check all rounds are CLOSED or CANCELLED
-    const allRoundsTerminal = (stream.bettingRounds || []).every(
+    const allRoundsTerminal = (stream.bettingRounds || []).some(
       (round) =>
-        round.status === BettingRoundStatus.CLOSED ||
-        round.status === BettingRoundStatus.CANCELLED,
+        round.status === BettingRoundStatus.OPEN ||
+        round.status === BettingRoundStatus.LOCKED,
     );
-    if (!allRoundsTerminal) {
+    if (allRoundsTerminal) {
       throw new BadRequestException(
-        'Cannot end stream: All rounds must be CLOSED or CANCELLED.',
+        'You can’t end the stream yet. Please finalize all bet rounds first.',
       );
     }
     // Set stream status to ENDED
