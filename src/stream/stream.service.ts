@@ -435,7 +435,7 @@ export class StreamService {
     );
     if (allRoundsTerminal) {
       throw new BadRequestException(
-        'You can’t end the stream yet. Please finalize all bet rounds first.',
+        'Cannot end this stream: All rounds must be closed or cancelled',
       );
     }
     // Set stream status to ENDED
