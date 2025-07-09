@@ -196,15 +196,28 @@ export class StreamService {
         .addSelect('s.status', 'streamStatus')
         .addSelect('s.viewerCount', 'viewerCount')
         .addSelect(
-          `
-          CASE
-            WHEN COUNT(r.id) > 0 AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) = COUNT(r.id) THEN '${BettingRoundStatus.CANCELLED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CLOSED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0 THEN '${BettingRoundStatus.OPEN}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.LOCKED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CREATED}'
-            ELSE 'no bet round'
-          END
+          `CASE
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
+    THEN '${BettingRoundStatus.OPEN}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
+    THEN '${BettingRoundStatus.LOCKED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CREATED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CLOSED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CANCELLED}'
+
+  ELSE 'no bet round'
+END
           `,
           'bettingRoundStatus',
         )
@@ -435,7 +448,7 @@ export class StreamService {
     );
     if (allRoundsTerminal) {
       throw new BadRequestException(
-        'Cannot end this stream: All rounds must be closed or cancelled',
+        'Please end or cancel all active rounds before ending the stream',
       );
     }
     // Set stream status to ENDED
