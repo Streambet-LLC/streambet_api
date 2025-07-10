@@ -13,6 +13,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Transform, TransformFnParams } from 'class-transformer';
 import { AdminFilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 
+export class UserIdDto {
+  @ApiProperty({
+    description: 'Id of the user',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  userId?: string;
+}
+
 export class ProfileUpdateDto {
   @ApiProperty({
     description: 'Name of the user',

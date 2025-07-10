@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
-import { StreamStatus } from '../entities/stream.entity';
+import { CurrencyType } from '../entities/transaction.entity';
 
-export class StreamFilterDto extends AdminFilterDto {
+export class TransactionFilterDto extends AdminFilterDto {
   @ApiProperty({
     description: `
   Filter params pass the data as key value pair
@@ -18,10 +18,11 @@ export class StreamFilterDto extends AdminFilterDto {
     default: '{}',
   })
   @IsString()
+  @IsOptional()
   public filter: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: Boolean,
     default: true,
     description:
       'Pass with parameter false if you want the results without pagination',
@@ -34,12 +35,11 @@ export class StreamFilterDto extends AdminFilterDto {
   pagination?: boolean;
 
   @ApiPropertyOptional({
-    enum: StreamStatus,
-    default: 'active',
-    description: `available streamStatus -> live and scheduled`,
-    required: false,
+    enum: CurrencyType,
+    default: 'stream_coins',
+    description: `available  currencyType -> free_tokens and stream_coins`,
   })
   @IsOptional()
-  @IsEnum(StreamStatus)
-  streamStatus?: string;
+  @IsEnum(CurrencyType)
+  currencyType?: CurrencyType;
 }

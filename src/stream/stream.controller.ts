@@ -5,6 +5,8 @@ import {
   Request,
   Query,
   HttpStatus,
+  Param,
+  Body,
 } from '@nestjs/common';
 import { StreamService } from './stream.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,8 +17,12 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiOkResponse,
+  ApiParam,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { StreamFilterDto } from './dto/list-stream.dto';
+import { Stream } from './entities/stream.entity';
+import { UserIdDto } from 'src/users/dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -29,16 +35,18 @@ export class StreamController {
   constructor(private readonly streamService: StreamService) {}
 
   /**
-   * Retrieves a list of live or filtered streams for the homepage, with optional pagination.
+   * Retrieves a paginated list of streams for the home page view.
+   * Applies optional filters such as stream status and sorting based on the provided DTO.
+   * Selects limited fields (id, name, thumbnailUrl) for performance optimization.
+   * Handles pagination with a default range of [0, 24] if not specified.
+   * Logs and throws an HttpException in case of internal server errors.
    *
-   * @param userFilterDto - The filter and pagination options, including:
-   *   - streamStatus: (optional) The status of streams to filter by (e.g., 'live').
-   *   - range: (optional) A JSON string representing the offset and limit for pagination.
-   *   - pagination: (optional) A boolean to enable or disable pagination (defaults to true).
-   *
-   * @returns An object containing:
-   *   - data: A list of raw stream records, each with id, streamName, and thumbnailURL.
-   *   - total: The total number of matching streams.
+   * @param streamFilterDto - DTO containing optional filters: status, sort, and pagination range.
+   * @returns A Promise resolving to an object with:
+   *          - data: Array of stream records with selected fields.
+   *          - total: Total number of matching stream records.
+   * @throws HttpException - If an error occurs during query execution.
+   * @author Reshma M S
    */
   @ApiOperation({
     summary: 'List live and sheduled streams for home page',
@@ -46,8 +54,6 @@ export class StreamController {
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
   @ApiOkResponse({ type: StreamFilterDto })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Get('home')
   async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
     const { total, data } =
@@ -57,6 +63,53 @@ export class StreamController {
       message: 'Successfully Listed',
       data,
       total,
+    };
+  }
+  /**
+   * Retrieves a stream by its ID with selected fields (id, kickEmbedUrl, name).
+   * Throws a NotFoundException if no stream is found with the given ID.
+   * Logs and throws an HttpException in case of any internal errors during retrieval.
+   *
+   * @param id - The unique identifier of the stream to retrieve.
+   * @returns A Promise resolving to the stream details.
+   * @throws NotFoundException | HttpException
+   * @author Reshma M S
+   */
+  @ApiOperation({
+    summary: 'Get stream by ID',
+    description: 'Public API for listing stream details based on stream id',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stream details retrieved successfully',
+  })
+  @Get('/:id')
+  async findStreamById(@Param('id') id: string) {
+    const stream = await this.streamService.findStreamById(id);
+    return {
+      message: 'Stream details retrieved successfully',
+      status: HttpStatus.OK,
+      data: stream,
+    };
+  }
+  @ApiOperation({ summary: 'Get bet round details by stream id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Stream details retrieved successfully',
+  })
+  @Get('bet-round/:streamId')
+  async findBetRoundDetailsByStreamId(
+    @Param('streamId') streamId: string,
+    @Query() userIdDto: UserIdDto,
+  ) {
+    const stream = await this.streamService.findBetRoundDetailsByStreamId(
+      streamId,
+      userIdDto?.userId,
+    );
+    return {
+      message: 'Stream details retrieved successfully',
+      status: HttpStatus.OK,
+      data: stream,
     };
   }
 }

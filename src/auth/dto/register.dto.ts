@@ -54,10 +54,13 @@ export class RegisterDto {
   @MinLength(8, {
     message: 'Password must be at least 8 characters long',
   })
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
-    message:
-      'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
-  })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~])[A-Za-z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/,
+    {
+      message:
+        'Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character',
+    },
+  )
   password: string;
 
   @ApiProperty({
@@ -111,6 +114,13 @@ export class RegisterDto {
   @IsDate()
   @IsNotEmpty()
   dob: Date;
+
+  @ApiProperty({
+    description: 'redirected link',
+  })
+  @IsOptional()
+  @IsString()
+  redirect?: string;
 }
 
 export class UserRegistrationResponseDto {

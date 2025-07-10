@@ -1,32 +1,35 @@
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Bet } from './bet.entity';
-import { Stream } from 'src/stream/entities/stream.entity';
-
-export enum BettingVariableStatus {
-  ACTIVE = 'active',
-  LOCKED = 'locked',
-  WINNER = 'winner',
-  LOSER = 'loser',
-  CANCELED = 'canceled',
-}
+import { Stream } from '../../stream/entities/stream.entity';
+import { BettingRound } from './betting-round.entity';
+import { BettingVariableStatus } from '../../enums/betting-variable-status.enum';
 
 @Entity('betting_variables')
 export class BettingVariable extends BaseEntity {
-  @Column()
-  name: string;
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
   @ManyToOne(() => Stream, (stream) => stream.bettingVariables, {
     onDelete: 'CASCADE',
   })
-  @JoinColumn()
+  @JoinColumn({ name: 'stream_id' })
   stream: Stream;
 
-  @Column({ type: 'uuid' })
+  @Column({ name: 'stream_id' })
   streamId: string;
+
+  @ManyToOne(() => BettingRound, (round) => round.bettingVariables, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'round_id' })
+  round: BettingRound;
+
+  @Column({ name: 'round_id', nullable: true })
+  roundId: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  name: string;
+
+  @Column({ type: 'boolean', default: false })
+  is_winning_option: boolean;
 
   @Column({
     type: 'enum',
@@ -35,11 +38,17 @@ export class BettingVariable extends BaseEntity {
   })
   status: BettingVariableStatus;
 
-  @Column({ type: 'integer', default: 0 })
-  totalBetsAmount: number;
+  @Column({ type: 'bigint', default: 0 })
+  totalBetsTokenAmount: number;
 
-  @Column({ type: 'integer', default: 0 })
-  betCount: number;
+  @Column({ type: 'bigint', default: 0 })
+  totalBetsCoinAmount: number;
+
+  @Column({ type: 'int', default: 0 })
+  betCountFreeToken: number;
+
+  @Column({ type: 'int', default: 0 })
+  betCountCoin: number;
 
   @OneToMany(() => Bet, (bet) => bet.bettingVariable)
   bets: Bet[];

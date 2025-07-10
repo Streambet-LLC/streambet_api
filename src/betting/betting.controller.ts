@@ -11,14 +11,20 @@ import {
   ParseBoolPipe,
   DefaultValuePipe,
   HttpStatus,
+  Patch,
 } from '@nestjs/common';
+import { ApiResponse } from '../common/types/api-response.interface';
 import { BettingService } from './betting.service';
-import { PlaceBetDto } from './dto/place-bet.dto';
+import {
+  CurrencyTypeDto,
+  EditBetDto,
+  PlaceBetDto,
+  RoundIdDto,
+} from './dto/place-bet.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
 import { User } from '../users/entities/user.entity';
-import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
   ApiOperation,
@@ -28,7 +34,9 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
+import { CancelBetDto } from './dto/cancel-bet.dto';
 
+// Define ApiResponse
 // Define the request type with user property
 interface RequestWithUser extends Request {
   user: User;
@@ -125,7 +133,6 @@ export class BettingController {
   }
 
   @ApiOperation({ summary: 'Cancel a bet' })
-  @ApiParam({ name: 'id', description: 'Bet ID' })
   @SwaggerApiResponse({
     status: 200,
     description: 'Bet cancelled successfully',
@@ -139,12 +146,12 @@ export class BettingController {
   @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete('bets/:id')
+  @Delete('bets/cancel')
   async cancelBet(
     @Request() req: RequestWithUser,
-    @Param('id') id: string,
-  ): Promise<ApiResponse> {
-    const bet = await this.bettingService.cancelBet(req.user.id, id);
+    @Body() cancelBetDto: CancelBetDto,
+  ) {
+    const bet = await this.bettingService.cancelBet(req.user.id, cancelBetDto);
     return {
       message: 'Bet cancelled successfully',
       status: HttpStatus.OK,
@@ -172,12 +179,64 @@ export class BettingController {
     @Request() req: RequestWithUser,
     @Query('active', new DefaultValuePipe(false), ParseBoolPipe)
     active: boolean,
-  ): Promise<ApiResponse> {
+  ) {
     const bets = await this.bettingService.getUserBets(req.user.id, active);
     return {
       message: 'User betting history retrieved successfully',
       status: HttpStatus.OK,
       data: bets,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get Potential winning amount for a round' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('potentialAmount/:roundId')
+  async findPotentialAmount(
+    @Param('roundId') roundId: string,
+    @Request() req: RequestWithUser,
+  ) {
+    const data = await this.bettingService.findPotentialAmount(
+      req.user.id,
+      roundId,
+    );
+
+    if (data === null) {
+      return {
+        message: 'No matching bet found for this user',
+        status: HttpStatus.OK,
+        data: null,
+      };
+    }
+
+    return {
+      message: 'Potential amount retrieved successfully',
+      status: HttpStatus.OK,
+      data: data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Edit a bet' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Bet edited successfully',
+    type: Bet,
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid bet data' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('edit-bet')
+  async editBet(
+    @Request() req: RequestWithUser,
+    @Body() editBetDto: EditBetDto,
+  ): Promise<ApiResponse> {
+    const bet = await this.bettingService.editBet(req.user.id, editBetDto);
+    return {
+      message: 'Bet edited successfully',
+      status: HttpStatus.OK,
+      data: bet,
     };
   }
 }

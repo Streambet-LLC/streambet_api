@@ -6,6 +6,7 @@ import {
   Query,
   ParseIntPipe,
   DefaultValuePipe,
+  HttpStatus,
 } from '@nestjs/common';
 import { WalletsService } from './wallets.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
+import { TransactionFilterDto } from './dto/transaction.list.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -45,36 +47,39 @@ export class WalletsController {
   }
 
   @ApiOperation({ summary: "Get user's transaction history" })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Maximum number of transactions to retrieve',
-  })
-  @ApiQuery({
-    name: 'offset',
-    required: false,
-    type: Number,
-    description: 'Number of transactions to skip',
-  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
     status: 200,
     description: 'Transaction history retrieved successfully',
-    type: [Transaction],
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 200 },
+        message: { type: 'string', example: 'Successfully Listed' },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/Transaction' },
+        },
+        total: { type: 'number', example: 100 },
+      },
+    },
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('transactions')
   async getTransactions(
     @Request() req: RequestWithUser,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
-  ): Promise<Transaction[]> {
-    return this.walletsService.getTransactionHistory(
+    @Query() transactionFilterDto: TransactionFilterDto,
+  ) {
+    const { data, total } = await this.walletsService.getAllTransactionHistory(
+      transactionFilterDto,
       req.user.id,
-      limit,
-      offset,
     );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
   }
 }

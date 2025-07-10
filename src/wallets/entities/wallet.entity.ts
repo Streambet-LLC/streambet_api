@@ -11,10 +11,10 @@ export class Wallet extends BaseEntity {
   @Column({ type: 'uuid' })
   userId: string;
 
-  @Column({ type: 'integer', default: 1000 })
+  @Column({ type: 'bigint', default: 1000 })
   freeTokens: number;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({ type: 'bigint', default: 0 })
   streamCoins: number;
 
   @Column({ type: 'boolean', default: false })
