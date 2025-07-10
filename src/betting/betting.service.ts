@@ -1097,9 +1097,9 @@ export class BettingService {
         // Equal share for all winners (not proportional to bet amount)
         const equalShare = 1 / winningTokenBets.length;
 
-        // Calculate share from losing pool Including decimal precision
-        const shareFromLosingPool = Number((Number(totalLosingTokenAmount) * equalShare).toFixed(3));
-        const payout = shareFromLosingPool + Number(bet.amount);
+        const payout =
+          Math.floor(Number(totalLosingTokenAmount) * equalShare) +
+          Number(bet.amount);
 
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
