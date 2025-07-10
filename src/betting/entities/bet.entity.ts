@@ -48,7 +48,7 @@ export class Bet extends BaseEntity {
   @Column({ type: 'bigint', default: 0 })
   payout: number;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 3 })
   payoutAmount: number;
 
   @Column({ type: 'timestamp', nullable: true })
