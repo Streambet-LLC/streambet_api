@@ -305,7 +305,7 @@ export class WalletsService {
         balanceAfter: amount,
         description,
       });
-      this.transactionsRepository.save(trans);
+      await this.transactionsRepository.save(trans);
     }
 
     return await this.findByUserId(userId);
