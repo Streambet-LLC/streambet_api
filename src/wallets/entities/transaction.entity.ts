@@ -11,6 +11,7 @@ export enum TransactionType {
   REFUND = 'Refund',
   INITIAL_CREDIT = 'Initial credit',
   ADMIN_CREDIT = 'Admin credit',
+  ADMIN_DEBITED = 'Admin debited',
 }
 
 export enum CurrencyType {
