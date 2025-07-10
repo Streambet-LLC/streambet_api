@@ -1,21 +1,23 @@
 import {
-  IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
-  IsOptional,
+  IsEnum,
   IsDateString,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { StreamStatus } from '../../stream/entities/stream.entity';
 
-export class CreateStreamDto {
+export class UpdateStreamDto {
   @ApiProperty({
     description: 'The name of the stream',
     example: 'Champions League Final - Real Madrid vs Barcelona',
     type: 'string',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @ApiProperty({
     description: 'A description of the stream',
@@ -32,9 +34,10 @@ export class CreateStreamDto {
     example: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
     type: 'string',
     format: 'uri',
+    required: false,
   })
   @IsUrl()
-  @IsNotEmpty()
+  @IsOptional()
   embeddedUrl?: string;
 
   @ApiProperty({
@@ -49,6 +52,16 @@ export class CreateStreamDto {
   thumbnailUrl?: string;
 
   @ApiProperty({
+    description: 'Status of the stream',
+    enum: StreamStatus,
+    example: StreamStatus.LIVE,
+    required: false,
+  })
+  @IsEnum(StreamStatus)
+  @IsOptional()
+  status?: StreamStatus;
+
+  @ApiProperty({
     description: 'Scheduled start time of the stream',
     example: '2024-01-01T20:00:00Z',
     type: 'string',
@@ -58,15 +71,4 @@ export class CreateStreamDto {
   @IsDateString()
   @IsOptional()
   scheduledStartTime?: string;
-
-  @ApiProperty({
-    description: 'End time of the stream',
-    example: '2024-01-01T22:00:00Z',
-    type: 'string',
-    format: 'date-time',
-    required: false,
-  })
-  @IsDateString()
-  @IsOptional()
-  endTime?: string;
 }

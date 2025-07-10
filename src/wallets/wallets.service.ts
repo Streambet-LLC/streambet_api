@@ -2,6 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  HttpException,
+  Logger,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -11,6 +14,8 @@ import {
   TransactionType,
   CurrencyType,
 } from './entities/transaction.entity';
+import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { TransactionFilterDto } from './dto/transaction.list.dto';
 
 @Injectable()
 export class WalletsService {
@@ -61,7 +66,7 @@ export class WalletsService {
       userId,
       amount,
       CurrencyType.FREE_TOKENS,
-      TransactionType.SYSTEM_ADJUSTMENT,
+      TransactionType.REFUND,
       description,
     );
   }
@@ -70,12 +75,17 @@ export class WalletsService {
     userId: string,
     amount: number,
     description: string,
+    type: string,
   ): Promise<Wallet> {
+    let addType = TransactionType.PURCHASE;
+    if (type === 'refund') {
+      addType = TransactionType.REFUND;
+    }
     return this.updateBalance(
       userId,
       amount,
       CurrencyType.STREAM_COINS,
-      TransactionType.PURCHASE,
+      addType,
       description,
     );
   }
@@ -139,17 +149,17 @@ export class WalletsService {
       // Calculate new balance
       let newBalance: number;
       if (currencyType === CurrencyType.FREE_TOKENS) {
-        newBalance = wallet.freeTokens + amount;
+        newBalance = Number(wallet.freeTokens) + Number(amount);
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient free tokens');
         }
-        wallet.freeTokens = newBalance;
+        wallet.freeTokens = Number(newBalance);
       } else {
-        newBalance = wallet.streamCoins + amount;
+        newBalance = Number(wallet.streamCoins) + Number(amount);
         if (newBalance < 0) {
           throw new BadRequestException('Insufficient stream coins');
         }
-        wallet.streamCoins = newBalance;
+        wallet.streamCoins = Number(newBalance);
       }
 
       // Save the updated wallet
@@ -182,17 +192,77 @@ export class WalletsService {
     }
   }
 
-  async getTransactionHistory(
+  async getAllTransactionHistory(
+    transactionFilterDto: TransactionFilterDto,
     userId: string,
-    limit: number = 20,
-    offset: number = 0,
-  ): Promise<Transaction[]> {
-    return this.transactionsRepository.find({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: offset,
-    });
+  ) {
+    let sort: Sort;
+    let filter: FilterDto;
+    let range: Range = [0, 10];
+
+    try {
+      try {
+        sort = transactionFilterDto.sort
+          ? JSON.parse(transactionFilterDto.sort)
+          : undefined;
+        filter = transactionFilterDto.filter
+          ? JSON.parse(transactionFilterDto.filter)
+          : undefined;
+        range = transactionFilterDto.range
+          ? JSON.parse(transactionFilterDto.range)
+          : [0, 10];
+      } catch (parseError) {
+        throw new BadRequestException('Invalid filter format');
+      }
+
+      const { pagination = true, currencyType } = transactionFilterDto;
+
+      const transactionQB = this.transactionsRepository
+        .createQueryBuilder('t')
+        .where('t.userId = :userId', { userId });
+      if (filter?.q) {
+        transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
+          q: `%${filter.q}%`,
+        });
+      }
+      if (currencyType) {
+        transactionQB.andWhere(`t.currencyType = :currencyType`, {
+          currencyType,
+        });
+      }
+      if (sort) {
+        const [sortColumn, sortOrder] = sort;
+        transactionQB.orderBy(
+          `t.${sortColumn}`,
+          sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+        );
+      }
+
+      const total = await transactionQB.getCount();
+      if (pagination && range) {
+        const [offset, limit] = range;
+        transactionQB.offset(offset).limit(limit);
+      }
+      transactionQB.select([
+        't.id AS transId',
+        't.createdAt AS createdAt',
+        't.updatedAt AS updatedAt',
+        't.userId AS userId',
+        't.type AS type',
+        't.currencyType AS currencyType',
+        't.amount AS amount',
+        't.balanceAfter AS balanceAfter',
+        't.description AS description',
+      ]);
+      const data = await transactionQB.getRawMany();
+      return { data, total };
+    } catch (e) {
+      Logger.error('Unable to list stream details', e);
+      throw new HttpException(
+        `Unable to retrieve transaction details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   private async createTransaction(
@@ -221,15 +291,28 @@ export class WalletsService {
 
     if (currencyType === CurrencyType.FREE_TOKENS) {
       await this.walletsRepository.update(wallet.id, { freeTokens: amount });
+      const addedAmount = amount - wallet.freeTokens;
+
+      const transactionType =
+        addedAmount >= 0
+          ? TransactionType.ADMIN_CREDIT
+          : TransactionType.ADMIN_DEBITED;
+      const trans = this.transactionsRepository.create({
+        userId,
+        type: transactionType,
+        currencyType,
+        amount: addedAmount,
+        balanceAfter: amount,
+        description,
+      });
+      await this.transactionsRepository.save(trans);
     }
-    this.transactionsRepository.create({
-      userId,
-      type: transactionType,
-      currencyType,
-      amount: wallet.freeTokens,
-      balanceAfter: amount,
-      description,
-    });
+
     return await this.findByUserId(userId);
+  }
+  async walletDetailsByUserId(userId: string) {
+    return await this.walletsRepository.findOne({
+      where: { userId },
+    });
   }
 }

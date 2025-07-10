@@ -136,6 +136,7 @@ export class AuthController {
     description: 'Unauthorized - Invalid or expired refresh token',
   })
   @ApiBody({ type: RefreshTokenDto })
+  @ApiBearerAuth()
   @UseGuards(RefreshTokenGuard)
   @Post('refresh')
   async refreshToken(@Request() req: RequestWithUser) {
@@ -181,7 +182,7 @@ export class AuthController {
     };
   }
 
-  @ApiOperation({ summary: 'Get the current user profile' })
+  @ApiOperation({ summary: 'Get the Old user profile' })
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',

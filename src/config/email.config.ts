@@ -11,7 +11,6 @@ export default registerAs('email', () => ({
   APPLICATION_HOST: process.env.APPLICATION_HOST || '',
   HOST_URL: process.env.APP_HOST_URL || '',
   HOSTED: process.env.HOSTED,
-
   schemaMapping: {
     account_verification: {
       templatePath: './src/templates/account_verification.ejs',
@@ -20,6 +19,10 @@ export default registerAs('email', () => ({
     password_reset: {
       templatePath: './src/templates/password_reset.ejs',
       schemaPath: './src/templates/password_reset.json',
+    },
+    welcome: {
+      templatePath: './src/templates/welcome.ejs',
+      schemaPath: './src/templates/welcome.json',
     },
   },
 }));

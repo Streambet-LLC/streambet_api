@@ -13,9 +13,6 @@ export class PaymentsService {
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
-      {
-        apiVersion: '2025-05-28.basil',
-      },
     );
   }
 
@@ -105,6 +102,7 @@ export class PaymentsService {
           userId,
           coins,
           `Purchase of ${packageName} coin package`,
+          'purchase',
         );
       }
     }
@@ -172,6 +170,7 @@ export class PaymentsService {
           userId,
           coins,
           `Auto-reload purchase of ${coins} stream coins`,
+          'purchase',
         );
 
         return { success: true, coins };

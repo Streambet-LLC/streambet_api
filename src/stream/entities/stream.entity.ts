@@ -1,4 +1,5 @@
-import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { BettingVariable } from '../../betting/entities/betting-variable.entity';
+import { BettingRound } from '../../betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 
@@ -16,16 +17,19 @@ export class Stream extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column()
-  kickEmbedUrl: string;
+  @Column({ nullable: true })
+  embeddedUrl: string;
 
   @Column({ nullable: true })
   thumbnailUrl: string;
 
+  @Column({ nullable: true })
+  platformName: string;
+
   @Column({
     type: 'enum',
     enum: StreamStatus,
-    default: StreamStatus.SCHEDULED,
+    default: StreamStatus.LIVE,
   })
   status: StreamStatus;
 
@@ -43,4 +47,7 @@ export class Stream extends BaseEntity {
 
   @OneToMany(() => BettingVariable, (variable) => variable.stream)
   bettingVariables: BettingVariable[];
+
+  @OneToMany(() => BettingRound, (round) => round.stream)
+  bettingRounds: BettingRound[];
 }
