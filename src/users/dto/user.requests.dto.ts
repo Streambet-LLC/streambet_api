@@ -178,3 +178,23 @@ export class UserUpdateDto {
   @IsString()
   userId: string;
 }
+
+export class NotificationSettingsUpdateDto {
+  @ApiProperty({
+    description: 'Enable or disable email notifications',
+    example: true,
+    required: true,
+  })
+  @IsDefined()
+  @IsBoolean()
+  emailNotification: boolean;
+
+  @ApiProperty({
+    description: 'Enable or disable in-app notifications',
+    example: false,
+    required: true,
+  })
+  @IsDefined()
+  @IsBoolean()
+  inAppNotification: boolean;
+}

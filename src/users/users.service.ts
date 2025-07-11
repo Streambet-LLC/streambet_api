@@ -4,6 +4,7 @@ import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
+  NotificationSettingsUpdateDto,
   ProfileUpdateDto,
   UserFilterDto,
   UserUpdateDto,
@@ -232,5 +233,34 @@ export class UsersService {
     await this.usersRepository.update(userId, {
       isVerify: true,
     });
+  }
+
+  /**
+   * Updates the notification preferences of a user.
+   * @param userId - The ID of the user whose notification settings are to be updated.
+   * @param notificationSettingsUpdateDto - The new notification settings.
+   * @returns The updated user details.
+   */
+  async updateNotificationSettings(
+    userId: string,
+    notificationSettingsUpdateDto: NotificationSettingsUpdateDto
+  ): Promise<UserResponseDto> {
+    // Find the user by ID
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Update the notificationPreferences field
+    user.notificationPreferences = {
+      ...user.notificationPreferences,
+      ...notificationSettingsUpdateDto,
+    };
+
+    // Save the updated user
+    await this.usersRepository.save(user);
+
+    // return sanitized user data
+    return this.findOne(userId);
   }
 }

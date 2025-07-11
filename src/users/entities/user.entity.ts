@@ -8,6 +8,11 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+export class NotificationPreference {
+    emailNotification: boolean;
+    inAppNotification: boolean;
+}
+
 @Entity('users')
 export class User extends BaseEntity {
   @Column({ length: 255, type: 'varchar', nullable: true })
@@ -47,12 +52,15 @@ export class User extends BaseEntity {
   googleId: string;
 
   @Column({
-    nullable: true,
+    nullable: false,
     type: 'jsonb',
-    default: {},
+    default: {
+      emailNotification: true,
+      inAppNotification: true,
+    },
     name: 'notification_preferences',
   })
-  notificationPreferences: string;
+  notificationPreferences: NotificationPreference;
 
   @Column({
     type: 'timestamp',
