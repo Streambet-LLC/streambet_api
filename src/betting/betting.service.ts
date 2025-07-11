@@ -1464,10 +1464,13 @@ export class BettingService {
             },
             relations: ['round'],
           });
+          // This is to prevent locking a round with no competition
           if (similarBets.length <= 1) {
-            throw new NotFoundException(
-              `Cannot lock the bet — only one user has placed a bet`,
-            );
+            let message =
+              similarBets.length === 1
+                ? `Cannot lock the bet — only one user has placed a bet`
+                : `Cannot lock the bet — no user has placed a bet`;
+            throw new NotFoundException(message);
           }
 
           round.status = newStatus as any;
