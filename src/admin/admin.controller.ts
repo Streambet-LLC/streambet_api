@@ -11,7 +11,6 @@ import {
   HttpStatus,
   Query,
   Delete,
-  NotFoundException,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -217,16 +216,14 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-
-    const lockedBetting = await this.bettingService.lockBet(id);
-
-    if (!lockedBetting.lockStatus) {
-      throw new NotFoundException(lockedBetting.message);
-    }
+    const lockedBetting = await this.bettingService.updateBettingVariableStatus(
+      id,
+      BettingVariableStatus.LOCKED,
+    );
     return {
       message: 'Betting locked successfully',
       status: HttpStatus.OK,
-      data: lockedBetting.updatedData,
+      data: lockedBetting,
     };
   }
 

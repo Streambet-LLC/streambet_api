@@ -196,53 +196,7 @@ export class BettingService {
 
     return bettingVariable;
   }
-  async lockBet(id: string) {
-    let lockStatus = true;
-    let message = '';
-    let updatedData = {};
-    const bet = await this.betsRepository.findOne({
-      where: { id },
-      relations: ['round'],
-    });
 
-    if (!bet || !bet.round) {
-      throw new NotFoundException('Bet or related round not found');
-    }
-
-    const similarBets = await this.betsRepository.find({
-      where: {
-        round: { id: bet.round.id },
-      },
-      relations: ['round', 'user', 'stream'], // add more relations if needed
-    });
-    if (similarBets.length <= 1) {
-      lockStatus = false;
-
-      message = 'Cannot lock the bet — only one user has placed a bet.';
-    }
-
-    const winnerBettingVariable = await this.bettingVariablesRepository.findOne(
-      {
-        where: {
-          round: { id: bet.round.id },
-          is_winning_option: true,
-        },
-        relations: ['round'], // add more relations if needed
-      },
-    );
-    if (!winnerBettingVariable) {
-      lockStatus = false;
-      message =
-        'Cannot lock the bet — no one placed a bet on the winning option';
-    }
-    if (lockStatus) {
-      updatedData = await this.updateBettingVariableStatus(
-        id,
-        BettingVariableStatus.LOCKED,
-      );
-    }
-    return { lockStatus, message, updatedData: updatedData || [] };
-  }
   async isRoundLocked(roundId: string) {
     const lockedBet = await this.bettingRoundsRepository.findOne({
       where: {
@@ -1501,6 +1455,7 @@ export class BettingService {
     if (!round) {
       throw new NotFoundException(`Round with ID ${roundId} not found`);
     }
+
     // Only allow: created -> open -> locked
     const current = round.status;
     if (
@@ -1515,6 +1470,30 @@ export class BettingService {
           relations: ['stream'],
         });
         if (roundWithStream && roundWithStream.streamId) {
+          const similarBets = await this.betsRepository.find({
+            where: {
+              round: { id: roundId },
+            },
+            relations: ['round'],
+          });
+          if (similarBets.length <= 1) {
+            throw new NotFoundException(
+              `Cannot lock the bet — only one user has placed a bet`,
+            );
+          }
+          const winnerBettingVariable =
+            await this.bettingVariablesRepository.findOne({
+              where: {
+                round: { id: roundId },
+                is_winning_option: true,
+              },
+              relations: ['round'], // add more relations if needed
+            });
+          if (!winnerBettingVariable) {
+            throw new NotFoundException(
+              `Cannot lock the bet — only one user has placed a bet`,
+            );
+          }
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
