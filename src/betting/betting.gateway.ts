@@ -485,6 +485,7 @@ export class BettingGateway
     streamId: string,
     roundId: string,
     status: 'open' | 'locked' | 'canceled',
+    lockedStatus?: Boolean,
   ): Promise<void> {
     let event: string;
     let message: string;
@@ -499,8 +500,7 @@ export class BettingGateway
       case 'locked':
         event = 'bettingLocked';
         message = 'Betting is now locked! No more bets can be placed.';
-        const locked = await this.bettingService.isRoundLocked(roundId);
-        payload = { roundId, locked };
+        payload = { roundId, lockedStatus };
         break;
       case 'canceled':
         event = 'betCancelledByAdmin';

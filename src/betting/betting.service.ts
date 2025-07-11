@@ -197,17 +197,6 @@ export class BettingService {
     return bettingVariable;
   }
 
-  async isRoundLocked(roundId: string) {
-    const lockedBet = await this.bettingRoundsRepository.findOne({
-      where: {
-        id: roundId,
-        status: BettingRoundStatus.LOCKED,
-      },
-    });
-    if (lockedBet) {
-      return false;
-    } else return true;
-  }
   async updateBettingVariableStatus(
     id: string,
     status: BettingVariableStatus,
@@ -1499,6 +1488,7 @@ export class BettingService {
             roundWithStream.streamId,
             roundId,
             'locked',
+            true,
           );
         }
       }
