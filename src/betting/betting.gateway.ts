@@ -31,6 +31,7 @@ interface ChatMessage {
   username: string;
   message: string;
   timestamp: Date;
+  imageURL?: string;
 }
 
 // Define notification interface
@@ -384,20 +385,20 @@ export class BettingGateway
   @SubscribeMessage('sendChatMessage')
   handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { streamId: string; message: string },
+    @MessageBody()
+    data: { streamId: string; message: string; imageURL: string },
   ) {
-    const { streamId, message } = data;
+    const { streamId, message, imageURL } = data;
     const user = client.data.user;
 
     const chatMessage: ChatMessage = {
       type: 'user',
       username: user.username,
       message,
+      imageURL,
       timestamp: new Date(),
     };
-
-    this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
-
+    this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
     return { event: 'messageSent', data: { success: true } };
   }
 
