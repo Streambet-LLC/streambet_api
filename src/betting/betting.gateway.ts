@@ -408,6 +408,7 @@ export class BettingGateway
   ) {
     const { streamId, message, imageURL } = data;
     const user = client.data.user;
+    console.log(message, streamId);
 
     const chatMessage: ChatMessage = {
       type: 'user',
@@ -480,11 +481,11 @@ export class BettingGateway
     });
   }
 
-  emitBettingStatus(
+  async emitBettingStatus(
     streamId: string,
     roundId: string,
     status: 'open' | 'locked' | 'canceled',
-  ): void {
+  ): Promise<void> {
     let event: string;
     let message: string;
     let payload: any;
@@ -498,7 +499,8 @@ export class BettingGateway
       case 'locked':
         event = 'bettingLocked';
         message = 'Betting is now locked! No more bets can be placed.';
-        payload = { roundId, locked: true };
+        const locked = await this.bettingService.isRoundLocked(roundId);
+        payload = { roundId, locked };
         break;
       case 'canceled':
         event = 'betCancelledByAdmin';
