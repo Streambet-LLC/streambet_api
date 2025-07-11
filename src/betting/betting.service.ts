@@ -1458,12 +1458,11 @@ export class BettingService {
 
     // Only allow: created -> open -> locked
     const current = round.status;
+    let savedRound;
     if (
       (current === 'created' && newStatus === 'open') ||
       (current === 'open' && newStatus === 'locked')
     ) {
-      round.status = newStatus as any;
-      const savedRound = await this.bettingRoundsRepository.save(round);
       if (newStatus === BettingRoundStatus.LOCKED) {
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
@@ -1494,6 +1493,8 @@ export class BettingService {
               `Cannot lock the bet — only one user has placed a bet`,
             );
           }
+          round.status = newStatus as any;
+          savedRound = await this.bettingRoundsRepository.save(round);
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
@@ -1501,7 +1502,10 @@ export class BettingService {
           );
         }
       }
+
       if (newStatus === BettingRoundStatus.OPEN) {
+        round.status = newStatus as any;
+        savedRound = await this.bettingRoundsRepository.save(round);
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
