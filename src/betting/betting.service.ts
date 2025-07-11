@@ -205,8 +205,8 @@ export class BettingService {
       },
     });
     if (lockedBet) {
-      return true;
-    } else return false;
+      return false;
+    } else return true;
   }
   async updateBettingVariableStatus(
     id: string,
