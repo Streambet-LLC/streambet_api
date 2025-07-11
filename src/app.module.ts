@@ -22,7 +22,6 @@ import fileConfig from './config/file.config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
-import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -79,7 +78,6 @@ import { ChatModule } from './chat/chat.module';
     PaymentsModule,
     MailerModule,
     StreamModule,
-    ChatModule,
   ],
   controllers: [AppController],
   providers: [
