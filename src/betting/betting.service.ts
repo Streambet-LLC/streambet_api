@@ -20,7 +20,10 @@ import {
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
-import { CurrencyType } from '../wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  TransactionType,
+} from '../wallets/entities/transaction.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
@@ -809,6 +812,12 @@ export class BettingService {
       // Process losing bets
       if (losingBets.length > 0) {
         await this.processLosingBets(queryRunner, losingBets);
+        if (winningTokenBets.length === 0) {
+          await this.creditAmountVoidCase(queryRunner, losingTokenBets);
+        }
+        if (winningCoinBets.length === 0) {
+          await this.creditAmountVoidCase(queryRunner, losingCoinBets);
+        }
       }
 
       await this.closeRound(queryRunner, bettingVariable);
@@ -843,6 +852,43 @@ export class BettingService {
     } finally {
       // Release the query runner
       await queryRunner.release();
+    }
+  }
+  private async creditAmountVoidCase(queryRunner, bets) {
+    if (!bets || !Array.isArray(bets) || bets.length === 0) {
+      console.log('No bets to refund in void case');
+      return;
+    }
+
+    for (const bet of bets) {
+      try {
+        if (!bet || !bet.userId || !bet.amount || !bet.currency) {
+          console.log('Invalid bet found in void case refund:', bet);
+          continue;
+        }
+
+        const userId = bet.userId;
+        const amount = Number(bet.amount);
+        const currency = bet.currency;
+        const transactionType = TransactionType.REFUND;
+        const description = `${amount} ${currency} refunded - bet round closed with no winners.`;
+
+        await this.walletsService.updateBalance(
+          userId,
+          amount,
+          currency,
+          transactionType,
+          description,
+        );
+        await queryRunner.manager.save(bet);
+        // Update bet status within transaction
+      } catch (error) {
+        console.error(
+          `Error processing void case refund for bet ${bet?.id}:`,
+          error,
+        );
+        throw error;
+      }
     }
   }
 
@@ -1050,9 +1096,11 @@ export class BettingService {
       try {
         // Equal share for all winners (not proportional to bet amount)
         const equalShare = 1 / winningTokenBets.length;
+
         const payout =
           Math.floor(Number(totalLosingTokenAmount) * equalShare) +
           Number(bet.amount);
+
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();

@@ -291,15 +291,23 @@ export class WalletsService {
 
     if (currencyType === CurrencyType.FREE_TOKENS) {
       await this.walletsRepository.update(wallet.id, { freeTokens: amount });
+      const addedAmount = amount - wallet.freeTokens;
+
+      const transactionType =
+        addedAmount >= 0
+          ? TransactionType.ADMIN_CREDIT
+          : TransactionType.ADMIN_DEBITED;
+      const trans = this.transactionsRepository.create({
+        userId,
+        type: transactionType,
+        currencyType,
+        amount: addedAmount,
+        balanceAfter: amount,
+        description,
+      });
+      await this.transactionsRepository.save(trans);
     }
-    this.transactionsRepository.create({
-      userId,
-      type: transactionType,
-      currencyType,
-      amount: wallet.freeTokens,
-      balanceAfter: amount,
-      description,
-    });
+
     return await this.findByUserId(userId);
   }
   async walletDetailsByUserId(userId: string) {

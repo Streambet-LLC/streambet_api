@@ -6,17 +6,17 @@ import { User } from '../users/entities/user.entity';
 import { UsersModule } from '../users/users.module';
 import { BettingModule } from '../betting/betting.module';
 import { WalletsModule } from '../wallets/wallets.module';
-import { Stream } from 'src/stream/entities/stream.entity';
-import { StreamService } from 'src/stream/stream.service';
+import { StreamModule } from 'src/stream/stream.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Stream]),
+    TypeOrmModule.forFeature([User]),
     UsersModule,
     BettingModule,
     WalletsModule,
+    StreamModule, // Import StreamModule
   ],
   controllers: [AdminController],
-  providers: [AdminService, StreamService],
+  providers: [AdminService],
 })
 export class AdminModule {}

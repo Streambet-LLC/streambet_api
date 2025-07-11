@@ -5,6 +5,8 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -23,6 +25,7 @@ export class StreamService {
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
     private walletService: WalletsService,
+    @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
   ) {}
   /**
@@ -121,14 +124,20 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
-      rounds: bettingRounds.map((round: any) => ({
-        roundId: round.id,
-        roundName: round.roundName ?? '',
-        options: (round.bettingVariables ?? []).map((variable: any) => ({
-          id: variable.id,
-          option: variable.name,
+      rounds: (bettingRounds ?? [])
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )
+        .map((round: any) => ({
+          roundId: round.id,
+          roundName: round.roundName ?? '',
+          createdAt: round.createdAt ?? '',
+          options: (round.bettingVariables ?? []).map((variable: any) => ({
+            id: variable.id,
+            option: variable.name,
+          })),
         })),
-      })),
     };
   }
 
@@ -187,15 +196,28 @@ export class StreamService {
         .addSelect('s.status', 'streamStatus')
         .addSelect('s.viewerCount', 'viewerCount')
         .addSelect(
-          `
-          CASE
-            WHEN COUNT(r.id) > 0 AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) = COUNT(r.id) THEN '${BettingRoundStatus.CANCELLED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CLOSED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0 THEN '${BettingRoundStatus.OPEN}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.LOCKED}'
-            WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0 THEN '${BettingRoundStatus.CREATED}'
-            ELSE 'no bet round'
-          END
+          `CASE
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
+    THEN '${BettingRoundStatus.OPEN}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
+    THEN '${BettingRoundStatus.LOCKED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CREATED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CLOSED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CANCELLED}'
+
+  ELSE 'no bet round'
+END
           `,
           'bettingRoundStatus',
         )
@@ -285,7 +307,7 @@ export class StreamService {
           `Could not find a live stream with the specified ID. Please check the ID and try again.`,
         );
       }
-      let total = { tokenSum: 0, coinSum: 0 };
+      const total = { tokenSum: 0, coinSum: 0 };
 
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
@@ -305,7 +327,7 @@ export class StreamService {
           }
         }
       }
-      let {
+      const {
         tokenSum: roundTotalBetsTokenAmount,
         coinSum: roundTotalBetsCoinAmount,
       } = total;
@@ -419,14 +441,14 @@ export class StreamService {
       throw new NotFoundException(`Stream with ID ${streamId} not found`);
     }
     // Check all rounds are CLOSED or CANCELLED
-    const allRoundsTerminal = (stream.bettingRounds || []).every(
+    const allRoundsTerminal = (stream.bettingRounds || []).some(
       (round) =>
-        round.status === BettingRoundStatus.CLOSED ||
-        round.status === BettingRoundStatus.CANCELLED,
+        round.status === BettingRoundStatus.OPEN ||
+        round.status === BettingRoundStatus.LOCKED,
     );
-    if (!allRoundsTerminal) {
+    if (allRoundsTerminal) {
       throw new BadRequestException(
-        'Cannot end stream: All rounds must be CLOSED or CANCELLED.',
+        'Please end or cancel all active rounds before ending the stream',
       );
     }
     // Set stream status to ENDED
@@ -438,5 +460,46 @@ export class StreamService {
     this.bettingGateway.emitStreamEnd(streamId);
 
     return savedStream;
+  }
+
+  async incrementViewCount(streamId: string) {
+    try {
+      const result = await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ viewerCount: () => 'viewerCount + 1' })
+        .where('id = :id', { id: streamId })
+        .execute();
+
+      if (result.affected === 0) {
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+      }
+    } catch (error) {
+      Logger.error(
+        `Failed to increment view count for stream ${streamId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+  async decrementViewCount(streamId: string) {
+    try {
+      const result = await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ viewerCount: () => 'GREATEST(viewerCount - 1, 0)' })
+        .where('id = :id', { id: streamId })
+        .execute();
+
+      if (result.affected === 0) {
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+      }
+    } catch (error) {
+      Logger.error(
+        `Failed to decrement view count for stream ${streamId}`,
+        error,
+      );
+      throw error;
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { BettingRound } from './entities/betting-round.entity';
@@ -10,6 +10,7 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 import { Stream } from 'src/stream/entities/stream.entity';
+import { StreamModule } from 'src/stream/stream.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { Stream } from 'src/stream/entities/stream.entity';
     WalletsModule,
     UsersModule,
     AuthModule,
+    forwardRef(() => StreamModule), // Add StreamModule with forwardRef
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway],
