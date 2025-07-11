@@ -1469,19 +1469,7 @@ export class BettingService {
               `Cannot lock the bet — only one user has placed a bet`,
             );
           }
-          const winnerBettingVariable =
-            await this.bettingVariablesRepository.findOne({
-              where: {
-                round: { id: roundId },
-                is_winning_option: true,
-              },
-              relations: ['round'], // add more relations if needed
-            });
-          if (!winnerBettingVariable) {
-            throw new NotFoundException(
-              `Cannot lock the bet — only one user has placed a bet`,
-            );
-          }
+
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
           this.bettingGateway.emitBettingStatus(
