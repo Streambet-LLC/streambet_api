@@ -393,7 +393,14 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
+          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+            amount: editedBet.amount,
+            currencyType: editedBet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+
           timestamp: new Date(),
         };
         this.server
