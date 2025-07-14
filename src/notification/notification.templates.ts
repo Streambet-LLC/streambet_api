@@ -36,4 +36,9 @@ export const NOTIFICATION_TEMPLATE = {
       `Betting is open for ${data.roundName}. Place your bets and good luck!`,
     TITLE: () => `Betting Phase Change - Betting Open`,
   },
+  BET_LOCKED: {
+    MESSAGE: (data: BetNotificationData) =>
+      `Betting has been locked for ${data.roundName}. Results will be announced shortly.`,
+    TITLE: () => `Betting Phase Change - Betting Locked`,
+  },
 };

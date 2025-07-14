@@ -181,7 +181,6 @@ export class BettingGateway
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
-    this.userSocketMap.set(username, client.id);
     // Join the streambet's room
     client.join(`streambet`);
     this.userSocketMap.set(username, client.id);
@@ -706,9 +705,9 @@ export class BettingGateway
   }
   emitBotMessageToLoser(losers) {
     for (const loser of losers) {
-      const socketId = this.userSocketMap.get(losers.username);
+      const socketId = this.userSocketMap.get(loser.username);
       if (!socketId) {
-        console.log(`User ${losers.username} not online`);
+        console.log(`User ${loser.username} not online`);
         return;
       }
       const chatMessage: ChatMessage = {
@@ -733,5 +732,22 @@ export class BettingGateway
       title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
       timestamp: new Date(),
     });
+  }
+  emitBotMessageToUserForLockedBet(username: string, roundName: string) {
+    const socketId = this.userSocketMap.get(username);
+    if (!socketId) {
+      console.log(`User ${username} not online`);
+      return;
+    }
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message: NOTIFICATION_TEMPLATE.BET_LOCKED.MESSAGE({
+        roundName: roundName || '',
+      }),
+      title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+      timestamp: new Date(),
+    };
+    void this.server.to(socketId).emit('botMessage', chatMessage);
   }
 }

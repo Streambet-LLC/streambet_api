@@ -1508,6 +1508,16 @@ export class BettingService {
             'locked',
             true,
           );
+          const bets = await this.betsRepository.find({
+            where: { round: { id: roundId } },
+            relations: ['user'],
+          });
+          for (const bet of bets) {
+            await this.bettingGateway.emitBotMessageToUserForLockedBet(
+              bet.user.username,
+              roundWithStream.roundName,
+            );
+          }
         }
       }
 
