@@ -308,7 +308,13 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+            amount: bet.amount,
+            currencyType: bet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
           timestamp: new Date(),
         };
         this.server
@@ -400,7 +406,6 @@ export class BettingGateway
             roundName: bettingVariable.round.roundName || '',
           }),
           title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
-
           timestamp: new Date(),
         };
         this.server
