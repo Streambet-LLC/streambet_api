@@ -18,6 +18,7 @@ import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { StreamService } from 'src/stream/stream.service';
+import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -33,6 +34,7 @@ interface ChatMessage {
   message: string;
   timestamp: Date;
   imageURL?: string;
+  title?: string;
 }
 
 // Define notification interface
@@ -238,7 +240,13 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
+            amount: placeBetDto.amount,
+            currencyType: placeBetDto.currencyType,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
           timestamp: new Date(),
         };
         this.server
