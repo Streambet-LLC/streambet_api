@@ -54,7 +54,7 @@ export class BettingGateway
 {
   @WebSocketServer()
   server: Server;
-
+  private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
     private readonly bettingService: BettingService,
@@ -105,7 +105,11 @@ export class BettingGateway
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
-    console.log(`Client disconnected: ${client.id}`);
+    const username = client.data.user?.username;
+    if (username) {
+      this.userSocketMap.delete(username);
+    }
+    console.log(`${username || client.id} disconnected`);
   }
 
   //@UseGuards(WsJwtGuard)
@@ -177,28 +181,26 @@ export class BettingGateway
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
+    this.userSocketMap.set(username, client.id);
     // Join the streambet's room
-    client.join(`streambet_${username}`);
-
+    client.join(`streambet`);
+    this.userSocketMap.set(username, client.id);
     // Let the client know they joined successfully
     client.emit('joinStreamBet', { username });
 
-    console.log(`User ${username} joined room  streambet_${username}`);
+    console.log(`User ${username} joined room  streambet`);
 
     return { event: 'joinStreamBet', data: { username } };
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('leaveStreamBet')
-  async handleLeaveStreamBet(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() streamId: string,
-  ) {
+  async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
     // Leave the streambet's room
-    client.leave(`streambet_${username}`);
+    client.leave(`streambet`);
 
-    console.log(`User ${username} left streambet_${username}`);
+    console.log(`User ${username} left streambet`);
 
     return { event: 'leaveStreamBet', data: { username } };
   }
@@ -577,7 +579,7 @@ export class BettingGateway
     };
 
     void this.server.to(`stream_${streamId}`).emit(event, payload);
-    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+    // void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 
   emitStreamEnd(streamId: string): void {
@@ -661,6 +663,11 @@ export class BettingGateway
     bettingOption: string,
     roundName: string,
   ) {
+    const socketId = this.userSocketMap.get(username);
+    if (!socketId) {
+      console.log(`User ${username} not online`);
+      return;
+    }
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',
@@ -674,12 +681,15 @@ export class BettingGateway
       timestamp: new Date(),
     };
 
-    void this.server
-      .to(`streambet_${username}`)
-      .emit('botMessage', chatMessage);
+    void this.server.to(socketId).emit('botMessage', chatMessage);
   }
   emitBotMessageToWinner(winners) {
     for (const winner of winners) {
+      const socketId = this.userSocketMap.get(winner.username);
+      if (!socketId) {
+        console.log(`User ${winner.username} not online`);
+        return;
+      }
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -691,13 +701,16 @@ export class BettingGateway
         title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
         timestamp: new Date(),
       };
-      void this.server
-        .to(`streambet_${winner.username}`)
-        .emit('botMessage', chatMessage);
+      void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
   emitBotMessageToLoser(losers) {
     for (const loser of losers) {
+      const socketId = this.userSocketMap.get(losers.username);
+      if (!socketId) {
+        console.log(`User ${losers.username} not online`);
+        return;
+      }
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -707,9 +720,18 @@ export class BettingGateway
         title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
         timestamp: new Date(),
       };
-      void this.server
-        .to(`streambet_${loser.username}`)
-        .emit('botMessage', chatMessage);
+      void this.server.to(socketId).emit('botMessage', chatMessage);
     }
+  }
+  emitBotMessageToUserForOpenBet(roundName) {
+    this.server.to('streambet').emit('botMessage', {
+      type: 'system',
+      username: 'StreambetBot',
+      message: NOTIFICATION_TEMPLATE.BET_OPEN.MESSAGE({
+        roundName: roundName || '',
+      }),
+      title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
+      timestamp: new Date(),
+    });
   }
 }

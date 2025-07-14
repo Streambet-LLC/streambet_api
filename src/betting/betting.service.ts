@@ -1524,6 +1524,7 @@ export class BettingService {
             roundId,
             'open',
           );
+          this.bettingGateway.emitBotMessageToUserForOpenBet(round.roundName);
         }
       }
       return savedRound;
