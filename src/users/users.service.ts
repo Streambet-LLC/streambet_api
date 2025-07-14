@@ -243,7 +243,7 @@ export class UsersService {
    */
   async updateNotificationSettings(
     userId: string,
-    notificationSettingsUpdateDto: NotificationSettingsUpdateDto
+    notificationSettingsUpdateDto: NotificationSettingsUpdateDto,
   ): Promise<UserResponseDto> {
     // Find the user by ID
     const user = await this.usersRepository.findOne({ where: { id: userId } });
@@ -251,16 +251,21 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Update the notificationPreferences field
-    user.notificationPreferences = {
-      ...user.notificationPreferences,
-      ...notificationSettingsUpdateDto,
-    };
+    // Update only provided fields in notificationPreferences
+    const currentPrefs = user.notificationPreferences;
 
+    user.notificationPreferences = {
+      emailNotification:
+        notificationSettingsUpdateDto.emailNotification ??
+        currentPrefs?.emailNotification,
+      inAppNotification:
+        notificationSettingsUpdateDto.inAppNotification ??
+        currentPrefs.inAppNotification,
+    };
     // Save the updated user
     await this.usersRepository.save(user);
 
-    // return sanitized user data
+    // Return sanitized user data
     return this.findOne(userId);
   }
 }
