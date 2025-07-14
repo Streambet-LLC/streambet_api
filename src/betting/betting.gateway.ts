@@ -678,4 +678,22 @@ export class BettingGateway
       .to(`streambet_${username}`)
       .emit('botMessage', chatMessage);
   }
+  emitBotMessageToWinner(winners) {
+    for (const winner of winners) {
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
+          amount: winner.amount,
+          currencyType: winner.currencyType,
+          roundName: winner.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
+        timestamp: new Date(),
+      };
+      void this.server
+        .to(`streambet_${winner.username}`)
+        .emit('botMessage', chatMessage);
+    }
+  }
 }

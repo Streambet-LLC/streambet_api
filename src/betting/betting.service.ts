@@ -836,6 +836,9 @@ export class BettingService {
       const winners = winningBetsWithUserInfo.map((bet) => ({
         userId: bet.userId,
         username: bet.user?.username,
+        amount: bet?.payoutAmount,
+        currencyType: bet?.currency,
+        roundName: bettingVariable?.round?.roundName,
       }));
 
       // Commit the transaction
@@ -847,6 +850,7 @@ export class BettingService {
         bettingVariable.name,
         winners,
       );
+      this.bettingGateway.emitBotMessageToWinner(winners);
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
