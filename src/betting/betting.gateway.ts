@@ -654,4 +654,28 @@ export class BettingGateway
       console.error('Error emitting potential amounts update:', e.message);
     }
   }
+  emitBotMessageForCancelBetByAdmin(
+    username: string,
+    amount: number,
+    currencyType: string,
+    bettingOption: string,
+    roundName: string,
+  ) {
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+        amount,
+        currencyType,
+        bettingOption: bettingOption || '',
+        roundName: roundName || '',
+      }),
+      title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
+      timestamp: new Date(),
+    };
+
+    void this.server
+      .to(`streambet_${username}`)
+      .emit('botMessage', chatMessage);
+  }
 }

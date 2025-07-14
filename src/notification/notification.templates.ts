@@ -18,7 +18,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your bet of ${data.amount} ${data.currencyType}${data.amount !== 1 ? 's' : ''} on ${data.bettingOption}  has been cancelled for ${data.roundName}`,
+      `Your bet of ${data.amount} ${data.currencyType}${data.amount !== 1 ? 's' : ''} on ${data.bettingOption} has been cancelled for ${data.roundName}`,
     TITLE: () => `Bet Cancelled`,
   },
 };

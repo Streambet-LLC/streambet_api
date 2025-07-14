@@ -30,6 +30,7 @@ import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from './betting.gateway';
+import { UsersService } from 'src/users/users.service';
 
 @Injectable()
 export class BettingService {
@@ -43,6 +44,7 @@ export class BettingService {
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
+    private usersService: UsersService,
     private dataSource: DataSource,
     @Inject(forwardRef(() => BettingGateway))
     private readonly bettingGateway: BettingGateway,
@@ -1536,6 +1538,7 @@ export class BettingService {
         // Set variable status to CANCELLED
         variable.status = BettingVariableStatus.CANCELLED;
         for (const bet of variable.bets) {
+          const { username } = await this.usersService.findById(bet.userId);
           if (bet.status !== BetStatus.Active) continue;
           // Refund to user
           if (bet.currency === CurrencyType.FREE_TOKENS) {
@@ -1559,6 +1562,14 @@ export class BettingService {
           bet.status = BetStatus.Cancelled;
           refundedBets.push(bet);
           await queryRunner.manager.save(bet);
+
+          this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+            username,
+            bet.amount,
+            bet.currency,
+            variable.name,
+            round.roundName,
+          );
         }
         await queryRunner.manager.save(variable);
       }
