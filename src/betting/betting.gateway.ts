@@ -398,7 +398,7 @@ export class BettingGateway
       });
     }
   }
-
+  //live chat implementation
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('sendChatMessage')
   handleChatMessage(
@@ -408,13 +408,18 @@ export class BettingGateway
   ) {
     const { streamId, message, imageURL } = data;
     const user = client.data.user;
-    console.log(message, streamId);
+    if (!streamId || !message) {
+      return {
+        event: 'messageSent',
+        data: { success: false, error: 'Missing message or stream ID.' },
+      };
+    }
 
     const chatMessage: ChatMessage = {
       type: 'user',
       username: user.username,
       message,
-      imageURL,
+      imageURL: imageURL || '',
       timestamp: new Date(),
     };
     this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
