@@ -41,4 +41,9 @@ export const NOTIFICATION_TEMPLATE = {
       `Betting has been locked for ${data.roundName}. Results will be announced shortly.`,
     TITLE: () => `Betting Phase Change - Betting Locked`,
   },
+  BET_WINNER_DECLARED: {
+    MESSAGE: (data: BetNotificationData) =>
+      `The winner of ${data.roundName} has been declared! Payouts are being processed`,
+    TITLE: () => `Winner Declared`,
+  },
 };

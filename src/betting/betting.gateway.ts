@@ -689,6 +689,7 @@ export class BettingGateway
         console.log(`User ${winner.username} not online`);
         return;
       }
+      this.emitBotMessageStatusWinnerDeclared(socketId, winner.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -710,6 +711,7 @@ export class BettingGateway
         console.log(`User ${loser.username} not online`);
         return;
       }
+      this.emitBotMessageStatusWinnerDeclared(socketId, loser.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -746,6 +748,19 @@ export class BettingGateway
         roundName: roundName || '',
       }),
       title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+      timestamp: new Date(),
+    };
+    void this.server.to(socketId).emit('botMessage', chatMessage);
+  }
+
+  emitBotMessageStatusWinnerDeclared(socketId: string, roundName: string) {
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.MESSAGE({
+        roundName: roundName || '',
+      }),
+      title: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.TITLE(),
       timestamp: new Date(),
     };
     void this.server.to(socketId).emit('botMessage', chatMessage);
