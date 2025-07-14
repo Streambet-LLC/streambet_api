@@ -408,17 +408,20 @@ export class BettingGateway
   ) {
     const { streamId, message, imageURL } = data;
     const user = client.data.user;
-    if (!streamId || !message) {
+    if (!streamId || !message || !streamId.trim() || !message.trim()) {
       return {
         event: 'messageSent',
-        data: { success: false, error: 'Missing message or stream ID.' },
+        data: {
+          success: false,
+          error: 'Stream ID and message cannot be empty.',
+        },
       };
     }
 
     const chatMessage: ChatMessage = {
       type: 'user',
       username: user.username,
-      message,
+      message: message.trim(),
       imageURL: imageURL || '',
       timestamp: new Date(),
     };
