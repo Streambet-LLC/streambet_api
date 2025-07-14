@@ -22,6 +22,7 @@ import fileConfig from './config/file.config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { StreamModule } from './stream/stream.module';
     PaymentsModule,
     MailerModule,
     StreamModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [
