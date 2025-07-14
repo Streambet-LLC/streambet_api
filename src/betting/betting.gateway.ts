@@ -174,6 +174,36 @@ export class BettingGateway
   }
 
   @UseGuards(WsJwtGuard)
+  @SubscribeMessage('joinStreamBet')
+  async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
+    const username = client.data.user.username;
+    // Join the streambet's room
+    client.join(`streambet_${username}`);
+
+    // Let the client know they joined successfully
+    client.emit('joinStreamBet', { username });
+
+    console.log(`User ${username} joined room  streambet_${username}`);
+
+    return { event: 'joinStreamBet', data: { username } };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('leaveStreamBet')
+  async handleLeaveStreamBet(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() streamId: string,
+  ) {
+    const username = client.data.user.username;
+    // Leave the streambet's room
+    client.leave(`streambet_${username}`);
+
+    console.log(`User ${username} left streambet_${username}`);
+
+    return { event: 'leaveStreamBet', data: { username } };
+  }
+
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
