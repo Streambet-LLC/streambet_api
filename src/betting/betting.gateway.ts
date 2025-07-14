@@ -696,4 +696,20 @@ export class BettingGateway
         .emit('botMessage', chatMessage);
     }
   }
+  emitBotMessageToLoser(losers) {
+    for (const loser of losers) {
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_LOST.MESSAGE({
+          roundName: loser.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+        timestamp: new Date(),
+      };
+      void this.server
+        .to(`streambet_${loser.username}`)
+        .emit('botMessage', chatMessage);
+    }
+  }
 }

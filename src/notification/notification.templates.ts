@@ -1,6 +1,6 @@
 interface BetNotificationData {
-  amount: number;
-  currencyType: string;
+  amount?: number;
+  currencyType?: string;
   bettingOption?: string;
   roundName: string;
 }
@@ -25,5 +25,10 @@ export const NOTIFICATION_TEMPLATE = {
     MESSAGE: (data: BetNotificationData) =>
       `🎉 Congratulations! You won ${data.amount} ${data.currencyType}${data.amount !== 1 ? 's' : ''} in  ${data.roundName}. Your wallet has been updated `,
     TITLE: () => `🎉 Oh Snap! You Won!`,
+  },
+  BET_LOST: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.roundName} has ended and unfortunately you Lost. Better luck next time!`,
+    TITLE: () => `You Lost 😭`,
   },
 };

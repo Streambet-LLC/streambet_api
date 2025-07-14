@@ -833,6 +833,7 @@ export class BettingService {
         },
         relations: ['user'],
       });
+
       const winners = winningBetsWithUserInfo.map((bet) => ({
         userId: bet.userId,
         username: bet.user?.username,
@@ -840,6 +841,21 @@ export class BettingService {
         currencyType: bet?.currency,
         roundName: bettingVariable?.round?.roundName,
       }));
+      if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+        const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+          where: {
+            bettingVariableId: variableId,
+            status: BetStatus.Lost,
+          },
+          relations: ['user'],
+        });
+        const loser = losingBetsWithUserInfo.map((bet) => ({
+          userId: bet.userId,
+          username: bet.user?.username,
+          roundName: bettingVariable?.round?.roundName,
+        }));
+        this.bettingGateway.emitBotMessageToLoser(loser);
+      }
 
       // Commit the transaction
       await queryRunner.commitTransaction();
