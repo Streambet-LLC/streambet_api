@@ -1141,8 +1141,13 @@ export class BettingService {
       try {
         // Equal share for all winners (not proportional to bet amount)
         const equalShare = 1 / winningCoinBets.length;
-        const payout =
-          Math.floor(distributableCoinPot * equalShare) + bet.amount;
+
+        // Calculate share from losing pool Including decimal precision
+        const shareFromLosingPool = Number(
+          (Number(distributableCoinPot) * equalShare).toFixed(3),
+        );
+        const payout = shareFromLosingPool + Number(bet.amount);
+
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();

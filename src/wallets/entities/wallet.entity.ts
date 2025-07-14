@@ -14,7 +14,7 @@ export class Wallet extends BaseEntity {
   @Column({ type: 'bigint', default: 1000 })
   freeTokens: number;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 3, nullable: true })
   streamCoins: number;
 
   @Column({ type: 'boolean', default: false })
