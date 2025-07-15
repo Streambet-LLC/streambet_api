@@ -31,6 +31,7 @@ import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class BettingService {
@@ -44,6 +45,7 @@ export class BettingService {
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
+    private notificationService: NotificationService,
     private usersService: UsersService,
     private dataSource: DataSource,
     @Inject(forwardRef(() => BettingGateway))
@@ -866,8 +868,21 @@ export class BettingService {
         bettingVariable.name,
         winners,
       );
-
-      this.bettingGateway.emitBotMessageToWinner(winners);
+      for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageToWinner(
+          winner.username,
+          winner.roundName,
+          winner.amount,
+          winner.currencyType,
+        );
+        await this.notificationService.sendSMTPForWonBet(
+          winner.userId,
+          bettingVariable.stream.name,
+          winner.amount,
+          winner.currencyType,
+          winner.roundName,
+        );
+      }
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();

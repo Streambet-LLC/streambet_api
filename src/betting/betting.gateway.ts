@@ -680,23 +680,26 @@ export class BettingGateway
 
     void this.server.to(socketId).emit('botMessage', chatMessage);
   }
-  emitBotMessageToWinner(winners) {
-    for (const winner of winners) {
-      const socketId = this.userSocketMap.get(winner.username);
-      this.emitBotMessageStatusWinnerDeclared(socketId, winner.roundName);
-      const chatMessage: ChatMessage = {
-        type: 'system',
-        username: 'StreambetBot',
-        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
-          amount: winner.amount,
-          currencyType: winner.currencyType,
-          roundName: winner.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
-        timestamp: new Date(),
-      };
-      void this.server.to(socketId).emit('botMessage', chatMessage);
-    }
+  async emitBotMessageToWinner(
+    username: string,
+    roundName: string,
+    amount: number,
+    currencyType: string,
+  ) {
+    const socketId = this.userSocketMap.get(username);
+    this.emitBotMessageStatusWinnerDeclared(socketId, roundName);
+    const chatMessage: ChatMessage = {
+      type: 'system',
+      username: 'StreambetBot',
+      message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
+        amount: amount,
+        currencyType: currencyType,
+        roundName: roundName || '',
+      }),
+      title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
+      timestamp: new Date(),
+    };
+    void this.server.to(socketId).emit('botMessage', chatMessage);
   }
   emitBotMessageToLoser(losers) {
     for (const loser of losers) {

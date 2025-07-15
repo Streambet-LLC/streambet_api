@@ -46,4 +46,7 @@ export const NOTIFICATION_TEMPLATE = {
       `The winner of ${data.roundName} has been declared! Payouts are being processed`,
     TITLE: () => `Winner Declared`,
   },
+  EMAIL_BET_WON: {
+    TITLE: (data) => `🎉 You won a bet on ${data.streamName}! `,
+  },
 };

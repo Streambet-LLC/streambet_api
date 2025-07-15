@@ -1,5 +1,5 @@
 {
-  "id": "http://streambet.com/email-standard-schema#",
+  "id": "http://craftsvilla.com/email-standard-schema#",
   "$schema": "http://json-schema.org/schema#",
   "type": "object",
   "properties": {
@@ -53,19 +53,33 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName", "verifyLink", "code"],
+      "required": [
+        "streamName",
+        "username",
+        "amount",
+        "currencyType",
+        "roundName"
+      ],
       "properties": {
-        "fullName": {
+        "username": {
           "type": "string",
-          "description": "Full name of the user"
+          "description": "username of the user"
         },
-        "verifyLink": {
+        "streamName": {
           "type": "string",
-          "description": "Verification link for email confirmation"
+          "description": "name of the stream"
         },
-        "code": {
+        "amount": {
           "type": ["string", "number"],
-          "description": "Verification code"
+          "description": "payout amount"
+        },
+        "currencyType": {
+          "type": ["string", "number"],
+          "description": "currency type"
+        },
+        "roundName": {
+          "type": ["string", "number"],
+          "description": "name of the round "
         }
       }
     }
