@@ -244,6 +244,13 @@ export class BettingGateway
           potentialAmount?.potentialFreeTokenAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
+        message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
+          amount: placeBetDto.amount,
+          currencyType: placeBetDto.currencyType,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
           streamCoins: updatedWallet.streamCoins,
@@ -313,6 +320,13 @@ export class BettingGateway
       client.emit('betCancelled', {
         bet,
         success: true,
+        message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+          amount: bet.amount,
+          currencyType: bet.currency,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
           streamCoins: updatedWallet.streamCoins,
@@ -390,6 +404,14 @@ export class BettingGateway
       client.emit('betEdited', {
         bet: editedBet,
         success: true,
+        message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+          amount: editedBet.amount,
+          currencyType: editedBet.currency,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+        timestamp: new Date(),
         currencyType: editedBet.currency,
         potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
         potentialTokenWinningAmount:
@@ -687,7 +709,7 @@ export class BettingGateway
     currencyType: string,
   ) {
     const socketId = this.userSocketMap.get(username);
-    this.emitBotMessageStatusWinnerDeclared(socketId, roundName);
+    this.emitBotMessageForWinnerDeclare(socketId, roundName);
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',
@@ -702,10 +724,13 @@ export class BettingGateway
     void this.server.to(socketId).emit('botMessage', chatMessage);
   }
   emitBotMessageToLoser(losers) {
+    console.log(losers);
+
     for (const loser of losers) {
       const socketId = this.userSocketMap.get(loser.username);
+      console.log(socketId, 'socketId');
 
-      this.emitBotMessageStatusWinnerDeclared(socketId, loser.roundName);
+      this.emitBotMessageForWinnerDeclare(socketId, loser.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -744,7 +769,7 @@ export class BettingGateway
     void this.server.to(socketId).emit('botMessage', chatMessage);
   }
 
-  emitBotMessageStatusWinnerDeclared(socketId: string, roundName: string) {
+  emitBotMessageForWinnerDeclare(socketId: string, roundName: string) {
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',

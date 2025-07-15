@@ -50,6 +50,11 @@ export class NotificationService {
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
+      console.log(
+        receiverNotificationPermission['emailNotification'],
+        'emailNotification',
+      );
+      console.log(receiverNotificationPermission);
       if (
         receiverNotificationPermission['emailNotification'] &&
         receiverEmail
@@ -70,6 +75,46 @@ export class NotificationService {
             username: receiver.username,
             amount,
             CurrencyType,
+            roundName,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('unable to send email', e);
+    }
+  }
+  async sendSMTPForLossBet(
+    userId: string,
+    streamName: string,
+    roundName: string,
+  ) {
+    try {
+      const receiver = await this.usersService.findById(userId);
+      const receiverEmail = receiver?.email;
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_BET_LOSS.TITLE({
+          streamName,
+        });
+
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            streamName,
+            username: receiver.username,
             roundName,
           },
         };

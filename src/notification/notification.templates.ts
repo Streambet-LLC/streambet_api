@@ -49,4 +49,7 @@ export const NOTIFICATION_TEMPLATE = {
   EMAIL_BET_WON: {
     TITLE: (data) => `🎉 You won a bet on ${data.streamName}! `,
   },
+  EMAIL_BET_LOSS: {
+    TITLE: (data) => `${data.streamName} round complete! See your results... `,
+  },
 };

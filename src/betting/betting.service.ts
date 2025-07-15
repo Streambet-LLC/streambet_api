@@ -827,6 +827,8 @@ export class BettingService {
 
       // Process losing bets
       if (losingBets.length > 0) {
+        console.log(losingBets, 'losing bets');
+
         await this.processLosingBets(queryRunner, losingBets);
         if (winningTokenBets.length === 0) {
           await this.creditAmountVoidCase(queryRunner, losingTokenBets);
@@ -854,21 +856,21 @@ export class BettingService {
         currencyType: bet?.currency,
         roundName: bettingVariable?.round?.roundName,
       }));
-      if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
-        const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-          where: {
-            bettingVariableId: variableId,
-            status: BetStatus.Lost,
-          },
-          relations: ['user'],
-        });
-        const loser = losingBetsWithUserInfo.map((bet) => ({
-          userId: bet.userId,
-          username: bet.user?.username,
-          roundName: bettingVariable?.round?.roundName,
-        }));
-        this.bettingGateway.emitBotMessageToLoser(loser);
-      }
+
+      const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          bettingVariableId: variableId,
+          status: BetStatus.Lost,
+        },
+        relations: ['user'],
+      });
+      const loser = losingBetsWithUserInfo.map((bet) => ({
+        userId: bet.userId,
+        username: bet.user?.username,
+        roundName: bettingVariable?.round?.roundName,
+      }));
+
+      this.bettingGateway.emitBotMessageToLoser(loser);
 
       // Commit the transaction
       await queryRunner.commitTransaction();
@@ -886,6 +888,15 @@ export class BettingService {
           winner.amount,
           winner.currencyType,
         );
+        console.log(
+          winner.userId,
+          bettingVariable.stream.name,
+          winner.amount,
+          winner.currencyType,
+          winner.roundName,
+          'data',
+        );
+
         await this.notificationService.sendSMTPForWonBet(
           winner.userId,
           bettingVariable.stream.name,

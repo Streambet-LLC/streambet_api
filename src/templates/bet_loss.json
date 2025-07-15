@@ -53,13 +53,7 @@
     },
     "params": {
       "type": "object",
-      "required": [
-        "streamName",
-        "username",
-        "amount",
-        "currencyType",
-        "roundName"
-      ],
+      "required": ["streamName", "username", "roundName"],
       "properties": {
         "username": {
           "type": "string",
@@ -69,14 +63,7 @@
           "type": "string",
           "description": "name of the stream"
         },
-        "amount": {
-          "type": ["string", "number"],
-          "description": "payout amount"
-        },
-        "currencyType": {
-          "type": ["string", "number"],
-          "description": "currency type"
-        },
+
         "roundName": {
           "type": ["string", "number"],
           "description": "name of the round "
