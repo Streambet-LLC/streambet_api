@@ -663,10 +663,7 @@ export class BettingGateway
     roundName: string,
   ) {
     const socketId = this.userSocketMap.get(username);
-    if (!socketId) {
-      console.log(`User ${username} not online`);
-      return;
-    }
+
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',
@@ -685,10 +682,7 @@ export class BettingGateway
   emitBotMessageToWinner(winners) {
     for (const winner of winners) {
       const socketId = this.userSocketMap.get(winner.username);
-      if (!socketId) {
-        console.log(`User ${winner.username} not online`);
-        return;
-      }
+
       this.emitBotMessageStatusWinnerDeclared(socketId, winner.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',
@@ -707,10 +701,7 @@ export class BettingGateway
   emitBotMessageToLoser(losers) {
     for (const loser of losers) {
       const socketId = this.userSocketMap.get(loser.username);
-      if (!socketId) {
-        console.log(`User ${loser.username} not online`);
-        return;
-      }
+
       this.emitBotMessageStatusWinnerDeclared(socketId, loser.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',
@@ -737,10 +728,7 @@ export class BettingGateway
   }
   emitBotMessageToUserForLockedBet(username: string, roundName: string) {
     const socketId = this.userSocketMap.get(username);
-    if (!socketId) {
-      console.log(`User ${username} not online`);
-      return;
-    }
+
     const chatMessage: ChatMessage = {
       type: 'system',
       username: 'StreambetBot',
