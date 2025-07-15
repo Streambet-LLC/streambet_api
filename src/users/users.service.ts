@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -11,12 +11,14 @@ import {
 } from './dto/user.requests.dto';
 import { UserResponseDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -250,7 +252,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
+    await this.cacheManager.del(`user_${user.id}_Notification_Settings`);
     // Update only provided fields in notificationPreferences
     const currentPrefs = user.notificationPreferences;
 

@@ -11,6 +11,14 @@ export default registerAs('email', () => ({
   APPLICATION_HOST: process.env.APPLICATION_HOST || '',
   HOST_URL: process.env.APP_HOST_URL || '',
   HOSTED: process.env.HOSTED,
+  ttls: {
+    eightHours: 28800000,
+    fullDay: 86400,
+    fourHours: 14400000,
+    fiveMinutes: 300000,
+    oneHour: 3600000,
+    tenSec: 10000,
+  },
   schemaMapping: {
     account_verification: {
       templatePath: './src/templates/account_verification.ejs',
