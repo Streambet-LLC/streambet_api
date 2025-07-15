@@ -73,6 +73,17 @@ export class BettingService {
   async createStream(createStreamDto: CreateStreamDto): Promise<Stream> {
     const stream = this.streamsRepository.create(createStreamDto);
 
+    if (createStreamDto.scheduledStartTime) {
+      const now = new Date();
+      const scheduledTime = new Date(createStreamDto.scheduledStartTime);
+
+      if (scheduledTime <= now) {
+        stream.status = StreamStatus.LIVE; // If scheduled time is now or in the past
+      } else {
+        stream.status = StreamStatus.SCHEDULED;
+      }
+    }
+
     // Auto-detect platform from embeddedUrl if provided
     if (createStreamDto.embeddedUrl) {
       const detectedPlatform = this.detectPlatformFromUrl(
