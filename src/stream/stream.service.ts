@@ -9,7 +9,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Stream, StreamStatus } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -255,7 +255,10 @@ END
   async findStreamById(id: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id, status: StreamStatus.LIVE },
+        where: { 
+          id, 
+          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]) // Include both LIVE and SCHEDULED
+        },
         select: {
           id: true,
           embeddedUrl: true,
