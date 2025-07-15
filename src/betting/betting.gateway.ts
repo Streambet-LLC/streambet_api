@@ -185,11 +185,12 @@ export class BettingGateway
     client.join(`streambet`);
     this.userSocketMap.set(username, client.id);
     // Let the client know they joined successfully
-    client.emit('joinStreamBet', { username });
+    console.log(`User ${username} ${client.id}joined room streambet`);
+    client.emit('joinedStreamBet', { username });
 
     console.log(`User ${username} joined room  streambet`);
 
-    return { event: 'joinStreamBet', data: { username } };
+    return { event: 'joinedStreamBet', data: { username } };
   }
 
   @UseGuards(WsJwtGuard)
@@ -682,7 +683,6 @@ export class BettingGateway
   emitBotMessageToWinner(winners) {
     for (const winner of winners) {
       const socketId = this.userSocketMap.get(winner.username);
-
       this.emitBotMessageStatusWinnerDeclared(socketId, winner.roundName);
       const chatMessage: ChatMessage = {
         type: 'system',

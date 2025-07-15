@@ -866,6 +866,7 @@ export class BettingService {
         bettingVariable.name,
         winners,
       );
+
       this.bettingGateway.emitBotMessageToWinner(winners);
     } catch (error) {
       // Rollback in case of error
