@@ -264,6 +264,8 @@ END
           embeddedUrl: true,
           name: true,
           platformName: true,
+          status:true,
+          scheduledStartTime: true
         },
       });
 
