@@ -8,7 +8,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards, Inject, forwardRef } from '@nestjs/common';
+import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
 import { BettingService } from './betting.service';
 import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
 import { CancelBetDto } from './dto/cancel-bet.dto';
@@ -54,6 +54,9 @@ export class BettingGateway
 {
   @WebSocketServer()
   server: Server;
+
+  private streamViewers = new Map<string, Set<string>>();
+  private streamUsers = new Map<string, Set<string>>();
   private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
@@ -69,13 +72,11 @@ export class BettingGateway
       const token =
         client.handshake.auth.token ||
         client.handshake.headers.authorization?.split(' ')[1];
-
       if (!token) {
         client.disconnect();
         await Promise.resolve();
         return;
       }
-
       // Verify token and get user
       const decoded = this.authService.verifyRefreshToken(token);
       if (!decoded) {
@@ -83,14 +84,11 @@ export class BettingGateway
         await Promise.resolve();
         return;
       }
-
       // Explicitly cast to JwtPayload since we've already verified it's not null
       const authenticatedSocket = client as AuthenticatedSocket;
-
       authenticatedSocket.data = {
         user: decoded,
       };
-
       console.log(
         `Client connected: ${client.id}, user: ${
           typeof decoded.username === 'string' ? decoded.username : 'unknown'
@@ -105,30 +103,20 @@ export class BettingGateway
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
+    for (const [streamId, sockets] of this.streamViewers.entries()) {
+      if (sockets.delete(client.id)) {
+        if (sockets.size === 0) {
+          this.streamViewers.delete(streamId);
+        }
+      }
+    }
     const username = client.data.user?.username;
     if (username) {
       this.userSocketMap.delete(username);
     }
     console.log(`${username || client.id} disconnected`);
+    Logger.log(`Client disconnected: ${username || client.id}`);
   }
-
-  //@UseGuards(WsJwtGuard)
-  // @SubscribeMessage('test')
-  // testStream(
-  //   @ConnectedSocket() client: AuthenticatedSocket,
-  //   @MessageBody() message: string,
-  // ) {
-  //   console.log({ message });
-  //   // Join the stream's room
-  //   client.join(`stream`);
-
-  //   // Let the client know they joined successfully
-  //   client.emit('joinedStream', { time: new Date() });
-
-  //   console.log(`User ${client.data.user.username} joined stream`);
-
-  //   return { event: 'joinedStream', data: { time: new Date() } };
-  // }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinStream')
@@ -136,21 +124,31 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
-    // Join the stream's room
+    const userId = client.data.user.sub;
     client.join(`stream_${streamId}`);
-
-    // Let the client know they joined successfully
     client.emit('joinedStream', { streamId });
-
-    console.log(`User ${client.data.user.username} joined stream ${streamId}`);
-    try {
-      await this.streamService.incrementViewCount(streamId);
-    } catch (error) {
-      console.error(
-        `Failed to increment view count for stream ${streamId}:`,
-        error,
-      );
+    if (!this.streamViewers.has(streamId)) {
+      this.streamViewers.set(streamId, new Set());
     }
+    this.streamViewers.get(streamId)!.add(client.id);
+    const users = this.streamUsers.get(streamId) || new Set();
+    const isFirstTime = !users.has(userId);
+
+    users.add(userId);
+    this.streamUsers.set(streamId, users);
+
+    // Update DB only the first time this user joins
+    if (isFirstTime) {
+      try {
+        await this.streamService.incrementViewCount(streamId);
+        Logger.log(
+          `User ${userId} incremented view count for stream ${streamId}`,
+        );
+      } catch (e) {
+        Logger.error(`Error updating view count: ${e.message}`);
+      }
+    }
+    console.log(`User ${client.data.user.username} joined stream ${streamId}`);
 
     return { event: 'joinedStream', data: { streamId } };
   }
@@ -161,19 +159,16 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
-    // Leave the stream's room
     client.leave(`stream_${streamId}`);
-
     console.log(`User ${client.data.user.username} left stream ${streamId}`);
-    try {
-      await this.streamService.decrementViewCount(streamId);
-    } catch (error) {
-      console.error(
-        `Failed to decrement view count for stream ${streamId}:`,
-        error,
-      );
+    const sockets = this.streamViewers.get(streamId);
+    if (sockets) {
+      sockets.delete(client.id);
+      if (sockets.size === 0) {
+        this.streamViewers.delete(streamId);
+        this.streamUsers.delete(streamId);
+      }
     }
-
     return { event: 'leftStream', data: { streamId } };
   }
 
@@ -181,15 +176,10 @@ export class BettingGateway
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
-    // Join the streambet's room
     client.join(`streambet`);
     this.userSocketMap.set(username, client.id);
-    // Let the client know they joined successfully
-    console.log(`User ${username} ${client.id}joined room streambet`);
     client.emit('joinedStreamBet', { username });
-
     console.log(`User ${username} joined room  streambet`);
-
     return { event: 'joinedStreamBet', data: { username } };
   }
 
@@ -197,11 +187,8 @@ export class BettingGateway
   @SubscribeMessage('leaveStreamBet')
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
-    // Leave the streambet's room
     client.leave(`streambet`);
-
     console.log(`User ${username} left streambet`);
-
     return { event: 'leaveStreamBet', data: { username } };
   }
 
@@ -217,12 +204,10 @@ export class BettingGateway
         user.sub,
         placeBetDto,
       );
-
       const [updatedWallet, bettingVariable] = await Promise.all([
         this.walletsService.findByUserId(user.sub),
         this.bettingService.findBettingVariableById(bet.bettingVariableId),
       ]);
-
       let potentialAmount = null;
       if (roundId) {
         try {
@@ -234,7 +219,6 @@ export class BettingGateway
           console.error('Potential amount error:', e.message);
         }
       }
-
       client.emit('betPlaced', {
         bet,
         success: true,
@@ -279,13 +263,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
-            amount: placeBetDto.amount,
-            currencyType: placeBetDto.currencyType,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
+          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
