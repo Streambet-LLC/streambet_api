@@ -747,7 +747,7 @@ export class BettingGateway
       message: NOTIFICATION_TEMPLATE.BET_LOCKED.MESSAGE({
         roundName: roundName || '',
       }),
-      title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+      title: NOTIFICATION_TEMPLATE.BET_LOCKED.TITLE(),
       timestamp: new Date(),
     };
     void this.server.to(socketId).emit('botMessage', chatMessage);
