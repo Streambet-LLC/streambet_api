@@ -44,6 +44,7 @@ import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
+import { AnalyticsSummaryResponseDto } from './dto/analytics.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -558,6 +559,39 @@ export class AdminController {
       message: 'Round cancelled and all bets refunded',
       status: HttpStatus.OK,
       data: result,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get analytics summary for dashboard' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Analytics summary fetched successfully',
+    type: AnalyticsSummaryResponseDto,
+  })
+  @Get('analytics/summary')
+  async getAnalyticsSummary(@Request() req: RequestWithUser) {
+    this.ensureAdmin(req.user);
+
+    // Total users
+    const totalUsers = await this.usersService.getUsersCount();
+
+    // Total live streams
+    const totalLiveStreams = await this.streamService.getLiveStreamsCount();
+
+    // Total active bets
+    const totalActiveBets = await this.bettingService.getActiveBetsCount();
+
+    const totalLiveTime = await this.streamService.getTotalLiveDuration();
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Analytics summary fetched successfully',
+      data: {
+        totalUsers,
+        totalActiveBets,
+        totalLiveStreams,
+        totalLiveTime
+      },
     };
   }
 }

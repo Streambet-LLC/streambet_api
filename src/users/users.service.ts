@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
   NotificationSettingsUpdateDto,
@@ -269,5 +269,19 @@ export class UsersService {
 
     // Return sanitized user data
     return this.findOne(userId);
+  }
+
+  /**
+   * Returns the total count of active, non-deleted users with the USER role.
+   * @returns Promise<number> - The number of users matching the criteria.
+   */
+  getUsersCount(): Promise<number> {
+    return this.usersRepository.count({
+      where: {
+        isActive: true,      // Only include users who are active
+        deletedAt: null,     // Exclude users who have been soft-deleted
+        role: UserRole.USER, // Only count users with the USER role
+      },
+    });
   }
 }

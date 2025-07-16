@@ -9,7 +9,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Stream, StreamStatus } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -27,6 +27,8 @@ export class StreamService {
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
+    private dataSource: DataSource,
+    
   ) {}
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -506,5 +508,37 @@ END
       );
       throw error;
     }
+  }
+
+  async getLiveStreamsCount(): Promise<number> {
+    return this.streamsRepository.count({
+      where: {
+        status: StreamStatus.LIVE, // Only count live streams
+      },
+    });
+  }
+
+  private formatDuration(totalSeconds: number): string {
+    const hours = Math.floor(totalSeconds / 3600)
+      .toString()
+      .padStart(2, '0');
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+      .toString()
+      .padStart(2, '0');
+    const seconds = Math.floor(totalSeconds % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  async getTotalLiveDuration(): Promise<string> {
+    const result = await this.dataSource.query(`
+      SELECT SUM(EXTRACT(EPOCH FROM ("endTime" - "scheduledStartTime"))) AS total_seconds
+      FROM streams
+      WHERE "scheduledStartTime" IS NOT NULL AND "endTime" IS NOT NULL
+    `);
+
+    const totalSeconds = parseFloat(result[0].total_seconds) || 0;
+    return this.formatDuration(totalSeconds);
   }
 }
