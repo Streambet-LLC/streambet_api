@@ -257,8 +257,8 @@ END
   async findStreamById(id: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { 
-          id, 
+        where: {
+          id,
           status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]) // Include both LIVE and SCHEDULED
         },
         select: {
@@ -540,5 +540,43 @@ END
 
     const totalSeconds = parseFloat(result[0].total_seconds) || 0;
     return this.formatDuration(totalSeconds);
+  }
+
+    /**
+   * Retrieves analytics summary for a specific stream.
+   * Calculates the total stream time (from scheduledStartTime to endTime, or current time if not ended).
+   * Formats the duration as "HHh MMm SSs".
+   * 
+   * @param streamId - The ID of the stream to summarize
+   * @returns An object containing:
+   *    - totalUsers: (currently uses viewerCount as a placeholder for unique users)
+   *    - totalStreamTime: formatted duration string
+   */
+  async getStreamAnalytics(streamId: string): Promise<any> {
+    // Fetch stream details for the given streamId
+    const stream = await this.findStreamDetailsForAdmin(streamId);
+  
+    // Calculate total stream time in seconds
+    const scheduledStart = stream.scheduledStartTime
+      ? new Date(stream.scheduledStartTime)
+      : null;
+    // Use endTime if available, otherwise use current time
+    const end = stream.endTime ? new Date(stream.endTime) : new Date();
+  
+    let totalSeconds = 0;
+    if (scheduledStart) {
+      totalSeconds = Math.floor(
+        (end.getTime() - scheduledStart.getTime()) / 1000,
+      );
+      if (totalSeconds < 0) totalSeconds = 0;
+    }
+  
+    // Format the duration as "HHh MMm SSs"
+    const totalStreamTime = this.formatDuration(totalSeconds);
+  
+    return {
+      totalUsers: stream.viewerCount || 0, // Assuming viewerCount represents unique users
+      totalStreamTime,
+    }
   }
 }
