@@ -1650,4 +1650,12 @@ export class BettingService {
 
     return { totalBetsTokenAmount, totalBetsCoinAmount };
   }
+
+  getActiveBetsCount(): Promise<number> {
+    return this.betsRepository.count({
+      where: {
+        status: BetStatus.Active,
+      },
+    });
+  }
 }
