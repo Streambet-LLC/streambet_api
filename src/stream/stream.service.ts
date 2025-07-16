@@ -465,7 +465,23 @@ END
 
     return savedStream;
   }
-
+  /**
+   * Decrements the viewer count for a given stream ID in the database.
+   * Ensures the count does not go below zero.
+   * @param streamId The ID of the stream.
+   * @returns The updated viewer count.
+   */
+  async decrementViewerCount(streamId: string): Promise<number> {
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+    });
+    stream.viewerCount = Math.max(0, stream.viewerCount - 1); // Ensure count doesn't go below 0
+    await this.streamsRepository.save(stream);
+    Logger.log(
+      `Stream ${streamId}: Viewers decremented to ${stream.viewerCount}`,
+    );
+    return stream.viewerCount;
+  }
   /**
    * Increments the viewer count for a given stream ID in the database.
    * @param streamId The ID of the stream.
