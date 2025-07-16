@@ -23,6 +23,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
+import { QueueBoardModule } from './queue/queue-board.module';
 
 @Module({
   imports: [
@@ -80,6 +81,9 @@ import { NotificationModule } from './notification/notification.module';
     MailerModule,
     StreamModule,
     NotificationModule,
+    QueueBoardModule.register({
+      queues: ['stream-live'],
+    }),
   ],
   controllers: [AppController],
   providers: [
