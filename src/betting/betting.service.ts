@@ -498,9 +498,9 @@ export class BettingService {
       throw new BadRequestException(message);
     }
 
-    if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+    if (bettingVariable.round.stream.status === StreamStatus.ENDED) {
       throw new BadRequestException(
-        `This stream is not live. You can only place bets during live streams.`,
+        `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
 
