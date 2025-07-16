@@ -467,6 +467,23 @@ END
   }
 
   /**
+   * Increments the viewer count for a given stream ID in the database.
+   * @param streamId The ID of the stream.
+   * @returns The updated viewer count.
+   */
+  async incrementViewerCount(streamId: string): Promise<number> {
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+    });
+    stream.viewerCount++;
+    await this.streamsRepository.save(stream);
+    Logger.log(
+      `Stream ${streamId}: Viewers incremented to ${stream.viewerCount}`,
+    );
+    return stream.viewerCount;
+  }
+
+  /**
    * Retrieves the current viewer count for a stream.
    * @param streamId The ID of the stream.
    * @returns The current viewer count, or 0 if the stream doesn't exist.
