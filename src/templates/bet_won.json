@@ -53,19 +53,38 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName", "verifyLink", "code"],
+      "required": [
+        "streamName",
+        "fullName",
+        "amount",
+        "currencyType",
+        "roundName",
+        "dashboardLink"
+      ],
       "properties": {
         "fullName": {
           "type": "string",
-          "description": "Full name of the user"
+          "description": "username of the user"
         },
-        "verifyLink": {
+        "streamName": {
           "type": "string",
-          "description": "Verification link for email confirmation"
+          "description": "name of the stream"
         },
-        "code": {
+        "amount": {
           "type": ["string", "number"],
-          "description": "Verification code"
+          "description": "payout amount"
+        },
+        "currencyType": {
+          "type": ["string", "number"],
+          "description": "currency type"
+        },
+        "roundName": {
+          "type": ["string", "number"],
+          "description": "name of the round "
+        },
+        "dashboardLink": {
+          "type": ["string", "number"],
+          "description": "link to dashboart"
         }
       }
     }

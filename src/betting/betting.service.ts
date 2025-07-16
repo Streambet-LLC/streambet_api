@@ -32,6 +32,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class BettingService {
@@ -45,6 +46,7 @@ export class BettingService {
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
+    private notificationService: NotificationService,
     private usersService: UsersService,
     private dataSource: DataSource,
     @Inject(forwardRef(() => BettingGateway))
@@ -859,33 +861,52 @@ export class BettingService {
         currencyType: bet?.currency,
         roundName: bettingVariable?.round?.roundName,
       }));
-      if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
-        const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-          where: {
-            bettingVariableId: variableId,
-            status: BetStatus.Lost,
-          },
-          relations: ['user'],
-        });
-        const loser = losingBetsWithUserInfo.map((bet) => ({
-          userId: bet.userId,
-          username: bet.user?.username,
-          roundName: bettingVariable?.round?.roundName,
-        }));
-        this.bettingGateway.emitBotMessageToLoser(loser);
-      }
 
-      // Commit the transaction
       await queryRunner.commitTransaction();
-      // Emit winner declared event
+
       this.bettingGateway.emitWinnerDeclared(
         bettingVariable.stream.id,
         bettingVariable.id,
         bettingVariable.name,
         winners,
       );
+      for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageToWinner(
+          winner.userId,
+          winner.username,
+          winner.roundName,
+          winner.amount,
+          winner.currencyType,
+        );
+        await this.notificationService.sendSMTPForWonBet(
+          winner.userId,
+          bettingVariable.stream.name,
+          winner.amount,
+          winner.currencyType,
+          winner.roundName,
+        );
+      }
+      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          roundId: bettingVariable.roundId,
+          status: BetStatus.Lost,
+        },
+        relations: ['user', 'bettingVariable', 'round'],
+      });
 
-      this.bettingGateway.emitBotMessageToWinner(winners);
+      lossingBetsWithUserInfo.map(async (bet) => {
+        await this.bettingGateway.emitBotMessageToLoser(
+          bet.userId,
+          bet.user?.username,
+          bet.round.roundName,
+        );
+
+        await this.notificationService.sendSMTPForLossBet(
+          bet.userId,
+          bettingVariable.stream.name,
+          bet.round.roundName,
+        );
+      });
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
@@ -1527,14 +1548,16 @@ export class BettingService {
             'locked',
             true,
           );
+
           const bets = await this.betsRepository.find({
             where: { round: { id: roundId } },
             relations: ['user'],
           });
+
           for (const bet of bets) {
-            await this.bettingGateway.emitBotMessageToUserForLockedBet(
-              bet.user.username,
+            await this.bettingGateway.emitLockBetRound(
               roundWithStream.roundName,
+              bet.userId,
             );
           }
         }
@@ -1553,7 +1576,7 @@ export class BettingService {
             roundId,
             'open',
           );
-          this.bettingGateway.emitBotMessageToUserForOpenBet(round.roundName);
+          this.bettingGateway.emitOpenBetRound(round.roundName);
         }
       }
       return savedRound;
@@ -1613,7 +1636,8 @@ export class BettingService {
           refundedBets.push(bet);
           await queryRunner.manager.save(bet);
 
-          this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+          await this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+            bet.userId,
             username,
             bet.amount,
             bet.currency,
@@ -1625,7 +1649,7 @@ export class BettingService {
       }
       await queryRunner.commitTransaction();
       if (round.streamId) {
-        this.bettingGateway.emitBettingStatus(
+        await this.bettingGateway.emitBettingStatus(
           round.streamId,
           roundId,
           'canceled',
@@ -1656,5 +1680,41 @@ export class BettingService {
     );
 
     return { totalBetsTokenAmount, totalBetsCoinAmount };
+  }
+
+  getActiveBetsCount(): Promise<number> {
+    return this.betsRepository.count({
+      where: {
+        status: BetStatus.Active,
+      },
+    });
+  }
+
+   /**
+   * Returns the total bet value for a stream, separated by free tokens and coins.
+   * @param streamId - The ID of the stream
+   * @returns Promise<{ freeTokens: number; coins: number }>
+   */
+  async getTotalBetValueForStream(streamId: string): Promise<{ freeTokens: number; coins: number }> {
+    // Get total bet value for free tokens
+    const tokenResult = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('SUM(bet.amount)', 'totalBetValue')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.FREE_TOKENS })
+      .getRawOne();
+  
+    // Get total bet value for coins
+    const coinResult = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('SUM(bet.amount)', 'totalBetValue')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.STREAM_COINS })
+      .getRawOne();
+  
+    return {
+      freeTokens: Number(tokenResult?.totalBetValue) || 0,
+      coins: Number(coinResult?.totalBetValue) || 0,
+    };
   }
 }
