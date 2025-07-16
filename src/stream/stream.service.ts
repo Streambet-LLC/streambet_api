@@ -466,47 +466,17 @@ END
     return savedStream;
   }
 
-  async incrementViewCount(streamId: string) {
-    try {
-      const result = await this.streamsRepository
-        .createQueryBuilder()
-        .update(Stream)
-        .set({ viewerCount: () => 'viewerCount + 1' })
-        .where('id = :id', { id: streamId })
-        .execute();
-
-      if (result.affected === 0) {
-        throw new NotFoundException(`Stream with ID ${streamId} not found`);
-      }
-    } catch (error) {
-      Logger.error(
-        `Failed to increment view count for stream ${streamId}`,
-        error,
-      );
-      throw error;
-    }
+  /**
+   * Retrieves the current viewer count for a stream.
+   * @param streamId The ID of the stream.
+   * @returns The current viewer count, or 0 if the stream doesn't exist.
+   */
+  async getViewerCount(streamId: string): Promise<number> {
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+    });
+    return stream ? stream.viewerCount : 0;
   }
-  async decrementViewCount(streamId: string) {
-    try {
-      const result = await this.streamsRepository
-        .createQueryBuilder()
-        .update(Stream)
-        .set({ viewerCount: () => 'GREATEST(viewerCount - 1, 0)' })
-        .where('id = :id', { id: streamId })
-        .execute();
-
-      if (result.affected === 0) {
-        throw new NotFoundException(`Stream with ID ${streamId} not found`);
-      }
-    } catch (error) {
-      Logger.error(
-        `Failed to decrement view count for stream ${streamId}`,
-        error,
-      );
-      throw error;
-    }
-  }
-
   async getLiveStreamsCount(): Promise<number> {
     return this.streamsRepository.count({
       where: {
@@ -539,11 +509,11 @@ END
     return this.formatDuration(totalSeconds);
   }
 
-    /**
+  /**
    * Retrieves analytics summary for a specific stream.
    * Calculates the total stream time (from scheduledStartTime to endTime, or current time if not ended).
    * Formats the duration as "HHh MMm SSs".
-   * 
+   *
    * @param streamId - The ID of the stream to summarize
    * @returns An object containing:
    *    - totalUsers: (currently uses viewerCount as a placeholder for unique users)
@@ -552,14 +522,14 @@ END
   async getStreamAnalytics(streamId: string): Promise<any> {
     // Fetch stream details for the given streamId
     const stream = await this.findStreamDetailsForAdmin(streamId);
-  
+
     // Calculate total stream time in seconds
     const scheduledStart = stream.scheduledStartTime
       ? new Date(stream.scheduledStartTime)
       : null;
     // Use endTime if available, otherwise use current time
     const end = stream.endTime ? new Date(stream.endTime) : new Date();
-  
+
     let totalSeconds = 0;
     if (scheduledStart) {
       totalSeconds = Math.floor(
@@ -567,13 +537,13 @@ END
       );
       if (totalSeconds < 0) totalSeconds = 0;
     }
-  
+
     // Format the duration as "HHh MMm SSs"
     const totalStreamTime = this.formatDuration(totalSeconds);
-  
+
     return {
       totalUsers: stream.viewerCount || 0, // Assuming viewerCount represents unique users
       totalStreamTime,
-    }
+    };
   }
 }
