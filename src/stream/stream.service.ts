@@ -28,7 +28,6 @@ export class StreamService {
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
-    
   ) {}
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -257,17 +256,17 @@ END
   async findStreamById(id: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { 
-          id, 
-          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]) // Include both LIVE and SCHEDULED
+        where: {
+          id,
+          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]), // Include both LIVE and SCHEDULED
         },
         select: {
           id: true,
           embeddedUrl: true,
           name: true,
           platformName: true,
-          status:true,
-          scheduledStartTime: true
+          status: true,
+          scheduledStartTime: true,
         },
       });
 
@@ -298,9 +297,7 @@ END
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .where('stream.id = :streamId', { streamId })
-        .andWhere('stream.status = :streamStatus', {
-          streamStatus: StreamStatus.LIVE,
-        })
+
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
         })
