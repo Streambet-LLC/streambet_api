@@ -82,7 +82,7 @@ import { QueueBoardModule } from './queue/queue-board.module';
     StreamModule,
     NotificationModule,
     QueueBoardModule.register({
-      queues: ['stream-live'],
+      queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
     }),
   ],
   controllers: [AppController],

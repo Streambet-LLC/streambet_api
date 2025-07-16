@@ -31,7 +31,7 @@ export class StreamService {
     private bettingGateway: BettingGateway,
   ) {}
   
-  private streamLiveQueue = new Queue('stream-live', { connection: redisConfig });
+  private streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
 
   /**
    * Retrieves a paginated list of streams for the home page view.

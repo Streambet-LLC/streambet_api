@@ -17,7 +17,7 @@ import { Queue } from 'bullmq';
 import redisConfig from './config/redis.config';
 
 // Create your queue instance
-const streamLiveQueue = new Queue('stream-live', { connection: redisConfig });
+const streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
 
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/admin/queues');
