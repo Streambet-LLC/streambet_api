@@ -29,9 +29,7 @@
                     </table>
 
                     <!-- Heading -->
-                    <h1 class="heading"
-                        style="text-align:center;font-size:38px;font-weight:600;color:#FFFFFF;margin-bottom:40px;font-family:'Inter',sans-serif;">
-                        Welcome to <span style="color:rgba(189,255,0,1);">Streambet</span></h1>
+
 
                     <!-- Box -->
                     <div class="box"
@@ -39,20 +37,20 @@
                         <div class="box-content" style="max-width:700px;margin:0 auto;color:#FFFFFF;">
                             <p
                                 style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform: capitalize;color:#FFFFFF;">
-                                Hi <%= params.username %>,</p>
+                                Hi <%= params.fullName %>,</p>
                             <p
                                 style="font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
                                 The betting round <%= params.roundName %> has concluded. Unfortunately, you didn't win.
                                     Better luck next round and you can see
-                                    your transaction history at any time in the Streambet dashboard <Button to
-                                        dashboard>
-                                        <a href="<%= params.loginLink %>" class="btn"
-                                            style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Go
-                                            to Dashboard</a>
+                                    your transaction history at any time in the Streambet dashboard
 
-                                        <p
-                                            style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                                            Cheers,<br /><b style="font-size:20px;">The Streambet Team</b></p>
+                                    <a href="<%= params.dashboardLink %>" class="btn"
+                                        style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Go
+                                        to Dashboard</a>
+
+                                    <p
+                                        style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                                        Cheers,<br /><b style="font-size:20px;">The Streambet Team</b></p>
                         </div>
                     </div>
 

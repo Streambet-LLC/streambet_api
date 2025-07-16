@@ -55,13 +55,14 @@
       "type": "object",
       "required": [
         "streamName",
-        "username",
+        "fullName",
         "amount",
         "currencyType",
-        "roundName"
+        "roundName",
+        "dashboardLink"
       ],
       "properties": {
-        "username": {
+        "fullName": {
           "type": "string",
           "description": "username of the user"
         },
@@ -80,6 +81,10 @@
         "roundName": {
           "type": ["string", "number"],
           "description": "name of the round "
+        },
+        "dashboardLink": {
+          "type": ["string", "number"],
+          "description": "link to dashboart"
         }
       }
     }

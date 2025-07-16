@@ -827,8 +827,6 @@ export class BettingService {
 
       // Process losing bets
       if (losingBets.length > 0) {
-        console.log(losingBets, 'losing bets');
-
         await this.processLosingBets(queryRunner, losingBets);
         if (winningTokenBets.length === 0) {
           await this.creditAmountVoidCase(queryRunner, losingTokenBets);
@@ -857,24 +855,8 @@ export class BettingService {
         roundName: bettingVariable?.round?.roundName,
       }));
 
-      const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: {
-          bettingVariableId: variableId,
-          status: BetStatus.Lost,
-        },
-        relations: ['user'],
-      });
-      const loser = losingBetsWithUserInfo.map((bet) => ({
-        userId: bet.userId,
-        username: bet.user?.username,
-        roundName: bettingVariable?.round?.roundName,
-      }));
-
-      this.bettingGateway.emitBotMessageToLoser(loser);
-
-      // Commit the transaction
       await queryRunner.commitTransaction();
-      // Emit winner declared event
+
       this.bettingGateway.emitWinnerDeclared(
         bettingVariable.stream.id,
         bettingVariable.id,
@@ -883,20 +865,12 @@ export class BettingService {
       );
       for (const winner of winners) {
         await this.bettingGateway.emitBotMessageToWinner(
+          winner.userId,
           winner.username,
           winner.roundName,
           winner.amount,
           winner.currencyType,
         );
-        console.log(
-          winner.userId,
-          bettingVariable.stream.name,
-          winner.amount,
-          winner.currencyType,
-          winner.roundName,
-          'data',
-        );
-
         await this.notificationService.sendSMTPForWonBet(
           winner.userId,
           bettingVariable.stream.name,
@@ -905,6 +879,27 @@ export class BettingService {
           winner.roundName,
         );
       }
+      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          roundId: bettingVariable.roundId,
+          status: BetStatus.Lost,
+        },
+        relations: ['user', 'bettingVariable', 'round'],
+      });
+
+      lossingBetsWithUserInfo.map(async (bet) => {
+        await this.bettingGateway.emitBotMessageToLoser(
+          bet.userId,
+          bet.user?.username,
+          bet.round.roundName,
+        );
+
+        await this.notificationService.sendSMTPForLossBet(
+          bet.userId,
+          bettingVariable.stream.name,
+          bet.round.roundName,
+        );
+      });
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
@@ -1546,14 +1541,16 @@ export class BettingService {
             'locked',
             true,
           );
+
           const bets = await this.betsRepository.find({
             where: { round: { id: roundId } },
             relations: ['user'],
           });
+
           for (const bet of bets) {
-            await this.bettingGateway.emitBotMessageToUserForLockedBet(
-              bet.user.username,
+            await this.bettingGateway.emitLockBetRound(
               roundWithStream.roundName,
+              bet.userId,
             );
           }
         }
@@ -1572,7 +1569,7 @@ export class BettingService {
             roundId,
             'open',
           );
-          this.bettingGateway.emitBotMessageToUserForOpenBet(round.roundName);
+          this.bettingGateway.emitOpenBetRound(round.roundName);
         }
       }
       return savedRound;
@@ -1632,7 +1629,8 @@ export class BettingService {
           refundedBets.push(bet);
           await queryRunner.manager.save(bet);
 
-          this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+          await this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+            bet.userId,
             username,
             bet.amount,
             bet.currency,
@@ -1644,7 +1642,7 @@ export class BettingService {
       }
       await queryRunner.commitTransaction();
       if (round.streamId) {
-        this.bettingGateway.emitBettingStatus(
+        await this.bettingGateway.emitBettingStatus(
           round.streamId,
           roundId,
           'canceled',

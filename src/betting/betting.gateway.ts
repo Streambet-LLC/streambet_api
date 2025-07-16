@@ -19,6 +19,7 @@ import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
+import { NotificationService } from 'src/notification/notification.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -64,6 +65,7 @@ export class BettingGateway
     private readonly authService: AuthService,
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -241,6 +243,50 @@ export class BettingGateway
         },
       });
 
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(
+          client.data.user.sub,
+        );
+      if (receiverNotificationPermission['inAppNotification']) {
+        client.emit('betPlaced', {
+          bet,
+          success: true,
+          currencyType: placeBetDto.currencyType,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: placeBetDto.amount,
+          selectedWinner: bettingVariable?.name || '',
+
+          message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
+            amount: placeBetDto.amount,
+            currencyType: placeBetDto.currencyType,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      } else {
+        client.emit('betPlaced', {
+          bet,
+          success: true,
+          currencyType: placeBetDto.currencyType,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: placeBetDto.amount,
+          selectedWinner: bettingVariable?.name || '',
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      }
+
       // Emit to all clients after DB commit
       if (bettingVariable) {
         const updatedBettingVariable =
@@ -295,21 +341,37 @@ export class BettingGateway
         this.bettingService.findBettingVariableById(bet.bettingVariableId),
       ]);
       const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
-      client.emit('betCancelled', {
-        bet,
-        success: true,
-        message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-          amount: bet.amount,
-          currencyType: bet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
-        updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
-        },
-      });
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(
+          client.data.user.sub,
+        );
+      if (receiverNotificationPermission['inAppNotification']) {
+        client.emit('betCancelled', {
+          bet,
+          success: true,
+          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+            amount: bet.amount,
+            currencyType: bet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      } else {
+        client.emit('betCancelled', {
+          bet,
+          success: true,
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      }
+
       // Emit to all clients after DB commit
       if (bettingVariable) {
         const updatedBettingVariable =
@@ -332,13 +394,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-            amount: bet.amount,
-            currencyType: bet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
+          message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
@@ -379,28 +435,51 @@ export class BettingGateway
           console.error('Potential amount error:', e.message);
         }
       }
-      client.emit('betEdited', {
-        bet: editedBet,
-        success: true,
-        message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-          amount: editedBet.amount,
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(
+          client.data.user.sub,
+        );
+      if (receiverNotificationPermission['inAppNotification']) {
+        client.emit('betEdited', {
+          bet: editedBet,
+          success: true,
+          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+            amount: editedBet.amount,
+            currencyType: editedBet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+          timestamp: new Date(),
           currencyType: editedBet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
-        timestamp: new Date(),
-        currencyType: editedBet.currency,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-        potentialTokenWinningAmount:
-          potentialAmount?.potentialFreeTokenAmt || 0,
-        amount: editedBet.amount,
-        selectedWinner: bettingVariable?.name || '',
-        updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
-        },
-      });
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: editedBet.amount,
+          selectedWinner: bettingVariable?.name || '',
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      } else {
+        client.emit('betEdited', {
+          bet: editedBet,
+          success: true,
+          timestamp: new Date(),
+          currencyType: editedBet.currency,
+          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+          potentialTokenWinningAmount:
+            potentialAmount?.potentialFreeTokenAmt || 0,
+          amount: editedBet.amount,
+          selectedWinner: bettingVariable?.name || '',
+          updatedWalletBalance: {
+            freeTokens: updatedWallet.freeTokens,
+            streamCoins: updatedWallet.streamCoins,
+          },
+        });
+      }
+
       // Emit to all clients after DB commit
       if (bettingVariable) {
         // Refetch the latest betting round with variables
@@ -431,13 +510,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-            amount: editedBet.amount,
-            currencyType: editedBet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
@@ -550,7 +623,6 @@ export class BettingGateway
     let event: string;
     let message: string;
     let payload: any;
-
     switch (status) {
       case 'open':
         event = 'betOpened';
@@ -565,7 +637,7 @@ export class BettingGateway
       case 'canceled':
         event = 'betCancelledByAdmin';
         message = 'Betting is canceled!';
-        payload = { roundId, cancelled: true };
+        payload = { roundId, cancelled: true, message };
         break;
       default:
         throw new Error('Invalid betting status');
@@ -577,9 +649,8 @@ export class BettingGateway
       message,
       timestamp: new Date(),
     };
-
     void this.server.to(`stream_${streamId}`).emit(event, payload);
-    // void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+    void this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
   }
 
   emitStreamEnd(streamId: string): void {
@@ -656,95 +727,114 @@ export class BettingGateway
       console.error('Error emitting potential amounts update:', e.message);
     }
   }
-  emitBotMessageForCancelBetByAdmin(
+  async emitBotMessageForCancelBetByAdmin(
+    userId: string,
     username: string,
     amount: number,
     currencyType: string,
     bettingOption: string,
     roundName: string,
   ) {
-    const socketId = this.userSocketMap.get(username);
-
-    const chatMessage: ChatMessage = {
-      type: 'system',
-      username: 'StreambetBot',
-      message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-        amount,
-        currencyType,
-        bettingOption: bettingOption || '',
-        roundName: roundName || '',
-      }),
-      title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
-      timestamp: new Date(),
-    };
-
-    void this.server.to(socketId).emit('botMessage', chatMessage);
-  }
-  async emitBotMessageToWinner(
-    username: string,
-    roundName: string,
-    amount: number,
-    currencyType: string,
-  ) {
-    const socketId = this.userSocketMap.get(username);
-    this.emitBotMessageForWinnerDeclare(socketId, roundName);
-    const chatMessage: ChatMessage = {
-      type: 'system',
-      username: 'StreambetBot',
-      message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
-        amount: amount,
-        currencyType: currencyType,
-        roundName: roundName || '',
-      }),
-      title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
-      timestamp: new Date(),
-    };
-    void this.server.to(socketId).emit('botMessage', chatMessage);
-  }
-  emitBotMessageToLoser(losers) {
-    console.log(losers);
-
-    for (const loser of losers) {
-      const socketId = this.userSocketMap.get(loser.username);
-      console.log(socketId, 'socketId');
-
-      this.emitBotMessageForWinnerDeclare(socketId, loser.roundName);
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
-        message: NOTIFICATION_TEMPLATE.BET_LOST.MESSAGE({
-          roundName: loser.roundName || '',
+        message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+          amount,
+          currencyType,
+          bettingOption: bettingOption || '',
+          roundName: roundName || '',
         }),
-        title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+        title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
         timestamp: new Date(),
       };
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
-  emitBotMessageToUserForOpenBet(roundName) {
-    this.server.to('streambet').emit('botMessage', {
+  async emitBotMessageToWinner(
+    userId: string,
+    username: string,
+    roundName: string,
+    amount: number,
+    currencyType: string,
+  ) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
+      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
+          amount: amount,
+          currencyType: currencyType,
+          roundName: roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
+        timestamp: new Date(),
+      };
+      void this.server.to(socketId).emit('botMessage', chatMessage);
+    }
+  }
+  async emitBotMessageToLoser(
+    userId: string,
+    username: string,
+    roundName: string,
+  ) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
+      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_LOST.MESSAGE({
+          roundName: roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_LOST.TITLE(),
+        timestamp: new Date(),
+      };
+
+      void this.server.to(socketId).emit('botMessage', chatMessage);
+    }
+  }
+
+  emitOpenBetRound(roundName: string) {
+    const payload = {
       type: 'system',
-      username: 'StreambetBot',
+      username: 'StreamBet Bot',
       message: NOTIFICATION_TEMPLATE.BET_OPEN.MESSAGE({
         roundName: roundName || '',
       }),
       title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
       timestamp: new Date(),
-    });
-  }
-  emitBotMessageToUserForLockedBet(username: string, roundName: string) {
-    const socketId = this.userSocketMap.get(username);
-
-    const chatMessage: ChatMessage = {
-      type: 'system',
-      username: 'StreambetBot',
-      message: NOTIFICATION_TEMPLATE.BET_LOCKED.MESSAGE({
-        roundName: roundName || '',
-      }),
-      title: NOTIFICATION_TEMPLATE.BET_LOCKED.TITLE(),
-      timestamp: new Date(),
     };
-    void this.server.to(socketId).emit('botMessage', chatMessage);
+    this.server.to('streambet').emit('botMessage', payload);
+    Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
+  }
+  async emitLockBetRound(roundName: string, userId: string) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_LOCKED.MESSAGE({
+          roundName: roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_LOCKED.TITLE(),
+        timestamp: new Date(),
+      };
+
+      this.server.to('streambet').emit('botMessage', chatMessage);
+
+      Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
+    }
   }
 
   emitBotMessageForWinnerDeclare(socketId: string, roundName: string) {

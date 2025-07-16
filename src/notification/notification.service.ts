@@ -1,10 +1,5 @@
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
@@ -31,7 +26,6 @@ export class NotificationService {
       const settings = userDetails.notificationPreferences;
       if (settings) {
         const expireTime = this.configService.get<number>('email.ttls.fullDay');
-        console.log('expireTime', expireTime);
         await this.cacheManager.set(cacheKey, settings, expireTime);
       }
       return settings;
@@ -42,7 +36,7 @@ export class NotificationService {
     userId: string,
     streamName: string,
     amount: number,
-    CurrencyType: string,
+    currencyType: string,
     roundName: string,
   ) {
     try {
@@ -50,11 +44,8 @@ export class NotificationService {
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
-      console.log(
-        receiverNotificationPermission['emailNotification'],
-        'emailNotification',
-      );
-      console.log(receiverNotificationPermission);
+      const dashboardLink =
+        this.configService.get<string[]>('email.HOST_URL') || '';
       if (
         receiverNotificationPermission['emailNotification'] &&
         receiverEmail
@@ -62,23 +53,25 @@ export class NotificationService {
         if (receiverEmail.indexOf('@example.com') !== -1) {
           return true;
         }
-
         const subject = NOTIFICATION_TEMPLATE.EMAIL_BET_WON.TITLE({
           streamName,
         });
-
+        let updatedCurrencyType =
+          currencyType === CurrencyType.FREE_TOKENS
+            ? 'free token'
+            : 'stream coin';
         const emailData = {
           toAddress: [receiverEmail],
           subject,
           params: {
             streamName,
-            username: receiver.username,
-            amount,
-            CurrencyType,
+            fullName: receiver.username,
+            amount: amount.toLocaleString('en-US'),
+            currencyType: updatedCurrencyType,
             roundName,
+            dashboardLink,
           },
         };
-
         await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
 
         return true;
@@ -104,7 +97,8 @@ export class NotificationService {
         if (receiverEmail.indexOf('@example.com') !== -1) {
           return true;
         }
-
+        const dashboardLink =
+          this.configService.get<string[]>('email.HOST_URL') || '';
         const subject = NOTIFICATION_TEMPLATE.EMAIL_BET_LOSS.TITLE({
           streamName,
         });
@@ -114,12 +108,130 @@ export class NotificationService {
           subject,
           params: {
             streamName,
-            username: receiver.username,
+            fullName: receiver.username,
             roundName,
+            dashboardLink,
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
+        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetLoss);
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('unable to send email', e);
+    }
+  }
+
+  async sendSMTPForWelcome(
+    userId: string,
+    receiverEmail: string,
+    username: string,
+  ) {
+    try {
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+        const dashboardLink =
+          this.configService.get<string[]>('email.HOST_URL') || '';
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_WELCOME.TITLE();
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            fullName: username,
+            dashboardLink,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(emailData, EmailType.Welcome);
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('unable to send email', e);
+    }
+  }
+  async sendSMTPForPasswordReset(
+    receiverEmail: string,
+    username: string,
+    resetLink: string,
+  ) {
+    try {
+      if (receiverEmail) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_PASSWORD_RESET.TITLE();
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            fullName: username,
+            resetLink,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.PasswordReset,
+        );
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('unable to send email', e);
+    }
+  }
+  async sendSMTPForWonFreeCoin(
+    userId: string,
+    receiverEmail: string,
+    username: string,
+    streamName: string,
+    amount: number,
+    roundName: string,
+    convertedCoin: string,
+    blogPostLink: string,
+  ) {
+    try {
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_FREE_COIN_WON.TITLE({
+          streamName,
+        });
+
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            streamName,
+            fullName: username,
+            amount: amount.toLocaleString('en-US'),
+            roundName,
+            convertedCoin,
+            blogPostLink,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.BetWonFreeCoin,
+        );
 
         return true;
       }

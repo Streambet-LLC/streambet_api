@@ -10,6 +10,7 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailsModule } from '../emails/email.module';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Module({
   imports: [
@@ -28,7 +29,13 @@ import { EmailsModule } from '../emails/email.module';
     EmailsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, RefreshTokenGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    RefreshTokenGuard,
+    NotificationService,
+  ],
   exports: [PassportModule, JwtModule, AuthService],
 })
 export class AuthModule {}

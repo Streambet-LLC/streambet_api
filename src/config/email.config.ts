@@ -28,5 +28,21 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/password_reset.ejs',
       schemaPath: './src/templates/password_reset.json',
     },
+    welcome: {
+      templatePath: './src/templates/welcome.ejs',
+      schemaPath: './src/templates/welcome.json',
+    },
+    bet_won: {
+      templatePath: './src/templates/bet_won.ejs',
+      schemaPath: './src/templates/bet_won.json',
+    },
+    bet_loss: {
+      templatePath: './src/templates/bet_loss.ejs',
+      schemaPath: './src/templates/bet_loss.json',
+    },
+    bet_won_free_coin: {
+      templatePath: './src/templates/bet_won_free_coin.ejs',
+      schemaPath: './src/templates/bet_won_free_coin.json',
+    },
   },
 }));
