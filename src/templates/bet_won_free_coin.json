@@ -53,19 +53,39 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName", "verifyLink", "code"],
+      "required": [
+        "streamName",
+        "fullName",
+        "amount",
+        "roundName",
+        "convertedCoin",
+        "blogPostLink"
+      ],
       "properties": {
+        "streamName": {
+          "type": "string",
+          "description": "name of the stream"
+        },
         "fullName": {
           "type": "string",
-          "description": "Full name of the user"
+          "description": "username of the user"
         },
-        "verifyLink": {
-          "type": "string",
-          "description": "Verification link for email confirmation"
-        },
-        "code": {
+
+        "amount": {
           "type": ["string", "number"],
-          "description": "Verification code"
+          "description": "payout amount"
+        },
+        "roundName": {
+          "type": ["string", "number"],
+          "description": "name of the round "
+        },
+        "convertedCoin": {
+          "type": ["string", "number"],
+          "description": "converted amount of tokent to coin"
+        },
+        "blogPostLink": {
+          "type": ["string", "number"],
+          "description": "link to blog post"
         }
       }
     }

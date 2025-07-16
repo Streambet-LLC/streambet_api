@@ -487,6 +487,7 @@ export class AdminController {
     @Body() body: UpdateRoundStatusDto,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
+
     const updatedRound = await this.bettingService.updateRoundStatus(
       roundId,
       body.newStatus,

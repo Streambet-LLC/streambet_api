@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Welcome to Streambet! Here's 1000 Free Tokens 🙌</title>
+    <title>🎉🎉 You won a bet on <%= params.streamName %>, but could you have done better? </title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
@@ -35,29 +35,24 @@
                     <div class="box"
                         style="background-color:#181818;border-radius:16px;border:1px solid #2C2C2C;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
                         <div class="box-content" style="max-width:700px;margin:0 auto;color:#FFFFFF;">
-                            <p
-                                style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform: capitalize;color:#FFFFFF;">
-                                Hey <%= params.fullName %>,</p>
+
                             <p
                                 style="font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                                Welcome to Streambet! Your account has been created successfully. As a thank you for
-                                joining, we've
-                                deposited 1000 free coins into your account to bet with. Here at Streambet there are two
-                                types of currency to bet
-                                with, Free coins which are more for fun and have lesser value, and Stream coins which
-                                can be purchased and converted
-                                into cash and cash equivalents when you win! We look forward to starting this journey
-                                with you and reach out with
-                                any questions.</p>
+                                Congratulations <%= params.fullName %> ! You won <%= params.amount %> Free Tokens in <%=
+                                            params.roundName %>. Your winnings have been added to your wallet.
+                                            While that's awesome you built up more coins, If you had bet Streamcoins,
+                                            you would have earned <%= params.convertedCoin %> which could have been
+                                                converted to cash or cash equivalents. Want to learn more about the
+                                                difference between
+                                                the two coins? Click the link below.
 
+                                                <a href="<%= params.blogPostLink %>" class="btn"
+                                                    style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Go
+                                                    to BLOG POST</a>
 
-                            <a href="<%= params.dashboardLink %>" class="btn"
-                                style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Go
-                                to Dashboard</a>
-
-                            <p
-                                style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                                Cheers,<br /><b style="font-size:20px;">The Streambet Team</b></p>
+                                                <p
+                                                    style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                                                    Cheers,<br /><b style="font-size:20px;">The Streambet Team</b></p>
                         </div>
                     </div>
 

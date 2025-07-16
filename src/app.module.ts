@@ -23,9 +23,18 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
-
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
 @Module({
   imports: [
+    CacheModule.register({
+      store: redisStore,
+      host: 'localhost',
+      port: 6379,
+      ttl: 60, // seconds
+      isGlobal: true, // ✅ Makes CACHE_MANAGER available globally
+    }),
+
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
