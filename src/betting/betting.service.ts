@@ -1564,7 +1564,7 @@ export class BettingService {
           );
 
           const bets = await this.betsRepository.find({
-            where: { round: { id: roundId } },
+            where: { round: { id: roundId }, status: BetStatus.Active },
             relations: ['user'],
           });
 
