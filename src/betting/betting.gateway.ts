@@ -177,7 +177,7 @@ export class BettingGateway
       throw error;
     }
 
-    return { event: 'joinedStream', data: { streamId } };
+    // return { event: 'joinedStream', data: { streamId } };
   }
 
   @UseGuards(WsJwtGuard)
@@ -216,7 +216,7 @@ export class BettingGateway
     this.userSocketMap.set(username, client.id);
     this.server.to(`streambet`).emit('joinedStreamBet', { username });
     console.log(`User ${username} joined room  streambet`);
-    return { event: 'joinedStreamBet', data: { username } };
+    //  return { event: 'joinedStreamBet', data: { username } };
   }
 
   @UseGuards(WsJwtGuard)
