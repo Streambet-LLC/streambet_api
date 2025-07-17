@@ -255,34 +255,13 @@ export class BettingGateway
           console.error('Potential amount error:', e.message);
         }
       }
-      client.emit('betPlaced', {
-        bet,
-        success: true,
-        currencyType: placeBetDto.currencyType,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-        potentialTokenWinningAmount:
-          potentialAmount?.potentialFreeTokenAmt || 0,
-        amount: placeBetDto.amount,
-        selectedWinner: bettingVariable?.name || '',
-        message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
-          amount: placeBetDto.amount,
-          currencyType: placeBetDto.currencyType,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
-        updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
-        },
-      });
-
       const receiverNotificationPermission =
         await this.notificationService.addNotificationPermision(
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        client.emit('betPlaced', {
+        const socketId = this.userSocketMap.get(client.data.user.username);
+        this.server.to(socketId).emit('betPlaced', {
           bet,
           success: true,
           currencyType: placeBetDto.currencyType,
@@ -380,7 +359,8 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        client.emit('betCancelled', {
+        const socketId = this.userSocketMap.get(client.data.user.username);
+        this.server.to(socketId).emit('betCancelled', {
           bet,
           success: true,
           message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
@@ -474,7 +454,8 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        client.emit('betEdited', {
+        const socketId = this.userSocketMap.get(client.data.user.username);
+        this.server.to(socketId).emit('betEdited', {
           bet: editedBet,
           success: true,
           message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
@@ -851,10 +832,12 @@ export class BettingGateway
     this.server.to('streambet').emit('botMessage', payload);
     Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
   }
-  async emitLockBetRound(roundName: string, userId: string) {
+  async emitLockBetRound(roundName: string, userId: string, username: string) {
     const receiverNotificationPermission =
       await this.notificationService.addNotificationPermision(userId);
+
     if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -865,7 +848,7 @@ export class BettingGateway
         timestamp: new Date(),
       };
 
-      this.server.to('streambet').emit('botMessage', chatMessage);
+      void this.server.to(socketId).emit('botMessage', chatMessage);
 
       Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
     }
