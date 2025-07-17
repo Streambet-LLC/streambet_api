@@ -23,6 +23,8 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
+import { QueueBoardModule } from './queue/queue-board.module';
+
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
 @Module({
@@ -89,6 +91,9 @@ import * as redisStore from 'cache-manager-redis-store';
     MailerModule,
     StreamModule,
     NotificationModule,
+    QueueBoardModule.register({
+      queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
+    }),
   ],
   controllers: [AppController],
   providers: [

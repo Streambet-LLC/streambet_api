@@ -31,6 +31,7 @@ import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
+import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
@@ -50,6 +51,7 @@ export class BettingService {
     private dataSource: DataSource,
     @Inject(forwardRef(() => BettingGateway))
     private readonly bettingGateway: BettingGateway,
+    private readonly streamService: StreamService,
   ) {}
 
   // Utility function to detect platform from URL
@@ -94,7 +96,12 @@ export class BettingService {
       }
     }
 
-    return this.streamsRepository.save(stream);
+    
+    const streamResponse = await this.streamsRepository.save(stream);
+    if(stream.status==StreamStatus.SCHEDULED) {
+      this.streamService.scheduleStream(streamResponse.id, stream.scheduledStartTime);
+    }
+    return streamResponse
   }
 
   async findAllStreams(includeEnded: boolean = false): Promise<Stream[]> {
@@ -853,6 +860,7 @@ export class BettingService {
         amount: bet?.payoutAmount,
         currencyType: bet?.currency,
         roundName: bettingVariable?.round?.roundName,
+        email: bet.user?.email,
       }));
 
       await queryRunner.commitTransaction();
@@ -878,6 +886,16 @@ export class BettingService {
           winner.currencyType,
           winner.roundName,
         );
+        if (winner.currencyType === CurrencyType.FREE_TOKENS) {
+          await this.notificationService.sendSMTPForWonFreeCoin(
+            winner.userId,
+            winner.email,
+            winner.username,
+            bettingVariable.stream.name,
+            winner.amount,
+            winner.roundName,
+          );
+        }
       }
       const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
         where: {

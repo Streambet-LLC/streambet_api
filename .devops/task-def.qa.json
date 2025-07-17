@@ -22,7 +22,11 @@
         { "name": "DB_PORT", "value": "5432" },
         { "name": "JWT_EXPIRES_IN", "value": "1d" },
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
-        { "name": "FILE_DRIVER", "value": "s3" }
+        { "name": "FILE_DRIVER", "value": "s3" },
+        { "name": "REDIS_HOST", "value": "54.172.250.213" },
+        { "name": "REDIS_PORT", "value": "6301" },
+        { "name": "REDIS_USERNAME", "value": "default" },
+        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_QA" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/qa/CLIENT_URL" },
@@ -84,7 +88,9 @@
           "valueFrom": "/streambet/dev/AWS_EMAIL_FROM"
         },
         { "name": "HOSTED", "valueFrom": "/streambet/dev/HOSTED" },
-        { "name": "APP_HOST_URL", "valueFrom": "/streambet/qa/APP_HOST_URL" }
+        { "name": "APP_HOST_URL", "valueFrom": "/streambet/qa/APP_HOST_URL" },
+        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" }
+
 
       ],
       "mountPoints": [],
