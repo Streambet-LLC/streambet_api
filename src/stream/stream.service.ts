@@ -31,8 +31,11 @@ export class StreamService {
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
   ) {}
-  
-  private streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
+
+  private streamLiveQueue = new Queue(
+    `${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`,
+    { connection: redisConfig },
+  );
 
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -421,7 +424,7 @@ END
       const streamResponse = await this.streamsRepository.save(stream);
 
       // If the scheduled start time is updated, remove any existing job and reschedule if necessary
-      if(updateStreamDto.scheduledStartTime !== undefined){
+      if (updateStreamDto.scheduledStartTime !== undefined) {
         const job = await this.streamLiveQueue.getJob(id);
         if (job) {
           await job.remove();
@@ -429,9 +432,8 @@ END
         if (streamResponse.status === StreamStatus.SCHEDULED) {
           this.scheduleStream(streamResponse.id, stream.scheduledStartTime);
         }
-
       }
-      return streamResponse
+      return streamResponse;
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw e;
@@ -523,7 +525,7 @@ END
     return stream.viewerCount;
   }
 
-  async updateStreamStatus(streamId: string){
+  async updateStreamStatus(streamId: string) {
     try {
       const stream = await this.streamsRepository.findOne({
         where: { id: streamId },
@@ -542,7 +544,7 @@ END
           stream.actualStartTime = currentTime;
         }
       } else if (stream.status === StreamStatus.LIVE) {
-        return stream     
+        return stream;
       }
 
       return await this.streamsRepository.save(stream);
@@ -553,17 +555,20 @@ END
   }
 
   async scheduleStream(streamId: string, scheduledTime: Date | string) {
-    const scheduledDate = scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
+    const scheduledDate =
+      scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
     const delay = scheduledDate.getTime() - Date.now();
-    console.log(`Scheduling stream ${streamId} for ${scheduledDate}`, 'StreamLiveWorker');
+    console.log(
+      `Scheduling stream ${streamId} for ${scheduledDate}`,
+      'StreamLiveWorker',
+    );
     await this.streamLiveQueue.add(
       'make-live',
       { streamId },
-      { 
-        delay: Math.max(delay, 0) ,
+      {
+        delay: Math.max(delay, 0),
         jobId: streamId,
-
-      }
+      },
     );
   }
 

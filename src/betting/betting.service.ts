@@ -96,12 +96,14 @@ export class BettingService {
       }
     }
 
-    
     const streamResponse = await this.streamsRepository.save(stream);
-    if(stream.status==StreamStatus.SCHEDULED) {
-      this.streamService.scheduleStream(streamResponse.id, stream.scheduledStartTime);
+    if (stream.status == StreamStatus.SCHEDULED) {
+      this.streamService.scheduleStream(
+        streamResponse.id,
+        stream.scheduledStartTime,
+      );
     }
-    return streamResponse
+    return streamResponse;
   }
 
   async findAllStreams(includeEnded: boolean = false): Promise<Stream[]> {
@@ -1569,6 +1571,7 @@ export class BettingService {
             await this.bettingGateway.emitLockBetRound(
               roundWithStream.roundName,
               bet.userId,
+              bet.user.username,
             );
           }
         }
