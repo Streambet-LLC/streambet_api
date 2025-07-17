@@ -152,7 +152,7 @@ export class BettingGateway
       );
     }
     client.join(`stream_${streamId}`);
-    client.emit('joinedStream', { streamId });
+    this.server.to(`stream_${streamId}`).emit('joinedStream', { streamId });
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
     this.socketToStreamMap.set(client.id, streamId);
     // Increment viewer count in DB
@@ -214,7 +214,7 @@ export class BettingGateway
     const username = client.data.user.username;
     client.join(`streambet`);
     this.userSocketMap.set(username, client.id);
-    client.emit('joinedStreamBet', { username });
+    this.server.to(`streambet`).emit('joinedStreamBet', { username });
     console.log(`User ${username} joined room  streambet`);
     return { event: 'joinedStreamBet', data: { username } };
   }
@@ -259,8 +259,8 @@ export class BettingGateway
         await this.notificationService.addNotificationPermision(
           client.data.user.sub,
         );
+      const socketId = this.userSocketMap.get(client.data.user.username);
       if (receiverNotificationPermission['inAppNotification']) {
-        const socketId = this.userSocketMap.get(client.data.user.username);
         this.server.to(socketId).emit('betPlaced', {
           bet,
           success: true,
@@ -284,7 +284,7 @@ export class BettingGateway
           },
         });
       } else {
-        client.emit('betPlaced', {
+        this.server.to(socketId).emit('betPlaced', {
           bet,
           success: true,
           currencyType: placeBetDto.currencyType,
@@ -358,8 +358,8 @@ export class BettingGateway
         await this.notificationService.addNotificationPermision(
           client.data.user.sub,
         );
+      const socketId = this.userSocketMap.get(client.data.user.username);
       if (receiverNotificationPermission['inAppNotification']) {
-        const socketId = this.userSocketMap.get(client.data.user.username);
         this.server.to(socketId).emit('betCancelled', {
           bet,
           success: true,
@@ -376,7 +376,7 @@ export class BettingGateway
           },
         });
       } else {
-        client.emit('betCancelled', {
+        this.server.to(socketId).emit('betCancelled', {
           bet,
           success: true,
           updatedWalletBalance: {
@@ -453,8 +453,8 @@ export class BettingGateway
         await this.notificationService.addNotificationPermision(
           client.data.user.sub,
         );
+      const socketId = this.userSocketMap.get(client.data.user.username);
       if (receiverNotificationPermission['inAppNotification']) {
-        const socketId = this.userSocketMap.get(client.data.user.username);
         this.server.to(socketId).emit('betEdited', {
           bet: editedBet,
           success: true,
@@ -478,7 +478,7 @@ export class BettingGateway
           },
         });
       } else {
-        client.emit('betEdited', {
+        this.server.to(socketId).emit('betEdited', {
           bet: editedBet,
           success: true,
           timestamp: new Date(),
