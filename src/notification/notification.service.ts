@@ -197,8 +197,6 @@ export class NotificationService {
     streamName: string,
     amount: number,
     roundName: string,
-    convertedCoin: string,
-    blogPostLink: string,
   ) {
     try {
       const receiverNotificationPermission =
@@ -214,7 +212,8 @@ export class NotificationService {
         const subject = NOTIFICATION_TEMPLATE.EMAIL_FREE_COIN_WON.TITLE({
           streamName,
         });
-
+        const blogPostLink = 'blog post url';
+        const convertedCoin = Number(amount / 100);
         const emailData = {
           toAddress: [receiverEmail],
           subject,
@@ -223,7 +222,7 @@ export class NotificationService {
             fullName: username,
             amount: amount.toLocaleString('en-US'),
             roundName,
-            convertedCoin,
+            convertedCoin: convertedCoin.toLocaleString('en-US'),
             blogPostLink,
           },
         };

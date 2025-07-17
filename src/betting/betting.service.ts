@@ -853,6 +853,7 @@ export class BettingService {
         amount: bet?.payoutAmount,
         currencyType: bet?.currency,
         roundName: bettingVariable?.round?.roundName,
+        email: bet.user?.email,
       }));
 
       await queryRunner.commitTransaction();
@@ -878,6 +879,16 @@ export class BettingService {
           winner.currencyType,
           winner.roundName,
         );
+        if (winner.currencyType === CurrencyType.FREE_TOKENS) {
+          await this.notificationService.sendSMTPForWonFreeCoin(
+            winner.userId,
+            winner.email,
+            winner.username,
+            bettingVariable.stream.name,
+            winner.amount,
+            winner.roundName,
+          );
+        }
       }
       const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
         where: {
