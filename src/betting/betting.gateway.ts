@@ -255,27 +255,6 @@ export class BettingGateway
           console.error('Potential amount error:', e.message);
         }
       }
-      client.emit('betPlaced', {
-        bet,
-        success: true,
-        currencyType: placeBetDto.currencyType,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-        potentialTokenWinningAmount:
-          potentialAmount?.potentialFreeTokenAmt || 0,
-        amount: placeBetDto.amount,
-        selectedWinner: bettingVariable?.name || '',
-        message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
-          amount: placeBetDto.amount,
-          currencyType: placeBetDto.currencyType,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
-        updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
-        },
-      });
 
       const receiverNotificationPermission =
         await this.notificationService.addNotificationPermision(
