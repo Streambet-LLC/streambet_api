@@ -404,9 +404,9 @@ export class BettingService {
       );
       throw new BadRequestException(message);
     }
-    if (bettingVariable?.round?.stream?.status !== StreamStatus.LIVE) {
+    if (bettingVariable?.round?.stream?.status === StreamStatus.ENDED) {
       throw new BadRequestException(
-        `This stream is not live. You can only place bets during live streams.`,
+        `This stream is Ended. You can only place bets during live and scheduled streams.`,
       );
     }
     const existingBet = await this.betsRepository
@@ -498,9 +498,9 @@ export class BettingService {
       throw new BadRequestException(message);
     }
 
-    if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+    if (bettingVariable.round.stream.status === StreamStatus.ENDED) {
       throw new BadRequestException(
-        `This stream is not live. You can only place bets during live streams.`,
+        `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
 
@@ -1683,28 +1683,34 @@ export class BettingService {
     });
   }
 
-   /**
+  /**
    * Returns the total bet value for a stream, separated by free tokens and coins.
    * @param streamId - The ID of the stream
    * @returns Promise<{ freeTokens: number; coins: number }>
    */
-  async getTotalBetValueForStream(streamId: string): Promise<{ freeTokens: number; coins: number }> {
+  async getTotalBetValueForStream(
+    streamId: string,
+  ): Promise<{ freeTokens: number; coins: number }> {
     // Get total bet value for free tokens
     const tokenResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', { currency: CurrencyType.FREE_TOKENS })
+      .andWhere('bet.currency = :currency', {
+        currency: CurrencyType.FREE_TOKENS,
+      })
       .getRawOne();
-  
+
     // Get total bet value for coins
     const coinResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', { currency: CurrencyType.STREAM_COINS })
+      .andWhere('bet.currency = :currency', {
+        currency: CurrencyType.STREAM_COINS,
+      })
       .getRawOne();
-  
+
     return {
       freeTokens: Number(tokenResult?.totalBetValue) || 0,
       coins: Number(coinResult?.totalBetValue) || 0,
