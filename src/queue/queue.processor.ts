@@ -16,18 +16,27 @@ async function getStreamService() {
 }
 
 export const streamLiveWorker = new Worker(
-  'stream-live',
-  async job => {
+  `${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`,
+  async (job) => {
     const { streamId } = job.data;
-    console.log(`Queue execution started for streamId: ${streamId}`, 'StreamLiveWorker');
+    console.log(
+      `Queue execution started for streamId: ${streamId}`,
+      'StreamLiveWorker',
+    );
     try {
       const service = await getStreamService();
       await service.updateStreamStatus(streamId);
-      console.log(`Queue execution completed for streamId: ${streamId}`, 'StreamLiveWorker');
+      console.log(
+        `Queue execution completed for streamId: ${streamId}`,
+        'StreamLiveWorker',
+      );
     } catch (error) {
-      console.error(`Queue execution failed for streamId: ${streamId} - ${error.message}`, 'StreamLiveWorker');
+      console.error(
+        `Queue execution failed for streamId: ${streamId} - ${error.message}`,
+        'StreamLiveWorker',
+      );
       throw error;
     }
   },
-  { connection: redisConfig }
+  { connection: redisConfig },
 );
