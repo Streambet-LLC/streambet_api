@@ -1541,6 +1541,7 @@ export class BettingService {
           const similarBets = await this.betsRepository.find({
             where: {
               round: { id: roundId },
+              status: BetStatus.Active,
             },
             relations: ['round'],
           });
