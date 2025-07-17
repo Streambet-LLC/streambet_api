@@ -55,9 +55,7 @@ export class BettingGateway
 {
   @WebSocketServer()
   server: Server;
-
-  private streamViewers = new Map<string, Set<string>>();
-  private streamUsers = new Map<string, Set<string>>();
+  private socketToStreamMap: Map<string, string> = new Map();
   private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
@@ -105,16 +103,30 @@ export class BettingGateway
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
-    for (const [streamId, sockets] of this.streamViewers.entries()) {
-      if (sockets.delete(client.id)) {
-        if (sockets.size === 0) {
-          this.streamViewers.delete(streamId);
-        }
-      }
-    }
     const username = client.data.user?.username;
     if (username) {
       this.userSocketMap.delete(username);
+    }
+    //live stream viewer count
+    const streamId = this.socketToStreamMap.get(client.id);
+    if (streamId) {
+      try {
+        const updatedCount =
+          await this.streamService.decrementViewerCount(streamId);
+        const roomName = `stream_${streamId}`;
+        this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
+        Logger.log(
+          `Stream ${streamId}: Viewers after disconnect: ${updatedCount}`,
+        );
+        this.socketToStreamMap.delete(client.id);
+      } catch (error) {
+        Logger.error(
+          `Error updating viewer count on disconnect for stream ${streamId}:`,
+          error,
+        );
+        // Still remove from map to prevent memory leaks
+        this.socketToStreamMap.delete(client.id);
+      }
     }
     console.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
@@ -126,31 +138,44 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
-    const userId = client.data.user.sub;
+    // If the client was already in a stream, make them leave it first
+    const previousStreamId = this.socketToStreamMap.get(client.id);
+    if (previousStreamId && previousStreamId !== streamId) {
+      client.leave(`stream_${previousStreamId}`);
+      const prevCount =
+        await this.streamService.decrementViewerCount(previousStreamId);
+      this.server
+        .to(`stream_${previousStreamId}`)
+        .emit('viewerCountUpdate', prevCount);
+      Logger.log(
+        `Client ${client.id} left previous stream ${previousStreamId}. New count: ${prevCount}`,
+      );
+    }
     client.join(`stream_${streamId}`);
     client.emit('joinedStream', { streamId });
-    if (!this.streamViewers.has(streamId)) {
-      this.streamViewers.set(streamId, new Set());
-    }
-    this.streamViewers.get(streamId)!.add(client.id);
-    const users = this.streamUsers.get(streamId) || new Set();
-    const isFirstTime = !users.has(userId);
-
-    users.add(userId);
-    this.streamUsers.set(streamId, users);
-
-    // Update DB only the first time this user joins
-    if (isFirstTime) {
-      try {
-        await this.streamService.incrementViewCount(streamId);
-        Logger.log(
-          `User ${userId} incremented view count for stream ${streamId}`,
-        );
-      } catch (e) {
-        Logger.error(`Error updating view count: ${e.message}`);
-      }
-    }
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
+    this.socketToStreamMap.set(client.id, streamId);
+    // Increment viewer count in DB
+    try {
+      const updatedCount =
+        await this.streamService.incrementViewerCount(streamId);
+
+      // Emit updated count to all clients in this stream's room
+      this.server
+        .to(`stream_${streamId}`)
+        .emit('viewerCountUpdate', updatedCount);
+      Logger.log(
+        `Client ${client.id} joined stream ${streamId}. Current viewers: ${updatedCount}`,
+      );
+    } catch (error) {
+      Logger.error(
+        `Error updating viewer count for stream ${streamId}:`,
+        error,
+      );
+      // Remove from map if database operation failed
+      this.socketToStreamMap.delete(client.id);
+      throw error;
+    }
 
     return { event: 'joinedStream', data: { streamId } };
   }
@@ -161,17 +186,26 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
-    client.leave(`stream_${streamId}`);
-    console.log(`User ${client.data.user.username} left stream ${streamId}`);
-    const sockets = this.streamViewers.get(streamId);
-    if (sockets) {
-      sockets.delete(client.id);
-      if (sockets.size === 0) {
-        this.streamViewers.delete(streamId);
-        this.streamUsers.delete(streamId);
-      }
+    const roomName = `stream_${streamId}`;
+    if (this.socketToStreamMap.get(client.id) === streamId) {
+      client.leave(roomName);
+      this.socketToStreamMap.delete(client.id);
+
+      // Decrement viewer count in DB
+      const updatedCount =
+        await this.streamService.decrementViewerCount(streamId);
+
+      // Emit updated count to all remaining clients in this stream's room
+      this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
+      Logger.log(
+        `Client ${client.id} left stream ${streamId}. Current viewers: ${updatedCount}`,
+      );
+      return { event: 'leftStream', data: { streamId } };
+    } else {
+      Logger.warn(
+        `Client ${client.id} tried to leave stream ${streamId} but was not registered as viewing it.`,
+      );
     }
-    return { event: 'leftStream', data: { streamId } };
   }
 
   @UseGuards(WsJwtGuard)
