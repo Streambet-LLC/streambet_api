@@ -110,14 +110,23 @@ export class BettingGateway
     //live stream viewer count
     const streamId = this.socketToStreamMap.get(client.id);
     if (streamId) {
-      const updatedCount =
-        await this.streamService.decrementViewerCount(streamId);
-      const roomName = `stream_${streamId}`;
-      this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
-      Logger.log(
-        `Stream ${streamId}: Viewers after disconnect: ${updatedCount}`,
-      );
-      this.socketToStreamMap.delete(client.id);
+      try {
+        const updatedCount =
+          await this.streamService.decrementViewerCount(streamId);
+        const roomName = `stream_${streamId}`;
+        this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
+        Logger.log(
+          `Stream ${streamId}: Viewers after disconnect: ${updatedCount}`,
+        );
+        this.socketToStreamMap.delete(client.id);
+      } catch (error) {
+        Logger.error(
+          `Error updating viewer count on disconnect for stream ${streamId}:`,
+          error,
+        );
+        // Still remove from map to prevent memory leaks
+        this.socketToStreamMap.delete(client.id);
+      }
     }
     console.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
