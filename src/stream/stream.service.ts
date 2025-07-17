@@ -472,15 +472,21 @@ END
    * @returns The updated viewer count.
    */
   async decrementViewerCount(streamId: string): Promise<number> {
-    const stream = await this.streamsRepository.findOne({
-      where: { id: streamId },
-    });
-    stream.viewerCount = Math.max(0, stream.viewerCount - 1); // Ensure count doesn't go below 0
-    await this.streamsRepository.save(stream);
-    Logger.log(
-      `Stream ${streamId}: Viewers decremented to ${stream.viewerCount}`,
-    );
-    return stream.viewerCount;
+    const result = await this.streamsRepository
+      .createQueryBuilder()
+      .update(Stream)
+      .set({ viewerCount: () => 'GREATEST(0, "viewerCount" - 1)' })
+      .where('id = :streamId', { streamId })
+      .returning('viewerCount')
+      .execute();
+
+    if (result.affected === 0) {
+      throw new NotFoundException(`Stream with ID ${streamId} not found`);
+    }
+    const updatedCount = result.raw[0].viewerCount;
+
+    Logger.log(`Stream ${streamId}: Viewers decremented to ${updatedCount}`);
+    return updatedCount;
   }
   /**
    * Increments the viewer count for a given stream ID in the database.
