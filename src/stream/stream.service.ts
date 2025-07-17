@@ -18,6 +18,8 @@ import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from 'src/betting/betting.gateway';
+import { Queue } from 'bullmq';
+import redisConfig from 'src/config/redis.config';
 
 @Injectable()
 export class StreamService {
@@ -29,6 +31,9 @@ export class StreamService {
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
   ) {}
+  
+  private streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
+
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -413,7 +418,20 @@ END
         }
       }
 
-      return await this.streamsRepository.save(stream);
+      const streamResponse = await this.streamsRepository.save(stream);
+
+      // If the scheduled start time is updated, remove any existing job and reschedule if necessary
+      if(updateStreamDto.scheduledStartTime !== undefined){
+        const job = await this.streamLiveQueue.getJob(id);
+        if (job) {
+          await job.remove();
+        }
+        if (streamResponse.status === StreamStatus.SCHEDULED) {
+          this.scheduleStream(streamResponse.id, stream.scheduledStartTime);
+        }
+
+      }
+      return streamResponse
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw e;
@@ -505,6 +523,50 @@ END
     return stream.viewerCount;
   }
 
+  async updateStreamStatus(streamId: string){
+    try {
+      const stream = await this.streamsRepository.findOne({
+        where: { id: streamId },
+        select: ['id', 'status', 'scheduledStartTime'],
+      });
+
+      if (!stream) {
+        throw new NotFoundException(`Stream with ID ${streamId} not found`);
+      }
+
+      // Update status based on scheduled start time
+      const currentTime = new Date();
+      if (stream.status === StreamStatus.SCHEDULED) {
+        if (stream.scheduledStartTime <= currentTime) {
+          stream.status = StreamStatus.LIVE;
+          stream.actualStartTime = currentTime;
+        }
+      } else if (stream.status === StreamStatus.LIVE) {
+        return stream     
+      }
+
+      return await this.streamsRepository.save(stream);
+    } catch (error) {
+      Logger.error(`Failed to update stream status for ${streamId}`, error);
+      throw error;
+    }
+  }
+
+  async scheduleStream(streamId: string, scheduledTime: Date | string) {
+    const scheduledDate = scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
+    const delay = scheduledDate.getTime() - Date.now();
+    console.log(`Scheduling stream ${streamId} for ${scheduledDate}`, 'StreamLiveWorker');
+    await this.streamLiveQueue.add(
+      'make-live',
+      { streamId },
+      { 
+        delay: Math.max(delay, 0) ,
+        jobId: streamId,
+
+      }
+    );
+  }
+
   /**
    * Retrieves the current viewer count for a stream.
    * @param streamId The ID of the stream.
@@ -516,6 +578,7 @@ END
     });
     return stream ? stream.viewerCount : 0;
   }
+
   async getLiveStreamsCount(): Promise<number> {
     return this.streamsRepository.count({
       where: {
