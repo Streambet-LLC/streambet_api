@@ -156,16 +156,27 @@ export class BettingGateway
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
     this.socketToStreamMap.set(client.id, streamId);
     // Increment viewer count in DB
-    const updatedCount =
-      await this.streamService.incrementViewerCount(streamId);
+    try {
+      const updatedCount =
+        await this.streamService.incrementViewerCount(streamId);
 
-    // Emit updated count to all clients in this stream's room
-    this.server
-      .to(`stream_${streamId}`)
-      .emit('viewerCountUpdate', updatedCount);
-    Logger.log(
-      `Client ${client.id} joined stream ${streamId}. Current viewers: ${updatedCount}`,
-    );
+      // Emit updated count to all clients in this stream's room
+      this.server
+        .to(`stream_${streamId}`)
+        .emit('viewerCountUpdate', updatedCount);
+      Logger.log(
+        `Client ${client.id} joined stream ${streamId}. Current viewers: ${updatedCount}`,
+      );
+    } catch (error) {
+      Logger.error(
+        `Error updating viewer count for stream ${streamId}:`,
+        error,
+      );
+      // Remove from map if database operation failed
+      this.socketToStreamMap.delete(client.id);
+      throw error;
+    }
+
     return { event: 'joinedStream', data: { streamId } };
   }
 
