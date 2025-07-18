@@ -1037,7 +1037,7 @@ export class BettingService {
           roundId: bettingVariable.roundId,
           status: BetStatus.Active,
         },
-        relations: ['bettingVariable'],
+        relations: ['bettingVariable', 'round'],
       });
 
       // Validate and filter out any invalid bets
@@ -1048,7 +1048,8 @@ export class BettingService {
           bet.bettingVariableId &&
           bet.amount !== null &&
           bet.amount !== undefined &&
-          bet.currency,
+          bet.currency &&
+          bet.round,
       );
     } catch (error) {
       console.error('Error fetching active bets:', error);
