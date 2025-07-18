@@ -819,6 +819,30 @@ export class BettingGateway
     }
   }
 
+  async emitBotMessageVoidRound(
+    userId: string,
+    username: string,
+    roundName: string,
+  ) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
+      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_ROUND_VOID.MESSAGE({
+          roundName: roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_ROUND_VOID.TITLE(),
+        timestamp: new Date(),
+      };
+
+      void this.server.to(socketId).emit('botMessage', chatMessage);
+    }
+  }
+
   emitOpenBetRound(roundName: string) {
     const payload = {
       type: 'system',

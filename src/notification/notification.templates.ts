@@ -49,6 +49,11 @@ export const NOTIFICATION_TEMPLATE = {
       `The winner of ${data.roundName} has been declared! Payouts are being processed`,
     TITLE: () => `Winner Declared`,
   },
+  BET_ROUND_VOID: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.roundName} has been voided due to technical issues. All bets have been refunded to your wallet.`,
+    TITLE: () => `Round Voided`,
+  },
   EMAIL_BET_WON: {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}! `,

@@ -937,6 +937,8 @@ export class BettingService {
     }
 
     for (const bet of bets) {
+      console.log('bet', bet);
+
       try {
         if (!bet || !bet.userId || !bet.amount || !bet.currency) {
           console.log('Invalid bet found in void case refund:', bet);
@@ -956,7 +958,14 @@ export class BettingService {
           transactionType,
           description,
         );
+        const userObj = await this.usersService.findById(userId);
+        await this.bettingGateway.emitBotMessageVoidRound(
+          userId,
+          userObj.username,
+          bet?.round?.roundName,
+        );
         await queryRunner.manager.save(bet);
+
         // Update bet status within transaction
       } catch (error) {
         console.error(
