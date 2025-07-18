@@ -260,45 +260,28 @@ export class BettingGateway
           client.data.user.sub,
         );
       const socketId = this.userSocketMap.get(client.data.user.username);
-      if (receiverNotificationPermission['inAppNotification']) {
-        this.server.to(socketId).emit('betPlaced', {
-          bet,
-          success: true,
-          currencyType: placeBetDto.currencyType,
-          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-          potentialTokenWinningAmount:
-            potentialAmount?.potentialFreeTokenAmt || 0,
-          amount: placeBetDto.amount,
-          selectedWinner: bettingVariable?.name || '',
+      this.server.to(socketId).emit('betPlaced', {
+        bet,
+        success: true,
+        currencyType: placeBetDto.currencyType,
+        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialTokenWinningAmount:
+          potentialAmount?.potentialFreeTokenAmt || 0,
+        amount: placeBetDto.amount,
+        selectedWinner: bettingVariable?.name || '',
 
-          message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
-            amount: placeBetDto.amount,
-            currencyType: placeBetDto.currencyType,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      } else {
-        this.server.to(socketId).emit('betPlaced', {
-          bet,
-          success: true,
-          currencyType: placeBetDto.currencyType,
-          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-          potentialTokenWinningAmount:
-            potentialAmount?.potentialFreeTokenAmt || 0,
+        message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
           amount: placeBetDto.amount,
-          selectedWinner: bettingVariable?.name || '',
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      }
+          currencyType: placeBetDto.currencyType,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
+        updatedWalletBalance: {
+          freeTokens: updatedWallet.freeTokens,
+          streamCoins: updatedWallet.streamCoins,
+        },
+      });
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -359,32 +342,21 @@ export class BettingGateway
           client.data.user.sub,
         );
       const socketId = this.userSocketMap.get(client.data.user.username);
-      if (receiverNotificationPermission['inAppNotification']) {
-        this.server.to(socketId).emit('betCancelled', {
-          bet,
-          success: true,
-          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-            amount: bet.amount,
-            currencyType: bet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      } else {
-        this.server.to(socketId).emit('betCancelled', {
-          bet,
-          success: true,
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      }
+      this.server.to(socketId).emit('betCancelled', {
+        bet,
+        success: true,
+        message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+          amount: bet.amount,
+          currencyType: bet.currency,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
+        updatedWalletBalance: {
+          freeTokens: updatedWallet.freeTokens,
+          streamCoins: updatedWallet.streamCoins,
+        },
+      });
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -454,46 +426,28 @@ export class BettingGateway
           client.data.user.sub,
         );
       const socketId = this.userSocketMap.get(client.data.user.username);
-      if (receiverNotificationPermission['inAppNotification']) {
-        this.server.to(socketId).emit('betEdited', {
-          bet: editedBet,
-          success: true,
-          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-            amount: editedBet.amount,
-            currencyType: editedBet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
-          timestamp: new Date(),
-          currencyType: editedBet.currency,
-          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-          potentialTokenWinningAmount:
-            potentialAmount?.potentialFreeTokenAmt || 0,
+      this.server.to(socketId).emit('betEdited', {
+        bet: editedBet,
+        success: true,
+        message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
           amount: editedBet.amount,
-          selectedWinner: bettingVariable?.name || '',
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      } else {
-        this.server.to(socketId).emit('betEdited', {
-          bet: editedBet,
-          success: true,
-          timestamp: new Date(),
           currencyType: editedBet.currency,
-          potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-          potentialTokenWinningAmount:
-            potentialAmount?.potentialFreeTokenAmt || 0,
-          amount: editedBet.amount,
-          selectedWinner: bettingVariable?.name || '',
-          updatedWalletBalance: {
-            freeTokens: updatedWallet.freeTokens,
-            streamCoins: updatedWallet.streamCoins,
-          },
-        });
-      }
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+        timestamp: new Date(),
+        currencyType: editedBet.currency,
+        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialTokenWinningAmount:
+          potentialAmount?.potentialFreeTokenAmt || 0,
+        amount: editedBet.amount,
+        selectedWinner: bettingVariable?.name || '',
+        updatedWalletBalance: {
+          freeTokens: updatedWallet.freeTokens,
+          streamCoins: updatedWallet.streamCoins,
+        },
+      });
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -819,7 +773,7 @@ export class BettingGateway
     }
   }
 
-  emitOpenBetRound(roundName: string) {
+  async emitOpenBetRound(roundName: string, client?: Socket) {
     const payload = {
       type: 'system',
       username: 'StreamBet Bot',
@@ -832,6 +786,7 @@ export class BettingGateway
     this.server.to('streambet').emit('botMessage', payload);
     Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
   }
+
   async emitLockBetRound(roundName: string, userId: string, username: string) {
     const receiverNotificationPermission =
       await this.notificationService.addNotificationPermision(userId);
