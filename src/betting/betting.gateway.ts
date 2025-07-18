@@ -548,12 +548,12 @@ export class BettingGateway
   ) {
     const { streamId, message, imageURL } = data;
     const user = client.data.user;
-    if (!streamId || !message || !streamId.trim() || !message.trim()) {
+    if (!streamId) {
       return {
         event: 'messageSent',
         data: {
           success: false,
-          error: 'Stream ID and message cannot be empty.',
+          error: 'Stream ID  cannot be empty.',
         },
       };
     }
