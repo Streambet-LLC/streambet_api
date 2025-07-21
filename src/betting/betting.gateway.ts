@@ -369,7 +369,7 @@ export class BettingGateway
         };
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(socketId).emit('betCancelled', {});
+      this.server.to(socketId).emit('betCancelled', betCancelPayout);
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
