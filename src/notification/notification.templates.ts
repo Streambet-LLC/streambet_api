@@ -36,18 +36,13 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_OPEN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting is open for ${data.roundName}. Place your bets and good luck!`,
+      `Betting is open for ${data.roundName} round of ${data.streamName} . Place your bets and good luck!`,
     TITLE: () => `Betting Phase Change - Betting Open`,
   },
   BET_LOCKED: {
     MESSAGE: (data: BetNotificationData) =>
       `Betting has been locked for ${data.roundName}. Results will be announced shortly.`,
     TITLE: () => `Betting Phase Change - Betting Locked`,
-  },
-  BET_WINNER_DECLARED: {
-    MESSAGE: (data: BetNotificationData) =>
-      `The winner of ${data.roundName} has been declared! Payouts are being processed`,
-    TITLE: () => `Winner Declared`,
   },
   BET_ROUND_VOID: {
     MESSAGE: (data: BetNotificationData) =>

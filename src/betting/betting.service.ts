@@ -1608,7 +1608,10 @@ export class BettingService {
             roundId,
             'open',
           );
-          this.bettingGateway.emitOpenBetRound(round.roundName);
+          this.bettingGateway.emitOpenBetRound(
+            round.roundName,
+            roundWithStream.stream.name,
+          );
         }
       }
       return savedRound;
