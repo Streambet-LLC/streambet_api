@@ -21,6 +21,7 @@ import { StreamService } from 'src/stream/stream.service';
 import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
 import { NotificationService } from 'src/notification/notification.service';
 import { PlaceBetResult } from 'src/interface/betPlace.interface';
+import { CancelBetPayout } from 'src/interface/betCancel.interface';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -342,26 +343,32 @@ export class BettingGateway
         this.bettingService.findBettingVariableById(bet.bettingVariableId),
       ]);
       const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
-      const receiverNotificationPermission =
-        await this.notificationService.addNotificationPermision(
-          client.data.user.sub,
-        );
-      const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(socketId).emit('betCancelled', {
+      let betCancelPayout: CancelBetPayout = {
         bet,
         success: true,
-        message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-          amount: bet.amount,
-          currencyType: bet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
           streamCoins: updatedWallet.streamCoins,
         },
-      });
+      };
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(
+          client.data.user.sub,
+        );
+      if (receiverNotificationPermission['inAppNotification']) {
+        betCancelPayout = {
+          ...betCancelPayout,
+          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+            amount: bet.amount,
+            currencyType: bet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
+        };
+      }
+      const socketId = this.userSocketMap.get(client.data.user.username);
+      this.server.to(socketId).emit('betCancelled', {});
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
