@@ -354,13 +354,13 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        (betCancelPayout.message = NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+        betCancelPayout.message = NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
           amount: bet.amount,
           currencyType: bet.currency,
           bettingOption: bettingVariable?.name || '',
           roundName: bettingVariable.round.roundName || '',
-        })),
-          (betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE());
+        });
+        betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE();
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(socketId).emit('betCancelled', betCancelPayout);
@@ -448,13 +448,13 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        (betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+        betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
           amount: editedBet.amount,
           currencyType: editedBet.currency,
           bettingOption: bettingVariable?.name || '',
           roundName: bettingVariable.round.roundName || '',
-        })),
-          (betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE());
+        });
+        betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(socketId).emit('betEdited', betEditedPayload);
