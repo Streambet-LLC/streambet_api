@@ -22,6 +22,7 @@ import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
 import { NotificationService } from 'src/notification/notification.service';
 import { PlaceBetResult } from 'src/interface/betPlace.interface';
 import { CancelBetPayout } from 'src/interface/betCancel.interface';
+import { EditedBetPayload } from 'src/interface/betEdit.interface';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -433,21 +434,9 @@ export class BettingGateway
           console.error('Potential amount error:', e.message);
         }
       }
-      const receiverNotificationPermission =
-        await this.notificationService.addNotificationPermision(
-          client.data.user.sub,
-        );
-      const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(socketId).emit('betEdited', {
+      let betEditedPayload: EditedBetPayload = {
         bet: editedBet,
         success: true,
-        message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-          amount: editedBet.amount,
-          currencyType: editedBet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
         timestamp: new Date(),
         currencyType: editedBet.currency,
         potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
@@ -459,7 +448,25 @@ export class BettingGateway
           freeTokens: updatedWallet.freeTokens,
           streamCoins: updatedWallet.streamCoins,
         },
-      });
+      };
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(
+          client.data.user.sub,
+        );
+      if (receiverNotificationPermission['inAppNotification']) {
+        betEditedPayload = {
+          ...betEditedPayload,
+          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+            amount: editedBet.amount,
+            currencyType: editedBet.currency,
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable.round.roundName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
+        };
+      }
+      const socketId = this.userSocketMap.get(client.data.user.username);
+      this.server.to(socketId).emit('betEdited', betEditedPayload);
       // Emit to all clients after DB commit
       if (bettingVariable) {
         // Refetch the latest betting round with variables
