@@ -277,16 +277,13 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        betPlacePayload = {
-          ...betPlacePayload,
-          message: NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
-            amount: placeBetDto.amount,
-            currencyType: placeBetDto.currencyType,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_PLACED.TITLE(),
-        };
+        betPlacePayload.message = NOTIFICATION_TEMPLATE.BET_PLACED.MESSAGE({
+          amount: placeBetDto.amount,
+          currencyType: placeBetDto.currencyType,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        });
+        betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(socketId).emit('betPlaced', betPlacePayload);
@@ -357,16 +354,13 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        betCancelPayout = {
-          ...betCancelPayout,
-          message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
-            amount: bet.amount,
-            currencyType: bet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE(),
-        };
+        (betCancelPayout.message = NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
+          amount: bet.amount,
+          currencyType: bet.currency,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        })),
+          (betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE());
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(socketId).emit('betCancelled', betCancelPayout);
@@ -454,16 +448,13 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        betEditedPayload = {
-          ...betEditedPayload,
-          message: NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-            amount: editedBet.amount,
-            currencyType: editedBet.currency,
-            bettingOption: bettingVariable?.name || '',
-            roundName: bettingVariable.round.roundName || '',
-          }),
-          title: NOTIFICATION_TEMPLATE.BET_EDIT.TITLE(),
-        };
+        (betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+          amount: editedBet.amount,
+          currencyType: editedBet.currency,
+          bettingOption: bettingVariable?.name || '',
+          roundName: bettingVariable.round.roundName || '',
+        })),
+          (betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE());
       }
       const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(socketId).emit('betEdited', betEditedPayload);
