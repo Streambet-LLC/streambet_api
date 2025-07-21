@@ -329,6 +329,12 @@ export class WalletsService {
     const wallet = await this.walletsRepository.findOne({
       where: { userId },
     });
+    if (!wallet) {
+      throw new NotFoundException(
+        `Wallet for user with ID ${userId} not found`,
+      );
+    }
+
     const balanceAfter =
       currencyType === CurrencyType.FREE_TOKENS
         ? wallet.freeTokens
