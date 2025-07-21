@@ -340,7 +340,7 @@ export class WalletsService {
         ? wallet.freeTokens
         : wallet.streamCoins;
     const transactionObj = this.transactionsRepository.create({
-      user: { id: userId },
+      userId,
       type: transactionType,
       currencyType,
       amount,
