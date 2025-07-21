@@ -752,7 +752,7 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -776,7 +776,7 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -800,7 +800,7 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-      this.emitBotMessageForWinnerDeclare(socketId, roundName);
+
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
@@ -848,18 +848,5 @@ export class BettingGateway
 
       Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
     }
-  }
-
-  emitBotMessageForWinnerDeclare(socketId: string, roundName: string) {
-    const chatMessage: ChatMessage = {
-      type: 'system',
-      username: 'StreambetBot',
-      message: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.MESSAGE({
-        roundName: roundName || '',
-      }),
-      title: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.TITLE(),
-      timestamp: new Date(),
-    };
-    void this.server.to(socketId).emit('botMessage', chatMessage);
   }
 }

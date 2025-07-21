@@ -908,11 +908,13 @@ export class BettingService {
       });
 
       lossingBetsWithUserInfo.map(async (bet) => {
-        await this.bettingGateway.emitBotMessageToLoser(
-          bet.userId,
-          bet.user?.username,
-          bet.round.roundName,
-        );
+        if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+          await this.bettingGateway.emitBotMessageToLoser(
+            bet.userId,
+            bet.user?.username,
+            bet.round.roundName,
+          );
+        }
 
         await this.notificationService.sendSMTPForLossBet(
           bet.userId,
@@ -937,8 +939,6 @@ export class BettingService {
     }
 
     for (const bet of bets) {
-      console.log('bet', bet);
-
       try {
         if (!bet || !bet.userId || !bet.amount || !bet.currency) {
           console.log('Invalid bet found in void case refund:', bet);
