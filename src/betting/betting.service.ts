@@ -914,13 +914,13 @@ export class BettingService {
             bet.user?.username,
             bet.round.roundName,
           );
-        }
 
-        await this.notificationService.sendSMTPForLossBet(
-          bet.userId,
-          bettingVariable.stream.name,
-          bet.round.roundName,
-        );
+          await this.notificationService.sendSMTPForLossBet(
+            bet.userId,
+            bettingVariable.stream.name,
+            bet.round.roundName,
+          );
+        }
       });
     } catch (error) {
       // Rollback in case of error
@@ -1269,6 +1269,13 @@ export class BettingService {
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
+        await this.walletsService.createTransactionData(
+          bet.userId,
+          TransactionType.BET_LOSS,
+          bet.currency,
+          bet.amount,
+          `${bet.amount} ${bet.currency} debited - bet lost.`,
+        );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
         throw error;
