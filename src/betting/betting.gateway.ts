@@ -815,18 +815,30 @@ export class BettingGateway
     }
   }
 
-  emitOpenBetRound(roundName: string) {
-    const payload = {
-      type: 'system',
-      username: 'StreamBet Bot',
-      message: NOTIFICATION_TEMPLATE.BET_OPEN.MESSAGE({
-        roundName: roundName || '',
-      }),
-      title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
-      timestamp: new Date(),
-    };
-    this.server.to('streambet').emit('botMessage', payload);
-    Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
+  async emitOpenBetRound(roundName: string, streamName: string) {
+    const sockets = await this.server.in('streambet').fetchSockets();
+    for (const socket of sockets) {
+      const userId = socket.data?.user?.sub;
+      if (!userId) continue;
+      const username = socket.data.user?.username;
+      const receiverNotificationPermission =
+        await this.notificationService.addNotificationPermision(userId);
+      if (receiverNotificationPermission['inAppNotification']) {
+        const socketId = this.userSocketMap.get(username);
+        const payload = {
+          type: 'system',
+          username: 'StreamBet Bot',
+          message: NOTIFICATION_TEMPLATE.BET_OPEN.MESSAGE({
+            roundName: roundName || '',
+            streamName: streamName || '',
+          }),
+          title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
+          timestamp: new Date(),
+        };
+        void this.server.to(socketId).emit('botMessage', payload);
+        Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
+      }
+    }
   }
   async emitLockBetRound(roundName: string, userId: string, username: string) {
     const receiverNotificationPermission =
