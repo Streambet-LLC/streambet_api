@@ -1271,10 +1271,10 @@ export class BettingService {
         await queryRunner.manager.save(bet);
         await this.walletsService.createTransactionData(
           bet.userId,
-          TransactionType.BET_LOSING,
+          TransactionType.BET_LOSS,
           bet.currency,
           bet.amount,
-          `${bet.amount} ${bet.currency} debited - bet lossed.`,
+          `${bet.amount} ${bet.currency} debited - bet lost.`,
         );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
