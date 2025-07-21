@@ -908,17 +908,19 @@ export class BettingService {
       });
 
       lossingBetsWithUserInfo.map(async (bet) => {
-        await this.bettingGateway.emitBotMessageToLoser(
-          bet.userId,
-          bet.user?.username,
-          bet.round.roundName,
-        );
+        if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+          await this.bettingGateway.emitBotMessageToLoser(
+            bet.userId,
+            bet.user?.username,
+            bet.round.roundName,
+          );
 
-        await this.notificationService.sendSMTPForLossBet(
-          bet.userId,
-          bettingVariable.stream.name,
-          bet.round.roundName,
-        );
+          await this.notificationService.sendSMTPForLossBet(
+            bet.userId,
+            bettingVariable.stream.name,
+            bet.round.roundName,
+          );
+        }
       });
     } catch (error) {
       // Rollback in case of error
@@ -937,8 +939,6 @@ export class BettingService {
     }
 
     for (const bet of bets) {
-      console.log('bet', bet);
-
       try {
         if (!bet || !bet.userId || !bet.amount || !bet.currency) {
           console.log('Invalid bet found in void case refund:', bet);
@@ -1269,6 +1269,13 @@ export class BettingService {
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
+        await this.walletsService.createTransactionData(
+          bet.userId,
+          TransactionType.BET_LOSING,
+          bet.currency,
+          bet.amount,
+          `${bet.amount} ${bet.currency} debited - bet lossed.`,
+        );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
         throw error;

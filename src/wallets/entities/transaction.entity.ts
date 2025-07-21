@@ -7,6 +7,7 @@ export enum TransactionType {
   WITHDRAWAL = 'Withdrawal',
   BET_PLACEMENT = 'Bet placement',
   BET_WINNINGS = 'Bet winnings',
+  BET_LOSING = 'Bet losing',
   PURCHASE = 'Purchase coins',
   REFUND = 'Refund',
   INITIAL_CREDIT = 'Initial credit',
