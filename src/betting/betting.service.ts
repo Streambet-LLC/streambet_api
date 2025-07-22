@@ -1730,29 +1730,31 @@ export class BettingService {
    * @param streamId - The ID of the stream
    * @returns Promise<{ freeTokens: number; coins: number }>
    */
-  async getTotalBetValueForStream(
+    async getTotalBetValueForStream(
     streamId: string,
   ): Promise<{ freeTokens: number; coins: number }> {
-    // Get total bet value for free tokens
+    // Get total bet value for free tokens (exclude cancelled, pending, refunded)
     const tokenResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.FREE_TOKENS,
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.FREE_TOKENS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
       })
       .getRawOne();
-
-    // Get total bet value for coins
+  
+    // Get total bet value for coins (exclude cancelled, pending, refunded)
     const coinResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.STREAM_COINS,
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.STREAM_COINS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
       })
       .getRawOne();
-
+  
     return {
       freeTokens: Number(tokenResult?.totalBetValue) || 0,
       coins: Number(coinResult?.totalBetValue) || 0,
