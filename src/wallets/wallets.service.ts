@@ -115,7 +115,7 @@ export class WalletsService {
       userId,
       amount,
       currencyType,
-      TransactionType.BET_WINNINGS,
+      TransactionType.BET_WON,
       description,
     );
   }
