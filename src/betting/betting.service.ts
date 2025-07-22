@@ -1271,7 +1271,7 @@ export class BettingService {
         await queryRunner.manager.save(bet);
         await this.walletsService.createTransactionData(
           bet.userId,
-          TransactionType.BET_LOSS,
+          TransactionType.BET_LOST,
           bet.currency,
           bet.amount,
           `${bet.amount} ${bet.currency} debited - bet lost.`,

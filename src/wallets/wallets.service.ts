@@ -343,7 +343,7 @@ export class WalletsService {
       userId,
       type: transactionType,
       currencyType,
-      amount,
+      amount: Number(-amount),
       balanceAfter,
       description,
     });
