@@ -41,12 +41,12 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_LOCKED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting has been locked for ${data.roundName}. Results will be announced shortly.`,
+      `Betting has been locked for "${data.roundName}". Results will be announced shortly.`,
     TITLE: () => `Betting Phase Change - Betting Locked`,
   },
   BET_ROUND_VOID: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.roundName} has been voided due to technical issues. All bets have been refunded to your wallet.`,
+      `"${data.roundName}" has been voided due to technical issues. All bets have been refunded to your wallet.`,
     TITLE: () => `Round Voided`,
   },
   EMAIL_BET_WON: {
