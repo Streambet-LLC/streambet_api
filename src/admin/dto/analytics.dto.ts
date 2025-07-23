@@ -39,4 +39,7 @@ export class StreamAnalyticsResponseDto {
 
   @ApiProperty({ type: String, description: 'Platform vig/commission (as a percentage string)' })
   platformVig: string;
+
+  @ApiProperty({ type: Number, description: 'Total number of users placed bet on this stream' })
+  totalBetPlacedUsers: number;
 }

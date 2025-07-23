@@ -1760,4 +1760,30 @@ export class BettingService {
       coins: Number(coinResult?.totalBetValue) || 0,
     };
   }
+
+  /**
+   * Returns the total number of unique users who have placed bets on a given stream,
+   * excluding bets with status Cancelled, Refunded, or Pending.
+   *
+   * @param streamId - The ID of the stream
+   * @returns Promise<number> - The count of unique users who placed valid bets
+   */
+  async getTotalBetPlacedUsersForStream(streamId: string): Promise<number> {
+    // Query for unique user count, excluding unwanted bet statuses
+    const result = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('COUNT(DISTINCT bet.userId)', 'count')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [
+          BetStatus.Cancelled,
+          BetStatus.Refunded,
+          BetStatus.Pending,
+        ],
+      })
+      .getRawOne();
+
+    // Return the count as a number (default to 0 if null)
+    return Number(result.count);
+  }
 }
