@@ -641,6 +641,8 @@ export class AdminController {
     // Get total bet value for the stream
     const totalBetValue = await this.bettingService.getTotalBetValueForStream(streamId);
     
+    const totalBetPlacedUsers = await this.bettingService.getTotalBetPlacedUsersForStream(streamId);
+
     return {
       statusCode: HttpStatus.OK,
       message: 'Analytics summary fetched successfully',
@@ -648,7 +650,8 @@ export class AdminController {
         totalUsers,
         totalStreamTime,
         totalBetValue,
-        platformVig:'15%'
+        platformVig:'15%',
+        totalBetPlacedUsers
       },
     };
   }
