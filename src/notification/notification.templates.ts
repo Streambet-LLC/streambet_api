@@ -26,17 +26,17 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_WON: {
     MESSAGE: (data: BetNotificationData) =>
-      `🎉 Congratulations! You won ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} in ${data.roundName}. Your wallet has been updated `,
+      `🎉 Congratulations! You won ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} in "${data.roundName}". Your wallet has been updated `,
     TITLE: () => `🎉 Oh Snap! You Won!`,
   },
   BET_LOST: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.roundName} has ended and unfortunately you Lost. Better luck next time!`,
+      `"${data.roundName}" has ended and unfortunately you Lost. Better luck next time!`,
     TITLE: () => `You Lost 😭`,
   },
   BET_OPEN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting is open for ${data.roundName} round of ${data.streamName} . Place your bets and good luck!`,
+      `Betting is open for "${data.roundName}" round of ${data.streamName} . Place your bets and good luck!`,
     TITLE: () => `Betting Phase Change - Betting Open`,
   },
   BET_LOCKED: {
