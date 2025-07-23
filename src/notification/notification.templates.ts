@@ -36,7 +36,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_OPEN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting is open for "${data.roundName}" round of ${data.streamName} . Place your bets and good luck!`,
+      `Betting is open for "${data.roundName}" of ${data.streamName} . Place your bets and good luck!`,
     TITLE: () => `Betting Phase Change - Betting Open`,
   },
   BET_LOCKED: {
