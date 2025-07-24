@@ -142,6 +142,8 @@ export class BettingGateway
     @MessageBody() streamId: string,
   ) {
     // If the client was already in a stream, make them leave it first
+    //commented -> solving issue for same user place bet in different stream through multiple tab
+    /*
     const previousStreamId = this.socketToStreamMap.get(client.id);
     if (previousStreamId && previousStreamId !== streamId) {
       client.leave(`stream_${previousStreamId}`);
@@ -154,6 +156,7 @@ export class BettingGateway
         `Client ${client.id} left previous stream ${previousStreamId}. New count: ${prevCount}`,
       );
     }
+    */
     client.join(`stream_${streamId}`);
     this.server.to(`stream_${streamId}`).emit('joinedStream', { streamId });
     console.log(`User ${client.data.user.username} joined stream ${streamId}`);
