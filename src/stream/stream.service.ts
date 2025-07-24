@@ -343,6 +343,14 @@ END
         tokenSum: roundTotalBetsTokenAmount,
         coinSum: roundTotalBetsCoinAmount,
       } = total;
+      stream.bettingRounds.forEach((round) => {
+        round.bettingVariables.sort((a, b) => {
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+      });
+
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
         walletCoin: wallet?.streamCoins || 0,
