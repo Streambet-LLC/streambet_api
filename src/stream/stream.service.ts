@@ -20,6 +20,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from 'src/betting/betting.gateway';
 import { Queue } from 'bullmq';
 import redisConfig from 'src/config/redis.config';
+import { BetStatus } from 'src/enums/bet-status.enum';
 
 @Injectable()
 export class StreamService {
@@ -229,6 +230,14 @@ export class StreamService {
 END
           `,
           'bettingRoundStatus',
+        )
+        .addSelect(
+          `(SELECT COUNT(DISTINCT bet."user_id")
+    FROM bets bet
+    WHERE bet."stream_id" = s.id
+      AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
+  )`,
+          'userBetCount',
         )
 
         .groupBy('s.id');
