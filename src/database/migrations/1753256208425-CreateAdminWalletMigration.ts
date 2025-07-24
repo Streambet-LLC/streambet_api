@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateAdminWalletMigration1621500001000
+export class CreateAdminWalletMigration1753256208425
   implements MigrationInterface
 {
   name = 'CreateAdminWalletMigration1753256208425';
@@ -20,28 +20,31 @@ export class CreateAdminWalletMigration1621500001000
 
     const adminId = result[0].id;
 
-    await queryRunner.query(`
+    await queryRunner.query(
+      `
       INSERT INTO wallets (
         id,
         "userId",
         "freeTokens",
         "streamCoins",
-        "autoReloadEnabled",
+       "autoReloadEnabled",
         "autoReloadAmount",
         "createdAt",
         "updatedAt"
       )
       VALUES (
         gen_random_uuid(),
-        '${adminId}',
+        $1,
         1000,
         0,
-        false,
+       false,
         NULL,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
-    `);
+    `,
+      [adminId],
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
