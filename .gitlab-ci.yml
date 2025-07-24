@@ -35,6 +35,7 @@ variables:
   artifacts:
     reports:
       dotenv: image.env
+    expire_in: 1 week
   script:
     - echo "Logging in to ECR"
     - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
@@ -54,6 +55,7 @@ variables:
   artifacts:
     paths:
       - .devops/task-def.$DEPLOY_ENV.json
+    expire_in: 1 week
 
 .deploy_template: &deploy_template
   <<: *before_script_template

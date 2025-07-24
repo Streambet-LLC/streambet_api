@@ -20,6 +20,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from 'src/betting/betting.gateway';
 import { Queue } from 'bullmq';
 import redisConfig from 'src/config/redis.config';
+import { BetStatus } from 'src/enums/bet-status.enum';
 
 @Injectable()
 export class StreamService {
@@ -230,6 +231,14 @@ END
           `,
           'bettingRoundStatus',
         )
+        .addSelect(
+          `(SELECT COUNT(DISTINCT bet."user_id")
+    FROM bets bet
+    WHERE bet."stream_id" = s.id
+      AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
+  )`,
+          'userBetCount',
+        )
 
         .groupBy('s.id');
 
@@ -343,6 +352,14 @@ END
         tokenSum: roundTotalBetsTokenAmount,
         coinSum: roundTotalBetsCoinAmount,
       } = total;
+      stream.bettingRounds.forEach((round) => {
+        round.bettingVariables.sort((a, b) => {
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+      });
+
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
         walletCoin: wallet?.streamCoins || 0,

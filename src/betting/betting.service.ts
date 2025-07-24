@@ -908,17 +908,19 @@ export class BettingService {
       });
 
       lossingBetsWithUserInfo.map(async (bet) => {
-        await this.bettingGateway.emitBotMessageToLoser(
-          bet.userId,
-          bet.user?.username,
-          bet.round.roundName,
-        );
+        if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+          await this.bettingGateway.emitBotMessageToLoser(
+            bet.userId,
+            bet.user?.username,
+            bet.round.roundName,
+          );
 
-        await this.notificationService.sendSMTPForLossBet(
-          bet.userId,
-          bettingVariable.stream.name,
-          bet.round.roundName,
-        );
+          await this.notificationService.sendSMTPForLossBet(
+            bet.userId,
+            bettingVariable.stream.name,
+            bet.round.roundName,
+          );
+        }
       });
     } catch (error) {
       // Rollback in case of error
@@ -956,7 +958,14 @@ export class BettingService {
           transactionType,
           description,
         );
+        const userObj = await this.usersService.findById(userId);
+        await this.bettingGateway.emitBotMessageVoidRound(
+          userId,
+          userObj.username,
+          bet?.round?.roundName,
+        );
         await queryRunner.manager.save(bet);
+
         // Update bet status within transaction
       } catch (error) {
         console.error(
@@ -1028,7 +1037,7 @@ export class BettingService {
           roundId: bettingVariable.roundId,
           status: BetStatus.Active,
         },
-        relations: ['bettingVariable'],
+        relations: ['bettingVariable', 'round'],
       });
 
       // Validate and filter out any invalid bets
@@ -1039,7 +1048,8 @@ export class BettingService {
           bet.bettingVariableId &&
           bet.amount !== null &&
           bet.amount !== undefined &&
-          bet.currency,
+          bet.currency &&
+          bet.round,
       );
     } catch (error) {
       console.error('Error fetching active bets:', error);
@@ -1259,6 +1269,13 @@ export class BettingService {
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
+        await this.walletsService.createTransactionData(
+          bet.userId,
+          TransactionType.BET_LOST,
+          bet.currency,
+          bet.amount,
+          `${bet.amount} ${bet.currency} debited - bet lost.`,
+        );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
         throw error;
@@ -1591,7 +1608,10 @@ export class BettingService {
             roundId,
             'open',
           );
-          this.bettingGateway.emitOpenBetRound(round.roundName);
+          this.bettingGateway.emitOpenBetRound(
+            round.roundName,
+            roundWithStream.stream.name,
+          );
         }
       }
       return savedRound;
@@ -1710,32 +1730,60 @@ export class BettingService {
    * @param streamId - The ID of the stream
    * @returns Promise<{ freeTokens: number; coins: number }>
    */
-  async getTotalBetValueForStream(
+    async getTotalBetValueForStream(
     streamId: string,
   ): Promise<{ freeTokens: number; coins: number }> {
-    // Get total bet value for free tokens
+    // Get total bet value for free tokens (exclude cancelled, pending, refunded)
     const tokenResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.FREE_TOKENS,
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.FREE_TOKENS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
       })
       .getRawOne();
-
-    // Get total bet value for coins
+  
+    // Get total bet value for coins (exclude cancelled, pending, refunded)
     const coinResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
-      .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.STREAM_COINS,
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.STREAM_COINS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
       })
       .getRawOne();
-
+  
     return {
       freeTokens: Number(tokenResult?.totalBetValue) || 0,
       coins: Number(coinResult?.totalBetValue) || 0,
     };
+  }
+
+  /**
+   * Returns the total number of unique users who have placed bets on a given stream,
+   * excluding bets with status Cancelled, Refunded, or Pending.
+   *
+   * @param streamId - The ID of the stream
+   * @returns Promise<number> - The count of unique users who placed valid bets
+   */
+  async getTotalBetPlacedUsersForStream(streamId: string): Promise<number> {
+    // Query for unique user count, excluding unwanted bet statuses
+    const result = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('COUNT(DISTINCT bet.userId)', 'count')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [
+          BetStatus.Cancelled,
+          BetStatus.Refunded,
+          BetStatus.Pending,
+        ],
+      })
+      .getRawOne();
+
+    // Return the count as a number (default to 0 if null)
+    return Number(result.count);
   }
 }
