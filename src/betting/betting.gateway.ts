@@ -288,7 +288,7 @@ export class BettingGateway
         });
         betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
-      const socketId = this.userSocketMap.get(client.data.user.username);
+      // const socketId = this.userSocketMap.get(client.data.user.username);
       this.server.to(client.id).emit('betPlaced', betPlacePayload);
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -365,8 +365,8 @@ export class BettingGateway
         });
         betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE();
       }
-      const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(socketId).emit('betCancelled', betCancelPayout);
+      //const socketId = this.userSocketMap.get(client.data.user.username);
+      this.server.to(client.id).emit('betCancelled', betCancelPayout);
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -459,8 +459,9 @@ export class BettingGateway
         });
         betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
       }
-      const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(socketId).emit('betEdited', betEditedPayload);
+
+      //const socketId = this.userSocketMap.get(client.data.user.username);
+      this.server.to(client.id).emit('betEdited', betEditedPayload);
       // Emit to all clients after DB commit
       if (bettingVariable) {
         // Refetch the latest betting round with variables
