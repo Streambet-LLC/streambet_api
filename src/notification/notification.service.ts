@@ -212,7 +212,7 @@ export class NotificationService {
         const subject = NOTIFICATION_TEMPLATE.EMAIL_FREE_COIN_WON.TITLE({
           streamName,
         });
-        const blogPostLink = 'blog post url';
+        const blogPostLink = '#';
         const convertedCoin = Number(amount / 100);
         const emailData = {
           toAddress: [receiverEmail],
