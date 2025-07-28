@@ -59,10 +59,46 @@ export class ChatService {
   ): Promise<{ data: any[]; total: number }> {
     try {
       const { streamId, range, sort } = filter;
-      const [offset, limit] = range ? JSON.parse(range) : [0, 20];
-      const [sortColumn, sortOrder] = sort
-        ? JSON.parse(sort)
-        : ['createdAt', 'DESC'];
+      // Safely parse pagination with validation
+      let offset = 0,
+        limit = 20;
+      if (range) {
+        try {
+          const parsed = JSON.parse(range);
+          if (Array.isArray(parsed) && parsed.length === 2) {
+            offset = Math.max(0, parseInt(parsed[0]) || 0);
+            limit = Math.min(100, Math.max(1, parseInt(parsed[1]) || 20)); // Max 100 items
+          }
+        } catch (e) {
+          throw new HttpException(
+            'Invalid range format',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
+
+      // Safely parse sort with whitelist validation
+      let sortColumn = 'createdAt',
+        sortOrder = 'DESC';
+      const allowedColumns = ['createdAt', 'updatedAt', 'message'];
+      if (sort) {
+        try {
+          const parsed = JSON.parse(sort);
+          if (Array.isArray(parsed) && parsed.length === 2) {
+            if (allowedColumns.includes(parsed[0])) {
+              sortColumn = parsed[0];
+            }
+            sortOrder = ['ASC', 'DESC'].includes(parsed[1]?.toUpperCase())
+              ? parsed[1].toUpperCase()
+              : 'DESC';
+          }
+        } catch (e) {
+          throw new HttpException(
+            'Invalid sort format',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
 
       const qb = this.chatRepository
         .createQueryBuilder('chat')
@@ -71,7 +107,7 @@ export class ChatService {
         .where('chat.streamId = :streamId', { streamId })
         .orderBy(
           `chat.${sortColumn}`,
-          sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+          sortOrder as 'ASC' | 'DESC'
         )
         .offset(offset)
         .limit(limit);
@@ -81,6 +117,7 @@ export class ChatService {
 
       return { data, total };
     } catch (e) {
+      if (e instanceof HttpException) throw e;
       Logger.error(e);
       throw new HttpException(
         'Unable to retrieve chat messages at the moment. Please try again later.',
