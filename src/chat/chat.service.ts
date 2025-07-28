@@ -1,0 +1,91 @@
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Chat } from './entities/chat.entity';
+import { User } from '../users/entities/user.entity';
+import { Stream } from '../stream/entities/stream.entity';
+import { ChatMessagesFilterDto } from './dto/list-chat.dto';
+
+@Injectable()
+export class ChatService {
+  constructor(
+    @InjectRepository(Chat)
+    private readonly chatRepository: Repository<Chat>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Stream)
+    private readonly streamRepository: Repository<Stream>,
+  ) {}
+
+  /**
+   * Creates a new chat message for a given stream and user.
+   * @param streamId - The ID of the stream.
+   * @param userId - The ID of the user.
+   * @param message - The chat message content.
+   * @param imageURL - Optional image URL.
+   * @returns The created Chat entity.
+   */
+  async createChatMessage(
+    streamId: string,
+    userId: string,
+    message: string,
+    imageURL?: string,
+  ): Promise<Chat> {
+    const stream = await this.streamRepository.findOne({
+      where: { id: streamId },
+    });
+    if (!stream) throw new NotFoundException('Stream not found');
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const chat = this.chatRepository.create({
+      stream,
+      streamId,
+      user,
+      userId,
+      message,
+      imageURL,
+    });
+    return this.chatRepository.save(chat);
+  }
+
+  async getMessagesByStreamId(
+    filter: ChatMessagesFilterDto,
+  ): Promise<{ data: any[]; total: number }> {
+    try {
+      const { streamId, range, sort } = filter;
+      const [offset, limit] = range ? JSON.parse(range) : [0, 20];
+      const [sortColumn, sortOrder] = sort
+        ? JSON.parse(sort)
+        : ['createdAt', 'DESC'];
+
+      const qb = this.chatRepository
+        .createQueryBuilder('chat')
+        .leftJoin('chat.user', 'user')
+        .addSelect(['user.username', 'user.email', 'user.profile_image_url'])
+        .where('chat.streamId = :streamId', { streamId })
+        .orderBy(
+          `chat.${sortColumn}`,
+          sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+        )
+        .offset(offset)
+        .limit(limit);
+
+      const total = await qb.getCount();
+      const data = await qb.getMany();
+
+      return { data, total };
+    } catch (e) {
+      Logger.error(e);
+      throw new HttpException(
+        'Unable to retrieve chat messages at the moment. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+}
