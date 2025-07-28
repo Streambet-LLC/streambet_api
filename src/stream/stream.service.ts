@@ -9,7 +9,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Stream, StreamStatus } from './entities/stream.entity';
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -18,6 +18,9 @@ import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from 'src/betting/betting.gateway';
+import { Queue } from 'bullmq';
+import redisConfig from 'src/config/redis.config';
+import { BetStatus } from 'src/enums/bet-status.enum';
 
 @Injectable()
 export class StreamService {
@@ -27,7 +30,14 @@ export class StreamService {
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
+    private dataSource: DataSource,
   ) {}
+
+  private streamLiveQueue = new Queue(
+    `${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`,
+    { connection: redisConfig },
+  );
+
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -221,6 +231,14 @@ END
           `,
           'bettingRoundStatus',
         )
+        .addSelect(
+          `(SELECT COUNT(DISTINCT bet."user_id")
+    FROM bets bet
+    WHERE bet."stream_id" = s.id
+      AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
+  )`,
+          'userBetCount',
+        )
 
         .groupBy('s.id');
 
@@ -255,12 +273,17 @@ END
   async findStreamById(id: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id, status: StreamStatus.LIVE },
+        where: {
+          id,
+          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]), // Include both LIVE and SCHEDULED
+        },
         select: {
           id: true,
           embeddedUrl: true,
           name: true,
           platformName: true,
+          status: true,
+          scheduledStartTime: true,
         },
       });
 
@@ -291,9 +314,7 @@ END
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .where('stream.id = :streamId', { streamId })
-        .andWhere('stream.status = :streamStatus', {
-          streamStatus: StreamStatus.LIVE,
-        })
+
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
         })
@@ -331,6 +352,14 @@ END
         tokenSum: roundTotalBetsTokenAmount,
         coinSum: roundTotalBetsCoinAmount,
       } = total;
+      stream.bettingRounds.forEach((round) => {
+        round.bettingVariables.sort((a, b) => {
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+      });
+
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
         walletCoin: wallet?.streamCoins || 0,
@@ -409,7 +438,19 @@ END
         }
       }
 
-      return await this.streamsRepository.save(stream);
+      const streamResponse = await this.streamsRepository.save(stream);
+
+      // If the scheduled start time is updated, remove any existing job and reschedule if necessary
+      if (updateStreamDto.scheduledStartTime !== undefined) {
+        const job = await this.streamLiveQueue.getJob(id);
+        if (job) {
+          await job.remove();
+        }
+        if (streamResponse.status === StreamStatus.SCHEDULED) {
+          this.scheduleStream(streamResponse.id, stream.scheduledStartTime);
+        }
+      }
+      return streamResponse;
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw e;
@@ -461,45 +502,172 @@ END
 
     return savedStream;
   }
+  /**
+   * Decrements the viewer count for a given stream ID in the database.
+   * Ensures the count does not go below zero.
+   * @param streamId The ID of the stream.
+   * @returns The updated viewer count.
+   */
+  async decrementViewerCount(streamId: string): Promise<number> {
+    const result = await this.streamsRepository
+      .createQueryBuilder()
+      .update(Stream)
+      .set({ viewerCount: () => 'GREATEST(0, "viewerCount" - 1)' })
+      .where('id = :streamId', { streamId })
+      .returning('viewerCount')
+      .execute();
 
-  async incrementViewCount(streamId: string) {
+    if (result.affected === 0) {
+      throw new NotFoundException(`Stream with ID ${streamId} not found`);
+    }
+    const updatedCount = result.raw[0].viewerCount;
+
+    Logger.log(`Stream ${streamId}: Viewers decremented to ${updatedCount}`);
+    return updatedCount;
+  }
+  /**
+   * Increments the viewer count for a given stream ID in the database.
+   * @param streamId The ID of the stream.
+   * @returns The updated viewer count.
+   */
+  async incrementViewerCount(streamId: string): Promise<number> {
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+    });
+    stream.viewerCount++;
+    await this.streamsRepository.save(stream);
+    Logger.log(
+      `Stream ${streamId}: Viewers incremented to ${stream.viewerCount}`,
+    );
+    return stream.viewerCount;
+  }
+
+  async updateStreamStatus(streamId: string) {
     try {
-      const result = await this.streamsRepository
-        .createQueryBuilder()
-        .update(Stream)
-        .set({ viewerCount: () => 'viewerCount + 1' })
-        .where('id = :id', { id: streamId })
-        .execute();
+      const stream = await this.streamsRepository.findOne({
+        where: { id: streamId },
+        select: ['id', 'status', 'scheduledStartTime'],
+      });
 
-      if (result.affected === 0) {
+      if (!stream) {
         throw new NotFoundException(`Stream with ID ${streamId} not found`);
       }
+
+      // Update status based on scheduled start time
+      const currentTime = new Date();
+      if (stream.status === StreamStatus.SCHEDULED) {
+        if (stream.scheduledStartTime <= currentTime) {
+          stream.status = StreamStatus.LIVE;
+          stream.actualStartTime = currentTime;
+        }
+      } else if (stream.status === StreamStatus.LIVE) {
+        return stream;
+      }
+
+      return await this.streamsRepository.save(stream);
     } catch (error) {
-      Logger.error(
-        `Failed to increment view count for stream ${streamId}`,
-        error,
-      );
+      Logger.error(`Failed to update stream status for ${streamId}`, error);
       throw error;
     }
   }
-  async decrementViewCount(streamId: string) {
-    try {
-      const result = await this.streamsRepository
-        .createQueryBuilder()
-        .update(Stream)
-        .set({ viewerCount: () => 'GREATEST(viewerCount - 1, 0)' })
-        .where('id = :id', { id: streamId })
-        .execute();
 
-      if (result.affected === 0) {
-        throw new NotFoundException(`Stream with ID ${streamId} not found`);
-      }
-    } catch (error) {
-      Logger.error(
-        `Failed to decrement view count for stream ${streamId}`,
-        error,
+  async scheduleStream(streamId: string, scheduledTime: Date | string) {
+    const scheduledDate =
+      scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
+    const delay = scheduledDate.getTime() - Date.now();
+    console.log(
+      `Scheduling stream ${streamId} for ${scheduledDate}`,
+      'StreamLiveWorker',
+    );
+    await this.streamLiveQueue.add(
+      'make-live',
+      { streamId },
+      {
+        delay: Math.max(delay, 0),
+        jobId: streamId,
+      },
+    );
+  }
+
+  /**
+   * Retrieves the current viewer count for a stream.
+   * @param streamId The ID of the stream.
+   * @returns The current viewer count, or 0 if the stream doesn't exist.
+   */
+  async getViewerCount(streamId: string): Promise<number> {
+    const stream = await this.streamsRepository.findOne({
+      where: { id: streamId },
+    });
+    return stream ? stream.viewerCount : 0;
+  }
+
+  async getLiveStreamsCount(): Promise<number> {
+    return this.streamsRepository.count({
+      where: {
+        status: StreamStatus.LIVE, // Only count live streams
+      },
+    });
+  }
+
+  private formatDuration(totalSeconds: number): string {
+    const hours = Math.floor(totalSeconds / 3600)
+      .toString()
+      .padStart(2, '0');
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+      .toString()
+      .padStart(2, '0');
+    const seconds = Math.floor(totalSeconds % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  async getTotalLiveDuration(): Promise<string> {
+    const result = await this.dataSource.query(`
+      SELECT SUM(EXTRACT(EPOCH FROM ("endTime" - "scheduledStartTime"))) AS total_seconds
+      FROM streams
+      WHERE "scheduledStartTime" IS NOT NULL AND "endTime" IS NOT NULL
+    `);
+
+    const totalSeconds = parseFloat(result[0].total_seconds) || 0;
+    return this.formatDuration(totalSeconds);
+  }
+
+  /**
+   * Retrieves analytics summary for a specific stream.
+   * Calculates the total stream time (from scheduledStartTime to endTime, or current time if not ended).
+   * Formats the duration as "HHh MMm SSs".
+   *
+   * @param streamId - The ID of the stream to summarize
+   * @returns An object containing:
+   *    - totalUsers: (currently uses viewerCount as a placeholder for unique users)
+   *    - totalStreamTime: formatted duration string
+   */
+  async getStreamAnalytics(streamId: string): Promise<any> {
+    // Fetch stream details for the given streamId
+    const stream = await this.findStreamDetailsForAdmin(streamId);
+
+    // Calculate total stream time in seconds
+    const scheduledStart = stream.scheduledStartTime
+      ? new Date(stream.scheduledStartTime)
+      : null;
+    // Use endTime if available, otherwise use current time
+    const end = stream.endTime ? new Date(stream.endTime) : new Date();
+
+    let totalSeconds = 0;
+    if (scheduledStart) {
+      totalSeconds = Math.floor(
+        (end.getTime() - scheduledStart.getTime()) / 1000,
       );
-      throw error;
+      if (totalSeconds < 0) totalSeconds = 0;
     }
+
+    // Format the duration as "HHh MMm SSs"
+    const totalStreamTime = this.formatDuration(totalSeconds);
+
+    return {
+      totalUsers: stream.viewerCount || 0, // Assuming viewerCount represents unique users
+      totalStreamTime,
+    };
   }
 }

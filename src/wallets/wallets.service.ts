@@ -115,7 +115,7 @@ export class WalletsService {
       userId,
       amount,
       currencyType,
-      TransactionType.BET_WINNINGS,
+      TransactionType.BET_WON,
       description,
     );
   }
@@ -220,6 +220,9 @@ export class WalletsService {
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
+      transactionQB.andWhere('t.type NOT IN (:...excludedTypes)', {
+        excludedTypes: [TransactionType.REFUND, TransactionType.BET_PLACEMENT],
+      });
       if (filter?.q) {
         transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
@@ -314,5 +317,36 @@ export class WalletsService {
     return await this.walletsRepository.findOne({
       where: { userId },
     });
+  }
+
+  async createTransactionData(
+    userId: string,
+    transactionType: TransactionType,
+    currencyType: CurrencyType,
+    amount: number,
+    description: string,
+  ) {
+    const wallet = await this.walletsRepository.findOne({
+      where: { userId },
+    });
+    if (!wallet) {
+      throw new NotFoundException(
+        `Wallet for user with ID ${userId} not found`,
+      );
+    }
+
+    const balanceAfter =
+      currencyType === CurrencyType.FREE_TOKENS
+        ? wallet.freeTokens
+        : wallet.streamCoins;
+    const transactionObj = this.transactionsRepository.create({
+      userId,
+      type: transactionType,
+      currencyType,
+      amount: Number(-amount),
+      balanceAfter,
+      description,
+    });
+    await this.transactionsRepository.save(transactionObj);
   }
 }

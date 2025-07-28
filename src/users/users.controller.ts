@@ -17,7 +17,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserProfileResponseDto } from './dto/user.response.dto';
-import { ProfileUpdateDto } from './dto/user.requests.dto';
+import { NotificationSettingsUpdateDto, ProfileUpdateDto } from './dto/user.requests.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -92,6 +92,42 @@ export class UsersController {
     return {
       data,
       message: 'User profile updated successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  /**
+   * Updates the notification settings of the currently logged-in user.
+   * @param req - The request object containing user information.
+   * @param notificationSettingsUpdateDto - The data to update the user's notification settings.
+   * @returns The updated notification settings.
+   */
+  @ApiOperation({
+    summary: 'Update user notification settings',
+    description:
+      'This endpoint updates the notification settings of the currently logged-in user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User notification settings updated successfully',
+    type: User, 
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('notification-settings')
+  async updateNotificationSettings(
+    @Request() req: RequestWithUser,
+    @Body() notificationSettingsUpdateDto: NotificationSettingsUpdateDto,
+  ) {
+    const data = await this.usersService.updateNotificationSettings(
+      req.user.id,
+      notificationSettingsUpdateDto,
+    );
+    return {
+      data,
+      message: 'User notification settings updated successfully',
       statusCode: HttpStatus.OK,
     };
   }

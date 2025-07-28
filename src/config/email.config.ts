@@ -11,6 +11,14 @@ export default registerAs('email', () => ({
   APPLICATION_HOST: process.env.APPLICATION_HOST || '',
   HOST_URL: process.env.APP_HOST_URL || '',
   HOSTED: process.env.HOSTED,
+  ttls: {
+    eightHours: 28800000,
+    fullDay: 86400,
+    fourHours: 14400000,
+    fiveMinutes: 300000,
+    oneHour: 3600000,
+    tenSec: 10000,
+  },
   schemaMapping: {
     account_verification: {
       templatePath: './src/templates/account_verification.ejs',
@@ -23,6 +31,18 @@ export default registerAs('email', () => ({
     welcome: {
       templatePath: './src/templates/welcome.ejs',
       schemaPath: './src/templates/welcome.json',
+    },
+    bet_won: {
+      templatePath: './src/templates/bet_won.ejs',
+      schemaPath: './src/templates/bet_won.json',
+    },
+    bet_loss: {
+      templatePath: './src/templates/bet_loss.ejs',
+      schemaPath: './src/templates/bet_loss.json',
+    },
+    bet_won_free_coin: {
+      templatePath: './src/templates/bet_won_free_coin.ejs',
+      schemaPath: './src/templates/bet_won_free_coin.json',
     },
   },
 }));

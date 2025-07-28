@@ -44,6 +44,7 @@ import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
+import { AnalyticsSummaryResponseDto, StreamAnalyticsResponseDto } from './dto/analytics.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -486,6 +487,7 @@ export class AdminController {
     @Body() body: UpdateRoundStatusDto,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
+
     const updatedRound = await this.bettingService.updateRoundStatus(
       roundId,
       body.newStatus,
@@ -557,6 +559,100 @@ export class AdminController {
       message: 'Round cancelled and all bets refunded',
       status: HttpStatus.OK,
       data: result,
+    };
+  }
+
+  /**
+ * Retrieves analytics summary data for the admin dashboard.
+ *
+ * This endpoint returns key metrics including:
+ * - Total number of active, non-deleted users with the USER role
+ * - Total number of live streams
+ * - Total number of active bets (implementation should be in bettingService)
+ * - Total live time duration for all streams (formatted as a string)
+ *
+ * The endpoint is protected and only accessible by admin users.
+ *
+ * @param req - The request object containing the authenticated user
+ * @returns An object containing the analytics summary data
+ */
+  @ApiOperation({ summary: 'Get analytics summary for dashboard' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Analytics summary fetched successfully',
+    type: AnalyticsSummaryResponseDto,
+  })
+  @Get('analytics/summary')
+  async getAnalyticsSummary(@Request() req: RequestWithUser) {
+    this.ensureAdmin(req.user);
+
+    // Total users
+    const totalUsers = await this.usersService.getUsersCount();
+
+    // Total live streams
+    const totalLiveStreams = await this.streamService.getLiveStreamsCount();
+
+    // Total active bets
+    const totalActiveBets = await this.bettingService.getActiveBetsCount();
+
+    const totalLiveTime = await this.streamService.getTotalLiveDuration();
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Analytics summary fetched successfully',
+      data: {
+        totalUsers,
+        totalActiveBets,
+        totalLiveStreams,
+        totalLiveTime
+      },
+    };
+  }
+
+  /**
+   * Retrieves analytics summary data for a specific stream.
+   *
+   * This endpoint returns key metrics for a given stream, including:
+   * - Total number of unique users who participated in the stream (placed a bet)
+   * - Total bet value (sum of all bets placed on the stream)
+   * - Total stream time (duration from scheduledStartTime to endTime, formatted as a string)
+   *
+   * The endpoint is protected and only accessible by admin users.
+   *
+   * @param streamId - The ID of the stream to summarize
+   * @returns An object containing the analytics summary data for the stream
+   */
+  @ApiOperation({ summary: 'Get analytics summary for a specific stream' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Analytics summary for stream fetched successfully',
+    type: StreamAnalyticsResponseDto,
+  })
+  @Get('analytics/stream/:streamId')
+  async getStreamAnalyticsSummary(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ) {
+    this.ensureAdmin(req.user);
+  
+    // Get stream details (including betting rounds and variables)
+    const { totalUsers, totalStreamTime } = await this.streamService.getStreamAnalytics(streamId);
+    
+    // Get total bet value for the stream
+    const totalBetValue = await this.bettingService.getTotalBetValueForStream(streamId);
+    
+    const totalBetPlacedUsers = await this.bettingService.getTotalBetPlacedUsersForStream(streamId);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Analytics summary fetched successfully',
+      data: {
+        totalUsers,
+        totalStreamTime,
+        totalBetValue,
+        platformVig:'15%',
+        totalBetPlacedUsers
+      },
     };
   }
 }

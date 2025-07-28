@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Forgot Password - Streambet</title>
+    <title>🎉 You won a bet on <%= params.streamName %>!</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
@@ -26,34 +26,27 @@
                         </tr>
                     </table>
 
-                    <!-- Heading -->
-                    <h1 class="heading"
-                        style="text-align:center;font-size:38px;font-weight:600;color:#FFFFFF;margin-bottom:40px;font-family:'Inter',sans-serif;">
-                        Password Reset Request</h1>
 
-                    <!-- Box -->
                     <div class="box"
                         style="background-color:#181818;border-radius:16px;border:1px solid #2C2C2C;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
                         <div class="box-content" style="max-width:700px;margin:0 auto;color:#FFFFFF;">
                             <p
                                 style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform: capitalize;color:#FFFFFF;">
-                                Hi <%= params.fullName %>
-                            </p>
+                                Congratulations <%= params.fullName %> !</p>
                             <p
                                 style="font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                                You requested a password reset for your Streambet account. Click the link below to
-                                create a new password. If you didn't
-                                request this, please ignore this email.</p>
+                                You won <%= params.amount %>
+                                    <%= params.currencyType %> in "<%= params.roundName %>". Your winnings have been
+                                            added to your wallet.
+                                            View your updated balance in your account. See the details here
 
+                                            <a href="<%= params.dashboardLink %>" class="btn"
+                                                style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Go
+                                                to Dashboard</a>
 
-                            <a href="<%= params.resetLink %>" class="btn"
-                                style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Reset
-                                Password</a>
-                            <p style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;
-                                 ">
-                                Stay secure,<br /><b style="font-size:20px;">The Streambet Team</b></p>
-
-
+                                            <p
+                                                style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                                                Cheers,<br /><b style="font-size:20px;">The Streambet Team</b></p>
                         </div>
                     </div>
 

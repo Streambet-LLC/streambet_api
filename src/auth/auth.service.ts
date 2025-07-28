@@ -22,6 +22,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
 import { userVerificationDto } from './dto/verify-password.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -41,6 +42,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailsService: EmailsService,
+    private notificationService: NotificationService,
   ) {}
 
   private calculateAge(birthDate: Date): number {
@@ -457,7 +459,12 @@ export class AuthService {
         );
       // Update password
       await this.usersService.verifyUser(user.id);
-      await this.sendWelcomeEmail(user);
+      const name = user.name || user.username;
+      await this.notificationService.sendSMTPForWelcome(
+        user.id,
+        user.email,
+        name,
+      );
       return {
         message: 'User Verified successfully',
         statusCode: HttpStatus.OK,
@@ -500,22 +507,12 @@ export class AuthService {
 
     try {
       // Send password reset email
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [user.email],
-          subject: 'Reset Your Password',
-          params: {
-            fullName: user.name || user.username,
-            resetLink,
-          },
-        },
-        'password_reset',
+      const name = user.name || user.username;
+      await this.notificationService.sendSMTPForPasswordReset(
+        user.email,
+        name,
+        resetLink,
       );
-
-      return {
-        message: `A password reset link has been sent to your registered email starting with '${user.email.slice(0, 3)}****'.`,
-        statusCode: HttpStatus.OK,
-      };
     } catch (error) {
       throw new HttpException(
         'Unable to send password reset email. Please try again later.',
@@ -562,32 +559,6 @@ export class AuthService {
       }
       throw new HttpException(
         'Error resetting password',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-  async sendWelcomeEmail(user: User) {
-    try {
-      const loginLink =
-        this.configService.get<string[]>('email.HOST_URL') || '';
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [user.email],
-          subject: 'Welcome to StreamBet',
-          params: {
-            fullName: user.name || user.username,
-            loginLink,
-          },
-        },
-        'welcome',
-      );
-      console.log(
-        `A welcome email has been sent to your registered email starting with '${user.email.slice(0, 3)}****'.`,
-      );
-    } catch (error) {
-      throw new HttpException(
-        'Unable to send welcome email. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

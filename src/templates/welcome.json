@@ -53,15 +53,15 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName"],
+      "required": ["fullName", "dashboardLink"],
       "properties": {
         "fullName": {
           "type": "string",
           "description": "Full name of the user"
         },
-        "loginLink": {
+        "dashboardLink": {
           "type": "string",
-          "description": "Link to login page"
+          "description": "Link to dashboard"
         }
       }
     }

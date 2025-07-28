@@ -1,21 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
+  NotificationSettingsUpdateDto,
   ProfileUpdateDto,
   UserFilterDto,
   UserUpdateDto,
 } from './dto/user.requests.dto';
 import { UserResponseDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -231,6 +234,54 @@ export class UsersService {
   async verifyUser(userId: string): Promise<void> {
     await this.usersRepository.update(userId, {
       isVerify: true,
+    });
+  }
+
+  /**
+   * Updates the notification preferences of a user.
+   * @param userId - The ID of the user whose notification settings are to be updated.
+   * @param notificationSettingsUpdateDto - The new notification settings.
+   * @returns The updated user details.
+   */
+  async updateNotificationSettings(
+    userId: string,
+    notificationSettingsUpdateDto: NotificationSettingsUpdateDto,
+  ): Promise<UserResponseDto> {
+    // Find the user by ID
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    await this.cacheManager.del(`user_${user.id}_Notification_Settings`);
+    // Update only provided fields in notificationPreferences
+    const currentPrefs = user.notificationPreferences;
+
+    user.notificationPreferences = {
+      emailNotification:
+        notificationSettingsUpdateDto.emailNotification ??
+        currentPrefs?.emailNotification,
+      inAppNotification:
+        notificationSettingsUpdateDto.inAppNotification ??
+        currentPrefs.inAppNotification,
+    };
+    // Save the updated user
+    await this.usersRepository.save(user);
+
+    // Return sanitized user data
+    return this.findOne(userId);
+  }
+
+  /**
+   * Returns the total count of active, non-deleted users with the USER role.
+   * @returns Promise<number> - The number of users matching the criteria.
+   */
+  getUsersCount(): Promise<number> {
+    return this.usersRepository.count({
+      where: {
+        isActive: true,      // Only include users who are active
+        deletedAt: null,     // Exclude users who have been soft-deleted
+        role: UserRole.USER, // Only count users with the USER role
+      },
     });
   }
 }

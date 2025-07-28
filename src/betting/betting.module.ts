@@ -11,6 +11,8 @@ import { UsersModule } from '../users/users.module';
 import { AuthModule } from '../auth/auth.module';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { StreamModule } from 'src/stream/stream.module';
+import { NotificationService } from 'src/notification/notification.service';
+import { EmailsService } from 'src/emails/email.service';
 
 @Module({
   imports: [
@@ -21,7 +23,12 @@ import { StreamModule } from 'src/stream/stream.module';
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
   ],
   controllers: [BettingController],
-  providers: [BettingService, BettingGateway],
+  providers: [
+    BettingService,
+    BettingGateway,
+    NotificationService,
+    EmailsService,
+  ],
   exports: [BettingService, BettingGateway],
 })
 export class BettingModule {}

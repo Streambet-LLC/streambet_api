@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { NotificationPreference } from '../entities/user.entity';
 
 export class UserProfileResponseDto {
   @ApiProperty()
@@ -45,8 +46,8 @@ export class UserResponseDto {
   @ApiProperty({ example: null, nullable: true })
   googleId: string | null;
 
-  @ApiProperty({ example: {}, type: Object })
-  notificationPreferences: string;
+  @ApiProperty({ example: {}, type: NotificationPreference })
+  notificationPreferences: NotificationPreference;
 
   @ApiProperty({ example: '2025-06-12T10:27:57.689Z' })
   tosAcceptanceTimestamp: Date;

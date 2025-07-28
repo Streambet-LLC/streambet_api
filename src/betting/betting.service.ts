@@ -30,6 +30,9 @@ import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from './betting.gateway';
+import { UsersService } from 'src/users/users.service';
+import { StreamService } from 'src/stream/stream.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class BettingService {
@@ -43,9 +46,12 @@ export class BettingService {
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
+    private notificationService: NotificationService,
+    private usersService: UsersService,
     private dataSource: DataSource,
     @Inject(forwardRef(() => BettingGateway))
     private readonly bettingGateway: BettingGateway,
+    private readonly streamService: StreamService,
   ) {}
 
   // Utility function to detect platform from URL
@@ -69,6 +75,17 @@ export class BettingService {
   async createStream(createStreamDto: CreateStreamDto): Promise<Stream> {
     const stream = this.streamsRepository.create(createStreamDto);
 
+    if (createStreamDto.scheduledStartTime) {
+      const now = new Date();
+      const scheduledTime = new Date(createStreamDto.scheduledStartTime);
+
+      if (scheduledTime <= now) {
+        stream.status = StreamStatus.LIVE; // If scheduled time is now or in the past
+      } else {
+        stream.status = StreamStatus.SCHEDULED;
+      }
+    }
+
     // Auto-detect platform from embeddedUrl if provided
     if (createStreamDto.embeddedUrl) {
       const detectedPlatform = this.detectPlatformFromUrl(
@@ -79,7 +96,14 @@ export class BettingService {
       }
     }
 
-    return this.streamsRepository.save(stream);
+    const streamResponse = await this.streamsRepository.save(stream);
+    if (stream.status == StreamStatus.SCHEDULED) {
+      this.streamService.scheduleStream(
+        streamResponse.id,
+        stream.scheduledStartTime,
+      );
+    }
+    return streamResponse;
   }
 
   async findAllStreams(includeEnded: boolean = false): Promise<Stream[]> {
@@ -202,6 +226,7 @@ export class BettingService {
     status: BettingVariableStatus,
   ): Promise<BettingVariable> {
     const bettingVariable = await this.findBettingVariableById(id);
+
     bettingVariable.status = status;
     const updatedVariable =
       await this.bettingVariablesRepository.save(bettingVariable);
@@ -388,9 +413,9 @@ export class BettingService {
       );
       throw new BadRequestException(message);
     }
-    if (bettingVariable?.round?.stream?.status !== StreamStatus.LIVE) {
+    if (bettingVariable?.round?.stream?.status === StreamStatus.ENDED) {
       throw new BadRequestException(
-        `This stream is not live. You can only place bets during live streams.`,
+        `This stream is Ended. You can only place bets during live and scheduled streams.`,
       );
     }
     const existingBet = await this.betsRepository
@@ -482,9 +507,9 @@ export class BettingService {
       throw new BadRequestException(message);
     }
 
-    if (bettingVariable.round.stream.status !== StreamStatus.LIVE) {
+    if (bettingVariable.round.stream.status === StreamStatus.ENDED) {
       throw new BadRequestException(
-        `This stream is not live. You can only place bets during live streams.`,
+        `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
 
@@ -830,20 +855,73 @@ export class BettingService {
         },
         relations: ['user'],
       });
+
       const winners = winningBetsWithUserInfo.map((bet) => ({
         userId: bet.userId,
         username: bet.user?.username,
+        amount: bet?.payoutAmount,
+        currencyType: bet?.currency,
+        roundName: bettingVariable?.round?.roundName,
+        email: bet.user?.email,
       }));
 
-      // Commit the transaction
       await queryRunner.commitTransaction();
-      // Emit winner declared event
+
       this.bettingGateway.emitWinnerDeclared(
         bettingVariable.stream.id,
         bettingVariable.id,
         bettingVariable.name,
         winners,
       );
+      for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageToWinner(
+          winner.userId,
+          winner.username,
+          winner.roundName,
+          winner.amount,
+          winner.currencyType,
+        );
+        await this.notificationService.sendSMTPForWonBet(
+          winner.userId,
+          bettingVariable.stream.name,
+          winner.amount,
+          winner.currencyType,
+          winner.roundName,
+        );
+        if (winner.currencyType === CurrencyType.FREE_TOKENS) {
+          await this.notificationService.sendSMTPForWonFreeCoin(
+            winner.userId,
+            winner.email,
+            winner.username,
+            bettingVariable.stream.name,
+            winner.amount,
+            winner.roundName,
+          );
+        }
+      }
+      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          roundId: bettingVariable.roundId,
+          status: BetStatus.Lost,
+        },
+        relations: ['user', 'bettingVariable', 'round'],
+      });
+
+      lossingBetsWithUserInfo.map(async (bet) => {
+        if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+          await this.bettingGateway.emitBotMessageToLoser(
+            bet.userId,
+            bet.user?.username,
+            bet.round.roundName,
+          );
+
+          await this.notificationService.sendSMTPForLossBet(
+            bet.userId,
+            bettingVariable.stream.name,
+            bet.round.roundName,
+          );
+        }
+      });
     } catch (error) {
       // Rollback in case of error
       await queryRunner.rollbackTransaction();
@@ -880,7 +958,14 @@ export class BettingService {
           transactionType,
           description,
         );
+        const userObj = await this.usersService.findById(userId);
+        await this.bettingGateway.emitBotMessageVoidRound(
+          userId,
+          userObj.username,
+          bet?.round?.roundName,
+        );
         await queryRunner.manager.save(bet);
+
         // Update bet status within transaction
       } catch (error) {
         console.error(
@@ -952,7 +1037,7 @@ export class BettingService {
           roundId: bettingVariable.roundId,
           status: BetStatus.Active,
         },
-        relations: ['bettingVariable'],
+        relations: ['bettingVariable', 'round'],
       });
 
       // Validate and filter out any invalid bets
@@ -963,7 +1048,8 @@ export class BettingService {
           bet.bettingVariableId &&
           bet.amount !== null &&
           bet.amount !== undefined &&
-          bet.currency,
+          bet.currency &&
+          bet.round,
       );
     } catch (error) {
       console.error('Error fetching active bets:', error);
@@ -1140,8 +1226,13 @@ export class BettingService {
       try {
         // Equal share for all winners (not proportional to bet amount)
         const equalShare = 1 / winningCoinBets.length;
-        const payout =
-          Math.floor(distributableCoinPot * equalShare) + bet.amount;
+
+        // Calculate share from losing pool Including decimal precision
+        const shareFromLosingPool = Number(
+          (Number(distributableCoinPot) * equalShare).toFixed(3),
+        );
+        const payout = shareFromLosingPool + Number(bet.amount);
+
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
@@ -1178,6 +1269,13 @@ export class BettingService {
         bet.processedAt = new Date();
         bet.isProcessed = true;
         await queryRunner.manager.save(bet);
+        await this.walletsService.createTransactionData(
+          bet.userId,
+          TransactionType.BET_LOST,
+          bet.currency,
+          bet.amount,
+          `${bet.amount} ${bet.currency} debited - bet lost.`,
+        );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
         throw error;
@@ -1444,28 +1542,63 @@ export class BettingService {
     if (!round) {
       throw new NotFoundException(`Round with ID ${roundId} not found`);
     }
+
     // Only allow: created -> open -> locked
     const current = round.status;
+    let savedRound;
     if (
       (current === 'created' && newStatus === 'open') ||
       (current === 'open' && newStatus === 'locked')
     ) {
-      round.status = newStatus as any;
-      const savedRound = await this.bettingRoundsRepository.save(round);
       if (newStatus === BettingRoundStatus.LOCKED) {
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
         });
         if (roundWithStream && roundWithStream.streamId) {
+          const similarBets = await this.betsRepository.find({
+            where: {
+              round: { id: roundId },
+              status: BetStatus.Active,
+            },
+            relations: ['round'],
+          });
+          // This is to prevent locking a round with no competition
+          if (similarBets.length <= 1) {
+            let message =
+              similarBets.length === 1
+                ? `Cannot lock the bet — only one user has placed a bet`
+                : `Cannot lock the bet — no user has placed a bet`;
+            throw new NotFoundException(message);
+          }
+
+          round.status = newStatus as any;
+          savedRound = await this.bettingRoundsRepository.save(round);
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
             'locked',
+            true,
           );
+
+          const bets = await this.betsRepository.find({
+            where: { round: { id: roundId }, status: BetStatus.Active },
+            relations: ['user'],
+          });
+
+          for (const bet of bets) {
+            await this.bettingGateway.emitLockBetRound(
+              roundWithStream.roundName,
+              bet.userId,
+              bet.user.username,
+            );
+          }
         }
       }
+
       if (newStatus === BettingRoundStatus.OPEN) {
+        round.status = newStatus as any;
+        savedRound = await this.bettingRoundsRepository.save(round);
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
@@ -1475,6 +1608,10 @@ export class BettingService {
             roundWithStream.streamId,
             roundId,
             'open',
+          );
+          this.bettingGateway.emitOpenBetRound(
+            round.roundName,
+            roundWithStream.stream.name,
           );
         }
       }
@@ -1510,6 +1647,7 @@ export class BettingService {
         // Set variable status to CANCELLED
         variable.status = BettingVariableStatus.CANCELLED;
         for (const bet of variable.bets) {
+          const { username } = await this.usersService.findById(bet.userId);
           if (bet.status !== BetStatus.Active) continue;
           // Refund to user
           if (bet.currency === CurrencyType.FREE_TOKENS) {
@@ -1533,12 +1671,21 @@ export class BettingService {
           bet.status = BetStatus.Cancelled;
           refundedBets.push(bet);
           await queryRunner.manager.save(bet);
+
+          await this.bettingGateway.emitBotMessageForCancelBetByAdmin(
+            bet.userId,
+            username,
+            bet.amount,
+            bet.currency,
+            variable.name,
+            round.roundName,
+          );
         }
         await queryRunner.manager.save(variable);
       }
       await queryRunner.commitTransaction();
       if (round.streamId) {
-        this.bettingGateway.emitBettingStatus(
+        await this.bettingGateway.emitBettingStatus(
           round.streamId,
           roundId,
           'canceled',
@@ -1569,5 +1716,75 @@ export class BettingService {
     );
 
     return { totalBetsTokenAmount, totalBetsCoinAmount };
+  }
+
+  getActiveBetsCount(): Promise<number> {
+    return this.betsRepository.count({
+      where: {
+        status: BetStatus.Active,
+      },
+    });
+  }
+
+  /**
+   * Returns the total bet value for a stream, separated by free tokens and coins.
+   * @param streamId - The ID of the stream
+   * @returns Promise<{ freeTokens: number; coins: number }>
+   */
+    async getTotalBetValueForStream(
+    streamId: string,
+  ): Promise<{ freeTokens: number; coins: number }> {
+    // Get total bet value for free tokens (exclude cancelled, pending, refunded)
+    const tokenResult = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('SUM(bet.amount)', 'totalBetValue')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.FREE_TOKENS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
+      })
+      .getRawOne();
+  
+    // Get total bet value for coins (exclude cancelled, pending, refunded)
+    const coinResult = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('SUM(bet.amount)', 'totalBetValue')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.STREAM_COINS })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [BetStatus.Cancelled, BetStatus.Pending, BetStatus.Refunded],
+      })
+      .getRawOne();
+  
+    return {
+      freeTokens: Number(tokenResult?.totalBetValue) || 0,
+      coins: Number(coinResult?.totalBetValue) || 0,
+    };
+  }
+
+  /**
+   * Returns the total number of unique users who have placed bets on a given stream,
+   * excluding bets with status Cancelled, Refunded, or Pending.
+   *
+   * @param streamId - The ID of the stream
+   * @returns Promise<number> - The count of unique users who placed valid bets
+   */
+  async getTotalBetPlacedUsersForStream(streamId: string): Promise<number> {
+    // Query for unique user count, excluding unwanted bet statuses
+    const result = await this.betsRepository
+      .createQueryBuilder('bet')
+      .select('COUNT(DISTINCT bet.userId)', 'count')
+      .where('bet.streamId = :streamId', { streamId })
+      .andWhere('bet.status NOT IN (:...excludedStatuses)', {
+        excludedStatuses: [
+          BetStatus.Cancelled,
+          BetStatus.Refunded,
+          BetStatus.Pending,
+        ],
+      })
+      .getRawOne();
+
+    // Return the count as a number (default to 0 if null)
+    return Number(result.count);
   }
 }
