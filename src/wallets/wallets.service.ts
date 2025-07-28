@@ -220,17 +220,28 @@ export class WalletsService {
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
-      transactionQB.andWhere('t.type NOT IN (:...excludedTypes)', {
-        excludedTypes: [TransactionType.REFUND, TransactionType.BET_PLACEMENT],
-      });
+
+      if (!currencyType) {
+        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
+          includedTypes: [TransactionType.BET_LOST, TransactionType.BET_WON],
+        });
+      }
       if (filter?.q) {
         transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
         });
       }
+      /*  
       if (currencyType) {
         transactionQB.andWhere(`t.currencyType = :currencyType`, {
           currencyType,
+        });
+      }
+*/
+
+      if (currencyType === CurrencyType.STREAM_COINS) {
+        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
+          includedTypes: [TransactionType.INITIAL_CREDIT],
         });
       }
       if (sort) {
