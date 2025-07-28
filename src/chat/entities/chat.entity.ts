@@ -1,4 +1,4 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { Stream } from '../../stream/entities/stream.entity';
@@ -7,10 +7,12 @@ import { Stream } from '../../stream/entities/stream.entity';
 export class Chat extends BaseEntity {
   @ManyToOne(() => Stream, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'stream_id' })
+  @Index()
   stream: Stream;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
+  @Index()
   user: User;
 
   @Column({ type: 'text' })
