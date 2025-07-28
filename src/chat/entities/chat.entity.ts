@@ -9,15 +9,9 @@ export class Chat extends BaseEntity {
   @JoinColumn({ name: 'stream_id' })
   stream: Stream;
 
-  @Column({ name: 'stream_id' })
-  streamId: string;
-
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
-
-  @Column({ name: 'user_id' })
-  userId: string;
 
   @Column({ type: 'text' })
   message: string;

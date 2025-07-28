@@ -45,9 +45,7 @@ export class ChatService {
     if (!user) throw new NotFoundException('User not found');
     const chat = this.chatRepository.create({
       stream,
-      streamId,
       user,
-      userId,
       message,
       imageURL,
     });
