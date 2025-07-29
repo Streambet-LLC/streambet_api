@@ -575,7 +575,7 @@ END
     const scheduledDate =
       scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
     const delay = scheduledDate.getTime() - Date.now();
-    console.log(
+    Logger.log(
       `Scheduling stream ${streamId} for ${scheduledDate}`,
       'StreamLiveWorker',
     );

@@ -13,6 +13,7 @@ import { Stream } from 'src/stream/entities/stream.entity';
 import { StreamModule } from 'src/stream/stream.module';
 import { NotificationService } from 'src/notification/notification.service';
 import { EmailsService } from 'src/emails/email.service';
+import { ChatModule } from 'src/chat/chat.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EmailsService } from 'src/emails/email.service';
     UsersModule,
     AuthModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
+    ChatModule
   ],
   controllers: [BettingController],
   providers: [
