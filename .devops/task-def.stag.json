@@ -31,7 +31,10 @@
         { "name": "REDIS_HOST", "value": "54.172.250.213" },
         { "name": "REDIS_PORT", "value": "6301" },
         { "name": "REDIS_USERNAME", "value": "default" },
-        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" }
+        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
+        { "name": "IS_SWAGGER_ENABLED", "value": "true" },
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" }
+
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },

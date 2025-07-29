@@ -13,4 +13,6 @@ export default registerAs('app', () => ({
     secretKey: process.env.STRIPE_SECRET_KEY || '',
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
   },
+  isSwaggerEnable: process.env.IS_SWAGGER_ENABLED === 'true',
+  isBullmqUiEnabled: process.env.IS_BULLMQ_UI_ENABLED === 'true',
 }));
