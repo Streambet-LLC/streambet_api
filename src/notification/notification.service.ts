@@ -69,7 +69,8 @@ export class NotificationService {
             amount: amount.toLocaleString('en-US'),
             currencyType: updatedCurrencyType,
             roundName,
-            dashboardLink,
+            dashboardLink: `${dashboardLink}/betting-history
+`,
           },
         };
         await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
@@ -110,7 +111,8 @@ export class NotificationService {
             streamName,
             fullName: receiver.username,
             roundName,
-            dashboardLink,
+            dashboardLink: `${dashboardLink}/betting-history
+`,
           },
         };
 
