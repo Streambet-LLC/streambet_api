@@ -1181,12 +1181,15 @@ export class BettingService {
 
     for (const bet of winningTokenBets) {
       try {
-        const totalBetsTokenAmount = bet.bettingVariable?.totalBetsTokenAmount;
+        const totalBetForWinningOption =
+          bet.bettingVariable?.totalBetsTokenAmount;
+        //bet amount placed by user
         const betAmount = bet.amount;
 
-        // payout calculation
+        // payout calculation, Multiply by the total token pool (winning + losing side)
+
         const payout = Math.floor(
-          (betAmount / totalBetsTokenAmount) *
+          (betAmount / totalBetForWinningOption) *
             Number(totalWinningTokenAmount + totalLosingTokenAmount),
         );
 
@@ -1228,15 +1231,17 @@ export class BettingService {
 
     for (const bet of winningCoinBets) {
       try {
-        const totalBetsCoinAmount = bet.bettingVariable?.totalBetsCoinAmount;
+        const totalBetForWinningOption =
+          bet.bettingVariable?.totalBetsCoinAmount;
+        //bet amount placed by user
         const betAmount = bet.amount;
-        //reduce 15% - platform fee form total pot amount
-        const updatedPotAmount = Math.floor(
-          Number(totalWinningCoinAmount + totalLosingCoinAmount) * 0.15,
-        );
+        //reduce 15% - platform fee from total streamcoin pot amount
+        const potAmountAfterPlatformFee =
+          Number(totalWinningCoinAmount + totalLosingCoinAmount) * 0.85;
         //calculation
-        let payout = (betAmount / totalBetsCoinAmount) * updatedPotAmount;
-        // reduce stream coin , upto 3 decimal place
+        let payout =
+          (betAmount / totalBetForWinningOption) * potAmountAfterPlatformFee;
+        // reduce stream coin, upto 3 decimal place
         payout = Number(payout.toFixed(3));
 
         bet.status = BetStatus.Won;
@@ -1470,20 +1475,31 @@ export class BettingService {
       throw new NotFoundException(e.message);
     }
   }
+  /**
+   * Calculates the potential winning amount for a user’s bet in a betting round.
+   *
+   * This method estimates the potential reward based on the total pool size,
+   * user's selected betting option, bet currency (FREE_TOKENS or STREAM_COINS),
+   * and bet amount. For STREAM_COINS, a platform fee of 15% is applied before payout.
+   *
+   * @param {any} bettingRound - The current betting round object which includes all betting variables.
+   * @param {any} bets - The user's bet object containing details such as amount, currency, and selected variable.
+   *
+   *
+   */
 
   private potentialAmountCal(bettingRound, bets) {
     try {
-      // Always calculate from scratch, never accumulate
-      let freeTokenBetAmount = 0;
-      let coinBetAmount = 0;
+      let freeTokenBetAmtForLoginUser = 0;
+      let stremCoinBetAmtForLoginUser = 0;
       //bet amount of login user
       const betAmount = Number(bets?.betamount || 0);
 
       if (bets.betcurrency === CurrencyType.FREE_TOKENS) {
-        freeTokenBetAmount = betAmount || 0;
+        freeTokenBetAmtForLoginUser = betAmount || 0;
       }
       if (bets.betcurrency === CurrencyType.STREAM_COINS) {
-        coinBetAmount = betAmount || 0;
+        stremCoinBetAmtForLoginUser = betAmount || 0;
       }
 
       const bettingVariables = bettingRound?.bettingVariables || [];
@@ -1512,23 +1528,25 @@ export class BettingService {
       );
 
       // --- MAIN LOGIC: always calculate from scratch ---
-      let potentialFreeTokenAmt = freeTokenBetAmount;
+      let potentialFreeTokenAmt = freeTokenBetAmtForLoginUser;
       if (
         bets.betcurrency === CurrencyType.FREE_TOKENS &&
         userOptionTokenCount > 0
       ) {
         potentialFreeTokenAmt =
-          (betAmount / userOptionTotalTokenAmount) * totalFreeTokenAmount;
+          (freeTokenBetAmtForLoginUser / userOptionTotalTokenAmount) *
+          totalFreeTokenAmount;
       }
-      let potentialCoinAmt = coinBetAmount;
+      let potentialCoinAmt = stremCoinBetAmtForLoginUser;
       if (
         bets.betcurrency === CurrencyType.STREAM_COINS &&
         userOptionCoinCount > 0
       ) {
         // Apply platform fee (15%)
-        const reducePlatformFee = Math.floor(totalPotStreamCoinAmount * 0.15);
+        const potAmountAfterPlatformFee = totalPotStreamCoinAmount * 0.85;
         potentialFreeTokenAmt =
-          (betAmount / userOptionTotalStreamCoinAmt) * reducePlatformFee;
+          (stremCoinBetAmtForLoginUser / userOptionTotalStreamCoinAmt) *
+          potAmountAfterPlatformFee;
       }
       // --- END MAIN LOGIC ---
 
