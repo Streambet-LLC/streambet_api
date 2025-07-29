@@ -58,7 +58,9 @@ async function bootstrap() {
   app.use(helmet());
   app.enableCors();
 
-  app.use('/admin/queues', serverAdapter.getRouter());
+  if(configService.get<boolean>('app.isBullmqUiEnabled')) {
+    app.use('/admin/queues', serverAdapter.getRouter());
+  }
 
   // Enable based on env
   if(configService.get<boolean>('app.isSwaggerEnable')) {

@@ -27,7 +27,8 @@
         { "name": "REDIS_PORT", "value": "6301" },
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_QA" },
-        { "name": "IS_SWAGGER_ENABLED", "value": "true" }
+        { "name": "IS_SWAGGER_ENABLED", "value": "true" },
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" }
 
       ],
       "secrets": [
