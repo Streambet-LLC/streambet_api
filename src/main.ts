@@ -60,6 +60,9 @@ async function bootstrap() {
 
   app.use('/admin/queues', serverAdapter.getRouter());
 
+  // Enable based on env
+  if(configService.get<boolean>('app.isSwaggerEnable')) {
+
   // Swagger configuration
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Streambet API')
@@ -76,7 +79,8 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
-
+  
+  }
   // Start server
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);
