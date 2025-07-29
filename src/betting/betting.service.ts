@@ -1544,7 +1544,7 @@ export class BettingService {
       ) {
         // Apply platform fee (15%)
         const potAmountAfterPlatformFee = totalPotStreamCoinAmount * 0.85;
-        potentialFreeTokenAmt =
+        potentialCoinAmt =
           (stremCoinBetAmtForLoginUser / userOptionTotalStreamCoinAmt) *
           potAmountAfterPlatformFee;
       }
