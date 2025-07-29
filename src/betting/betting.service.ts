@@ -1488,7 +1488,7 @@ export class BettingService {
    *
    */
 
-  private potentialAmountCal(bettingRound, bets) {
+  private potentialAmountCal(bettingRound, bets: any) {
     try {
       let freeTokenBetAmtForLoginUser = 0;
       let stremCoinBetAmtForLoginUser = 0;
