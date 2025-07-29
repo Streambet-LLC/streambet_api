@@ -526,8 +526,9 @@ export class BettingGateway
         },
       };
     }
+    const timestamp = new Date()
     try {
-      await this.chatService.createChatMessage(streamId, user.sub, message, imageURL);
+      await this.chatService.createChatMessage(streamId, user.sub, message, imageURL, timestamp);
     } catch (e) {
       return { event: 'messageSent', data: { success: false, error: e.message } };
     }
@@ -536,7 +537,7 @@ export class BettingGateway
       username: user.username,
       message: message.trim(),
       imageURL: imageURL || '',
-      timestamp: new Date(),
+      timestamp: timestamp,
     };
     this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
     return { event: 'messageSent', data: { success: true } };

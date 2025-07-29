@@ -29,14 +29,16 @@ export class ChatMessagesFilterDto {
 }
 
 class UserDto {
-  @ApiProperty({ example: 'streambetadmin' })
+
+  @ApiProperty({ example: '96332764-7e86-48de-88fe-c460b569558c' })
+  id: string;
+
+  @ApiProperty({ example: 'username' })
   username: string;
 
-  @ApiProperty({ example: 'admin@streambet.com' })
+  @ApiProperty({ example: 'username@streambet.com' })
   email: string;
 
-  @ApiProperty({ example: 'https://example.com/profile.jpg', required: false })
-  profile_image_url?: string;
 }
 
 export class ChatMessageDto {

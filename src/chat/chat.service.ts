@@ -29,6 +29,7 @@ export class ChatService {
    * @param userId - The ID of the user.
    * @param message - The chat message content.
    * @param imageURL - Optional image URL.
+   * @param timestamp - Optional timestamp.
    * @returns The created Chat entity.
    */
   async createChatMessage(
@@ -36,6 +37,7 @@ export class ChatService {
     userId: string,
     message: string,
     imageURL?: string,
+    timestamp?: Date,
   ): Promise<Chat> {
     const stream = await this.streamRepository.findOne({
       where: { id: streamId },
@@ -48,6 +50,7 @@ export class ChatService {
       user,
       message,
       imageURL,
+      timestamp: timestamp || new Date(), // Use provided timestamp or current time
     });
     return this.chatRepository.save(chat);
   }
@@ -78,7 +81,7 @@ export class ChatService {
       // Safely parse sort with whitelist validation
       let sortColumn = 'createdAt',
         sortOrder = 'DESC';
-      const allowedColumns = ['createdAt', 'updatedAt', 'message'];
+      const allowedColumns = ['createdAt', 'updatedAt', 'message', 'timestamp'];
       if (sort) {
         try {
           const parsed = JSON.parse(sort);
@@ -101,8 +104,8 @@ export class ChatService {
       const qb = this.chatRepository
         .createQueryBuilder('chat')
         .leftJoin('chat.user', 'user')
-        .addSelect(['user.username', 'user.email', 'user.profile_image_url'])
-        .where('chat.streamId = :streamId', { streamId })
+        .addSelect(['user.id','user.username', 'user.email', 'user.profile_image_url'])
+        .where('chat.stream_id = :streamId', { streamId })
         .orderBy(
           `chat.${sortColumn}`,
           sortOrder as 'ASC' | 'DESC'
