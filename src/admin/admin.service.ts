@@ -108,7 +108,6 @@ export class AdminService {
       const options = round.bettingVariables.map((variable) => ({
         id: variable.id,
         option: variable.name,
-        createdAt: variable.createdAt,
       }));
 
       // Find the winning option(s)
@@ -168,12 +167,6 @@ export class AdminService {
           ? winnerAmountStreamCoins
           : null;
       }
-
-      //sorted by createdAt, betting variable misplaced
-      options.sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
 
       result.rounds.push({
         roundId: round.id,
