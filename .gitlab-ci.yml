@@ -97,6 +97,9 @@ deploy_dev:
     ECS_SERVICE_NAME: streambet-dev
     CLUSTER_NAME: revyrie-cluster
   dependencies: [validate_dev]
+  environment:
+    name: dev
+    url: https://streambetapidev.revyrie.co/api/docs
   only: [dev]
 
 # === ENV: QA ===
@@ -124,6 +127,9 @@ deploy_qa:
     ECS_SERVICE_NAME: streambet-qa
     CLUSTER_NAME: revyrie-cluster
   dependencies: [validate_qa]
+  environment:
+    name: qa
+    url: https://streambetapiqa.revyrie.co/api/docs
   only: [qa]
 
 # === ENV: Stag ===
@@ -151,6 +157,9 @@ deploy_stag:
     ECS_SERVICE_NAME: streambet-stag
     CLUSTER_NAME: streambet-cluster
   dependencies: [validate_stag]
+  environment:
+    name: stag
+    url: https://apistag.streambet.tv/api/docs
   only: [stag]
 
 # === ENV: Prod ===
@@ -178,4 +187,7 @@ deploy_prod:
     ECS_SERVICE_NAME: streambet-prod
     CLUSTER_NAME: streambet-cluster
   dependencies: [validate_prod]
+  environment:
+    name: prod
+    url: https://api.streambet.tv/api/docs
   only: [prod]
