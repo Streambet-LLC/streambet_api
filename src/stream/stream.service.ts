@@ -21,6 +21,7 @@ import { BettingGateway } from 'src/betting/betting.gateway';
 import { Queue } from 'bullmq';
 import redisConfig from 'src/config/redis.config';
 import { BetStatus } from 'src/enums/bet-status.enum';
+import { PlatformName } from 'src/enums/platform-name.enum';
 
 @Injectable()
 export class StreamService {
@@ -100,7 +101,10 @@ export class StreamService {
       );
     }
   }
-  private async simplifyStreamResponse(streamData: any) {
+  private async simplifyStreamResponse(
+    streamData: any,
+    bettingRoundStatus: string,
+  ) {
     if (!streamData) return null;
 
     const {
@@ -117,6 +121,7 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
+
       bettingRounds = [],
     } = streamData;
 
@@ -134,6 +139,7 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
+      bettingRoundStatus,
       rounds: (bettingRounds ?? [])
         .sort(
           (a, b) =>
@@ -226,7 +232,7 @@ export class StreamService {
     AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
     THEN '${BettingRoundStatus.CANCELLED}'
 
-  ELSE 'no bet round'
+  ELSE '${BettingRoundStatus.NO_BET_ROUND}' 
 END
           `,
           'bettingRoundStatus',
@@ -284,6 +290,7 @@ END
           platformName: true,
           status: true,
           scheduledStartTime: true,
+          thumbnailUrl: true,
         },
       });
 
@@ -382,7 +389,29 @@ END
       where: { id },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
-    return await this.simplifyStreamResponse(stream);
+
+    if (!stream) return null;
+
+    // Compute bettingRoundStatus
+    const statuses = stream.bettingRounds.map((br) => br.status);
+
+    let bettingRoundStatus = BettingRoundStatus.NO_BET_ROUND;
+
+    if (statuses.includes(BettingRoundStatus.OPEN)) {
+      bettingRoundStatus = BettingRoundStatus.OPEN;
+    } else if (statuses.includes(BettingRoundStatus.LOCKED)) {
+      bettingRoundStatus = BettingRoundStatus.LOCKED;
+    } else if (statuses.includes(BettingRoundStatus.CREATED)) {
+      bettingRoundStatus = BettingRoundStatus.CREATED;
+    } else if (statuses.includes(BettingRoundStatus.CLOSED)) {
+      bettingRoundStatus = BettingRoundStatus.CLOSED;
+    } else if (statuses.includes(BettingRoundStatus.CANCELLED)) {
+      bettingRoundStatus = BettingRoundStatus.CANCELLED;
+    }
+
+    // Attach computed status
+
+    return await this.simplifyStreamResponse(stream, bettingRoundStatus);
   }
 
   /**
@@ -416,9 +445,18 @@ END
       if (updateStreamDto.description !== undefined) {
         stream.description = updateStreamDto.description;
       }
+
+      // Auto-detect platform from embeddedUrl if provided
       if (updateStreamDto.embeddedUrl !== undefined) {
         stream.embeddedUrl = updateStreamDto.embeddedUrl;
+        const detectedPlatform = this.detectPlatformFromUrl(
+          updateStreamDto.embeddedUrl,
+        );
+        if (detectedPlatform) {
+          stream.platformName = detectedPlatform;
+        }
       }
+
       if (updateStreamDto.thumbnailUrl !== undefined) {
         stream.thumbnailUrl = updateStreamDto.thumbnailUrl;
       }
@@ -575,7 +613,7 @@ END
     const scheduledDate =
       scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
     const delay = scheduledDate.getTime() - Date.now();
-    console.log(
+    Logger.log(
       `Scheduling stream ${streamId} for ${scheduledDate}`,
       'StreamLiveWorker',
     );
@@ -669,5 +707,21 @@ END
       totalUsers: stream.viewerCount || 0, // Assuming viewerCount represents unique users
       totalStreamTime,
     };
+  }
+
+  private detectPlatformFromUrl(url: string): PlatformName | null {
+    const platformKeywords: Record<PlatformName, string[]> = {
+      [PlatformName.Kick]: ['kick.com', 'kick'],
+      [PlatformName.Youtube]: ['youtube.com', 'youtu.be', 'youtube'],
+      [PlatformName.Twitch]: ['twitch.tv', 'twitch.com', 'twitch'],
+      [PlatformName.Vimeo]: ['vimeo.com', 'vimeo'],
+    };
+    const urlLower = url.toLowerCase();
+    for (const [platform, keywords] of Object.entries(platformKeywords)) {
+      if (keywords.some((keyword) => urlLower.includes(keyword))) {
+        return platform as PlatformName;
+      }
+    }
+    return null;
   }
 }
