@@ -447,7 +447,8 @@ END
       }
 
       // Auto-detect platform from embeddedUrl if provided
-      if (updateStreamDto.embeddedUrl) {
+      if (updateStreamDto.embeddedUrl !== undefined) {
+        stream.embeddedUrl = updateStreamDto.embeddedUrl;
         const detectedPlatform = this.detectPlatformFromUrl(
           updateStreamDto.embeddedUrl,
         );
