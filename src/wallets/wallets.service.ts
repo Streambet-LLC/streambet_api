@@ -241,7 +241,11 @@ export class WalletsService {
 
       if (currencyType === CurrencyType.STREAM_COINS) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
-          includedTypes: [TransactionType.INITIAL_CREDIT],
+          includedTypes: [
+            TransactionType.INITIAL_CREDIT,
+            TransactionType.ADMIN_CREDIT,
+            TransactionType.ADMIN_DEBITED,
+          ],
         });
       }
       if (sort) {
