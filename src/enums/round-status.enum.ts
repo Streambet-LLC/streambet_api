@@ -4,4 +4,5 @@ export enum BettingRoundStatus {
   LOCKED = 'locked',
   CANCELLED = 'cancelled',
   CLOSED = 'closed',
+  NO_BET_ROUND = 'No bet round',
 }

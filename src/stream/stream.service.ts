@@ -101,7 +101,10 @@ export class StreamService {
       );
     }
   }
-  private async simplifyStreamResponse(streamData: any) {
+  private async simplifyStreamResponse(
+    streamData: any,
+    bettingRoundStatus: string,
+  ) {
     if (!streamData) return null;
 
     const {
@@ -118,6 +121,7 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
+
       bettingRounds = [],
     } = streamData;
 
@@ -135,6 +139,7 @@ export class StreamService {
       actualStartTime,
       endTime,
       viewerCount,
+      bettingRoundStatus,
       rounds: (bettingRounds ?? [])
         .sort(
           (a, b) =>
@@ -227,7 +232,7 @@ export class StreamService {
     AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
     THEN '${BettingRoundStatus.CANCELLED}'
 
-  ELSE 'no bet round'
+  ELSE '${BettingRoundStatus.NO_BET_ROUND}' 
 END
           `,
           'bettingRoundStatus',
@@ -384,7 +389,29 @@ END
       where: { id },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
-    return await this.simplifyStreamResponse(stream);
+
+    if (!stream) return null;
+
+    // Compute bettingRoundStatus
+    const statuses = stream.bettingRounds.map((br) => br.status);
+
+    let bettingRoundStatus = BettingRoundStatus.NO_BET_ROUND;
+
+    if (statuses.includes(BettingRoundStatus.OPEN)) {
+      bettingRoundStatus = BettingRoundStatus.OPEN;
+    } else if (statuses.includes(BettingRoundStatus.LOCKED)) {
+      bettingRoundStatus = BettingRoundStatus.LOCKED;
+    } else if (statuses.includes(BettingRoundStatus.CREATED)) {
+      bettingRoundStatus = BettingRoundStatus.CREATED;
+    } else if (statuses.includes(BettingRoundStatus.CLOSED)) {
+      bettingRoundStatus = BettingRoundStatus.CLOSED;
+    } else if (statuses.includes(BettingRoundStatus.CANCELLED)) {
+      bettingRoundStatus = BettingRoundStatus.CANCELLED;
+    }
+
+    // Attach computed status
+
+    return await this.simplifyStreamResponse(stream, bettingRoundStatus);
   }
 
   /**
@@ -420,7 +447,8 @@ END
       }
 
       // Auto-detect platform from embeddedUrl if provided
-      if (updateStreamDto.embeddedUrl) {
+      if (updateStreamDto.embeddedUrl !== undefined) {
+        stream.embeddedUrl = updateStreamDto.embeddedUrl;
         const detectedPlatform = this.detectPlatformFromUrl(
           updateStreamDto.embeddedUrl,
         );
