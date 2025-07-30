@@ -152,3 +152,30 @@ deploy_stag:
     CLUSTER_NAME: streambet-cluster
   dependencies: [validate_stag]
   only: [stag]
+
+# === ENV: Prod ===
+build_prod:
+  <<: *build_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+    ECR_REPO_NAME: streambet-prod
+  only: [prod]
+
+validate_prod:
+  <<: *validate_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+  dependencies: [build_prod]
+  only: [prod]
+
+deploy_prod:
+  <<: *deploy_template
+  variables:
+    ACCOUNT_OWNER: client
+    DEPLOY_ENV: prod
+    ECS_SERVICE_NAME: streambet-prod
+    CLUSTER_NAME: streambet-cluster
+  dependencies: [validate_prod]
+  only: [prod]
