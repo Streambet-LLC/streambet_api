@@ -21,6 +21,7 @@ import { BettingGateway } from 'src/betting/betting.gateway';
 import { Queue } from 'bullmq';
 import redisConfig from 'src/config/redis.config';
 import { BetStatus } from 'src/enums/bet-status.enum';
+import { PlatformName } from 'src/enums/platform-name.enum';
 
 @Injectable()
 export class StreamService {
@@ -416,9 +417,17 @@ END
       if (updateStreamDto.description !== undefined) {
         stream.description = updateStreamDto.description;
       }
-      if (updateStreamDto.embeddedUrl !== undefined) {
-        stream.embeddedUrl = updateStreamDto.embeddedUrl;
+
+      // Auto-detect platform from embeddedUrl if provided
+      if (updateStreamDto.embeddedUrl) {
+        const detectedPlatform = this.detectPlatformFromUrl(
+          updateStreamDto.embeddedUrl,
+        );
+        if (detectedPlatform) {
+          stream.platformName = detectedPlatform;
+        }
       }
+
       if (updateStreamDto.thumbnailUrl !== undefined) {
         stream.thumbnailUrl = updateStreamDto.thumbnailUrl;
       }
@@ -669,5 +678,21 @@ END
       totalUsers: stream.viewerCount || 0, // Assuming viewerCount represents unique users
       totalStreamTime,
     };
+  }
+
+  private detectPlatformFromUrl(url: string): PlatformName | null {
+    const platformKeywords: Record<PlatformName, string[]> = {
+      [PlatformName.Kick]: ['kick.com', 'kick'],
+      [PlatformName.Youtube]: ['youtube.com', 'youtu.be', 'youtube'],
+      [PlatformName.Twitch]: ['twitch.tv', 'twitch.com', 'twitch'],
+      [PlatformName.Vimeo]: ['vimeo.com', 'vimeo'],
+    };
+    const urlLower = url.toLowerCase();
+    for (const [platform, keywords] of Object.entries(platformKeywords)) {
+      if (keywords.some((keyword) => urlLower.includes(keyword))) {
+        return platform as PlatformName;
+      }
+    }
+    return null;
   }
 }
