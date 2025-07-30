@@ -37,6 +37,12 @@ async function bootstrap() {
   // Get ConfigService
   const configService = app.get(ConfigService);
 
+  if (configService.getOrThrow('app.isNewRelicEnable', { infer: true })) {
+    import('newrelic').catch((err) => {
+      Logger.error('Failed to load New Relic:', err);
+    });
+  }
+
   // Set up global prefix
   app.setGlobalPrefix('api');
 
@@ -51,7 +57,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(configService));
   app.useGlobalInterceptors(new LoggingInterceptor(configService));
 
   // Security middleware

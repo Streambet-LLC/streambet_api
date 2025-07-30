@@ -23,7 +23,9 @@
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_DEV" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
-        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" }
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_ENABLED", "value": "false" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
       ],
       "secrets": [
         { "name": "NODE_ENV", "valueFrom": "/streambet/dev/NODE_ENV" },
@@ -132,7 +134,8 @@
           "valueFrom": "/streambet/dev/AWS_DEFAULT_S3_BUCKET"
         },
         { "name": "AWS_S3_REGION", "valueFrom": "/streambet/dev/AWS_S3_REGION" },
-        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" }
+        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" },
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/dev/NEW_RELIC_LICENSE_KEY" }
       ],
       "mountPoints": [],
       "volumesFrom": [],

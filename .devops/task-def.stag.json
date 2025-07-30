@@ -33,7 +33,9 @@
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
-        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" }
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_ENABLED", "value": "false" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
 
       ],
       "secrets": [
@@ -65,7 +67,9 @@
         { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
-        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" }
+        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/stag/NEW_RELIC_LICENSE_KEY" }
+
 
       ],
       "mountPoints": [],
