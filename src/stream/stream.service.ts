@@ -285,6 +285,7 @@ END
           platformName: true,
           status: true,
           scheduledStartTime: true,
+          thumbnailUrl: true,
         },
       });
 
