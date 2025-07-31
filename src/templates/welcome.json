@@ -53,7 +53,7 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName", "dashboardLink", "signUpLink"],
+      "required": ["fullName", "dashboardLink", "creatorSignUpForm"],
       "properties": {
         "fullName": {
           "type": "string",
