@@ -842,6 +842,7 @@ export class BettingGateway
       }
     }
   }
+
   async emitLockBetRound(roundName: string, userId: string, username: string) {
     const receiverNotificationPermission =
       await this.notificationService.addNotificationPermision(userId);

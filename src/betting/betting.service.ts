@@ -889,6 +889,8 @@ export class BettingService {
           winner.currencyType,
           winner.roundName,
         );
+        //As per client feedback, only one email should be sent to winners (bet_won)
+        /*
         if (winner.currencyType === CurrencyType.FREE_TOKENS) {
           await this.notificationService.sendSMTPForWonFreeCoin(
             winner.userId,
@@ -899,6 +901,7 @@ export class BettingService {
             winner.roundName,
           );
         }
+          */
       }
       const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
         where: {
