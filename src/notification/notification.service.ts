@@ -192,6 +192,9 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+
+  //As per client feedback, only one email should be sent to winners (bet_won)
+  /*
   async sendSMTPForWonFreeCoin(
     userId: string,
     receiverEmail: string,
@@ -240,4 +243,5 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+    */
 }
