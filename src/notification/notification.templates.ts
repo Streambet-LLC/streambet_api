@@ -58,7 +58,7 @@ export const NOTIFICATION_TEMPLATE = {
       `${data.streamName} round complete! See your results... `,
   },
   EMAIL_WELCOME: {
-    TITLE: () => `Welcome to Streambet! Here's 1000 Free Tokens 🙌`,
+    TITLE: () => `You've passed go, collect 1000 Free Tokens`,
   },
   EMAIL_PASSWORD_RESET: {
     TITLE: () => `Password Reset Request`,
