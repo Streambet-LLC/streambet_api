@@ -149,6 +149,7 @@ export class NotificationService {
           params: {
             fullName: username,
             dashboardLink,
+            creatorSignUpForm: `https://form.jotform.com/252037370862052`,
           },
         };
 
