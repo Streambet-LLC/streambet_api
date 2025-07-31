@@ -23,6 +23,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { PlaceBetResult } from 'src/interface/betPlace.interface';
 import { CancelBetPayout } from 'src/interface/betCancel.interface';
 import { EditedBetPayload } from 'src/interface/betEdit.interface';
+import { ChatService } from '../chat/chat.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -67,6 +68,7 @@ export class BettingGateway
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
     private readonly notificationService: NotificationService,
+    private readonly chatService: ChatService, // Inject ChatService
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -508,7 +510,7 @@ export class BettingGateway
   //live chat implementation
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('sendChatMessage')
-  handleChatMessage(
+  async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody()
     data: { streamId: string; message: string; imageURL: string },
@@ -524,13 +526,18 @@ export class BettingGateway
         },
       };
     }
-
+    const timestamp = new Date()
+    try {
+      await this.chatService.createChatMessage(streamId, user.sub, message, imageURL, timestamp);
+    } catch (e) {
+      return { event: 'messageSent', data: { success: false, error: e.message } };
+    }
     const chatMessage: ChatMessage = {
       type: 'user',
       username: user.username,
       message: message.trim(),
       imageURL: imageURL || '',
-      timestamp: new Date(),
+      timestamp: timestamp,
     };
     this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
     return { event: 'messageSent', data: { success: true } };

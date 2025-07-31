@@ -58,7 +58,12 @@ async function bootstrap() {
   app.use(helmet());
   app.enableCors();
 
-  app.use('/admin/queues', serverAdapter.getRouter());
+  if(configService.get<boolean>('app.isBullmqUiEnabled')) {
+    app.use('/admin/queues', serverAdapter.getRouter());
+  }
+
+  // Enable based on env
+  if(configService.get<boolean>('app.isSwaggerEnable')) {
 
   // Swagger configuration
   const swaggerConfig = new DocumentBuilder()
@@ -76,7 +81,8 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
-
+  
+  }
   // Start server
   const port = configService.get<number>('PORT', 3000);
   await app.listen(port);

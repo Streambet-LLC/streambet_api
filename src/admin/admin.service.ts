@@ -167,6 +167,7 @@ export class AdminService {
           ? winnerAmountStreamCoins
           : null;
       }
+
       result.rounds.push({
         roundId: round.id,
         roundName: round.roundName,

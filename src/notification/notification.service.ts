@@ -69,7 +69,8 @@ export class NotificationService {
             amount: amount.toLocaleString('en-US'),
             currencyType: updatedCurrencyType,
             roundName,
-            dashboardLink,
+            dashboardLink: `${dashboardLink}/betting-history
+`,
           },
         };
         await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
@@ -110,7 +111,8 @@ export class NotificationService {
             streamName,
             fullName: receiver.username,
             roundName,
-            dashboardLink,
+            dashboardLink: `${dashboardLink}/betting-history
+`,
           },
         };
 
@@ -190,6 +192,9 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+
+  //As per client feedback, only one email should be sent to winners (bet_won)
+  /*
   async sendSMTPForWonFreeCoin(
     userId: string,
     receiverEmail: string,
@@ -212,7 +217,7 @@ export class NotificationService {
         const subject = NOTIFICATION_TEMPLATE.EMAIL_FREE_COIN_WON.TITLE({
           streamName,
         });
-        const blogPostLink = 'blog post url';
+        const blogPostLink = '#';
         const convertedCoin = Number(amount / 100);
         const emailData = {
           toAddress: [receiverEmail],
@@ -238,4 +243,5 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+    */
 }
