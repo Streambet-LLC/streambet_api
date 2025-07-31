@@ -373,20 +373,17 @@ END
         });
         // userBetFreeTokens, userBetStreamCoin  passing through response
         round.bettingVariables.forEach((variable) => {
-          if (variable.bets.length > 0) {
-            variable.bets.forEach((bet) => {
-              if (bet.currency === CurrencyType.FREE_TOKENS) {
-                userBetFreeTokens = bet.amount;
-              } else {
-                userBetStreamCoin = bet.amount;
-              }
-              // Excluded 'bets' from the response payload to reduce unnecessary data.
-              delete variable.bets;
-            });
-          } else {
-            // Excluded 'bets [] from the response payload to reduce unnecessary data.
-            delete variable.bets;
+          const bet = variable.bets[0]; // Each user is permitted only one bet per round
+
+          if (bet) {
+            if (bet.currency === CurrencyType.FREE_TOKENS) {
+              userBetFreeTokens = bet.amount;
+            } else {
+              userBetStreamCoin = bet.amount;
+            }
           }
+          // Remove bets from response
+          delete variable.bets;
         });
       });
 
