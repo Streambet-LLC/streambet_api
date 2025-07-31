@@ -389,7 +389,6 @@ END
           }
         });
       });
-      console.log(userBetFreeTokens, userBetStreamCoin, 'dd');
 
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
