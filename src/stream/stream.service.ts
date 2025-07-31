@@ -22,6 +22,7 @@ import { Queue } from 'bullmq';
 import redisConfig from 'src/config/redis.config';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
+import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 
 @Injectable()
 export class StreamService {
@@ -311,6 +312,8 @@ END
   }
   async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
     try {
+      let userBetFreeTokens: number;
+      let userBetStreamCoin: number;
       let wallet: Wallet;
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
@@ -320,10 +323,12 @@ END
           'round.status IN (:...roundStatuses)',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
+        .leftJoinAndSelect('variable.bets', 'b', 'b.userId = :userId')
         .where('stream.id = :streamId', { streamId })
 
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
+          userId,
         })
         .getOne();
       if (userId) {
@@ -360,16 +365,37 @@ END
         coinSum: roundTotalBetsCoinAmount,
       } = total;
       stream.bettingRounds.forEach((round) => {
+        //sort betting varirable,
         round.bettingVariables.sort((a, b) => {
           return (
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
           );
         });
+        // userBetFreeTokens, userBetStreamCoin  passing through response
+        round.bettingVariables.forEach((variable) => {
+          if (variable.bets.length > 0) {
+            variable.bets.forEach((bet) => {
+              if (bet.currency === CurrencyType.FREE_TOKENS) {
+                userBetFreeTokens = bet.amount;
+              } else {
+                userBetStreamCoin = bet.amount;
+              }
+              // Excluded 'bets' from the response payload to reduce unnecessary data.
+              delete variable.bets;
+            });
+          } else {
+            // Excluded 'bets [] from the response payload to reduce unnecessary data.
+            delete variable.bets;
+          }
+        });
       });
+      console.log(userBetFreeTokens, userBetStreamCoin, 'dd');
 
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
         walletCoin: wallet?.streamCoins || 0,
+        userBetFreeTokens: userBetFreeTokens || 0,
+        userBetStreamCoin: userBetStreamCoin || 0,
         roundTotalBetsTokenAmount,
         roundTotalBetsCoinAmount,
         ...stream,
