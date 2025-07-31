@@ -373,7 +373,7 @@ END
         });
         // userBetFreeTokens, userBetStreamCoin  passing through response
         round.bettingVariables.forEach((variable) => {
-          if (variable.bets || variable.bets.length > 0) {
+          if (variable.bets && variable.bets.length > 0) {
             variable.bets.forEach((bet) => {
               if (bet.status === BetStatus.Active) {
                 if (bet.currency === CurrencyType.FREE_TOKENS) {
