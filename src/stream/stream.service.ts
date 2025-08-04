@@ -829,7 +829,11 @@ END
         'bettingRound',
         'bettingRound.status IN (:...roundStatuses)',
         {
-          roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
+          roundStatuses: [
+            BettingRoundStatus.OPEN,
+            BettingRoundStatus.LOCKED,
+            BettingRoundStatus.CREATED,
+          ],
         },
       )
       .leftJoinAndSelect('bettingRound.bet', 'bet', 'bet.status = :betStatus', {
