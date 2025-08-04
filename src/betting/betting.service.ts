@@ -1324,6 +1324,7 @@ export class BettingService {
 
   async getUserBets(userId: string, active: boolean = false): Promise<Bet[]> {
     const whereClause: Record<string, unknown> = { userId };
+    console.log('debug');
 
     if (active) {
       whereClause.status = BetStatus.Active;

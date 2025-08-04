@@ -48,7 +48,7 @@
 
         { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/stag/GOOGLE_CLIENT_ID" },
         { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/stag/GOOGLE_CLIENT_SECRET" },
-        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/stag/GOOGLE_CALLBACK_URL" },
+        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/prod/GOOGLE_CALLBACK_URL" },
 
         { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/stag/STRIPE_SECRET_KEY" },
         { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/stag/STRIPE_WEBHOOK_SECRET" },
