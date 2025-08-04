@@ -27,6 +27,7 @@ import { QueueBoardModule } from './queue/queue-board.module';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
+import { CoinPackageModule } from './coin-package/coin-package.module';
 import * as redisStore from 'cache-manager-redis-store';
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import * as redisStore from 'cache-manager-redis-store';
       queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
     }),
     ChatModule,
+    CoinPackageModule,
   ],
   controllers: [AppController],
   providers: [
