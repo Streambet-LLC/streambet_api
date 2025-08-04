@@ -46,7 +46,6 @@ import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
 import { AnalyticsSummaryResponseDto, StreamAnalyticsResponseDto } from './dto/analytics.dto';
-import { StreamIdDto } from 'src/stream/dto/stream.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -694,11 +693,11 @@ export class AdminController {
   })
   async cancelScheduledStream(
     @Request() req: RequestWithUser,
-    @Param('streamId') streamIdDto: StreamIdDto,
+    @Param('streamId') streamId: string,
   ): Promise<{ message: string; data: String; statusCode: Number }> {
     this.ensureAdmin(req.user);
     const canceledStreamId = await this.streamService.canceledSheduledStream(
-      streamIdDto.streamId,
+      streamId,
     );
     return {
       data: canceledStreamId,
