@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Query,
   Delete,
+  HttpCode,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -45,6 +46,7 @@ import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
 import { AnalyticsSummaryResponseDto, StreamAnalyticsResponseDto } from './dto/analytics.dto';
+import { StreamIdDto } from 'src/stream/dto/stream.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -653,6 +655,55 @@ export class AdminController {
         platformVig:'15%',
         totalBetPlacedUsers
       },
+    };
+  }
+  /**
+   * Cancel a scheduled stream by its stream ID.
+   *
+   * This endpoint cancels a scheduled stream, removes it from the processing queue,
+   * updates its status to `CANCELED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to cancel.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Patch('/stream/scheduled/cancel/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully canceled',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been canceled successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async cancelScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamIdDto: StreamIdDto,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureAdmin(req.user);
+    const canceledStreamId = await this.streamService.canceledSheduledStream(
+      streamIdDto.streamId,
+    );
+    return {
+      data: canceledStreamId,
+      message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
+      statusCode: HttpStatus.OK,
     };
   }
 }
