@@ -23,6 +23,7 @@ import redisConfig from 'src/config/redis.config';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import { BettingService } from 'src/betting/betting.service';
 
 @Injectable()
 export class StreamService {
@@ -30,6 +31,8 @@ export class StreamService {
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
     private walletService: WalletsService,
+    @Inject(forwardRef(() => BettingService))
+    private bettingService: BettingService,
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
@@ -760,5 +763,42 @@ END
       return true;
     }
     return false;
+  }
+  /**
+   * Retrieves a scheduled stream by its ID along with its associated betting rounds and active bets.
+   *
+   * - Only betting rounds with status `OPEN` or `LOCKED` are included.
+   * - Only bets with status `ACTIVE` within those betting rounds are returned.
+   * - Limits the selected fields to essential data for optimized performance.
+   *
+   * @param streamId - The unique identifier of the stream to fetch.
+   * @returns A stream entity with filtered betting rounds and active bets, or `null` if not found.
+   */
+  async getSheduledStreamWithActiveRound(streamId: string) {
+    return await this.streamsRepository
+      .createQueryBuilder('stream')
+      .leftJoinAndSelect(
+        'stream.bettingRounds',
+        'bettingRound',
+        'bettingRound.status IN (:...roundStatuses)',
+        {
+          roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
+        },
+      )
+      .leftJoinAndSelect('bettingRound.bet', 'bet', 'bet.status = :betStatus', {
+        betStatus: BetStatus.Active,
+      })
+      .where('stream.id = :streamId', { streamId })
+      .andWhere('stream.status = :status', { status: StreamStatus.SCHEDULED })
+      .select([
+        'stream.id',
+        'stream.name',
+        'stream.status',
+        'bettingRound.id',
+        'bettingRound.status',
+        'bet.id',
+        'bet.status',
+      ])
+      .getOne();
   }
 }
