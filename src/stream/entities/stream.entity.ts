@@ -7,7 +7,7 @@ export enum StreamStatus {
   SCHEDULED = 'scheduled',
   LIVE = 'live',
   ENDED = 'ended',
-  CANCELED = 'canceled',
+  CANCELLED = 'cancelled',
 }
 
 @Entity('streams')
