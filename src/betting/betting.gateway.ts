@@ -41,6 +41,7 @@ interface ChatMessage {
   timestamp: Date;
   imageURL?: string;
   title?: string;
+  profileUrl?: string;
 }
 
 // Define notification interface
@@ -542,6 +543,7 @@ export class BettingGateway
       message: message.trim(),
       imageURL: imageURL || '',
       timestamp: timestamp,
+      profileUrl: user?.profileImageUrl,
     };
     this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
     return { event: 'messageSent', data: { success: true } };
