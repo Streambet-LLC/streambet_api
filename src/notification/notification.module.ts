@@ -18,16 +18,12 @@ import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { AuthService } from 'src/auth/auth.service';
 import { StreamService } from 'src/stream/stream.service';
 import { JwtService } from '@nestjs/jwt';
+import { StreamModule } from 'src/stream/stream.module';
 
 @Module({
   imports: [
     EmailsModule,
     BettingModule,
-    CacheModule.register({
-      ttl: 60, // seconds
-      max: 100, // optional
-      isGlobal: false,
-    }),
     TypeOrmModule.forFeature([
       User,
       Stream,
@@ -37,6 +33,7 @@ import { JwtService } from '@nestjs/jwt';
       Wallet,
       Transaction,
     ]),
+    StreamModule
   ],
   controllers: [NotificationController],
   providers: [
@@ -47,7 +44,6 @@ import { JwtService } from '@nestjs/jwt';
 
     AuthService,
     JwtService,
-    StreamService,
   ],
 })
 export class NotificationModule {}

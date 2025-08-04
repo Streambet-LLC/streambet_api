@@ -28,10 +28,12 @@ import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
+import { QueueModule } from './queue/queue.module';
+import { queueConfig } from './config/queue.config';
+
 @Module({
   imports: [
     CacheModule.register({
-      store: redisStore,
       ttl: 60, // seconds
       isGlobal: true, // ✅ Makes CACHE_MANAGER available globally
     }),
@@ -45,6 +47,7 @@ import * as redisStore from 'cache-manager-redis-store';
         appConfig,
         fileConfig,
         emailConfig,
+        queueConfig
       ] as ConfigFactory[],
     }),
     TypeOrmModule.forRootAsync({
@@ -94,6 +97,7 @@ import * as redisStore from 'cache-manager-redis-store';
       queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
     }),
     ChatModule,
+    QueueModule
   ],
   controllers: [AppController],
   providers: [

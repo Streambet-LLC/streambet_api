@@ -19,10 +19,10 @@ import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingGateway } from 'src/betting/betting.gateway';
 import { Queue } from 'bullmq';
-import redisConfig from 'src/config/redis.config';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import { QueueService } from 'src/queue/queue.service';
 
 @Injectable()
 export class StreamService {
@@ -33,13 +33,10 @@ export class StreamService {
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
+    private queueService: QueueService,
   ) {}
 
-  private streamLiveQueue = new Queue(
-    `${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`,
-    { connection: redisConfig },
-  );
-
+ 
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -503,7 +500,7 @@ END
 
       // If the scheduled start time is updated, remove any existing job and reschedule if necessary
       if (updateStreamDto.scheduledStartTime !== undefined) {
-        const job = await this.streamLiveQueue.getJob(id);
+        const job = await this.queueService.getJobById('stream-live',id);
         if (job) {
           await job.remove();
         }
@@ -635,19 +632,7 @@ END
   async scheduleStream(streamId: string, scheduledTime: Date | string) {
     const scheduledDate =
       scheduledTime instanceof Date ? scheduledTime : new Date(scheduledTime);
-    const delay = scheduledDate.getTime() - Date.now();
-    Logger.log(
-      `Scheduling stream ${streamId} for ${scheduledDate}`,
-      'StreamLiveWorker',
-    );
-    await this.streamLiveQueue.add(
-      'make-live',
-      { streamId },
-      {
-        delay: Math.max(delay, 0),
-        jobId: streamId,
-      },
-    );
+    this.queueService.addStreamLiveJob(streamId, scheduledDate);
   }
 
   /**

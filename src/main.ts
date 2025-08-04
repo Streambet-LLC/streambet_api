@@ -8,24 +8,12 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import './queue/queue.processor';
 
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import redisConfig from './config/redis.config';
 
-// Create your queue instance
-const streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
-
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath('/admin/queues');
-
-createBullBoard({
-  queues: [new BullMQAdapter(streamLiveQueue)],
-  serverAdapter,
-});
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -36,6 +24,18 @@ async function bootstrap() {
 
   // Get ConfigService
   const configService = app.get(ConfigService);
+
+  // Create your queue instance
+const streamLiveQueue = app.get<Queue>(`BullQueue_${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`);
+
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+
+createBullBoard({
+  queues: [new BullMQAdapter(streamLiveQueue)],
+  serverAdapter,
+});
+
 
   // Set up global prefix
   app.setGlobalPrefix('api');
