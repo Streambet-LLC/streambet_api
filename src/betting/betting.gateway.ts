@@ -14,7 +14,7 @@ import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { AuthService } from '../auth/auth.service';
-import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { AuthenticatedSocketPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { StreamService } from 'src/stream/stream.service';
@@ -24,11 +24,12 @@ import { PlaceBetResult } from 'src/interface/betPlace.interface';
 import { CancelBetPayout } from 'src/interface/betCancel.interface';
 import { EditedBetPayload } from 'src/interface/betEdit.interface';
 import { ChatService } from '../chat/chat.service';
+import { UsersService } from 'src/users/users.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
   data: {
-    user: JwtPayload;
+    user: AuthenticatedSocketPayload;
   };
 }
 
@@ -68,6 +69,7 @@ export class BettingGateway
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
     private readonly notificationService: NotificationService,
+    private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
   ) {}
 
@@ -89,10 +91,12 @@ export class BettingGateway
         await Promise.resolve();
         return;
       }
+      const { profileImageUrl } = await this.userService.findById(decoded.sub);
+      const updatedDecode = { ...decoded, profileImageUrl };
       // Explicitly cast to JwtPayload since we've already verified it's not null
       const authenticatedSocket = client as AuthenticatedSocket;
       authenticatedSocket.data = {
-        user: decoded,
+        user: updatedDecode,
       };
       console.log(
         `Client connected: ${client.id}, user: ${
