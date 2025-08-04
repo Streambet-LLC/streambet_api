@@ -92,13 +92,25 @@ export class BettingGateway
         await Promise.resolve();
         return;
       }
-      const { profileImageUrl } = await this.userService.findById(decoded.sub);
-      const updatedDecode = { ...decoded, profileImageUrl };
-      // Explicitly cast to JwtPayload since we've already verified it's not null
-      const authenticatedSocket = client as AuthenticatedSocket;
-      authenticatedSocket.data = {
-        user: updatedDecode,
-      };
+      try {
+        const { profileImageUrl } = await this.userService.findById(
+          decoded.sub,
+        );
+        const updatedDecode = { ...decoded, profileImageUrl };
+        // Explicitly cast to JwtPayload since we've already verified it's not null
+        const authenticatedSocket = client as AuthenticatedSocket;
+        authenticatedSocket.data = {
+          user: updatedDecode,
+        };
+      } catch (userError) {
+        console.error(`Failed to fetch user profile: ${userError.message}`);
+        // Still allow connection but without profile image
+        const authenticatedSocket = client as AuthenticatedSocket;
+        authenticatedSocket.data = {
+          user: { ...decoded, profileImageUrl: undefined },
+        };
+      }
+
       console.log(
         `Client connected: ${client.id}, user: ${
           typeof decoded.username === 'string' ? decoded.username : 'unknown'
