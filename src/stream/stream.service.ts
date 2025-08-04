@@ -766,7 +766,7 @@ END
       await this.streamsRepository
         .createQueryBuilder()
         .update(Stream)
-        .set({ status: StreamStatus.CANCELED })
+        .set({ status: StreamStatus.CANCELLED })
         .where('id = :streamId', { streamId })
         .returning('status')
         .execute();
