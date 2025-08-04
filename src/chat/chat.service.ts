@@ -104,7 +104,12 @@ export class ChatService {
       const qb = this.chatRepository
         .createQueryBuilder('chat')
         .leftJoin('chat.user', 'user')
-        .addSelect(['user.id','user.username', 'user.email', 'user.profile_image_url'])
+        .addSelect([
+          'user.id',
+          'user.username',
+          'user.email',
+          'user.profileImageUrl',
+        ])
         .where('chat.stream_id = :streamId', { streamId })
         .orderBy(
           `chat.${sortColumn}`,
