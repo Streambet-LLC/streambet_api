@@ -747,4 +747,18 @@ END
     }
     return null;
   }
+  /**
+   * Removes a scheduled stream job from the queue based on the given stream ID.
+   *
+   * @param streamId - The unique identifier of the stream/job to be removed from the queue.
+   * @returns A boolean indicating whether the job was found and successfully removed.
+   */
+  async removeScheduledStreamFromQueue(streamId: string): Promise<Boolean> {
+    const job = await this.streamLiveQueue.getJob(streamId);
+    if (job) {
+      await job.remove();
+      return true;
+    }
+    return false;
+  }
 }
