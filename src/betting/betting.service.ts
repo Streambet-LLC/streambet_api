@@ -245,7 +245,11 @@ export class BettingService {
         'Cannot edit betting variables for ended streams',
       );
     }
-
+ if (stream.status === StreamStatus.CANCELLED) {
+   throw new BadRequestException(
+     'Cannot edit betting variables for cancelled streams',
+   );
+ }
     // Get existing rounds for this stream
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
