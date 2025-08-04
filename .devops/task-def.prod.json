@@ -3,8 +3,8 @@
     {
       "name": "streambet-prod",
       "image": "<IMAGE_URI>",
-      "cpu": 2048,
-      "memory": 4096,
+      "cpu": 256,
+      "memory": 512,
       "portMappings": [
         {
           "containerPort": 3000,
@@ -85,7 +85,7 @@
   "networkMode": "awsvpc",
   "volumes": [],
   "requiresCompatibilities": ["FARGATE"],
-  "cpu": "2048",
-  "memory": "4096",
+  "cpu": "256",
+  "memory": "512",
   "executionRoleArn": "arn:aws:iam::530976901597:role/ecsTaskExecutionRole"
 }
