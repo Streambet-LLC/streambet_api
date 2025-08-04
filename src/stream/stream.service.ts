@@ -760,7 +760,7 @@ END
       const isRemoved = await this.removeScheduledStreamFromQueue(streamId);
       if (!isRemoved) {
         throw new BadRequestException(
-          `Stream-${stream.name} not found in the queue or already removed.`,
+          `"Stream "${stream.name}" was not found in the queue. It may have already been processed or removed.`,
         );
       }
       await this.streamsRepository
