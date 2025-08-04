@@ -734,6 +734,53 @@ END
       totalStreamTime,
     };
   }
+  /**
+   * Cancels a scheduled stream and handles associated cleanup operations.
+   *
+   * This method performs the following actions:
+   * 1. Retrieves the scheduled stream and its associated active betting rounds.
+   * 2. Ensures the stream exists; throws an error if not found.
+   * 3. Removes the stream from the scheduled processing queue.
+   * 4. Updates the stream status to `CANCELED` in the database.
+   * 5. If the stream has associated betting rounds, it cancels each round and processes refunds.
+   *
+   * @param streamId - The ID of the scheduled stream to cancel.
+   * @returns A promise that resolves with the canceled stream's ID.
+   * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
+   */
+  async canceledSheduledStream(streamId: string): Promise<String> {
+    try {
+      //retun a sheduled stream with open or locked round. and with active bets
+      const stream = await this.getSheduledStreamWithActiveRound(streamId);
+      if (!stream) {
+        throw new BadRequestException(
+          `No scheduled stream found for stream ID: ${streamId}`,
+        );
+      }
+      const isRemoved = await this.removeScheduledStreamFromQueue(streamId);
+      if (!isRemoved) {
+        throw new BadRequestException(
+          `Stream-${stream.name} not found in the queue or already removed.`,
+        );
+      }
+      await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ status: StreamStatus.CANCELED })
+        .where('id = :streamId', { streamId })
+        .returning('status')
+        .execute();
+      if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
+        for (const round of stream.bettingRounds) {
+          await this.bettingService.cancelRoundAndRefund(round.id);
+        }
+      }
+      return streamId;
+    } catch (error) {
+      Logger.error('Error in AuthService.login:', error);
+      throw new BadRequestException((error as Error).message);
+    }
+  }
 
   private detectPlatformFromUrl(url: string): PlatformName | null {
     const platformKeywords: Record<PlatformName, string[]> = {
