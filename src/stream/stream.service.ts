@@ -70,7 +70,7 @@ export class StreamService {
         : [0, 24];
 
       const { pagination = true, streamStatus } = streamFilterDto;
-      
+
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
         .leftJoinAndSelect(
@@ -89,6 +89,7 @@ export class StreamService {
         .addSelect('s.name', 'streamName')
         .addSelect('s.thumbnailUrl', 'thumbnailURL')
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect('s.endTime', 'endTime')
         .addSelect(
           'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
           'totalBetsTokenAmount',
@@ -837,7 +838,7 @@ END
       await this.streamsRepository
         .createQueryBuilder()
         .update(Stream)
-        .set({ status: StreamStatus.DELETED})
+        .set({ status: StreamStatus.DELETED })
         .where('id = :streamId', { streamId })
         .returning('status')
         .execute();
