@@ -748,10 +748,10 @@ END
    * @returns A promise that resolves with the canceled stream's ID.
    * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
    */
-  async canceledSheduledStream(streamId: string): Promise<String> {
+  async cancelScheduledStream(streamId: string): Promise<String> {
     try {
       //retun a sheduled stream with open or locked round. and with active bets
-      const stream = await this.getSheduledStreamWithActiveRound(streamId);
+      const stream = await this.getScheduledStreamWithActiveRound(streamId);
       if (!stream) {
         throw new BadRequestException(
           `No scheduled stream found for stream ID: ${streamId}`,
@@ -777,7 +777,7 @@ END
       }
       return streamId;
     } catch (error) {
-      Logger.error('Error in AuthService.login:', error);
+      Logger.error('Error in StreamService.cancelScheduledStream:', error);
       throw new BadRequestException((error as Error).message);
     }
   }
@@ -814,14 +814,14 @@ END
   /**
    * Retrieves a scheduled stream by its ID along with its associated betting rounds and active bets.
    *
-   * - Only betting rounds with status `OPEN` or `LOCKED` are included.
+   * - Only betting rounds with status `OPEN`, CREATED or `LOCKED` are included.
    * - Only bets with status `ACTIVE` within those betting rounds are returned.
    * - Limits the selected fields to essential data for optimized performance.
    *
    * @param streamId - The unique identifier of the stream to fetch.
    * @returns A stream entity with filtered betting rounds and active bets, or `null` if not found.
    */
-  async getSheduledStreamWithActiveRound(streamId: string) {
+  async getScheduledStreamWithActiveRound(streamId: string) {
     return await this.streamsRepository
       .createQueryBuilder('stream')
       .leftJoinAndSelect(
