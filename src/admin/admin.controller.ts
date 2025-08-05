@@ -746,7 +746,7 @@ export class AdminController {
   ): Promise<{ message: string; data: String; statusCode: Number }> {
     this.ensureAdmin(req.user);
     const deletedStreamId =
-      await this.streamService.deleteSheduledStream(streamId);
+      await this.streamService.deleteScheduledStream(streamId);
     return {
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been canceled successfully.`,
