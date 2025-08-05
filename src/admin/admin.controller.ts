@@ -749,7 +749,7 @@ export class AdminController {
       await this.streamService.deleteScheduledStream(streamId);
     return {
       data: deletedStreamId,
-      message: `Stream with ID ${deletedStreamId} has been canceled successfully.`,
+      message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
       statusCode: HttpStatus.OK,
     };
   }
