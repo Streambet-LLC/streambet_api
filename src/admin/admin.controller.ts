@@ -715,7 +715,7 @@ export class AdminController {
    * @param streamId - The unique ID of the stream to delete.
    * @returns A confirmation message with the stream ID.
    */
-  @Patch('/stream/scheduled/delete/:streamId')
+  @Delete('/stream/scheduled/delete/:streamId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a scheduled stream by ID' })
   @SwaggerApiResponse({
