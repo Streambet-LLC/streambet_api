@@ -70,8 +70,34 @@ export class StreamService {
         : [0, 24];
 
       const { pagination = true, streamStatus } = streamFilterDto;
-
-      const streamQB = this.streamsRepository.createQueryBuilder('s');
+      
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect(
+          's.bettingRounds',
+          'br',
+          'br.status IN (:...roundStatuses)',
+          {
+            roundStatuses: [
+              BettingRoundStatus.OPEN,
+              BettingRoundStatus.LOCKED,
+            ],
+          },
+        )
+        .leftJoinAndSelect('br.bettingVariables', 'bv')
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.thumbnailUrl', 'thumbnailURL')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
+          'totalBetsTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
+          'totalBetsCoinAmount',
+        )
+        .groupBy('s.id');
 
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
@@ -88,12 +114,6 @@ export class StreamService {
         streamQB.offset(offset).limit(limit);
       }
 
-      streamQB
-        .select('s.id', 'id')
-        .addSelect('s.name', 'streamName')
-        .addSelect('s.thumbnailUrl', 'thumbnailURL')
-        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
-        .addSelect('s.endTime', 'endTime');
       const total = await streamQB.getCount();
       const data = await streamQB.getRawMany();
 
