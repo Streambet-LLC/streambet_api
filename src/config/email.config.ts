@@ -6,6 +6,7 @@ export default registerAs('email', () => ({
   SMTP_PORT: process.env.AWS_SMTP_PORT,
   SMTP_HOST: process.env.AWS_SMTP_HOST,
   SMTP_SECURE: true,
+  defaultName: process.env.MAIL_DEFAULT_NAME,
   FROM_EMAIL: process.env.AWS_EMAIL_FROM,
   SMTP_REGION: process.env.AWS_SMTP_REGION,
   APPLICATION_HOST: process.env.APPLICATION_HOST || '',
