@@ -201,6 +201,9 @@ export class StreamService {
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
       }
+      streamQB.andWhere(`s.status != :streamStatus`, {
+        streamStatus: StreamStatus.DELETED,
+      });
 
       if (sort) {
         const [sortColumn, sortOrder] = sort;
