@@ -288,7 +288,7 @@ END
       const stream = await this.streamsRepository.findOne({
         where: {
           id,
-          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]), // Include both LIVE and SCHEDULED
+          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED,StreamStatus.ENDED]), // Include both LIVE and SCHEDULED
         },
         select: {
           id: true,
