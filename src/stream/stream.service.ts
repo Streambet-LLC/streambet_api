@@ -71,7 +71,34 @@ export class StreamService {
 
       const { pagination = true, streamStatus } = streamFilterDto;
 
-      const streamQB = this.streamsRepository.createQueryBuilder('s');
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect(
+          's.bettingRounds',
+          'br',
+          'br.status IN (:...roundStatuses)',
+          {
+            roundStatuses: [
+              BettingRoundStatus.OPEN,
+              BettingRoundStatus.LOCKED,
+            ],
+          },
+        )
+        .leftJoinAndSelect('br.bettingVariables', 'bv')
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.thumbnailUrl', 'thumbnailURL')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect('s.endTime', 'endTime')
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
+          'totalBetsTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
+          'totalBetsCoinAmount',
+        )
+        .groupBy('s.id');
 
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
@@ -87,13 +114,11 @@ export class StreamService {
         const [offset, limit] = range;
         streamQB.offset(offset).limit(limit);
       }
-
-      streamQB
-        .select('s.id', 'id')
-        .addSelect('s.name', 'streamName')
-        .addSelect('s.thumbnailUrl', 'thumbnailURL')
-        .addSelect('s.scheduledStartTime', 'scheduledStartTime');
-      const total = await streamQB.getCount();
+      const countQB = this.streamsRepository.createQueryBuilder('s');
+      if (streamStatus) {
+        countQB.andWhere(`s.status = :streamStatus`, { streamStatus });
+      }
+      const total = await countQB.getCount();
       const data = await streamQB.getRawMany();
 
       return { data, total };
@@ -816,7 +841,7 @@ END
       await this.streamsRepository
         .createQueryBuilder()
         .update(Stream)
-        .set({ status: StreamStatus.DELETED})
+        .set({ status: StreamStatus.DELETED })
         .where('id = :streamId', { streamId })
         .returning('status')
         .execute();
