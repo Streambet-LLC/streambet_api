@@ -114,8 +114,11 @@ export class StreamService {
         const [offset, limit] = range;
         streamQB.offset(offset).limit(limit);
       }
-
-      const total = await streamQB.getCount();
+      const countQB = this.streamsRepository.createQueryBuilder('s');
+      if (streamStatus) {
+        countQB.andWhere(`s.status = :streamStatus`, { streamStatus });
+      }
+      const total = await countQB.getCount();
       const data = await streamQB.getRawMany();
 
       return { data, total };
