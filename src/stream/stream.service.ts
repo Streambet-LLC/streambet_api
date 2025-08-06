@@ -544,7 +544,7 @@ END
         }
       }
 
-      if(updateStreamDto.status === StreamStatus.ENDED){
+      if(updateStreamDto.status === StreamStatus.ENDED && !stream.endTime){
         this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
       }else {
         this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);

@@ -25,6 +25,7 @@ import { CancelBetPayout } from 'src/interface/betCancel.interface';
 import { EditedBetPayload } from 'src/interface/betEdit.interface';
 import { ChatService } from '../chat/chat.service';
 import { UsersService } from 'src/users/users.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -927,7 +928,7 @@ export class BettingGateway
     }
   }
 
-  emitStreamListEvent(event: string){
+  emitStreamListEvent(event: StreamList){
     const payload = { event };
     this.server.to('streambet').emit('streamListUpdated', payload)
     Logger.log(`Emitting stream list event: ${event}`);
