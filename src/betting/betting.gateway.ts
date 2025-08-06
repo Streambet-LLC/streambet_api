@@ -356,22 +356,20 @@ export class BettingGateway
             systemMessage,
           );
         } catch (e) {
-          return {
-            event: 'messageSent',
-            data: { success: false, error: e.message },
-          };
+          Logger.error('Failed to save system chat message:', e.message);
         }
         const systemChatMessage: ChatMessage = {
           type: 'user',
           username: user.username,
           message: '',
-          systemMessage: '',
+          systemMessage,
           imageURL: '',
           timestamp: timestamp,
           profileUrl: user?.profileImageUrl,
         };
+        //emmit to all users in a stream - chat 
         this.server
-          .to(`stream_${bettingVariable.stream.id}}`)
+          .to(`stream_${bettingVariable.stream.id}`)
           .emit('newMessage', systemChatMessage);
       }
     } catch (error) {
