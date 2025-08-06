@@ -27,9 +27,10 @@ export class ChatService {
    * Creates a new chat message for a given stream and user.
    * @param streamId - The ID of the stream.
    * @param userId - The ID of the user.
-   * @param message - The chat message content.
+   * @param message - Optional chat message content.
    * @param imageURL - Optional image URL.
    * @param timestamp - Optional timestamp.
+   * @param systemMessage - Optional systemMessage.
    * @returns The created Chat entity.
    */
   async createChatMessage(
@@ -52,7 +53,7 @@ export class ChatService {
       message,
       imageURL,
       timestamp: timestamp || new Date(), // Use provided timestamp or current time
-      systemMessage
+      systemMessage,
     });
     return this.chatRepository.save(chat);
   }
