@@ -21,6 +21,17 @@ export class Chat extends BaseEntity {
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'image_url' })
   imageURL: string;
 
-  @Column({ type: 'timestamp', name: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'system_message',
+  })
+  systemMessage: string;
+
+  @Column({
+    type: 'timestamp',
+    name: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   timestamp: Date;
 } 
