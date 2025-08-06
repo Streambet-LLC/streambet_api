@@ -875,7 +875,7 @@ END
    * @returns A boolean indicating whether the job was found and successfully removed.
    */
   async removeScheduledStreamFromQueue(streamId: string): Promise<Boolean> {
-    const job = await this.streamLiveQueue.getJob(streamId);
+    const job = await this.queueService.getJobById('stream-live',streamId);
     if (job) {
       await job.remove();
       return true;
