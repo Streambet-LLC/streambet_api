@@ -6,6 +6,7 @@ interface BetNotificationData {
   bettingOption?: string;
   roundName?: string;
   streamName?: string;
+  username?: string;
 }
 
 export const NOTIFICATION_TEMPLATE = {
@@ -66,5 +67,9 @@ export const NOTIFICATION_TEMPLATE = {
   EMAIL_FREE_COIN_WON: {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}, but could you have done better?`,
+  },
+   PLACE_BET_CHAT_MESSAGE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.username} bet ${data.amount} on ${data.bettingOption}`,
   },
 };
