@@ -27,7 +27,6 @@ import { QueueBoardModule } from './queue/queue-board.module';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-redis-store';
 import { QueueModule } from './queue/queue.module';
 import { queueConfig } from './config/queue.config';
 
