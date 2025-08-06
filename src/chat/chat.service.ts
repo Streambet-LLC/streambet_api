@@ -35,9 +35,10 @@ export class ChatService {
   async createChatMessage(
     streamId: string,
     userId: string,
-    message: string,
+    message?: string,
     imageURL?: string,
     timestamp?: Date,
+    systemMessage?: string,
   ): Promise<Chat> {
     const stream = await this.streamRepository.findOne({
       where: { id: streamId },
@@ -51,6 +52,7 @@ export class ChatService {
       message,
       imageURL,
       timestamp: timestamp || new Date(), // Use provided timestamp or current time
+      systemMessage
     });
     return this.chatRepository.save(chat);
   }
@@ -111,10 +113,7 @@ export class ChatService {
           'user.profileImageUrl',
         ])
         .where('chat.stream_id = :streamId', { streamId })
-        .orderBy(
-          `chat.${sortColumn}`,
-          sortOrder as 'ASC' | 'DESC'
-        )
+        .orderBy(`chat.${sortColumn}`, sortOrder as 'ASC' | 'DESC')
         .offset(offset)
         .limit(limit);
 
