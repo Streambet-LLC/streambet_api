@@ -13,10 +13,10 @@ import { StreamModule } from 'src/stream/stream.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         connection: {
-          host: configService.get('redis.host'),
-          port: configService.get('redis.port'),
-          username: configService.get('redis.username'),
-          password: configService.get('redis.password'),
+          host: configService.get('queue.redis.host'),
+          port: configService.get('queue.redis.port'),
+          username: configService.get('queue.redis.username'),
+          password: configService.get('queue.redis.password'),
         },
         defaultJobOptions: {
           attempts: 3,
@@ -33,9 +33,9 @@ import { StreamModule } from 'src/stream/stream.module';
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (configService: ConfigService) => ({
-          name: configService.get('queues.streamLive.name'),
+          name: configService.get('queue.queues.streamLive.name'),
           defaultJobOptions: configService.get(
-            'queues.streamLive.defaultJobOptions',
+            'queue.queues.streamLive.defaultJobOptions',
           ),
         }),
       },
