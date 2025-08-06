@@ -23,6 +23,8 @@ import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { QueueService } from 'src/queue/queue.service';
+import { BettingService } from 'src/betting/betting.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 @Injectable()
 export class StreamService {
@@ -30,6 +32,8 @@ export class StreamService {
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
     private walletService: WalletsService,
+    @Inject(forwardRef(() => BettingService))
+    private bettingService: BettingService,
     @Inject(forwardRef(() => BettingGateway))
     private bettingGateway: BettingGateway,
     private dataSource: DataSource,
@@ -65,7 +69,34 @@ export class StreamService {
 
       const { pagination = true, streamStatus } = streamFilterDto;
 
-      const streamQB = this.streamsRepository.createQueryBuilder('s');
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect(
+          's.bettingRounds',
+          'br',
+          'br.status IN (:...roundStatuses)',
+          {
+            roundStatuses: [
+              BettingRoundStatus.OPEN,
+              BettingRoundStatus.LOCKED,
+            ],
+          },
+        )
+        .leftJoinAndSelect('br.bettingVariables', 'bv')
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.thumbnailUrl', 'thumbnailURL')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect('s.endTime', 'endTime')
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
+          'totalBetsTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
+          'totalBetsCoinAmount',
+        )
+        .groupBy('s.id');
 
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
@@ -81,13 +112,11 @@ export class StreamService {
         const [offset, limit] = range;
         streamQB.offset(offset).limit(limit);
       }
-
-      streamQB
-        .select('s.id', 'id')
-        .addSelect('s.name', 'streamName')
-        .addSelect('s.thumbnailUrl', 'thumbnailURL')
-        .addSelect('s.scheduledStartTime', 'scheduledStartTime');
-      const total = await streamQB.getCount();
+      const countQB = this.streamsRepository.createQueryBuilder('s');
+      if (streamStatus) {
+        countQB.andWhere(`s.status = :streamStatus`, { streamStatus });
+      }
+      const total = await countQB.getCount();
       const data = await streamQB.getRawMany();
 
       return { data, total };
@@ -195,6 +224,9 @@ export class StreamService {
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
       }
+      streamQB.andWhere(`s.status != :streamStatus`, {
+        streamStatus: StreamStatus.DELETED,
+      });
 
       if (sort) {
         const [sortColumn, sortOrder] = sort;
@@ -279,7 +311,7 @@ END
       const stream = await this.streamsRepository.findOne({
         where: {
           id,
-          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED]), // Include both LIVE and SCHEDULED
+          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED,StreamStatus.ENDED]), // Include both LIVE and SCHEDULED
         },
         select: {
           id: true,
@@ -508,6 +540,13 @@ END
           this.scheduleStream(streamResponse.id, stream.scheduledStartTime);
         }
       }
+
+      if(updateStreamDto.status === StreamStatus.ENDED && !stream.endTime){
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
+      }else {
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);
+      }
+
       return streamResponse;
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -716,7 +755,104 @@ END
       totalStreamTime,
     };
   }
+  /**
+   * Cancels a scheduled stream and handles associated cleanup operations.
+   *
+   * This method performs the following actions:
+   * 1. Retrieves the scheduled stream and its associated active betting rounds.
+   * 2. Ensures the stream exists; throws an error if not found.
+   * 3. Removes the stream from the scheduled processing queue.
+   * 4. Updates the stream status to `CANCELED` in the database.
+   * 5. If the stream has associated betting rounds, it cancels each round and processes refunds.
+   *
+   * @param streamId - The ID of the scheduled stream to cancel.
+   * @returns A promise that resolves with the canceled stream's ID.
+   * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
+   */
+  async cancelScheduledStream(streamId: string): Promise<String> {
+    try {
+      //retun a sheduled stream with open or locked round. and with active bets
+      const stream = await this.getScheduledStreamWithActiveRound(streamId);
+      if (!stream) {
+        throw new BadRequestException(
+          `No scheduled stream found for stream ID: ${streamId}`,
+        );
+      }
+      const isRemoved = await this.removeScheduledStreamFromQueue(streamId);
+      if (!isRemoved) {
+        throw new BadRequestException(
+          `"Stream "${stream.name}" was not found in the queue. It may have already been processed or removed.`,
+        );
+      }
+      await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ status: StreamStatus.CANCELLED })
+        .where('id = :streamId', { streamId })
+        .returning('status')
+        .execute();
+      if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
+        for (const round of stream.bettingRounds) {
+          await this.bettingService.cancelRoundAndRefund(round.id);
+        }
+      }
+      return streamId;
+    } catch (error) {
+      Logger.error('Error in StreamService.cancelScheduledStream:', error);
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+  /**
+   * Delete a scheduled stream and handles associated cleanup operations.
+   *
+   * This method performs the following actions:
+   * 1. Retrieves the scheduled stream and its associated active betting rounds.
+   * 2. Ensures the stream exists; throws an error if not found.
+   * 3. Removes the stream from the scheduled processing queue.
+   * 4. Updates the stream status to `Delete` in the database.
+   * 5. If the stream has associated betting rounds, it cancels each round and processes refunds.
+   *
+   * @param streamId - The ID of the scheduled stream to delete.
+   * @returns A promise that resolves with the delete stream's ID.
+   * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
+   */
+  async deleteScheduledStream(streamId: string): Promise<String> {
+    try {
+      //retun a sheduled stream with created, open or locked round. and with active bets
+      const stream = await this.getScheduledStreamWithActiveRound(streamId);
+      if (!stream) {
+        throw new BadRequestException(
+          `No scheduled stream found for stream ID: ${streamId}`,
+        );
+      }
+      const isRemoved = await this.removeScheduledStreamFromQueue(streamId);
+      if (!isRemoved) {
+        throw new BadRequestException(
+          `"Stream "${stream.name}" was not found in the queue. It may have already been processed or removed.`,
+        );
+      }
+      await this.streamsRepository
+        .createQueryBuilder()
+        .update(Stream)
+        .set({ status: StreamStatus.DELETED })
+        .where('id = :streamId', { streamId })
+        .returning('status')
+        .execute();
+      if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
+        for (const round of stream.bettingRounds) {
+          await this.bettingService.cancelRoundAndRefund(round.id);
+        }
+      }
 
+      // Emit stream list event to update the UI
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamDeleted);
+
+      return streamId;
+    } catch (error) {
+      Logger.error('Error in StreamService.deleteScheduledStream:', error);
+      throw new BadRequestException((error as Error).message);
+    }
+  }
   private detectPlatformFromUrl(url: string): PlatformName | null {
     const platformKeywords: Record<PlatformName, string[]> = {
       [PlatformName.Kick]: ['kick.com', 'kick'],
@@ -731,5 +867,60 @@ END
       }
     }
     return null;
+  }
+  /**
+   * Removes a scheduled stream job from the queue based on the given stream ID.
+   *
+   * @param streamId - The unique identifier of the stream/job to be removed from the queue.
+   * @returns A boolean indicating whether the job was found and successfully removed.
+   */
+  async removeScheduledStreamFromQueue(streamId: string): Promise<Boolean> {
+    const job = await this.streamLiveQueue.getJob(streamId);
+    if (job) {
+      await job.remove();
+      return true;
+    }
+    return false;
+  }
+  /**
+   * Retrieves a scheduled stream by its ID along with its associated betting rounds and active bets.
+   *
+   * - Only betting rounds with status `OPEN`, CREATED or `LOCKED` are included.
+   * - Only bets with status `ACTIVE` within those betting rounds are returned.
+   * - Limits the selected fields to essential data for optimized performance.
+   *
+   * @param streamId - The unique identifier of the stream to fetch.
+   * @returns A stream entity with filtered betting rounds and active bets, or `null` if not found.
+   */
+  async getScheduledStreamWithActiveRound(streamId: string) {
+    return await this.streamsRepository
+      .createQueryBuilder('stream')
+      .leftJoinAndSelect(
+        'stream.bettingRounds',
+        'bettingRound',
+        'bettingRound.status IN (:...roundStatuses)',
+        {
+          roundStatuses: [
+            BettingRoundStatus.OPEN,
+            BettingRoundStatus.LOCKED,
+            BettingRoundStatus.CREATED,
+          ],
+        },
+      )
+      .leftJoinAndSelect('bettingRound.bet', 'bet', 'bet.status = :betStatus', {
+        betStatus: BetStatus.Active,
+      })
+      .where('stream.id = :streamId', { streamId })
+      .andWhere('stream.status = :status', { status: StreamStatus.SCHEDULED })
+      .select([
+        'stream.id',
+        'stream.name',
+        'stream.status',
+        'bettingRound.id',
+        'bettingRound.status',
+        'bet.id',
+        'bet.status',
+      ])
+      .getOne();
   }
 }

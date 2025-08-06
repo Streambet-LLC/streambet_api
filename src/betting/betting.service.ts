@@ -33,6 +33,7 @@ import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 @Injectable()
 export class BettingService {
@@ -103,6 +104,9 @@ export class BettingService {
         stream.scheduledStartTime,
       );
     }
+
+    // Emit event to update stream list
+    this.bettingGateway.emitStreamListEvent(StreamList.StreamCreated);
     return streamResponse;
   }
 
@@ -245,7 +249,11 @@ export class BettingService {
         'Cannot edit betting variables for ended streams',
       );
     }
-
+ if (stream.status === StreamStatus.CANCELLED) {
+   throw new BadRequestException(
+     'Cannot edit betting variables for cancelled streams',
+   );
+ }
     // Get existing rounds for this stream
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
@@ -1320,6 +1328,7 @@ export class BettingService {
 
   async getUserBets(userId: string, active: boolean = false): Promise<Bet[]> {
     const whereClause: Record<string, unknown> = { userId };
+    console.log('debug');
 
     if (active) {
       whereClause.status = BetStatus.Active;

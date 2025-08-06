@@ -14,7 +14,7 @@ import { PlaceBetDto, EditBetDto } from './dto/place-bet.dto';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 import { AuthService } from '../auth/auth.service';
-import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { AuthenticatedSocketPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrencyType } from '../wallets/entities/transaction.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { StreamService } from 'src/stream/stream.service';
@@ -24,11 +24,13 @@ import { PlaceBetResult } from 'src/interface/betPlace.interface';
 import { CancelBetPayout } from 'src/interface/betCancel.interface';
 import { EditedBetPayload } from 'src/interface/betEdit.interface';
 import { ChatService } from '../chat/chat.service';
+import { UsersService } from 'src/users/users.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
   data: {
-    user: JwtPayload;
+    user: AuthenticatedSocketPayload;
   };
 }
 
@@ -40,6 +42,8 @@ interface ChatMessage {
   timestamp: Date;
   imageURL?: string;
   title?: string;
+  profileUrl?: string;
+  systemMessage?: string;
 }
 
 // Define notification interface
@@ -68,6 +72,7 @@ export class BettingGateway
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
     private readonly notificationService: NotificationService,
+    private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
   ) {}
 
@@ -89,11 +94,25 @@ export class BettingGateway
         await Promise.resolve();
         return;
       }
-      // Explicitly cast to JwtPayload since we've already verified it's not null
-      const authenticatedSocket = client as AuthenticatedSocket;
-      authenticatedSocket.data = {
-        user: decoded,
-      };
+      try {
+        const { profileImageUrl } = await this.userService.findById(
+          decoded.sub,
+        );
+        const updatedDecode = { ...decoded, profileImageUrl };
+        // Explicitly cast to JwtPayload since we've already verified it's not null
+        const authenticatedSocket = client as AuthenticatedSocket;
+        authenticatedSocket.data = {
+          user: updatedDecode,
+        };
+      } catch (userError) {
+        console.error(`Failed to fetch user profile: ${userError.message}`);
+        // Still allow connection but without profile image
+        const authenticatedSocket = client as AuthenticatedSocket;
+        authenticatedSocket.data = {
+          user: { ...decoded, profileImageUrl: undefined },
+        };
+      }
+
       console.log(
         `Client connected: ${client.id}, user: ${
           typeof decoded.username === 'string' ? decoded.username : 'unknown'
@@ -320,6 +339,38 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+        const timestamp = new Date();
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        try {
+          await this.chatService.createChatMessage(
+            bettingVariable.stream.id,
+            user.sub,
+            undefined,
+            undefined,
+            timestamp,
+            systemMessage,
+          );
+        } catch (e) {
+          Logger.error('Failed to save system chat message:', e.message);
+        }
+        const systemChatMessage: ChatMessage = {
+          type: 'user',
+          username: user.username,
+          message: '',
+          systemMessage,
+          imageURL: '',
+          timestamp: timestamp,
+          profileUrl: user?.profileImageUrl,
+        };
+        //emmit to all users in a stream - chat 
+        this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('newMessage', systemChatMessage);
       }
     } catch (error) {
       void client.emit('error', {
@@ -526,11 +577,20 @@ export class BettingGateway
         },
       };
     }
-    const timestamp = new Date()
+    const timestamp = new Date();
     try {
-      await this.chatService.createChatMessage(streamId, user.sub, message, imageURL, timestamp);
+      await this.chatService.createChatMessage(
+        streamId,
+        user.sub,
+        message,
+        imageURL,
+        timestamp,
+      );
     } catch (e) {
-      return { event: 'messageSent', data: { success: false, error: e.message } };
+      return {
+        event: 'messageSent',
+        data: { success: false, error: e.message },
+      };
     }
     const chatMessage: ChatMessage = {
       type: 'user',
@@ -538,6 +598,7 @@ export class BettingGateway
       message: message.trim(),
       imageURL: imageURL || '',
       timestamp: timestamp,
+      profileUrl: user?.profileImageUrl,
     };
     this.server.to(`stream_${streamId}`).emit('newMessage', chatMessage);
     return { event: 'messageSent', data: { success: true } };
@@ -842,6 +903,7 @@ export class BettingGateway
       }
     }
   }
+
   async emitLockBetRound(roundName: string, userId: string, username: string) {
     const receiverNotificationPermission =
       await this.notificationService.addNotificationPermision(userId);
@@ -862,5 +924,11 @@ export class BettingGateway
 
       Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
     }
+  }
+
+  emitStreamListEvent(event: StreamList){
+    const payload = { event };
+    this.server.to('streambet').emit('streamListUpdated', payload)
+    Logger.log(`Emitting stream list event: ${event}`);
   }
 }

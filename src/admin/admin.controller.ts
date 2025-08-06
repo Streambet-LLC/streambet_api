@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Query,
   Delete,
+  HttpCode,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -653,6 +654,104 @@ export class AdminController {
         platformVig:'15%',
         totalBetPlacedUsers
       },
+    };
+  }
+  /**
+   * Cancel a scheduled stream by its stream ID.
+   *
+   * This endpoint cancels a scheduled stream, removes it from the processing queue,
+   * updates its status to `CANCELED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to cancel.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Patch('/stream/scheduled/cancel/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully canceled',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been canceled successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async cancelScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureAdmin(req.user);
+    const canceledStreamId =
+      await this.streamService.cancelScheduledStream(
+        streamId,
+      );
+    return {
+      data: canceledStreamId,
+      message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
+      statusCode: HttpStatus.OK,
+    };
+  }
+  /**
+   * Soft Delete a scheduled stream by its stream ID. Update status to delete
+   *
+   * This endpoint delet a scheduled stream, removes it from the processing queue,
+   * updates its status to `DELETED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to delete.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Delete('/stream/scheduled/delete/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully deleted',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been deleted successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async deleteScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureAdmin(req.user);
+    const deletedStreamId =
+      await this.streamService.deleteScheduledStream(streamId);
+    return {
+      data: deletedStreamId,
+      message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
+      statusCode: HttpStatus.OK,
     };
   }
 }
