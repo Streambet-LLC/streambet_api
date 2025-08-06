@@ -42,6 +42,7 @@ interface ChatMessage {
   imageURL?: string;
   title?: string;
   profileUrl?: string;
+  systemMessage?: string;
 }
 
 // Define notification interface
@@ -337,6 +338,40 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+        const timestamp = new Date();
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        try {
+          await this.chatService.createChatMessage(
+            bettingVariable.stream.id,
+            user.sub,
+            undefined,
+            undefined,
+            timestamp,
+            systemMessage,
+          );
+        } catch (e) {
+          return {
+            event: 'messageSent',
+            data: { success: false, error: e.message },
+          };
+        }
+        const systemChatMessage: ChatMessage = {
+          type: 'user',
+          username: user.username,
+          message: '',
+          systemMessage: '',
+          imageURL: '',
+          timestamp: timestamp,
+          profileUrl: user?.profileImageUrl,
+        };
+        this.server
+          .to(`stream_${bettingVariable.stream.id}}`)
+          .emit('newMessage', systemChatMessage);
       }
     } catch (error) {
       void client.emit('error', {
@@ -543,11 +578,20 @@ export class BettingGateway
         },
       };
     }
-    const timestamp = new Date()
+    const timestamp = new Date();
     try {
-      await this.chatService.createChatMessage(streamId, user.sub, message, imageURL, timestamp);
+      await this.chatService.createChatMessage(
+        streamId,
+        user.sub,
+        message,
+        imageURL,
+        timestamp,
+      );
     } catch (e) {
-      return { event: 'messageSent', data: { success: false, error: e.message } };
+      return {
+        event: 'messageSent',
+        data: { success: false, error: e.message },
+      };
     }
     const chatMessage: ChatMessage = {
       type: 'user',
