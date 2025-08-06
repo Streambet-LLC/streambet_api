@@ -926,4 +926,10 @@ export class BettingGateway
       Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
     }
   }
+
+  emitStreamListEvent(event: string){
+    const payload = { event };
+    this.server.to('streambet').emit('streamListUpdated', payload)
+    Logger.log(`Emitting stream list event: ${event}`);
+  }
 }

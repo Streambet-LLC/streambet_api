@@ -24,6 +24,7 @@ import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { BettingService } from 'src/betting/betting.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 @Injectable()
 export class StreamService {
@@ -542,6 +543,13 @@ END
           this.scheduleStream(streamResponse.id, stream.scheduledStartTime);
         }
       }
+
+      if(updateStreamDto.status === StreamStatus.ENDED){
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
+      }else {
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);
+      }
+
       return streamResponse;
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -850,6 +858,10 @@ END
           await this.bettingService.cancelRoundAndRefund(round.id);
         }
       }
+
+      // Emit stream list event to update the UI
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamDeleted);
+
       return streamId;
     } catch (error) {
       Logger.error('Error in StreamService.deleteScheduledStream:', error);
