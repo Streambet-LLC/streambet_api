@@ -33,6 +33,7 @@ import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { StreamList } from 'src/enums/stream-list.enum';
 
 @Injectable()
 export class BettingService {
@@ -103,6 +104,9 @@ export class BettingService {
         stream.scheduledStartTime,
       );
     }
+
+    // Emit event to update stream list
+    this.bettingGateway.emitStreamListEvent(StreamList.StreamCreated);
     return streamResponse;
   }
 
