@@ -309,8 +309,13 @@ export class BettingGateway
         });
         betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
-      // const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(`stream_${bettingVariable.stream.id}`).emit('betPlaced', betPlacePayload);
+      // Emit placement confirmation only to the user's own active sockets
+      this.server.sockets.sockets.forEach((socket) => {
+        const authenticatedSocket = socket as AuthenticatedSocket;
+        if (authenticatedSocket.data?.user?.sub === user.sub) {
+          authenticatedSocket.emit('betPlaced', betPlacePayload);
+        }
+      });
       // Emit to all clients after DB commit
       if (bettingVariable) {
         const updatedBettingVariable =
@@ -418,8 +423,13 @@ export class BettingGateway
         });
         betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE();
       }
-      //const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(client.id).emit('betCancelled', betCancelPayout);
+      // Emit cancellation confirmation only to the user's own active sockets
+      this.server.sockets.sockets.forEach((socket) => {
+        const authenticatedSocket = socket as AuthenticatedSocket;
+        if (authenticatedSocket.data?.user?.sub === user.sub) {
+          authenticatedSocket.emit('betCancelled', betCancelPayout);
+        }
+      });
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -513,8 +523,13 @@ export class BettingGateway
         betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
       }
 
-      //const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(client.id).emit('betEdited', betEditedPayload);
+      // Emit edit confirmation only to the user's own active sockets
+      this.server.sockets.sockets.forEach((socket) => {
+        const authenticatedSocket = socket as AuthenticatedSocket;
+        if (authenticatedSocket.data?.user?.sub === user.sub) {
+          authenticatedSocket.emit('betEdited', betEditedPayload);
+        }
+      });
       // Emit to all clients after DB commit
       if (bettingVariable) {
         // Refetch the latest betting round with variables
