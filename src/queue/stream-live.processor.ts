@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { StreamService } from 'src/stream/stream.service';
+import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 
 export interface StreamLiveJobData {
   streamId: string;
@@ -9,7 +10,7 @@ export interface StreamLiveJobData {
 }
 
 @Injectable()
-@Processor('stream-live')
+@Processor(STREAM_LIVE_QUEUE)
 export class StreamLiveProcessor extends WorkerHost {
   private readonly logger = new Logger(StreamLiveProcessor.name);
 

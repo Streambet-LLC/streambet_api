@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { MAKE_LIVE_JOB, STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 
 export interface QueueJobOptions {
   delay?: number;
@@ -15,7 +16,7 @@ export class QueueService {
   private readonly logger = new Logger(QueueService.name);
 
   constructor(
-    @InjectQueue('stream-live') private streamLiveQueue: Queue,
+    @InjectQueue(STREAM_LIVE_QUEUE) private streamLiveQueue: Queue,
     // @InjectQueue('email') private emailQueue: Queue,
   ) {}
 
@@ -32,7 +33,7 @@ export class QueueService {
       }
 
       const job = await this.streamLiveQueue.add(
-        'make-live',
+        MAKE_LIVE_JOB,
         { streamId, scheduledTime },
         {
           delay: Math.max(delay, 0),
@@ -89,7 +90,7 @@ export class QueueService {
 
   private getQueueByName(queueName: string): Queue {
     switch (queueName) {
-      case 'stream-live':
+      case STREAM_LIVE_QUEUE:
         return this.streamLiveQueue;
     //   case 'email':
     //     return this.emailQueue;

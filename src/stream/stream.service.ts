@@ -25,6 +25,7 @@ import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { StreamList } from 'src/enums/stream-list.enum';
+import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 
 @Injectable()
 export class StreamService {
@@ -532,7 +533,7 @@ END
 
       // If the scheduled start time is updated, remove any existing job and reschedule if necessary
       if (updateStreamDto.scheduledStartTime !== undefined) {
-        const job = await this.queueService.getJobById('stream-live',id);
+        const job = await this.queueService.getJobById(STREAM_LIVE_QUEUE, id);
         if (job) {
           await job.remove();
         }
@@ -875,7 +876,7 @@ END
    * @returns A boolean indicating whether the job was found and successfully removed.
    */
   async removeScheduledStreamFromQueue(streamId: string): Promise<Boolean> {
-    const job = await this.queueService.getJobById('stream-live',streamId);
+    const job = await this.queueService.getJobById(STREAM_LIVE_QUEUE, streamId);
     if (job) {
       await job.remove();
       return true;

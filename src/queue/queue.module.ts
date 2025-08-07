@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QueueService } from './queue.service';
 import { StreamLiveProcessor } from './stream-live.processor';
 import { StreamModule } from 'src/stream/stream.module';
+import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 
 @Module({
   imports: [
@@ -29,7 +30,7 @@ import { StreamModule } from 'src/stream/stream.module';
     }),
     BullModule.registerQueueAsync(
       {
-        name: 'stream-live',
+        name: STREAM_LIVE_QUEUE,
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (configService: ConfigService) => ({
