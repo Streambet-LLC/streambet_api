@@ -419,7 +419,7 @@ export class BettingGateway
         betCancelPayout.title = NOTIFICATION_TEMPLATE.BET_CANCELLED.TITLE();
       }
       //const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(client.id).emit('betCancelled', betCancelPayout);
+      this.server.to(`stream_${bettingVariable.stream.id}`).emit('betCancelled', betCancelPayout);
 
       // Emit to all clients after DB commit
       if (bettingVariable) {
@@ -514,7 +514,7 @@ export class BettingGateway
       }
 
       //const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(client.id).emit('betEdited', betEditedPayload);
+      this.server.to(`stream_${bettingVariable.stream.id}`).emit('betEdited', betEditedPayload);
       // Emit to all clients after DB commit
       if (bettingVariable) {
         // Refetch the latest betting round with variables
