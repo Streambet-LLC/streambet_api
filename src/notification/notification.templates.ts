@@ -68,8 +68,8 @@ export const NOTIFICATION_TEMPLATE = {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}, but could you have done better?`,
   },
-   PLACE_BET_CHAT_MESSAGE: {
+  PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} bet ${data.amount} on ${data.bettingOption}`,
+      `${data.username} bet ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
 };

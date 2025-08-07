@@ -15,12 +15,13 @@ export class Chat extends BaseEntity {
   @Index()
   user: User;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: true })
   message: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'image_url' })
   imageURL: string;
 
+  //store message for place bet
   @Column({
     type: 'text',
     nullable: true,

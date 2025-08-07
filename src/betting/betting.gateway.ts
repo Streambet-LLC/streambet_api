@@ -310,7 +310,7 @@ export class BettingGateway
         betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
       // const socketId = this.userSocketMap.get(client.data.user.username);
-      this.server.to(client.id).emit('betPlaced', betPlacePayload);
+      this.server.to(`stream_${bettingVariable.stream.id}`).emit('betPlaced', betPlacePayload);
       // Emit to all clients after DB commit
       if (bettingVariable) {
         const updatedBettingVariable =
