@@ -32,8 +32,8 @@ export const configValidationSchema = Joi.object({
   STRIPE_WEBHOOK_SECRET: Joi.string().required(),
 
   // Redis
-  REDIS_HOST: Joi.string(),
-  REDIS_PORT: Joi.number(),
+  REDIS_HOST: Joi.string().default('localhost'),
+  REDIS_PORT: Joi.number().default(6379),
   REDIS_USERNAME: Joi.string().optional(),
   REDIS_PASSWORD: Joi.string().optional(),
   REDIS_KEY_PREFIX: Joi.string().default('streambet:'),
