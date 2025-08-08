@@ -2,8 +2,8 @@ import { registerAs } from '@nestjs/config';
 
 export const queueConfig = registerAs('queue', () => ({
   redis: {
-    host: process.env.REDIS_HOST,
-    port: parseInt(process.env.REDIS_PORT, 10),
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
     password: process.env.REDIS_PASSWORD,
     username: process.env.REDIS_USERNAME,
   },
