@@ -69,23 +69,31 @@ export class QueueService {
 //     }
 //   }
 
-  async getJobStatus(queueName: string, jobId: string) {
-    const queue = this.getQueueByName(queueName);
-    const job = await queue.getJob(jobId);
-    
-    if (!job) {
-      return null;
-    }
+   async getJobStatus(queueName: string, jobId: string) {
+    try {
+      const queue = this.getQueueByName(queueName);
+      const job = await queue.getJob(jobId);
 
-    return {
-      id: job.id,
-      name: job.name,
-      data: job.data,
-      state: await job.getState(),
-      progress: job.progress,
-      failedReason: job.failedReason,
-      timestamp: job.timestamp,
-    };
+      if (!job) {
+        return null;
+      }
+
+      return {
+        id: job.id,
+        name: job.name,
+        data: job.data,
+        state: await job.getState(),
+        progress: job.progress,
+        failedReason: job.failedReason,
+        timestamp: job.timestamp,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get job status for ${jobId} in queue ${queueName}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 
   private getQueueByName(queueName: string): Queue {
@@ -100,7 +108,15 @@ export class QueueService {
   }
 
   getJobById(queueName: string, jobId: string) {
-    const queue = this.getQueueByName(queueName);
-    return queue.getJob(jobId);
+    try {
+      const queue = this.getQueueByName(queueName);
+      return queue.getJob(jobId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to get job ${jobId} from queue ${queueName}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 }
