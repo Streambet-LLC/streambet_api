@@ -15,6 +15,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
 import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import { getQueueToken } from '@nestjs/bullmq';
 
 
 async function bootstrap() {
@@ -28,7 +29,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Create your queue instance
-const streamLiveQueue = app.get<Queue>(`BullQueue_${STREAM_LIVE_QUEUE}`);
+const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
 
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/admin/queues');
