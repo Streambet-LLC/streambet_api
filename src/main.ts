@@ -13,6 +13,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
+import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 
 
 async function bootstrap() {
@@ -26,7 +27,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Create your queue instance
-const streamLiveQueue = app.get<Queue>(`BullQueue_${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`);
+const streamLiveQueue = app.get<Queue>(`BullQueue_${STREAM_LIVE_QUEUE}`);
 
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/admin/queues');

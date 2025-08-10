@@ -24,6 +24,7 @@ import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
 import { QueueBoardModule } from './queue/queue-board.module';
+import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
@@ -48,6 +49,7 @@ import { queueConfig } from './config/queue.config';
         emailConfig,
         queueConfig
       ] as ConfigFactory[],
+      envFilePath: ["./.env"]
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -93,7 +95,7 @@ import { queueConfig } from './config/queue.config';
     StreamModule,
     NotificationModule,
     QueueBoardModule.register({
-      queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
+      queues: [STREAM_LIVE_QUEUE],
     }),
     ChatModule,
     QueueModule

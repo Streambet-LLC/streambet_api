@@ -1,4 +1,9 @@
-export const STREAM_LIVE_QUEUE = 'stream-live';
+import { config as dotenvConfig } from 'dotenv';
+
+dotenvConfig(); // Load environment variables before constants are resolved
+
+const prefix = process.env.REDIS_KEY_PREFIX ? `${process.env.REDIS_KEY_PREFIX}_` : '';
+
+export const STREAM_LIVE_QUEUE = `${prefix}STREAM_LIVE`;
 export const MAKE_LIVE_JOB = 'make-live';
 
-export const BULL_STREAM_LIVE_QUEUE_NAME = `${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`;

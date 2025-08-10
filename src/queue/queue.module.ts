@@ -34,7 +34,7 @@ import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (configService: ConfigService) => ({
-          name: configService.get('queue.queues.streamLive.name'),
+          name: STREAM_LIVE_QUEUE,
           defaultJobOptions: configService.get(
             'queue.queues.streamLive.defaultJobOptions',
           ),
