@@ -29,6 +29,7 @@ import { ChatModule } from './chat/chat.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { QueueModule } from './queue/queue.module';
 import { queueConfig } from './config/queue.config';
+import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
 
 @Module({
   imports: [
@@ -96,7 +97,8 @@ import { queueConfig } from './config/queue.config';
       queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
     }),
     ChatModule,
-    QueueModule
+    QueueModule,
+    GeoFencingModule
   ],
   controllers: [AppController],
   providers: [
