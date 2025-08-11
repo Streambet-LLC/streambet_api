@@ -23,6 +23,7 @@ import {
 import { StreamFilterDto } from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
+import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -54,6 +55,7 @@ export class StreamController {
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
   @ApiOkResponse({ type: StreamFilterDto })
+  @UseGuards(GeoFencingGuard)
   @Get('home')
   async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
     const { total, data } =
@@ -83,6 +85,7 @@ export class StreamController {
     status: 200,
     description: 'Stream details retrieved successfully',
   })
+  @UseGuards(GeoFencingGuard)
   @Get('/:id')
   async findStreamById(@Param('id') id: string) {
     const stream = await this.streamService.findStreamById(id);
@@ -92,11 +95,13 @@ export class StreamController {
       data: stream,
     };
   }
+
   @ApiOperation({ summary: 'Get bet round details by stream id' })
   @ApiResponse({
     status: 200,
     description: 'Stream details retrieved successfully',
   })
+  @UseGuards(GeoFencingGuard)
   @Get('bet-round/:streamId')
   async findBetRoundDetailsByStreamId(
     @Param('streamId') streamId: string,

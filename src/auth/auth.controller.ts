@@ -35,6 +35,7 @@ import {
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { userVerificationDto } from './dto/verify-password.dto';
+import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -77,6 +78,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: RegisterDto })
+  @UseGuards(GeoFencingGuard)
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     const data = await this.authService.register(registerDto);
@@ -115,6 +117,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: LoginDto })
+  @UseGuards(GeoFencingGuard)
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const data = await this.authService.login(loginDto);
@@ -211,7 +214,7 @@ export class AuthController {
     description: 'Redirects to Google authentication page',
   })
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(AuthGuard('google'), GeoFencingGuard)
   async googleAuth(): Promise<void> {
     // This route triggers Google OAuth2 flow
     // The actual implementation is handled by Passport

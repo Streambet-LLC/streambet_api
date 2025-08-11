@@ -11,6 +11,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailsModule } from '../emails/email.module';
 import { NotificationService } from 'src/notification/notification.service';
+import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { NotificationService } from 'src/notification/notification.service';
     }),
     UsersModule,
     WalletsModule,
-    EmailsModule,
+    EmailsModule,GeoFencingModule
   ],
   controllers: [AuthController],
   providers: [
