@@ -29,13 +29,13 @@ export class GeoFencingGuard implements CanActivate {
     req.geo = loc ?? null;
 
     // Config: blocked countries CSV (ISO2)
-    const blocked = (process.env.BLOCKED_COUNTRIES || '')
+    const blocked = (process.env.BLOCKED_STATE_CODES || '')
       .split(',')
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
 
-    if (loc?.country && blocked.includes(loc.country.toUpperCase())) {
-      this.logger.warn(`Blocked country request: ${loc.country} ip=${ip}`);
+    if (loc?.country_code && blocked.includes(loc.country_code.toUpperCase())) {
+      this.logger.warn(`Blocked country request: ${loc.country_code} ip=${ip}`);
       throw new ForbiddenException('Access from your country is restricted');
     }
 

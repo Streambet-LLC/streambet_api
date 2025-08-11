@@ -8,4 +8,5 @@ export interface Location {
   timezone?: string;
   isVpn?: boolean;
   raw?: any;
+  country_code?: string;
 }
