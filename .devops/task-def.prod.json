@@ -33,7 +33,7 @@
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_PROD" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
-        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "false" },
         { "name": "BLOCKED_STATE_CODES", "value": "CT,DE,LA,MI,MT,WA,WV" },
         { "name": "BLOCK_VPN", "value": "true" },
         { "name": "TRUST_PROXY", "value": "true" },
