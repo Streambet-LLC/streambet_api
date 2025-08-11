@@ -20,6 +20,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', true); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
   const logger = new Logger('HTTP');
   app.setViewEngine('ejs');
 
@@ -29,16 +30,15 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   // Create your queue instance
-const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
+  const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
 
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath('/admin/queues');
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath('/admin/queues');
 
-createBullBoard({
-  queues: [new BullMQAdapter(streamLiveQueue)],
-  serverAdapter,
-});
-
+  createBullBoard({
+    queues: [new BullMQAdapter(streamLiveQueue)],
+    serverAdapter,
+  });
 
   // Set up global prefix
   app.setGlobalPrefix('api');
@@ -61,30 +61,28 @@ createBullBoard({
   app.use(helmet());
   app.enableCors();
 
-  if(configService.get<boolean>('app.isBullmqUiEnabled')) {
+  if (configService.get<boolean>('app.isBullmqUiEnabled')) {
     app.use('/admin/queues', serverAdapter.getRouter());
   }
 
   // Enable based on env
-  if(configService.get<boolean>('app.isSwaggerEnable')) {
+  if (configService.get<boolean>('app.isSwaggerEnable')) {
+    // Swagger configuration
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Streambet API')
+      .setDescription('The Streambet API documentation')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Authentication endpoints')
+      .addTag('users', 'User management endpoints')
+      .addTag('wallets', 'Wallet and transaction endpoints')
+      .addTag('betting', 'Stream and betting endpoints')
+      .addTag('payments', 'Payment processing endpoints')
+      .addTag('admin', 'Admin control endpoints')
+      .build();
 
-  // Swagger configuration
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Streambet API')
-    .setDescription('The Streambet API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management endpoints')
-    .addTag('wallets', 'Wallet and transaction endpoints')
-    .addTag('betting', 'Stream and betting endpoints')
-    .addTag('payments', 'Payment processing endpoints')
-    .addTag('admin', 'Admin control endpoints')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
-  
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
   }
   // Start server
   const port = configService.get<number>('PORT', 3000);

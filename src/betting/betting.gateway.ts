@@ -26,6 +26,8 @@ import { EditedBetPayload } from 'src/interface/betEdit.interface';
 import { ChatService } from '../chat/chat.service';
 import { UsersService } from 'src/users/users.service';
 import { StreamList } from 'src/enums/stream-list.enum';
+import { extractIpFromSocket } from 'src/common/utils/ip-utils';
+import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -74,8 +76,48 @@ export class BettingGateway
     private readonly notificationService: NotificationService,
     private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
+    private readonly geoFencingService: GeoFencingService,
   ) {}
 
+  // global for all socket events, runs on every incoming connection before any events are handled.
+  afterInit() {
+    this.server.use(async (socket: any, next: (err?: any) => void) => {
+      try {
+        const ip = extractIpFromSocket(socket);
+        //for debugging, will remove after checking
+        console.log(ip, 'ip in socket connection');
+
+        if (!ip) return next(new Error('Could not determine IP'));
+
+        const loc = await this.geoFencingService.lookup(ip);
+        socket.data.geo = loc ?? null;
+
+        const blocked = (process.env.BLOCKED_COUNTRIES || '')
+          .split(',')
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean);
+
+        if (loc?.country && blocked.includes(loc.country.toUpperCase())) {
+          Logger.log(
+            `Socket connection rejected: blocked country ${loc.country} ip=${ip}`,
+          );
+          return next(new Error('geolocation: forbidden'));
+        }
+
+        const blockVpn =
+          String(process.env.BLOCK_VPN || '').toLowerCase() === 'true';
+        if (blockVpn && loc?.isVpn) {
+          Logger.log(`Socket connection rejected: VPN ip=${ip}`);
+          return next(new Error('geolocation: forbidden'));
+        }
+
+        return next();
+      } catch (err) {
+        Logger.log('Socket geolocation error', String(err));
+        return next(new Error('geolocation: error'));
+      }
+    });
+  }
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract token from handshake
@@ -372,7 +414,7 @@ export class BettingGateway
           timestamp: timestamp,
           profileUrl: user?.profileImageUrl,
         };
-        //emmit to all users in a stream - chat 
+        //emmit to all users in a stream - chat
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('newMessage', systemChatMessage);
@@ -941,9 +983,9 @@ export class BettingGateway
     }
   }
 
-  emitStreamListEvent(event: StreamList){
+  emitStreamListEvent(event: StreamList) {
     const payload = { event };
-    this.server.to('streambet').emit('streamListUpdated', payload)
+    this.server.to('streambet').emit('streamListUpdated', payload);
     Logger.log(`Emitting stream list event: ${event}`);
   }
 }
