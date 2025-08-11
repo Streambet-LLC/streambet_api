@@ -31,6 +31,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { QueueModule } from './queue/queue.module';
 import { queueConfig } from './config/queue.config';
 import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -100,7 +101,8 @@ import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
     }),
     ChatModule,
     QueueModule,
-    GeoFencingModule
+    GeoFencingModule,
+    RedisModule
   ],
   controllers: [AppController],
   providers: [
