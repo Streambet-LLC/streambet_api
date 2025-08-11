@@ -31,8 +31,7 @@
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
         { "name": "BLOCKED_STATE_CODES", "value": "CT,DE,LA,MI,MT,WA,WV" },
         { "name": "BLOCK_VPN", "value": "true" },
-        { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "GEO_CACHE_TTL_SECONDS", "value": "86400" }
+        { "name": "TRUST_PROXY", "value": "true" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/qa/CLIENT_URL" },
