@@ -28,6 +28,7 @@ import { UsersService } from 'src/users/users.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
+import { ConfigService } from '@nestjs/config';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -77,6 +78,7 @@ export class BettingGateway
     private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
     private readonly geoFencingService: GeoFencingService,
+    private readonly configService: ConfigService,
   ) {}
 
   // global for all socket events, runs on every incoming connection before any events are handled.
@@ -91,8 +93,9 @@ export class BettingGateway
 
         const loc = await this.geoFencingService.lookup(ip);
         socket.data.geo = loc ?? null;
-
-        const blocked = (process.env.BLOCKED_STATE_CODES || '')
+        const blockStateCode =
+          this.configService.get<string>('geo.blockStateCode');
+        const blocked = (blockStateCode || '')
           .split(',')
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean);
@@ -106,10 +109,8 @@ export class BettingGateway
           );
           return next(new Error('geolocation: forbidden'));
         }
-
-        const blockVpn =
-          String(process.env.BLOCK_VPN || '').toLowerCase() === 'true';
-        if (blockVpn && loc?.isVpn) {
+        const blockVPN = this.configService.get<string>('geo.blockVPN');
+        if (blockVPN && loc?.isVpn) {
           Logger.log(`Socket connection rejected: VPN ip=${ip}`);
           return next(new Error('geolocation: forbidden'));
         }

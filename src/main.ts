@@ -20,7 +20,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', true); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+
   const logger = new Logger('HTTP');
   app.setViewEngine('ejs');
 
@@ -28,6 +28,9 @@ async function bootstrap() {
 
   // Get ConfigService
   const configService = app.get(ConfigService);
+
+  const trustProxy = configService.get<string>('geo.trustProxy');
+  if (trustProxy === 'true') app.set('trust proxy', true); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));

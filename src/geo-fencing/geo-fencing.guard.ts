@@ -7,12 +7,16 @@ import {
 } from '@nestjs/common';
 import { GeoFencingService } from './geo-fencing.service';
 import { extractIpFromRequest } from 'src/common/utils/ip-utils';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class GeoFencingGuard implements CanActivate {
   private readonly logger = new Logger(GeoFencingGuard.name);
 
-  constructor(private readonly geoFencingService: GeoFencingService) {}
+  constructor(
+    private readonly geoFencingService: GeoFencingService,
+    private readonly configService: ConfigService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest();
@@ -28,8 +32,9 @@ export class GeoFencingGuard implements CanActivate {
     const loc = await this.geoFencingService.lookup(ip);
     req.geo = loc ?? null;
 
-    // Config: blocked countries CSV (ISO2)
-    const blocked = (process.env.BLOCKED_STATE_CODES || '')
+    // Config: blocked countries
+    const blockStateCode = this.configService.get<string>('geo.blockStateCode');
+    const blocked = (blockStateCode || '')
       .split(',')
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
@@ -38,10 +43,8 @@ export class GeoFencingGuard implements CanActivate {
       this.logger.warn(`Blocked country request: ${loc.country_code} ip=${ip}`);
       throw new ForbiddenException('Access from your country is restricted');
     }
-
-    const blockVpn =
-      String(process.env.BLOCK_VPN || '').toLowerCase() === 'true';
-    if (blockVpn && loc?.isVpn) {
+     const blockVPN = this.configService.get<string>('geo.blockVPN');
+    if (blockVPN && loc?.isVpn) {
       this.logger.warn(`Blocked VPN/proxy ip=${ip}`);
       throw new ForbiddenException('Access from VPN/proxy is restricted');
     }

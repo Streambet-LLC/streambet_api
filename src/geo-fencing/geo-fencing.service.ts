@@ -3,31 +3,50 @@ import axios from 'axios';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 import type { Redis } from 'ioredis';
 import { Location } from 'src/interface/geo-fencing.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class GeoFencingService  {
+export class GeoFencingService {
   private readonly logger = new Logger(GeoFencingService.name);
-  private readonly apiKey = process.env.ABSTRACT_API_KEY;
-  private readonly ttlSeconds = Number(process.env.GEO_CACHE_TTL_SECONDS || 86400);
+  private readonly apiKey: string;
+  private readonly fullDay: number;
 
-  constructor(@Inject(REDIS_CLIENT) private readonly redisClient: Redis) {}
+  constructor(
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
+    private readonly configService: ConfigService,
+  ) {
+    this.apiKey = this.configService.get<string>('geo.abstractKey');
+    this.fullDay = this.configService.get<number>('throttle.ttls.fullDay');
+  }
 
   private cacheKey(ip: string) {
     return `geo:abstract:${ip}`;
   }
 
   private async redisGet(key: string): Promise<string | null> {
-    try { return await this.redisClient?.get?.(key) ?? null; }
-    catch (e) { this.logger.warn('Redis GET failed: ' + String(e)); return null; }
+    try {
+      return (await this.redisClient?.get?.(key)) ?? null;
+    } catch (e) {
+      this.logger.warn('Redis GET failed: ' + String(e));
+      return null;
+    }
   }
 
   private async redisSet(key: string, value: string, ttlSec: number) {
     if (!this.redisClient) return;
     // Try ioredis style then node-redis style
-    try { await (this.redisClient as any).set(key, value, 'EX', ttlSec); return; }
-    catch (e) { /* try next */ }
-    try { await (this.redisClient as any).set(key, value, { EX: ttlSec }); return; }
-    catch (e) { this.logger.warn('Redis SET failed: ' + String(e)); }
+    try {
+      await (this.redisClient as any).set(key, value, 'EX', ttlSec);
+      return;
+    } catch (e) {
+      /* try next */
+    }
+    try {
+      await (this.redisClient as any).set(key, value, { EX: ttlSec });
+      return;
+    } catch (e) {
+      this.logger.warn('Redis SET failed: ' + String(e));
+    }
   }
 
   private normalizeIp(ip: string) {
@@ -42,8 +61,11 @@ export class GeoFencingService  {
     const key = this.cacheKey(ip);
     const cached = await this.redisGet(key);
     if (cached) {
-      try { return JSON.parse(cached) as Location; }
-      catch (e) { this.logger.warn('Failed parse geo cache: ' + String(e)); }
+      try {
+        return JSON.parse(cached) as Location;
+      } catch (e) {
+        this.logger.warn('Failed parse geo cache: ' + String(e));
+      }
     }
 
     if (!this.apiKey) {
@@ -66,7 +88,7 @@ export class GeoFencingService  {
         raw: data,
       };
 
-      await this.redisSet(key, JSON.stringify(loc), this.ttlSeconds);
+      await this.redisSet(key, JSON.stringify(loc), this.fullDay);
       return loc;
     } catch (err) {
       this.logger.warn('AbstractAPI request failed: ' + String(err));
