@@ -33,8 +33,13 @@
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
-        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" }
-
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "BLOCKED_STATE_CODES", "value": "CT,DE,LA,MI,MT,WA,WV" },
+        { "name": "GEOFENCE_FAIL_CLOSED", "value": "true" },
+        { "name": "DENY_ON_NO_IP", "value": "true" },
+        { "name": "BLOCK_VPN", "value": "true" },
+        { "name": "TRUST_PROXY", "value": "true" },
+        { "name": "GEO_CACHE_TTL_SECONDS", "value": "86400" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },
@@ -65,7 +70,8 @@
         { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
-        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" }
+        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
+        {"name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/stag/ABSTRACT_API_KEY" }
 
       ],
       "mountPoints": [],
