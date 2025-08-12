@@ -24,9 +24,10 @@
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_DEV" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
-        { "name": "BLOCKED_STATE_CODES", "value": "CT,DE,LA,MI,MT,WA,WV" },
+        { "name": "BLOCKED_REGION", "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia" },
         { "name": "BLOCK_VPN", "value": "true" },
-        { "name": "TRUST_PROXY", "value": "true" }
+        { "name": "TRUST_PROXY", "value": "true" },
+        { "name": "REDIS_TLS", "value": "false" }
       ],
       "secrets": [
         { "name": "NODE_ENV", "valueFrom": "/streambet/dev/NODE_ENV" },

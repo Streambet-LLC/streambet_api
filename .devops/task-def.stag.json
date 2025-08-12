@@ -34,13 +34,16 @@
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
-        { "name": "BLOCKED_STATE_CODES", "value": "CT,DE,LA,MI,MT,WA,WV" },
+        {
+          "name": "BLOCKED_REGION",
+          "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
+        },
         { "name": "BLOCK_VPN", "value": "true" },
         { "name": "TRUST_PROXY", "value": "true" },
+        { "name": "REDIS_TLS", "value": "true" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },
-
         { "name": "DB_USERNAME", "valueFrom": "/streambet/stag/DB_USERNAME" },
         { "name": "DB_PASSWORD", "valueFrom": "/streambet/stag/DB_PASSWORD" },
         { "name": "DB_DATABASE", "valueFrom": "/streambet/stag/DB_DATABASE" },
