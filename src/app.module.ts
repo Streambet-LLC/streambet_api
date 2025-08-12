@@ -32,6 +32,8 @@ import { QueueModule } from './queue/queue.module';
 import { queueConfig } from './config/queue.config';
 import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
 import { RedisModule } from './redis/redis.module';
+import redisConfig from './config/redis.config';
+import geoLocationConfig from './config/geo-location.config';
 
 @Module({
   imports: [
@@ -49,7 +51,9 @@ import { RedisModule } from './redis/redis.module';
         appConfig,
         fileConfig,
         emailConfig,
-        queueConfig
+        queueConfig,
+        redisConfig,
+        geoLocationConfig
       ] as ConfigFactory[],
       envFilePath: ["./.env"]
     }),

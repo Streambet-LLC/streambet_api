@@ -93,25 +93,25 @@ export class BettingGateway
 
         const loc = await this.geoFencingService.lookup(ip);
         socket.data.geo = loc ?? null;
-        const blockStateCode =
-          this.configService.get<string>('geo.blockStateCode');
-        const blocked = (blockStateCode || '')
+        const blockedRegion =
+          this.configService.get<string>('geo.blockedRegion');
+        const blocked = (blockedRegion || '')
           .split(',')
-          .map((s) => s.trim().toUpperCase())
+          .map((s) => s.trim())
           .filter(Boolean);
 
         if (
-          loc?.country_code &&
-          blocked.includes(loc.country_code.toUpperCase())
+          loc?.region &&
+          blocked.includes(loc.region)
         ) {
-          Logger.log(
-            `Socket connection rejected: blocked country ${loc.country_code} ip=${ip}`,
+          Logger.warn(
+            `Socket connection rejected: blocked country ${loc.region} ip=${ip}`,
           );
           return next(new Error('geolocation: forbidden'));
         }
         const blockVPN = this.configService.get<string>('geo.blockVPN');
         if (blockVPN && loc?.isVpn) {
-          Logger.log(`Socket connection rejected: VPN ip=${ip}`);
+          Logger.warn(`Socket connection rejected: VPN ip=${ip}`);
           return next(new Error('geolocation: forbidden'));
         }
 

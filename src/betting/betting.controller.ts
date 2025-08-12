@@ -194,8 +194,7 @@ export class BettingController {
 
   @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @UseGuards(GeoFencingGuard)
+  @UseGuards(GeoFencingGuard, JwtAuthGuard)
   @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string,

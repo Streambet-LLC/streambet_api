@@ -33,18 +33,19 @@ export class GeoFencingGuard implements CanActivate {
     req.geo = loc ?? null;
 
     // Config: blocked countries
-    const blockStateCode = this.configService.get<string>('geo.blockStateCode');
-    const blocked = (blockStateCode || '')
+    const blockedRegion = this.configService.get<string>('geo.blockedRegion');
+    const blocked = (blockedRegion || '')
       .split(',')
-      .map((s) => s.trim().toUpperCase())
+      .map((s) => s.trim())
       .filter(Boolean);
-
-    if (loc?.country_code && blocked.includes(loc.country_code.toUpperCase())) {
+    if (loc?.region && blocked.includes(loc.region)) {
       this.logger.warn(`Blocked country request: ${loc.country_code} ip=${ip}`);
       throw new ForbiddenException('Access from your country is restricted');
     }
-     const blockVPN = this.configService.get<string>('geo.blockVPN');
-    if (blockVPN && loc?.isVpn) {
+    const blockVPN = this.configService.get<string>('geo.blockVPN');
+    
+    const isBlockVPN = blockVPN === 'true'; // Convert string to real boolean
+    if (isBlockVPN && Boolean(loc?.isVpn)) {
       this.logger.warn(`Blocked VPN/proxy ip=${ip}`);
       throw new ForbiddenException('Access from VPN/proxy is restricted');
     }

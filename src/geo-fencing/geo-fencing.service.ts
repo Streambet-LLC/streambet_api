@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import axios from 'axios';
-import { REDIS_CLIENT } from '../redis/redis.constants';
-import type { Redis } from 'ioredis';
 import { Location } from 'src/interface/geo-fencing.interface';
 import { ConfigService } from '@nestjs/config';
 
@@ -12,41 +12,16 @@ export class GeoFencingService {
   private readonly fullDay: number;
 
   constructor(
-    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
     private readonly configService: ConfigService,
   ) {
     this.apiKey = this.configService.get<string>('geo.abstractKey');
-    this.fullDay = this.configService.get<number>('throttle.ttls.fullDay');
+    this.fullDay =
+      this.configService.get<number>('throttle.ttls.fullDay') ?? 86400; // default 1 day in seconds
   }
 
   private cacheKey(ip: string) {
-    return `geo:abstract:${ip}`;
-  }
-
-  private async redisGet(key: string): Promise<string | null> {
-    try {
-      return (await this.redisClient?.get?.(key)) ?? null;
-    } catch (e) {
-      this.logger.warn('Redis GET failed: ' + String(e));
-      return null;
-    }
-  }
-
-  private async redisSet(key: string, value: string, ttlSec: number) {
-    if (!this.redisClient) return;
-    // Try ioredis style then node-redis style
-    try {
-      await (this.redisClient as any).set(key, value, 'EX', ttlSec);
-      return;
-    } catch (e) {
-      /* try next */
-    }
-    try {
-      await (this.redisClient as any).set(key, value, { EX: ttlSec });
-      return;
-    } catch (e) {
-      this.logger.warn('Redis SET failed: ' + String(e));
-    }
+    return `geo:${ip}`;
   }
 
   private normalizeIp(ip: string) {
@@ -59,13 +34,16 @@ export class GeoFencingService {
     if (!ip) return null;
 
     const key = this.cacheKey(ip);
-    const cached = await this.redisGet(key);
-    if (cached) {
-      try {
-        return JSON.parse(cached) as Location;
-      } catch (e) {
-        this.logger.warn('Failed parse geo cache: ' + String(e));
+    this.logger.debug(`Checking cache for ${key}`);
+
+    try {
+      const cached = await this.cache.get<Location>(key);
+      if (cached) {
+        this.logger.debug(`Cache hit: ${JSON.stringify(cached)}`);
+        return cached;
       }
+    } catch (e) {
+      this.logger.warn(`Cache GET failed: ${String(e)}`);
     }
 
     if (!this.apiKey) {
@@ -73,7 +51,10 @@ export class GeoFencingService {
       return null;
     }
 
-    const url = `https://ipgeolocation.abstractapi.com/v1/?api_key=${encodeURIComponent(this.apiKey)}&ip_address=${encodeURIComponent(ip)}`;
+    const url = `https://ipgeolocation.abstractapi.com/v1/?api_key=${encodeURIComponent(
+      this.apiKey,
+    )}&ip_address=${encodeURIComponent(ip)}`;
+
     try {
       const { data } = await axios.get(url, { timeout: 3500 });
       const loc: Location = {
@@ -88,10 +69,16 @@ export class GeoFencingService {
         raw: data,
       };
 
-      await this.redisSet(key, JSON.stringify(loc), this.fullDay);
+      try {
+      await this.cache.set(key, JSON.stringify(loc), this.fullDay);
+        this.logger.debug(`Cache set: ${key}`);
+      } catch (e) {
+        this.logger.warn(`Cache SET failed: ${String(e)}`);
+      }
+
       return loc;
     } catch (err) {
-      this.logger.warn('AbstractAPI request failed: ' + String(err));
+      this.logger.warn(`AbstractAPI request failed: ${String(err)}`);
       return null;
     }
   }
