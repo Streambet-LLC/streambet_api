@@ -63,7 +63,7 @@
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^11.10.0",
-    "bullmq": "^5.56.4",
+    "bullmq": "^5.57.0",
     "cache-manager": "^7.0.1",
     "cache-manager-redis-store": "^3.0.1",
     "cache-manager-redis-yet": "^5.1.5",
