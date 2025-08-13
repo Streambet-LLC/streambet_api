@@ -1,9 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { Location } from 'src/interface/geo-fencing.interface';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from 'src/redis/redis.service'; // adjust path
 
 @Injectable()
 export class GeoFencingService {
@@ -12,7 +11,7 @@ export class GeoFencingService {
   private readonly fullDay: number;
 
   constructor(
-    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {
     this.apiKey = this.configService.get<string>('geo.abstractKey');
@@ -34,16 +33,17 @@ export class GeoFencingService {
     if (!ip) return null;
 
     const key = this.cacheKey(ip);
-    this.logger.debug(`Checking cache for ${key}`);
+    this.logger.debug(`Checking Redis for ${key}`);
 
     try {
-      const cached = await this.cache.get<Location>(key);
+      const cached = await this.redisService.get(key);
       if (cached) {
-        this.logger.debug(`Cache hit: ${JSON.stringify(cached)}`);
-        return cached;
+        const parsed = JSON.parse(cached) as Location;
+        this.logger.debug(`Cache hit: ${JSON.stringify(parsed)}`);
+        return parsed;
       }
     } catch (e) {
-      this.logger.warn(`Cache GET failed: ${String(e)}`);
+      this.logger.warn(`Redis GET failed: ${String(e)}`);
     }
 
     if (!this.apiKey) {
@@ -70,10 +70,10 @@ export class GeoFencingService {
       };
 
       try {
-      await this.cache.set(key, JSON.stringify(loc), this.fullDay);
+        await this.redisService.set(key, JSON.stringify(loc), this.fullDay);
         this.logger.debug(`Cache set: ${key}`);
       } catch (e) {
-        this.logger.warn(`Cache SET failed: ${String(e)}`);
+        this.logger.warn(`Redis SET failed: ${String(e)}`);
       }
 
       return loc;
