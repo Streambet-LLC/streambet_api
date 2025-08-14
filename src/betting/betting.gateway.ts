@@ -368,21 +368,18 @@ export class BettingGateway
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
-        let betStat = {};
+       
         if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
+          const betStat = await this.bettingService.getBetStatsByStream(
             bettingVariable.stream.id,
           );
           this.server.emit('bettingStat', {
-            roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            ...betStat,
           });
         }
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
-            betStat,
             roundId: roundIdEmit,
             totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
@@ -516,6 +513,14 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
+      if (user.role === UserRole.ADMIN) {
+        const betStat = await this.bettingService.getBetStatsByStream(
+          bettingVariable.stream.id,
+        );
+        this.server.emit('bettingStat', {
+          ...betStat,
+        });
+      }
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -622,6 +627,14 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+      }
+      if (user.role === UserRole.ADMIN) {
+        const betStat = await this.bettingService.getBetStatsByStream(
+          bettingVariable.stream.id,
+        );
+        this.server.emit('bettingStat', {
+          ...betStat,
+        });
       }
     } catch (error) {
       client.emit('error', {
