@@ -29,7 +29,7 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
-import { User } from 'src/users/entities/user.entity';
+import { UserRole } from 'src/users/entities/user.entity';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -399,9 +399,21 @@ export class BettingGateway
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+          this.server.emit('bettingStat', {
+            roundId: roundIdEmit,
+            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+          });
+        }
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
+            betStat,
             roundId: roundIdEmit,
             totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,

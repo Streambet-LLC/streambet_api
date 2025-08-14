@@ -5,6 +5,8 @@ import {
   forwardRef,
   Inject,
   HttpStatus,
+  Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -249,11 +251,11 @@ export class BettingService {
         'Cannot edit betting variables for ended streams',
       );
     }
- if (stream.status === StreamStatus.CANCELLED) {
-   throw new BadRequestException(
-     'Cannot edit betting variables for cancelled streams',
-   );
- }
+    if (stream.status === StreamStatus.CANCELLED) {
+      throw new BadRequestException(
+        'Cannot edit betting variables for cancelled streams',
+      );
+    }
     // Get existing rounds for this stream
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
@@ -1839,5 +1841,80 @@ export class BettingService {
 
     // Return the count as a number (default to 0 if null)
     return Number(result.count);
+  }
+
+  /**
+   * Fetches betting statistics for a given stream when the round status is OPEN and bet status is ACTIVE.
+   *
+   * The result includes:
+   * - total token bets and amount (currency = freeToken)
+   * - total coin bets and amount (currency = coin)
+   *
+   * @param streamId - The ID of the stream to filter bets by.
+   * @returns An object containing:
+   *  {
+   *    totalTokenAmount: number,
+   *    totalTokenBet: number,
+   *    totalCoinAmount: number,
+   *    totalCoinBet: number
+   *  }
+   *
+   * @throws Will throw an error if the database query fails.
+   */
+  async getBetStatsByStream(streamId: string): Promise<{
+    totalTokenAmount: number;
+    totalTokenBet: number;
+    totalCoinAmount: number;
+    totalCoinBet: number;
+  }> {
+    try {
+      const qb = this.betsRepository
+        .createQueryBuilder('bet')
+        .innerJoin('bet.round', 'round')
+        .where('bet.streamId = :streamId', { streamId })
+        .andWhere('bet.status = :betStatus', { betStatus: BetStatus.Active })
+        .andWhere('round.status = :roundStatus', {
+          roundStatus: BettingRoundStatus.OPEN,
+        });
+
+      const betStat = await qb
+        .select([])
+        .addSelect(
+          'COALESCE(SUM(CASE WHEN bet.currency = :freeToken THEN bet.amount ELSE 0 END), 0)',
+          'totalTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(COUNT(CASE WHEN bet.currency = :freeToken THEN 1 END), 0)',
+          'totalTokenBet',
+        )
+        .addSelect(
+          'COALESCE(SUM(CASE WHEN bet.currency = :coin THEN bet.amount ELSE 0 END), 0)',
+          'totalCoinAmount',
+        )
+        .addSelect(
+          'COALESCE(COUNT(CASE WHEN bet.currency = :coin THEN 1 END), 0)',
+          'totalCoinBet',
+        )
+        .setParameters({
+          freeToken: CurrencyType.FREE_TOKENS,
+          coin: CurrencyType.STREAM_COINS,
+        })
+        .getRawOne();
+
+      return {
+        totalTokenAmount: Number(betStat?.totalTokenAmount) || 0,
+        totalTokenBet: Number(betStat?.totalTokenBet) || 0,
+        totalCoinAmount: Number(betStat?.totalCoinAmount) || 0,
+        totalCoinBet: Number(betStat?.totalCoinBet) || 0,
+      };
+    } catch (error) {
+      Logger.error(
+        `Failed to fetch bet stats for streamId: ${streamId}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Could not retrieve bet statistics. Please try again later.',
+      );
+    }
   }
 }

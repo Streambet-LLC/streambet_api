@@ -41,7 +41,6 @@ export class StreamService {
     private queueService: QueueService,
   ) {}
 
- 
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -77,10 +76,7 @@ export class StreamService {
           'br',
           'br.status IN (:...roundStatuses)',
           {
-            roundStatuses: [
-              BettingRoundStatus.OPEN,
-              BettingRoundStatus.LOCKED,
-            ],
+            roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           },
         )
         .leftJoinAndSelect('br.bettingVariables', 'bv')
@@ -132,6 +128,7 @@ export class StreamService {
   private async simplifyStreamResponse(
     streamData: any,
     bettingRoundStatus: string,
+    betStat: any,
   ) {
     if (!streamData) return null;
 
@@ -168,6 +165,7 @@ export class StreamService {
       endTime,
       viewerCount,
       bettingRoundStatus,
+      ...(betStat || {}),
       rounds: (bettingRounds ?? [])
         .sort(
           (a, b) =>
@@ -307,12 +305,16 @@ END
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
-  async findStreamById(id: string): Promise<Stream> {
+  async findStreamById(streamId: string): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
         where: {
-          id,
-          status: In([StreamStatus.LIVE, StreamStatus.SCHEDULED,StreamStatus.ENDED]), // Include both LIVE and SCHEDULED
+          id: streamId,
+          status: In([
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED,
+            StreamStatus.ENDED,
+          ]), // Include both LIVE and SCHEDULED
         },
         select: {
           id: true,
@@ -330,6 +332,7 @@ END
           `Could not find an active stream with the specified ID. Please check the ID and try again.`,
         );
       }
+
       return stream;
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -437,34 +440,38 @@ END
       throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
-  async findStreamDetailsForAdmin(id: string) {
+  async findStreamDetailsForAdmin(streamId: string) {
     const stream = await this.streamsRepository.findOne({
-      where: { id },
+      where: { id: streamId },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
 
     if (!stream) return null;
 
     // Compute bettingRoundStatus
-    const statuses = stream.bettingRounds.map((br) => br.status);
+    const status = stream.bettingRounds.map((br) => br.status);
 
     let bettingRoundStatus = BettingRoundStatus.NO_BET_ROUND;
 
-    if (statuses.includes(BettingRoundStatus.OPEN)) {
+    if (status.includes(BettingRoundStatus.OPEN)) {
       bettingRoundStatus = BettingRoundStatus.OPEN;
-    } else if (statuses.includes(BettingRoundStatus.LOCKED)) {
+    } else if (status.includes(BettingRoundStatus.LOCKED)) {
       bettingRoundStatus = BettingRoundStatus.LOCKED;
-    } else if (statuses.includes(BettingRoundStatus.CREATED)) {
+    } else if (status.includes(BettingRoundStatus.CREATED)) {
       bettingRoundStatus = BettingRoundStatus.CREATED;
-    } else if (statuses.includes(BettingRoundStatus.CLOSED)) {
+    } else if (status.includes(BettingRoundStatus.CLOSED)) {
       bettingRoundStatus = BettingRoundStatus.CLOSED;
-    } else if (statuses.includes(BettingRoundStatus.CANCELLED)) {
+    } else if (status.includes(BettingRoundStatus.CANCELLED)) {
       bettingRoundStatus = BettingRoundStatus.CANCELLED;
     }
 
     // Attach computed status
-
-    return await this.simplifyStreamResponse(stream, bettingRoundStatus);
+    const betStat = await this.bettingService.getBetStatsByStream(streamId);
+    return await this.simplifyStreamResponse(
+      stream,
+      bettingRoundStatus,
+       betStat || {},
+    );
   }
 
   /**
@@ -542,9 +549,9 @@ END
         }
       }
 
-      if(updateStreamDto.status === StreamStatus.ENDED && !stream.endTime){
+      if (updateStreamDto.status === StreamStatus.ENDED && !stream.endTime) {
         this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
-      }else {
+      } else {
         this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);
       }
 
