@@ -368,22 +368,20 @@ export class BettingGateway
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
-       
-        if (user.role === UserRole.ADMIN) {
-          const betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
-          );
-          this.server.emit('bettingStat', {
-            ...betStat,
-          });
-        }
-        this.server
-          .to(`stream_${bettingVariable.stream.id}`)
-          .emit('bettingUpdate', {
-            roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
-          });
+       let betStat = {};
+       if (user.role === UserRole.ADMIN) {
+         betStat = await this.bettingService.getBetStatsByStream(
+           bettingVariable.stream.id,
+         );
+       }
+       this.server
+         .to(`stream_${bettingVariable.stream.id}`)
+         .emit('bettingUpdate', {
+           roundId: roundIdEmit,
+           totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+           totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+           ...betStat,
+         });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
           roundIdEmit,
@@ -488,6 +486,12 @@ export class BettingGateway
       if (bettingVariable) {
         const updatedBettingVariable =
           await this.bettingService.findBettingVariableById(bettingVariable.id);
+          let betStat={}
+          if (user.role === UserRole.ADMIN) {
+              betStat = await this.bettingService.getBetStatsByStream(
+               bettingVariable.stream.id,
+             );
+           }
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
@@ -498,6 +502,7 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            ...betStat,
           });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
@@ -513,14 +518,7 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
-      if (user.role === UserRole.ADMIN) {
-        const betStat = await this.bettingService.getBetStatsByStream(
-          bettingVariable.stream.id,
-        );
-        this.server.emit('bettingStat', {
-          ...betStat,
-        });
-      }
+     
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -604,6 +602,12 @@ export class BettingGateway
           where: { id: roundIdEmit },
           relations: ['bettingVariables'],
         });
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
         this.server
@@ -612,6 +616,7 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            ...betStat,
           });
         // Use the latest round for personalized potential amounts
         await this.sendPersonalizedPotentialAmounts(
@@ -627,15 +632,7 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-      }
-      if (user.role === UserRole.ADMIN) {
-        const betStat = await this.bettingService.getBetStatsByStream(
-          bettingVariable.stream.id,
-        );
-        this.server.emit('bettingStat', {
-          ...betStat,
-        });
-      }
+      }    
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
