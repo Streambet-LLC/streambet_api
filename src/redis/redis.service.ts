@@ -40,20 +40,22 @@ export class RedisService implements OnModuleDestroy, OnModuleInit {
     const keyPrefix = this.configService.get<string>('redis.keyPrefix') || '';
     const username =
       this.configService.get<string>('redis.username') || undefined;
+      const tlsEnabled = this.configService.get<boolean>('redis.tls') === true;
 
-    this.client = new Redis({
-      host,
-      port,
-      username,
-      password: password || undefined,
-      db,
-      keyPrefix,
-      lazyConnect: true,
-      retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-    });
+      this.client = new Redis({
+        host,
+        port,
+        username,
+        password: password || undefined,
+        db,
+        keyPrefix,
+        lazyConnect: true,
+        tls: tlsEnabled ? {} : undefined,
+        retryStrategy(times) {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+      });
 
     this.client.on('connect', () => {
       this.logger.log('Connected to Redis');
