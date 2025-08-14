@@ -6,6 +6,7 @@ import {
   Inject,
   HttpStatus,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -1911,7 +1912,7 @@ export class BettingService {
         `Failed to fetch bet stats for streamId: ${streamId}`,
         error.stack,
       );
-      throw new Error(
+      throw new InternalServerErrorException(
         'Could not retrieve bet statistics. Please try again later.',
       );
     }
