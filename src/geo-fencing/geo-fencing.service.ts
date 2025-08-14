@@ -40,7 +40,9 @@ export class GeoFencingService {
       if (cached) {
         try {
           const parsed = JSON.parse(cached) as Location;
-          this.logger.debug(`Cache hit: ${JSON.stringify(parsed)}`);
+          this.logger.debug(
+            `Cache hit: key=${key} ip=${parsed?.ip} country=${parsed?.region ?? ''}`,
+          );
           return parsed;
         } catch (parseErr) {
           this.logger.warn(
