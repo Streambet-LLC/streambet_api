@@ -38,9 +38,22 @@ export class GeoFencingService {
     try {
       const cached = await this.redisService.get(key);
       if (cached) {
-        const parsed = JSON.parse(cached) as Location;
-        this.logger.debug(`Cache hit: ${JSON.stringify(parsed)}`);
-        return parsed;
+        try {
+          const parsed = JSON.parse(cached) as Location;
+          this.logger.debug(`Cache hit: ${JSON.stringify(parsed)}`);
+          return parsed;
+        } catch (parseErr) {
+          this.logger.warn(
+            `Cache parse failed for ${key}; purging. err=${String(parseErr)}`,
+          );
+          try {
+            await this.redisService.delete?.(key);
+          } catch (delErr) {
+            this.logger.warn(
+              `Failed to delete corrupted cache key ${key}: ${String(delErr)}`,
+            );
+          }
+        }
       }
     } catch (e) {
       this.logger.warn(`Redis GET failed: ${String(e)}`);

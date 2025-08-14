@@ -1,14 +1,32 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
-import  Redis from 'ioredis';
+import {
+  Injectable,
+  OnModuleDestroy,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
+import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class RedisService implements OnModuleDestroy {
+export class RedisService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(RedisService.name);
-  private client: Redis;
+  private client!: Redis;
 
   constructor(private configService: ConfigService) {
     this.initRedisClient();
+  }
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.client.connect();
+      this.logger.log('Redis connected');
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to connect to Redis: ${err.message}`,
+        err.stack,
+      );
+      throw err;
+    }
   }
 
   /**
@@ -20,8 +38,9 @@ export class RedisService implements OnModuleDestroy {
     const password = this.configService.get<string>('redis.password');
     const db = this.configService.get<number>('redis.db');
     const keyPrefix = this.configService.get<string>('redis.keyPrefix') || '';
-    const username = this.configService.get<string>('redis.username') || undefined;
-    
+    const username =
+      this.configService.get<string>('redis.username') || undefined;
+
     this.client = new Redis({
       host,
       port,
@@ -29,6 +48,7 @@ export class RedisService implements OnModuleDestroy {
       password: password || undefined,
       db,
       keyPrefix,
+      lazyConnect: true,
       retryStrategy(times) {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -57,16 +77,27 @@ export class RedisService implements OnModuleDestroy {
   /**
    * Gracefully close the connection on module destroy
    */
-  async onModuleDestroy() {
-    if (this.client) {
-      await this.client.quit();
+
+  async onModuleDestroy(): Promise<void> {
+    if (!this.client) return;
+    try {
+      if (this.client.status !== 'end') {
+        await this.client.quit();
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Error during Redis quit: ${err?.message}. Forcing disconnect.`,
+      );
+      this.client.disconnect(false);
+    } finally {
+      this.client.removeAllListeners();
       this.logger.log('Redis connection closed');
     }
   }
 
   // EXAMPLE: Add more abstracted methods if needed
   async set(key: string, value: string, ttl?: number) {
-    if (ttl) {
+    if (typeof ttl === 'number' && ttl > 0) {
       await this.client.set(key, value, 'EX', ttl);
     } else {
       await this.client.set(key, value);
