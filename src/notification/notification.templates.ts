@@ -72,4 +72,12 @@ export const NOTIFICATION_TEMPLATE = {
     MESSAGE: (data: BetNotificationData) =>
       `${data.username} bet ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
+  EDIT_BET_CHAT_MESSAGE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.username} updated bet to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+  },
+  Cancel_BET_CHAT_MESSAGE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.username} cancel bet on ${data.bettingOption}`,
+  },
 };

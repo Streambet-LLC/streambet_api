@@ -29,6 +29,7 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
+import { User } from 'src/users/entities/user.entity';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -100,10 +101,7 @@ export class BettingGateway
           .map((s) => s.trim())
           .filter(Boolean);
 
-        if (
-          loc?.region &&
-          blocked.includes(loc.region)
-        ) {
+        if (loc?.region && blocked.includes(loc.region)) {
           Logger.warn(
             `Socket connection rejected: blocked country ${loc.region} ip=${ip}`,
           );
@@ -300,7 +298,38 @@ export class BettingGateway
     console.log(`User ${username} left streambet`);
     return { event: 'leaveStreamBet', data: { username } };
   }
-
+  private async chatNotification(
+    user,
+    payoutAmount,
+    variableName,
+    stringId,
+    systemMessage,
+  ) {
+    const timestamp = new Date();
+    try {
+      await this.chatService.createChatMessage(
+        stringId,
+        user.sub,
+        undefined,
+        undefined,
+        timestamp,
+        systemMessage,
+      );
+    } catch (e) {
+      Logger.error('Failed to save system chat message:', e.message);
+    }
+    const systemChatMessage: ChatMessage = {
+      type: 'user',
+      username: user.username,
+      message: '',
+      systemMessage,
+      imageURL: '',
+      timestamp: timestamp,
+      profileUrl: user?.profileImageUrl,
+    };
+    //emmit to all users in a stream - chat
+    this.server.to(`stream_${stringId}`).emit('newMessage', systemChatMessage);
+  }
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
@@ -390,38 +419,20 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-        const timestamp = new Date();
+        //sending bet place updation in chat
         const systemMessage =
           NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
             username: user.username,
             amount: bet.amount,
             bettingOption: bettingVariable.name,
           });
-        try {
-          await this.chatService.createChatMessage(
-            bettingVariable.stream.id,
-            user.sub,
-            undefined,
-            undefined,
-            timestamp,
-            systemMessage,
-          );
-        } catch (e) {
-          Logger.error('Failed to save system chat message:', e.message);
-        }
-        const systemChatMessage: ChatMessage = {
-          type: 'user',
-          username: user.username,
-          message: '',
+        await this.chatNotification(
+          user,
+          bet.amount,
+          bettingVariable.name,
+          bettingVariable.stream.id,
           systemMessage,
-          imageURL: '',
-          timestamp: timestamp,
-          profileUrl: user?.profileImageUrl,
-        };
-        //emmit to all users in a stream - chat
-        this.server
-          .to(`stream_${bettingVariable.stream.id}`)
-          .emit('newMessage', systemChatMessage);
+        );
       }
     } catch (error) {
       void client.emit('error', {
@@ -505,6 +516,21 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+
+        //sending bet cancel updation in chat
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatNotification(
+          user,
+          bet.amount,
+          bettingVariable.name,
+          bettingVariable.stream.id,
+          systemMessage,
+        );
       }
     } catch (error) {
       client.emit('error', {
@@ -613,6 +639,21 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
+      //sending bet edit updation in chat
+      const systemMessage = NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE(
+        {
+          username: user.username,
+          amount: editedBet.amount,
+          bettingOption: bettingVariable.name,
+        },
+      );
+      await this.chatNotification(
+        user,
+        editedBet.amount,
+        bettingVariable.name,
+        bettingVariable.stream.id,
+        systemMessage,
+      );
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
