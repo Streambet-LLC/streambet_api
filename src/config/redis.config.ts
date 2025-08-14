@@ -6,5 +6,6 @@ export default () => ({
     db: parseInt(process.env.REDIS_DB || '0', 10),
     username: process.env.REDIS_USERNAME,
     keyPrefix: process.env.REDIS_KEY_PREFIX,
+    tls: process.env.REDIS_TLS === 'true',
   },
 });
