@@ -33,7 +33,8 @@ import { queueConfig } from './config/queue.config';
 import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
 import { RedisModule } from './redis/redis.module';
 import redisConfig from './config/redis.config';
-import geoLocationConfig from './config/geo-location.config';
+import geoFencingConfig from './config/geo-fencing.config';
+import { envValidationSchema } from './config/redis.validation';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import geoLocationConfig from './config/geo-location.config';
 
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
       load: [
         databaseConfig,
         authConfig,
@@ -53,9 +55,9 @@ import geoLocationConfig from './config/geo-location.config';
         emailConfig,
         queueConfig,
         redisConfig,
-        geoLocationConfig
+        geoFencingConfig,
       ] as ConfigFactory[],
-      envFilePath: ["./.env"]
+      envFilePath: ['./.env'],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -106,7 +108,7 @@ import geoLocationConfig from './config/geo-location.config';
     ChatModule,
     QueueModule,
     GeoFencingModule,
-    RedisModule
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [

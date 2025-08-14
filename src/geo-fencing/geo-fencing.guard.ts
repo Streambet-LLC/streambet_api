@@ -22,7 +22,7 @@ export class GeoFencingGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
     const ip = extractIpFromRequest(req);
     //is for debuging purpose will remove after checking
-    console.log(ip, 'ip address');
+  
 
     if (!ip) {
       this.logger.warn('Could not determine IP for request');
@@ -39,7 +39,7 @@ export class GeoFencingGuard implements CanActivate {
       .map((s) => s.trim())
       .filter(Boolean);
     if (loc?.region && blocked.includes(loc.region)) {
-      this.logger.warn(`Blocked country request: ${loc.country_code} ip=${ip}`);
+      this.logger.warn(`Blocked country request: ${loc.region} ip=${ip}`);
       throw new ForbiddenException('Access from your country is restricted');
     }
     const blockVPN = this.configService.get<string>('geo.blockVPN');
