@@ -1860,32 +1860,52 @@ export class BettingService {
    *
    * @throws Will throw an error if the database query fails.
    */
-  async getBetStatsByStream(streamId: string) {
+  async getBetStatsByStream(streamId: string): Promise<{
+    totalTokenAmount: number;
+    totalTokenBet: number;
+    totalCoinAmount: number;
+    totalCoinBet: number;
+  }> {
     try {
-      const betStat = await this.betsRepository
+      const qb = this.betsRepository
         .createQueryBuilder('bet')
         .innerJoin('bet.round', 'round')
         .where('bet.streamId = :streamId', { streamId })
         .andWhere('bet.status = :betStatus', { betStatus: BetStatus.Active })
         .andWhere('round.status = :roundStatus', {
           roundStatus: BettingRoundStatus.OPEN,
-        })
-        .select([
-          // Token bets count and amount
-          `COALESCE(SUM(CASE WHEN bet.currency = :freeToken THEN bet.amount ELSE 0 END), 0) AS totalTokenAmount`,
-          `COALESCE(COUNT(CASE WHEN bet.currency = :freeToken THEN 1 END), 0) AS totalTokenBet`,
+        });
 
-          // Coin bets count and amount
-          `COALESCE(SUM(CASE WHEN bet.currency = :coin THEN bet.amount ELSE 0 END), 0) AS totalCoinAmount`,
-          `COALESCE(COUNT(CASE WHEN bet.currency = :coin THEN 1 END), 0) AS totalCoinBet`,
-        ])
+      const betStat = await qb
+        .select([])
+        .addSelect(
+          'COALESCE(SUM(CASE WHEN bet.currency = :freeToken THEN bet.amount ELSE 0 END), 0)',
+          'totalTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(COUNT(CASE WHEN bet.currency = :freeToken THEN 1 END), 0)',
+          'totalTokenBet',
+        )
+        .addSelect(
+          'COALESCE(SUM(CASE WHEN bet.currency = :coin THEN bet.amount ELSE 0 END), 0)',
+          'totalCoinAmount',
+        )
+        .addSelect(
+          'COALESCE(COUNT(CASE WHEN bet.currency = :coin THEN 1 END), 0)',
+          'totalCoinBet',
+        )
         .setParameters({
           freeToken: CurrencyType.FREE_TOKENS,
           coin: CurrencyType.STREAM_COINS,
         })
         .getRawOne();
-      // Ensure numeric output
-      return betStat;
+
+      return {
+        totalTokenAmount: Number(betStat?.totalTokenAmount) || 0,
+        totalTokenBet: Number(betStat?.totalTokenBet) || 0,
+        totalCoinAmount: Number(betStat?.totalCoinAmount) || 0,
+        totalCoinBet: Number(betStat?.totalCoinBet) || 0,
+      };
     } catch (error) {
       Logger.error(
         `Failed to fetch bet stats for streamId: ${streamId}`,

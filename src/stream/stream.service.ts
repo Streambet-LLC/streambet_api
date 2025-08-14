@@ -165,7 +165,7 @@ export class StreamService {
       endTime,
       viewerCount,
       bettingRoundStatus,
-      ...betStat,
+      ...(betStat || {}),
       rounds: (bettingRounds ?? [])
         .sort(
           (a, b) =>
@@ -470,7 +470,7 @@ END
     return await this.simplifyStreamResponse(
       stream,
       bettingRoundStatus,
-      betStat,
+       betStat || {},
     );
   }
 
