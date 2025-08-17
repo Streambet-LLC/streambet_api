@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   UseGuards,
   Request,
@@ -8,6 +9,7 @@ import {
   Req,
   RawBodyRequest,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,6 +21,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiHeader,
+  ApiQuery,
 } from '@nestjs/swagger';
 
 // Define the request type with user property
@@ -133,5 +136,50 @@ export class PaymentsController {
   @Post('confirm-auto-reload')
   async confirmAutoReload(@Body('paymentIntentId') paymentIntentId: string) {
     return this.paymentsService.handleAutoReloadSuccess(paymentIntentId);
+  }
+
+  /** Retrieves a Coinflow session key for the authenticated user. */
+  @ApiOperation({ summary: 'Get Coinflow session key' })
+  @ApiResponse({ status: 200, description: 'Coinflow session key fetched' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('coinflow/session-key')
+  async getCoinflowSessionKey(@Request() req: RequestWithUser) {
+    return this.paymentsService.getCoinflowSessionKey(req.user.id);
+  }
+
+  /** Retrieves Coinflow withdrawer data for the authenticated user. */
+  @ApiOperation({ summary: 'Get Coinflow withdraw' })
+  @ApiResponse({ status: 200, description: 'Coinflow withdraw payload fetched' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('coinflow/withdrawer')
+  async getCoinflowWithdraw(@Request() req: RequestWithUser) {
+    return this.paymentsService.getCoinflowWithdraw(req.user.id);
+  }
+
+  /** Retrieves Coinflow withdraw quote for the authenticated user. */
+  @ApiOperation({ summary: 'Get Coinflow withdraw quote' })
+  @ApiResponse({ status: 200, description: 'Coinflow withdraw quote fetched' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid amount' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiQuery({ name: 'amount', type: Number, required: true })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('coinflow/withdrawer/quote')
+  async getCoinflowWithdrawQuote(
+    @Request() req: RequestWithUser,
+    @Query('amount') amount: string,
+  ) {
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new BadRequestException('Invalid amount');
+    }
+    return this.paymentsService.getCoinflowWithdrawQuote(
+      parsedAmount,
+      req.user.id,
+    );
   }
 }

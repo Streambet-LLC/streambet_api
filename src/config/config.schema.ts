@@ -31,6 +31,16 @@ export const configValidationSchema = Joi.object({
   STRIPE_SECRET_KEY: Joi.string().required(),
   STRIPE_WEBHOOK_SECRET: Joi.string().required(),
 
+  // Coinflow
+  COINFLOW_API_URL: Joi.string().uri().optional(),
+  COINFLOW_API_KEY: Joi.string().optional(),
+  COINFLOW_DEFAULT_TOKEN: Joi.string().optional(),
+  COINFLOW_MERCHANT_ID: Joi.string().optional(),
+  COINFLOW_BLOCKCHAIN: Joi.string().optional(),
+  COINFLOW_TIMEOUT_MS: Joi.number().integer().min(1000).optional(),
+  COINFLOW_MAX_RETRIES: Joi.number().integer().min(0).max(5).optional(),
+  COINFLOW_RETRY_DELAY_MS: Joi.number().integer().min(0).optional(),
+
   // Redis
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),

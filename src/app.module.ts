@@ -35,6 +35,7 @@ import { RedisModule } from './redis/redis.module';
 import redisConfig from './config/redis.config';
 import geoFencingConfig from './config/geo-fencing.config';
 import { envValidationSchema } from './config/redis.validation';
+import coinflowConfig from './config/coinflow.config';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { envValidationSchema } from './config/redis.validation';
         queueConfig,
         redisConfig,
         geoFencingConfig,
+        coinflowConfig,
       ] as ConfigFactory[],
       envFilePath: ['./.env'],
     }),
