@@ -37,6 +37,8 @@ import geoFencingConfig from './config/geo-fencing.config';
 import { envValidationSchema } from './config/redis.validation';
 import coinflowConfig from './config/coinflow.config';
 
+import { CoinPackageModule } from './coin-package/coin-package.module';
+import * as redisStore from 'cache-manager-redis-store';
 @Module({
   imports: [
     CacheModule.register({
@@ -111,6 +113,7 @@ import coinflowConfig from './config/coinflow.config';
     QueueModule,
     GeoFencingModule,
     RedisModule,
+    CoinPackageModule,
   ],
   controllers: [AppController],
   providers: [
