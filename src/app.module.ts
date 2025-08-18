@@ -38,7 +38,7 @@ import { envValidationSchema } from './config/redis.validation';
 import coinflowConfig from './config/coinflow.config';
 
 import { CoinPackageModule } from './coin-package/coin-package.module';
-import * as redisStore from 'cache-manager-redis-store';
+
 @Module({
   imports: [
     CacheModule.register({
