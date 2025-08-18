@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
 import Stripe from 'stripe';
@@ -343,20 +343,26 @@ export class PaymentsService {
     }
   }
 
-  /** Maps an Axios error from Coinflow into a meaningful BadRequestException. */
-  private mapCoinflowError(error: unknown, prefix: string): BadRequestException {
+  /** Maps an Axios error from Coinflow into a meaningful HttpException. */
+  private mapCoinflowError(error: unknown, prefix: string): HttpException {
     const axiosError = error as AxiosError<any>;
     const status = axiosError.response?.status;
     const responseData = axiosError.response?.data;
-    const details =
-      typeof responseData === 'object' && responseData
-        ? JSON.stringify(responseData)
-        : axiosError.message || 'Unknown Coinflow error';
+    const safeDetail =
+      (responseData && typeof (responseData as any).message === 'string'
+        ? (responseData as any).message
+        : typeof responseData === 'string'
+        ? responseData
+        : axiosError.message) || 'Unknown Coinflow error';
 
     const message = status
-      ? `${prefix}: [${status}] ${details}`
-      : `${prefix}: ${details}`;
+      ? `${prefix}: [${status}] ${safeDetail}`
+      : `${prefix}: ${safeDetail}`;
 
-    return new BadRequestException(message);
+    const httpStatus =
+      typeof status === 'number' && status >= 400 && status < 600
+        ? status
+        : HttpStatus.BAD_GATEWAY;
+    return new HttpException(message, httpStatus);
   }
 }
