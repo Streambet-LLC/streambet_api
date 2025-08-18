@@ -26,7 +26,10 @@ export class GeoFencingGuard implements CanActivate {
 
     if (!ip) {
       this.logger.warn('Could not determine IP for request');
-      throw new ForbiddenException('Unable to determine client IP');
+      throw new ForbiddenException({
+        message: 'Unable to determine client IP',
+        key: 'locationRestricted',
+      });
     }
 
     const loc = await this.geoFencingService.lookup(ip);
@@ -40,14 +43,20 @@ export class GeoFencingGuard implements CanActivate {
       .filter(Boolean);
     if (loc?.region && blocked.includes(loc.region)) {
       this.logger.warn(`Blocked country request: ${loc.region} ip=${ip}`);
-      throw new ForbiddenException('Access from your country is restricted');
+      throw new ForbiddenException({
+        message: 'Access from your country is restricted',
+        key: 'locationRestricted',
+      });
     }
     const blockVPN = this.configService.get<string>('geo.blockVPN');
-    
+
     const isBlockVPN = blockVPN === 'true'; // Convert string to real boolean
     if (isBlockVPN && Boolean(loc?.isVpn)) {
       this.logger.warn(`Blocked VPN/proxy ip=${ip}`);
-      throw new ForbiddenException('Access from VPN/proxy is restricted');
+      throw new ForbiddenException({
+        message: 'Access from VPN/proxy is restricted',
+        key: 'locationRestricted',
+      });
     }
 
     // pass
