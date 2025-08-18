@@ -20,7 +20,10 @@ import {
   ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
-import { StreamFilterDto } from './dto/list-stream.dto';
+import {
+  LiveScheduledStreamListDto,
+  StreamFilterDto,
+} from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
 import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
@@ -34,7 +37,57 @@ interface RequestWithUser extends Request {
 @Controller('stream')
 export class StreamController {
   constructor(private readonly streamService: StreamService) {}
+  /**
+   * Retrieves a paginated list of live and scheduled streams for the home page view.
+   * Ensures DELETED streams are excluded.
+   *
+   * Ordering logic:
+   * - Live streams appear first, ordered by createdAt in descending order.
+   * - Scheduled streams appear next, ordered by scheduledStartTime in ascending order.
+   * - Falls back to user-defined sorting if provided in the DTO.
+   *
+   * Selects essential fields (id, name, status, viewerCount) along with
+   * derived values:
+   * - bettingRoundStatus (calculated from related betting rounds)
+   * - userBetCount (count of unique users who placed valid bets on the stream).
+   *
+   * Applies pagination with a default range of [0, 24] if not specified.
+   * Returns both the filtered data and the total count of matching streams.
+   * Logs errors and throws an HttpException in case of failures.
+   *
+   * @param liveScheduledStreamListDto - DTO containing optional sort and range for pagination.
+   * @returns A Promise resolving to an object with:
+   *          - data: Array of stream records with selected and derived fields.
+   *          - total: Total number of matching stream records.
+   * @throws HttpException - If an error occurs during query execution.
+   * @author Reshma M S
+   */
 
+  @ApiOperation({
+    summary: 'List live and scheduled streams for home page',
+    description:
+      'Retrieves a paginated list of live and scheduled streams for the home page view. \
+Live streams are listed first (ordered by createdAt in descending order), followed by scheduled streams (ordered by scheduledStartTime in ascending order). \
+Supports optional sorting and pagination (default range: [0, 24]). \
+Pass "pagination=false" to retrieve all matching streams without pagination. \
+Returns essential fields (id, name, status, viewerCount) along with derived values such as bettingRoundStatus and userBetCount.',
+  })
+  @ApiOkResponse({ type: LiveScheduledStreamListDto })
+  @UseGuards(GeoFencingGuard)
+  @Get()
+  async getScheduledAndLiveStreams(
+    @Query() liveScheduledStreamListDto: LiveScheduledStreamListDto,
+  ) {
+    const { total, data } = await this.streamService.getScheduledAndLiveStreams(
+      liveScheduledStreamListDto,
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
+  }
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
