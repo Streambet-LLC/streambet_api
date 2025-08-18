@@ -38,23 +38,19 @@ interface RequestWithUser extends Request {
 export class StreamController {
   constructor(private readonly streamService: StreamService) {}
   /**
-   * Retrieves a paginated list of live and scheduled streams for the home page view.
-   * Ensures DELETED streams are excluded.
-   *
+ * Retrieves a paginated list of live and scheduled streams for the home page view.
+   * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
+  
    * Ordering logic:
    * - Live streams appear first, ordered by createdAt in descending order.
    * - Scheduled streams appear next, ordered by scheduledStartTime in ascending order.
-   * - Falls back to user-defined sorting if provided in the DTO.
    *
-   * Selects essential fields (id, name, status, viewerCount) along with
+   * Selects essential fields  along with
    * derived values:
-   * - bettingRoundStatus (calculated from related betting rounds)
-   * - userBetCount (count of unique users who placed valid bets on the stream).
-   *
+   * - bettingRoundStatus (calculated from related betting rounds)   *
    * Applies pagination with a default range of [0, 24] if not specified.
    * Returns both the filtered data and the total count of matching streams.
    * Logs errors and throws an HttpException in case of failures.
-   *
    * @param liveScheduledStreamListDto - DTO containing optional sort and range for pagination.
    * @returns A Promise resolving to an object with:
    *          - data: Array of stream records with selected and derived fields.
