@@ -10,6 +10,9 @@ import {
   RawBodyRequest,
   BadRequestException,
   Query,
+  HttpCode,
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -23,6 +26,8 @@ import {
   ApiHeader,
   ApiQuery,
 } from '@nestjs/swagger';
+import { CoinflowWebhookGuard } from '../auth/guards/coinflow-webhook.guard';
+import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -181,5 +186,18 @@ export class PaymentsController {
       parsedAmount,
       req.user.id,
     );
+  }
+
+  /** Webhook receiver for Coinflow checkout events. */
+  @Post('coinflow/webhook')
+  @UseGuards(CoinflowWebhookGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  async handleCoinflowWebhook(@Body() payload: CoinflowWebhookDto) {
+    Logger.log(
+      `Coinflow webhook received: ${JSON.stringify(payload)}`,
+      PaymentsController.name,
+    );
+    return { received: true };
   }
 }

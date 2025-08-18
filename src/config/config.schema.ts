@@ -34,6 +34,7 @@ export const configValidationSchema = Joi.object({
   // Coinflow
   COINFLOW_API_URL: Joi.string().uri().optional(),
   COINFLOW_API_KEY: Joi.string().optional(),
+  COINFLOW_WEBHOOK_SECRET: Joi.string().optional(),
   COINFLOW_DEFAULT_TOKEN: Joi.string().optional(),
   COINFLOW_MERCHANT_ID: Joi.string().optional(),
   COINFLOW_BLOCKCHAIN: Joi.string().optional(),

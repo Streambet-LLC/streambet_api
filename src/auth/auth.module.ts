@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { EmailsModule } from '../emails/email.module';
 import { NotificationService } from 'src/notification/notification.service';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
+import { CoinflowWebhookGuard } from './guards/coinflow-webhook.guard';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
     GoogleStrategy,
     RefreshTokenGuard,
     NotificationService,
+    CoinflowWebhookGuard,
   ],
   exports: [PassportModule, JwtModule, AuthService],
 })

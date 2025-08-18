@@ -9,6 +9,7 @@ export default registerAs('coinflow', () => ({
   timeoutMs: Number(process.env.COINFLOW_TIMEOUT_MS || 10000),
   maxRetries: Number(process.env.COINFLOW_MAX_RETRIES || 2),
   retryDelayMs: Number(process.env.COINFLOW_RETRY_DELAY_MS || 300),
+  webhookSecret: process.env.COINFLOW_WEBHOOK_SECRET || '',
 }));
 
 
