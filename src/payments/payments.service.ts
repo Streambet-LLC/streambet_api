@@ -1,11 +1,22 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
 import Stripe from 'stripe';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 
 @Injectable()
 export class PaymentsService {
   private stripe: Stripe;
+  /** Coinflow API configuration values */
+  private readonly coinflowApiUrl: string;
+  private readonly coinflowApiKey: string;
+  private readonly coinflowDefaultToken: string;
+  private readonly coinflowMerchantId: string;
+  private readonly coinflowBlockchain: string;
+  private readonly coinflowTimeoutMs: number;
+  private readonly coinflowClient: AxiosInstance;
+  private readonly coinflowMaxRetries: number;
+  private readonly coinflowRetryDelayMs: number;
 
   constructor(
     private configService: ConfigService,
@@ -13,6 +24,55 @@ export class PaymentsService {
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
+    );
+
+    this.coinflowApiUrl =
+      this.configService.get<string>('coinflow.apiUrl') || '';
+    this.coinflowApiKey =
+      this.configService.get<string>('coinflow.apiKey') || '';
+    this.coinflowDefaultToken =
+      this.configService.get<string>('coinflow.defaultToken') || '';
+    this.coinflowMerchantId =
+      this.configService.get<string>('coinflow.merchantId') || '';
+    this.coinflowBlockchain =
+      this.configService.get<string>('coinflow.blockchain') || '';
+    this.coinflowTimeoutMs =
+      this.configService.get<number>('coinflow.timeoutMs') || 10000;
+    this.coinflowMaxRetries =
+      this.configService.get<number>('coinflow.maxRetries') || 2;
+    this.coinflowRetryDelayMs =
+      this.configService.get<number>('coinflow.retryDelayMs') || 300;
+
+    this.coinflowClient = axios.create({
+      baseURL: this.coinflowApiUrl.replace(/\/+$/, ''),
+      timeout: this.coinflowTimeoutMs,
+      headers: {
+        Authorization: this.coinflowApiKey,
+        accept: 'application/json',
+      },
+    });
+
+    // Response interceptor: simple retry on transient errors (5xx, ECONNRESET, ETIMEDOUT)
+    this.coinflowClient.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const config: any = error.config || {};
+        config.__retryCount = config.__retryCount || 0;
+
+        const status = error.response?.status;
+        const isRetryableStatus = status && status >= 500 && status < 600;
+        const isNetworkError = !status;
+
+        if (
+          config.__retryCount < this.coinflowMaxRetries &&
+          (isRetryableStatus || isNetworkError)
+        ) {
+          config.__retryCount += 1;
+          await new Promise((res) => setTimeout(res, this.coinflowRetryDelayMs));
+          return this.coinflowClient.request(config);
+        }
+        return Promise.reject(error);
+      },
     );
   }
 
@@ -187,5 +247,122 @@ export class PaymentsService {
         `Failed to process payment: ${errorMessage}`,
       );
     }
+  }
+
+  /**
+   * Fetches a Coinflow session key for the given user.
+   *
+   * @param userId - The application user ID.
+   * @returns The session key payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing or the upstream request fails.
+   */
+  async getCoinflowSessionKey(userId: string) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.get('/api/auth/session-key', {
+        headers: {
+          'x-coinflow-auth-user-id': userId,
+        },
+      });
+
+      return data;
+    } catch (error) {
+      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow session key');
+    }
+  }
+
+  /**
+   * Retrieves the Coinflow withdraw payload for the given user.
+   *
+   * @param userId - The application user ID.
+   * @returns The withdraw payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing or the upstream request fails.
+   */
+  async getCoinflowWithdraw(userId: string) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.get('/api/withdraw', {
+        headers: {
+          'x-coinflow-auth-user-id': userId,
+        },
+      });
+
+      return data;
+    } catch (error) {
+      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw data');
+    }
+  }
+
+  /**
+   * Retrieves a withdraw quote from Coinflow for the given amount and user.
+   *
+   * @param amount - The withdraw amount.
+   * @param userId - The application user ID.
+   * @returns The quote payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing or the upstream request fails.
+   */
+  async getCoinflowWithdrawQuote(amount: number, userId: string) {
+    if (
+      !this.coinflowApiUrl ||
+      !this.coinflowApiKey ||
+      !this.coinflowDefaultToken ||
+      !this.coinflowMerchantId ||
+      !this.coinflowBlockchain
+    ) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, COINFLOW_DEFAULT_TOKEN, COINFLOW_MERCHANT_ID, and COINFLOW_BLOCKCHAIN',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.get('/api/withdraw/quote', {
+        params: {
+          token: this.coinflowDefaultToken,
+          amount,
+          merchantId: this.coinflowMerchantId,
+        },
+        headers: {
+          'x-coinflow-auth-blockchain': this.coinflowBlockchain,
+          'x-coinflow-auth-user-id': userId,
+        },
+      });
+
+      return data;
+    } catch (error) {
+      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw quote');
+    }
+  }
+
+  /** Maps an Axios error from Coinflow into a meaningful HttpException. */
+  private mapCoinflowError(error: unknown, prefix: string): HttpException {
+    const axiosError = error as AxiosError<any>;
+    const status = axiosError.response?.status;
+    const responseData = axiosError.response?.data;
+    const safeDetail =
+      (responseData && typeof (responseData as any).message === 'string'
+        ? (responseData as any).message
+        : typeof responseData === 'string'
+        ? responseData
+        : axiosError.message) || 'Unknown Coinflow error';
+
+    const message = status
+      ? `${prefix}: [${status}] ${safeDetail}`
+      : `${prefix}: ${safeDetail}`;
+
+    const httpStatus =
+      typeof status === 'number' && status >= 400 && status < 600
+        ? status
+        : HttpStatus.BAD_GATEWAY;
+    return new HttpException(message, httpStatus);
   }
 }
