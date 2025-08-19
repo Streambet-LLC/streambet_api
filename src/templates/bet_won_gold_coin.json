@@ -58,7 +58,7 @@
         "fullName",
         "amount",
         "roundName",
-        "convertedCoin",
+        "convertedSweepCoin",
         "blogPostLink"
       ],
       "properties": {
@@ -79,9 +79,9 @@
           "type": ["string", "number"],
           "description": "name of the round "
         },
-        "convertedCoin": {
+        "convertedSweepCoin": {
           "type": ["string", "number"],
-          "description": "converted amount of tokent to coin"
+          "description": "converted amount of token to sweep coin"
         },
         "blogPostLink": {
           "type": ["string", "number"],
