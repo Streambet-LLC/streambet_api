@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RenameWalletColumns1724060112345 implements MigrationInterface {
-  name = 'RenameWalletColumns1724060112345';
+export class RenameWalletColumns1755610476531 implements MigrationInterface {
+  name = 'RenameWalletColumns17556104765315';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Rename freeTokens -> gold_coin
