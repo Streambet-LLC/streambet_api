@@ -81,15 +81,25 @@ export class PaymentsService {
     type PackageInfo = {
       id: string;
       name: string;
-      coins: number;
+      sweepCoins: number;
       price: number;
     };
 
     const packages: Record<string, PackageInfo> = {
-      small: { id: 'small', name: 'Small Pack', coins: 500, price: 5 },
-      medium: { id: 'medium', name: 'Medium Pack', coins: 1200, price: 10 },
-      large: { id: 'large', name: 'Large Pack', coins: 2500, price: 20 },
-      premium: { id: 'premium', name: 'Premium Pack', coins: 6500, price: 50 },
+      small: { id: 'small', name: 'Small Pack', sweepCoins: 500, price: 5 },
+      medium: {
+        id: 'medium',
+        name: 'Medium Pack',
+        sweepCoins: 1200,
+        price: 10,
+      },
+      large: { id: 'large', name: 'Large Pack', sweepCoins: 2500, price: 20 },
+      premium: {
+        id: 'premium',
+        name: 'Premium Pack',
+        sweepCoins: 6500,
+        price: 50,
+      },
     };
 
     // Check if package exists
@@ -108,7 +118,7 @@ export class PaymentsService {
             currency: 'usd',
             product_data: {
               name: selectedPackage.name,
-              description: `${selectedPackage.coins} Stream Coins`,
+              description: `${selectedPackage.sweepCoins} Sweep Coins`,
             },
             unit_amount: selectedPackage.price * 100, // in cents
           },
@@ -121,7 +131,7 @@ export class PaymentsService {
       metadata: {
         userId,
         packageId,
-        coins: selectedPackage.coins.toString(),
+        sweepCoins: selectedPackage.sweepCoins.toString(),
       },
     });
 
@@ -152,16 +162,16 @@ export class PaymentsService {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
 
-      // Add coins to user's wallet
-      if (session.metadata?.userId && session.metadata?.coins) {
+      // Add sweep coins to user's wallet
+      if (session.metadata?.userId && session.metadata?.sweepCoins) {
         const userId = session.metadata.userId;
-        const coins = parseInt(session.metadata.coins, 10);
+        const sweepCoins = parseInt(session.metadata.sweepCoins, 10);
         const packageName = session.metadata.packageId;
 
-        await this.walletsService.addStreamCoins(
+        await this.walletsService.addSweepCoins(
           userId,
-          coins,
-          `Purchase of ${packageName} coin package`,
+          sweepCoins,
+          `Purchase of ${packageName} sweep coin package`,
           'purchase',
         );
       }
@@ -176,15 +186,15 @@ export class PaymentsService {
       throw new BadRequestException('Invalid auto-reload amount');
     }
 
-    // Get stream coins based on amount
-    const coinsMap: Record<number, number> = {
+    // Get sweep coins based on amount
+    const sweepCoinsMap: Record<number, number> = {
       5: 500,
       10: 1200,
       15: 1800,
       20: 2500,
     };
 
-    const coins = coinsMap[amount];
+    const sweepCoins = sweepCoinsMap[amount];
 
     try {
       // Create payment intent
@@ -194,7 +204,7 @@ export class PaymentsService {
         payment_method_types: ['card'],
         metadata: {
           userId,
-          coins: coins.toString(),
+          sweepCoins: sweepCoins.toString(),
           autoReload: 'true',
         },
       });
@@ -219,21 +229,20 @@ export class PaymentsService {
       if (
         paymentIntent.status === 'succeeded' &&
         paymentIntent.metadata?.userId &&
-        paymentIntent.metadata?.coins &&
+        paymentIntent.metadata?.sweepCoins &&
         paymentIntent.metadata?.autoReload === 'true'
       ) {
         const userId = paymentIntent.metadata.userId;
-        const coins = parseInt(paymentIntent.metadata.coins, 10);
+        const sweepCoins = parseInt(paymentIntent.metadata.sweepCoins, 10);
 
-        // Add coins to user's wallet
-        await this.walletsService.addStreamCoins(
+        // Add sweep coins to user's wallet
+        await this.walletsService.addSweepCoins(
           userId,
-          coins,
-          `Auto-reload purchase of ${coins} stream coins`,
+          sweepCoins,
+          `Auto-reload purchase of ${sweepCoins} sweep coins`,
           'purchase',
         );
-
-        return { success: true, coins };
+        return { success: true, sweepCoins };
       }
 
       throw new BadRequestException('Invalid or unsuccessful payment');
