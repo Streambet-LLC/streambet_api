@@ -6,13 +6,13 @@ export interface EditedBetPayload {
   success: Boolean;
   timestamp: Date;
   currencyType: CurrencyType;
-  potentialCoinWinningAmount: number;
+  potentialSweepCoinWinningAmount: number;
   potentialTokenWinningAmount: number;
   amount: number;
   selectedWinner: string;
   updatedWalletBalance: {
     freeTokens: number;
-    streamCoins: number;
+    sweepCoins: number;
   };
   message?: string;
   title?: string;
