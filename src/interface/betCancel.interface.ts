@@ -7,6 +7,6 @@ export interface CancelBetPayout {
   title?: string;
   updatedWalletBalance: {
     freeTokens: number;
-    streamCoins: number;
+    sweepCoins: number;
   };
 }
