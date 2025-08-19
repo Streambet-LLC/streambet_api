@@ -797,6 +797,7 @@ export class BettingService {
           bettingVariable.name,
           [], // No winners
         );
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
         return;
       }
 
@@ -884,6 +885,9 @@ export class BettingService {
         bettingVariable.name,
         winners,
       );
+
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
+
       for (const winner of winners) {
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
@@ -1658,6 +1662,8 @@ export class BettingService {
           );
         }
       }
+
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
       return savedRound;
     } else {
       throw new BadRequestException(
@@ -1734,6 +1740,8 @@ export class BettingService {
           'canceled',
         );
       }
+
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
 
       return { refundedBets };
     } catch (error) {
