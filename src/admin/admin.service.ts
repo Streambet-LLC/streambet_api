@@ -114,15 +114,17 @@ export class AdminService {
       const winningOptions = round.bettingVariables.filter(
         (v) => v.is_winning_option,
       );
-      let winners = { freeTokens: [], streamCoins: [] };
-      let winnerAmount = { freeTokens: null, streamCoins: null };
+      let winners = { freeTokens: [], sweepCoins: [] };
+      let winnerAmount = { freeTokens: null, sweepCoins: null };
       if (winningOptions.length > 0) {
         // For each winning option, get all bets by currency
         const winnerBetsFreeTokens = winningOptions.flatMap((v) =>
           (v.bets || []).filter((bet) => bet.currency === 'free_tokens'),
         );
-        const winnerBetsStreamCoins = winningOptions.flatMap((v) =>
-          (v.bets || []).filter((bet) => bet.currency === 'stream_coins'),
+        const winnerBetsSweepCoins = winningOptions.flatMap((v) =>
+          (v.bets || []).filter(
+            (bet) => bet.currency === CurrencyType.SWEEP_COINS,
+          ),
         );
         // Remove duplicate users (in case a user bet multiple times)
         const winnerUsersMapFreeTokens = new Map();
@@ -139,10 +141,10 @@ export class AdminService {
             });
           }
         }
-        const winnerUsersMapStreamCoins = new Map();
-        for (const bet of winnerBetsStreamCoins) {
-          if (bet.user && !winnerUsersMapStreamCoins.has(bet.user.id)) {
-            winnerUsersMapStreamCoins.set(bet.user.id, {
+        const winnerUsersMapSweepCoins = new Map();
+        for (const bet of winnerBetsSweepCoins) {
+          if (bet.user && !winnerUsersMapSweepCoins.has(bet.user.id)) {
+            winnerUsersMapSweepCoins.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
               avatar: bet.user.profileImageUrl,
@@ -150,21 +152,21 @@ export class AdminService {
           }
         }
         winners.freeTokens = Array.from(winnerUsersMapFreeTokens.values());
-        winners.streamCoins = Array.from(winnerUsersMapStreamCoins.values());
+        winners.sweepCoins = Array.from(winnerUsersMapSweepCoins.values());
         // Calculate winnerAmount (sum of payouts for this round's winning bets)
         const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
-        const winnerAmountStreamCoins = winnerBetsStreamCoins.reduce(
+        const winnerAmountSweepCoins = winnerBetsSweepCoins.reduce(
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
         winnerAmount.freeTokens = winnerAmountFreeTokens
           ? winnerAmountFreeTokens
           : null;
-        winnerAmount.streamCoins = winnerAmountStreamCoins
-          ? winnerAmountStreamCoins
+        winnerAmount.sweepCoins = winnerAmountSweepCoins
+          ? winnerAmountSweepCoins
           : null;
       }
 
