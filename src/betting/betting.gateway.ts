@@ -330,14 +330,14 @@ export class BettingGateway
         bet,
         success: true,
         currencyType: placeBetDto.currencyType,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialSweepCoinWinningAmount: potentialAmount?.potentialSweepCoinAmt || 0,
         potentialTokenWinningAmount:
           potentialAmount?.potentialFreeTokenAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -378,7 +378,7 @@ export class BettingGateway
          .to(`stream_${bettingVariable.stream.id}`)
          .emit('bettingUpdate', {
            roundId: roundIdEmit,
-           totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
            ...betStat,
          });
@@ -458,7 +458,7 @@ export class BettingGateway
         success: true,
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -500,7 +500,7 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
             roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
             ...betStat,
           });
@@ -558,14 +558,15 @@ export class BettingGateway
         success: true,
         timestamp: new Date(),
         currencyType: editedBet.currency,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
+        potentialSweepCoinWinningAmount:
+          potentialAmount?.potentialSweepCoinAmt || 0,
         potentialTokenWinningAmount:
           potentialAmount?.potentialFreeTokenAmt || 0,
         amount: editedBet.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
           freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -614,7 +615,7 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
             roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
             ...betStat,
           });
@@ -691,9 +692,9 @@ export class BettingGateway
       .then(async (bettingVariable) => {
         this.server.to(`stream_${streamId}`).emit('bettingUpdate', {
           bettingVariableId: bettingVariable.id,
-          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
+          totalBetsSweepCoinAmount: bettingVariable.totalBetsSweepCoinAmount,
           totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-          betCountCoin: bettingVariable.betCountCoin,
+          betCountSweepCoin: bettingVariable.betCountSweepCoin,
           betCountFreeToken: bettingVariable.betCountFreeToken,
           status: bettingVariable.status,
         });
@@ -826,9 +827,9 @@ export class BettingGateway
             const potentialAmount = userPotentialMap.get(userId);
             socket.emit('potentialAmountUpdate', {
               bettingVariableId: potentialAmount.bettingVariableId,
-              potentialCoinWinningAmount: potentialAmount.potentialCoinAmt,
+              potentialSweepCoinWinningAmount: potentialAmount.potentialSweepCoinAmt,
               potentialTokenWinningAmount:
-                potentialAmount.potentialFreeTokenAmt,
+              potentialAmount.potentialFreeTokenAmt,
               currencyType: potentialAmount.currencyType,
               optionName: potentialAmount.optionName,
             });
