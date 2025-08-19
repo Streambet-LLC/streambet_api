@@ -393,7 +393,7 @@ export class AdminController {
     summary: `Add Gold Coin .`,
     description: 'API to add Gold Coin by admin.',
   })
-  @Patch('gold-coin/free')
+  @Patch('gold-coins')
   async addGoldCoin(
     @Body() addGoldCoinDto: AddGoldCoinDto,
     @Request() req: RequestWithUser,
@@ -402,7 +402,7 @@ export class AdminController {
     const data = await this.adminService.updateGoldCoinsByAdmin(addGoldCoinDto);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Successfully updated Gold Coin',
+      message: 'Successfully updated Gold Coins',
       data,
     };
   }
