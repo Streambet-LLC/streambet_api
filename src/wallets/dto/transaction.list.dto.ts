@@ -36,8 +36,8 @@ export class TransactionFilterDto extends AdminFilterDto {
 
   @ApiPropertyOptional({
     enum: CurrencyType,
-    default: 'stream_coins',
-    description: `available  currencyType -> free_tokens and stream_coins`,
+    default: CurrencyType.SWEEP_COINS,
+    description: `available  currencyType -> free_tokens and sweep_coins`,
   })
   @IsOptional()
   @IsEnum(CurrencyType)
