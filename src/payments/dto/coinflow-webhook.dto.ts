@@ -66,6 +66,10 @@ import {
     @IsOptional()
     @IsString()
     rawCustomerId?: string;
+
+    @IsOptional()
+    @IsString()
+    paymentMethod?:string
   }
   
   /** DTO for Coinflow webhook payload. */

@@ -11,7 +11,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Stream, StreamStatus } from './entities/stream.entity';
-import { StreamFilterDto } from './dto/list-stream.dto';
+import {
+  LiveScheduledStreamListDto,
+  StreamFilterDto,
+} from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
@@ -472,7 +475,7 @@ END
     return await this.simplifyStreamResponse(
       stream,
       bettingRoundStatus,
-       betStat || {},
+      betStat || {},
     );
   }
 
@@ -933,4 +936,153 @@ END
       ])
       .getOne();
   }
+
+  /**
+   * Retrieves a paginated list of live and scheduled streams for the home page view.
+   * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
+  
+   * Ordering logic:
+   * - Live streams appear first, ordered by createdAt in descending order.
+   * - Scheduled streams appear next, ordered by scheduledStartTime in ascending order.
+   *
+   * Selects essential fields  along with
+   * derived values:
+   * - bettingRoundStatus (calculated from related betting rounds)   *
+   * Applies pagination with a default range of [0, 24] if not specified.
+   * Returns both the filtered data and the total count of matching streams.
+   * Logs errors and throws an HttpException in case of failures.
+   *
+   * @param liveScheduledStreamListDto - DTO containing optional sort and range for pagination.
+   * @returns A Promise resolving to an object with:
+   *          - data: Array of stream records with selected and derived fields.
+   *          - total: Total number of matching stream records.
+   * @throws HttpException - If an error occurs during query execution.
+   * @author Reshma M S
+   */
+
+  async getScheduledAndLiveStreams(
+    liveScheduledStreamListDto: LiveScheduledStreamListDto,
+  ): Promise<{ data: Stream[]; total: number }> {
+    try {
+      const range: Range = liveScheduledStreamListDto.range
+        ? (JSON.parse(liveScheduledStreamListDto.range) as Range)
+        : [0, 24];
+
+      const { pagination = true } = liveScheduledStreamListDto;
+
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.bettingRounds', 'r')
+        .leftJoinAndSelect('r.bettingVariables', 'bv');
+      streamQB.andWhere(`s.status = :scheduled or s.status = :live`, {
+        scheduled: StreamStatus.SCHEDULED,
+        live: StreamStatus.LIVE,
+      });
+      /** Custom ordering:
+       *  - LIVE streams first (createdAt DESC)
+       *  - SCHEDULED streams next (scheduledStartTime ASC)
+       *  - Fallback to user-defined sort if provided
+       */
+
+      streamQB
+        .orderBy(
+          `CASE 
+        WHEN s.status = :live THEN 1
+        WHEN s.status = :scheduled THEN 2
+        ELSE 3
+      END`,
+          'ASC',
+        )
+        .addOrderBy(
+          `CASE 
+        WHEN s.status = :live THEN s."createdAt"
+      END`,
+          'DESC',
+          'NULLS LAST',
+        )
+        .addOrderBy(
+          `CASE 
+        WHEN s.status = :scheduled THEN s."scheduledStartTime"
+      END`,
+          'ASC',
+          'NULLS LAST',
+        )
+        .setParameters({
+          live: StreamStatus.LIVE,
+          scheduled: StreamStatus.SCHEDULED,
+        });
+
+      /** Select fields + betting round status calculation */
+      streamQB
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.status', 'streamStatus')
+        .addSelect('s.thumbnailUrl', 'thumbnailUrl')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
+          'totalBetsTokenAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
+          'totalBetsCoinAmount',
+        )
+        .addSelect(
+          `CASE
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
+          THEN '${BettingRoundStatus.OPEN}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
+          THEN '${BettingRoundStatus.LOCKED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CREATED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CLOSED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CANCELLED}'
+
+        ELSE '${BettingRoundStatus.NO_BET_ROUND}'
+      END`,
+          'bettingRoundStatus',
+        )
+        .addSelect(
+          `(SELECT COUNT(DISTINCT bet."user_id")
+        FROM bets bet
+        WHERE bet."stream_id" = s.id
+          AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
+      )`,
+          'userBetCount',
+        )
+        .groupBy('s.id');
+
+      /**  Total count */
+      const total = await streamQB.getCount();
+
+      /**  Pagination */
+      if (pagination && range) {
+        const [offset, limit] = range;
+        streamQB.offset(offset).limit(limit);
+      }
+
+      const data = await streamQB.getRawMany();
+      return { data, total };
+    } catch (e) {
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
+
+
+
+  
