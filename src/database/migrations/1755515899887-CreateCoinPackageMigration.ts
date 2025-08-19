@@ -24,7 +24,7 @@ export class CreateCoinPackageMigration1755515899887 implements MigrationInterfa
               NULL,
               1000.00,
               1000,
-              'coin/2cf96dfd-ebb1-49d1-8414-c01372752772-coin.svg',
+              'coin/641158a0-877c-4093-9e8f-0a45b1cb028d-coin1.png',
               true,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
@@ -36,7 +36,7 @@ export class CreateCoinPackageMigration1755515899887 implements MigrationInterfa
               NULL,
               5000.00,
               5000,
-              'coin-stack/85bab892-0687-40ea-8a8a-5a99380e4368-coin-stack.svg',
+              'coin-stack/4c86b0df-5691-4d24-bf49-8f1d829214ad-coin2.png',
               true,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
@@ -48,7 +48,7 @@ export class CreateCoinPackageMigration1755515899887 implements MigrationInterfa
               NULL,
               10000.00,
               10000,
-              'coin-bundle/609f012f-f9cc-48c0-9905-7ba3bfbd0082-coin-bundle.svg',
+              'coin-bundle/b8ac69a9-5b14-40dc-88a7-361c7032e3ff-coin3.png',
               true,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
@@ -60,7 +60,7 @@ export class CreateCoinPackageMigration1755515899887 implements MigrationInterfa
               NULL,
               25000.00,
               25000,
-              'coin/2cf96dfd-ebb1-49d1-8414-c01372752772-coin.svg',
+              'coin/641158a0-877c-4093-9e8f-0a45b1cb028d-coin1.png',
               true,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
