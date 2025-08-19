@@ -13,7 +13,7 @@ export class CurrencyTypeDto {
   @ApiProperty({
     required: false,
   })
-  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
+  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.SWEEP_COINS])
   @IsOptional()
   currencyType?: CurrencyType;
 }
@@ -35,7 +35,7 @@ export class PlaceBetDto {
   amount: number;
 
   @ApiProperty()
-  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
+  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.SWEEP_COINS])
   currencyType: CurrencyType;
 }
 
@@ -72,10 +72,10 @@ export class EditBetDto {
 
   @ApiProperty({
     description: 'The new currency type to use for the bet',
-    example: CurrencyType.STREAM_COINS,
-    enum: [CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS],
+    example: CurrencyType.SWEEP_COINS,
+    enum: [CurrencyType.FREE_TOKENS, CurrencyType.SWEEP_COINS],
     enumName: 'CurrencyType',
   })
-  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
+  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.SWEEP_COINS])
   newCurrencyType: CurrencyType;
 }

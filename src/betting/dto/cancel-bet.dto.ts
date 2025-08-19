@@ -10,6 +10,6 @@ export class CancelBetDto {
   betId: string;
 
   @ApiProperty()
-  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.STREAM_COINS])
+  @IsIn([CurrencyType.FREE_TOKENS, CurrencyType.SWEEP_COINS])
   currencyType: CurrencyType;
 }
