@@ -84,6 +84,6 @@ export class UserResponseDto {
   @ApiProperty({ description: 'Free token balance', example: 0 })
   walletBalanceToken: number;
 
-  @ApiProperty({ description: 'Stream coin balance', example: 0 })
-  walletBalanceCoin: number;
+  @ApiProperty({ description: 'Sweep coin balance', example: 0 })
+  walletBalanceSweepCoin: number;
 }
