@@ -18,28 +18,47 @@ export class AnalyticsSummaryResponseDto {
 }
 
 export class StreamAnalyticsResponseDto {
-  @ApiProperty({ type: Number, description: 'Total number of users watching stream' })
+  @ApiProperty({
+    type: Number,
+    description: 'Total number of users watching stream',
+  })
   totalUsers: number;
 
   @ApiProperty({
     type: 'object',
-    description: 'Total bet value for the stream, separated by freeTokens and coins',
+    description:
+      'Total bet value for the stream, separated by freeTokens and sweep coins',
     properties: {
-      freeTokens: { type: 'number', description: 'Total bet value in free tokens' },
-      coins: { type: 'number', description: 'Total bet value in coins' },
+      freeTokens: {
+        type: 'number',
+        description: 'Total bet value in free tokens',
+      },
+      sweepCoins: {
+        type: 'number',
+        description: 'Total bet value in sweep coins',
+      },
     },
   })
   totalBetValue: {
     freeTokens: number;
-    coins: number;
+    sweepCoins: number;
   };
 
-  @ApiProperty({ type: String, description: 'Total stream time (formatted as HHh MMm SSs)' })
+  @ApiProperty({
+    type: String,
+    description: 'Total stream time (formatted as HHh MMm SSs)',
+  })
   totalStreamTime: string;
 
-  @ApiProperty({ type: String, description: 'Platform vig/commission (as a percentage string)' })
+  @ApiProperty({
+    type: String,
+    description: 'Platform vig/commission (as a percentage string)',
+  })
   platformVig: string;
 
-  @ApiProperty({ type: Number, description: 'Total number of users placed bet on this stream' })
+  @ApiProperty({
+    type: Number,
+    description: 'Total number of users placed bet on this stream',
+  })
   totalBetPlacedUsers: number;
 }
