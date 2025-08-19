@@ -58,6 +58,10 @@ export class AdminService {
     user.email = updatedEmail;
     user.username = updatedUsername;
     user.deletedAt = new Date();
+    // Deactivate and invalidate tokens immediately
+    user.isActive = false;
+    user.refreshToken = null;
+    user.refreshTokenExpiresAt = null;
 
     // Save the updated user
     return this.userRepository.save(user);
