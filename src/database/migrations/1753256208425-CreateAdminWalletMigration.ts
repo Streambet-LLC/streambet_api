@@ -26,7 +26,7 @@ export class CreateAdminWalletMigration1753256208425
         id,
         "userId",
         "freeTokens",
-        "streamCoins",
+        "sweepCoins",
        "autoReloadEnabled",
         "autoReloadAmount",
         "createdAt",
