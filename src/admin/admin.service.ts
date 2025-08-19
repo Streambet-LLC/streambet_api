@@ -149,7 +149,11 @@ export class AdminService {
         }
         const winnerUsersMapSweepCoins = new Map();
         for (const bet of winnerBetsSweepCoins) {
-          if (bet.user && !winnerUsersMapSweepCoins.has(bet.user.id)) {
+          if (
+            bet.user &&
+            !winnerUsersMapSweepCoins.has(bet.user.id) &&
+            bet.status === BetStatus.Won
+          ) {
             winnerUsersMapSweepCoins.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
