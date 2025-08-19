@@ -90,8 +90,8 @@ export class StreamService {
           'totalBetsTokenAmount',
         )
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
-          'totalBetsCoinAmount',
+          'COALESCE(SUM(bv.totalBetsSweepCoinAmount), 0)',
+          'totalBetsSweepCoinAmount',
         )
         .groupBy('s.id');
 
@@ -346,7 +346,7 @@ END
   async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
     try {
       let userBetFreeTokens: number;
-      let userBetStreamCoin: number;
+      let userBetSweepCoin: number;
       let wallet: Wallet;
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
@@ -373,7 +373,7 @@ END
           `Could not find a live stream with the specified ID. Please check the ID and try again.`,
         );
       }
-      const total = { tokenSum: 0, coinSum: 0 };
+      const total = { tokenSum: 0, sweepCoinSum: 0 };
 
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
@@ -383,19 +383,21 @@ END
             const roundTotals = round.bettingVariables.reduce(
               (acc, variable) => {
                 acc.tokenSum += Number(variable.totalBetsTokenAmount || 0);
-                acc.coinSum += Number(variable.totalBetsCoinAmount || 0);
+                acc.sweepCoinSum += Number(
+                  variable.totalBetsSweepCoinAmount || 0,
+                );
                 return acc;
               },
-              { tokenSum: 0, coinSum: 0 },
+              { tokenSum: 0, sweepCoinSum: 0 },
             );
             total.tokenSum += roundTotals.tokenSum;
-            total.coinSum += roundTotals.coinSum;
+            total.sweepCoinSum += roundTotals.sweepCoinSum;
           }
         }
       }
       const {
         tokenSum: roundTotalBetsTokenAmount,
-        coinSum: roundTotalBetsCoinAmount,
+        sweepCoinSum: roundTotalBetsSweepCoinAmount,
       } = total;
       stream.bettingRounds.forEach((round) => {
         //sort betting varirable,
@@ -404,7 +406,7 @@ END
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
           );
         });
-        // userBetFreeTokens, userBetStreamCoin  passing through response
+        // userBetFreeTokens, userBetSweepCoin  passing through response
         round.bettingVariables.forEach((variable) => {
           if (variable.bets && variable.bets.length > 0) {
             variable.bets.forEach((bet) => {
@@ -412,7 +414,7 @@ END
                 if (bet.currency === CurrencyType.FREE_TOKENS) {
                   userBetFreeTokens = bet.amount;
                 } else {
-                  userBetStreamCoin = bet.amount;
+                  userBetSweepCoin = bet.amount;
                 }
               }
             });
@@ -423,11 +425,11 @@ END
 
       const result = {
         walletFreeToken: wallet?.freeTokens || 0,
-        walletCoin: wallet?.streamCoins || 0,
+        walletSweepCoin: wallet?.sweepCoins || 0,
         userBetFreeTokens: userBetFreeTokens || 0,
-        userBetStreamCoin: userBetStreamCoin || 0,
+        userBetSweepCoin: userBetSweepCoin || 0,
         roundTotalBetsTokenAmount,
-        roundTotalBetsCoinAmount,
+        roundTotalBetsSweepCoinAmount,
         ...stream,
       };
       return result;
