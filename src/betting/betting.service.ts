@@ -201,9 +201,9 @@ export class BettingService {
           is_winning_option: variable.is_winning_option,
           status: variable.status,
           totalBetsTokenAmount: variable.totalBetsTokenAmount,
-          totalBetsCoinAmount: variable.totalBetsCoinAmount,
+          totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
           betCountFreeToken: variable.betCountFreeToken,
-          betCountCoin: variable.betCountCoin,
+          betCountSweepCoin: variable.betCountSweepCoin,
         })),
       });
     }
@@ -392,9 +392,9 @@ export class BettingService {
           name: variable.name,
           is_winning_option: variable.is_winning_option,
           status: variable.status,
-          totalBetsCoinAmount: variable.totalBetsCoinAmount,
+          totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
           totalBetsTokenAmount: variable.totalBetsTokenAmount,
-          betCountCoin: variable.betCountCoin,
+          betCountSweepCoin: variable.betCountSweepCoin,
           betCountFreeToken: variable.betCountFreeToken,
         })),
       };
@@ -466,10 +466,10 @@ export class BettingService {
         bettingVariable.totalBetsTokenAmount =
           Number(bettingVariable.totalBetsTokenAmount) + Number(amount);
         bettingVariable.betCountFreeToken += 1;
-      } else if (currencyType === CurrencyType.STREAM_COINS) {
-        bettingVariable.totalBetsCoinAmount =
-          Number(bettingVariable.totalBetsCoinAmount) + Number(amount);
-        bettingVariable.betCountCoin += 1;
+      } else if (currencyType === CurrencyType.SWEEP_COINS) {
+        bettingVariable.totalBetsSweepCoinAmount =
+          Number(bettingVariable.totalBetsSweepCoinAmount) + Number(amount);
+        bettingVariable.betCountSweepCoin += 1;
       }
       await queryRunner.manager.save(bettingVariable);
       roundIdToUpdate = bettingVariable.roundId;
@@ -549,7 +549,7 @@ export class BettingService {
             `Refund from bet edit: ${refundAmount}`,
           );
         } else {
-          await this.walletsService.addStreamCoins(
+          await this.walletsService.addSweepCoins(
             userId,
             refundAmount,
             `Refund from bet edit: ${refundAmount}`,
@@ -585,20 +585,21 @@ export class BettingService {
         }
       } else {
         if (isSameOption) {
-          bettingVariable.totalBetsCoinAmount =
-            Number(bettingVariable.totalBetsCoinAmount) -
+          bettingVariable.totalBetsSweepCoinAmount =
+            Number(bettingVariable.totalBetsSweepCoinAmount) -
             Number(betDetails.amount) +
             Number(newAmount);
         } else {
-          oldBettingVariable.totalBetsCoinAmount =
-            Number(oldBettingVariable.totalBetsCoinAmount) -
+          oldBettingVariable.totalBetsSweepCoinAmount =
+            Number(oldBettingVariable.totalBetsSweepCoinAmount) -
             Number(betDetails.amount);
-          bettingVariable.totalBetsCoinAmount =
-            Number(bettingVariable.totalBetsCoinAmount) + Number(newAmount);
+          bettingVariable.totalBetsSweepCoinAmount =
+            Number(bettingVariable.totalBetsSweepCoinAmount) +
+            Number(newAmount);
         }
         if (!isSameOption) {
-          oldBettingVariable.betCountCoin -= 1;
-          bettingVariable.betCountCoin += 1;
+          oldBettingVariable.betCountSweepCoin -= 1;
+          bettingVariable.betCountSweepCoin += 1;
         }
       }
 
@@ -738,15 +739,15 @@ export class BettingService {
           Number(bettingVariable.totalBetsTokenAmount) - amount;
         bettingVariable.betCountFreeToken -= 1;
       } else {
-        await this.walletsService.addStreamCoins(
+        await this.walletsService.addSweepCoins(
           userId,
           bet.amount,
           refundMessage,
           'refund',
         );
-        bettingVariable.totalBetsCoinAmount =
-          Number(bettingVariable.totalBetsCoinAmount) - amount;
-        bettingVariable.betCountCoin -= 1;
+        bettingVariable.totalBetsSweepCoinAmount =
+          Number(bettingVariable.totalBetsSweepCoinAmount) - amount;
+        bettingVariable.betCountSweepCoin -= 1;
       }
 
       // Update bet status
@@ -804,22 +805,22 @@ export class BettingService {
         winningBets,
         losingBets,
         winningTokenBets,
-        winningCoinBets,
+        winningSweepCoinBets,
         losingTokenBets,
-        losingCoinBets,
+        losingSweepCoinBets,
       } = this.splitBets(allStreamBets, variableId);
       const {
         totalWinningTokenAmount,
         totalLosingTokenAmount,
-        totalWinningCoinAmount,
-        totalLosingCoinAmount,
-        coinPlatformFee,
-        distributableCoinPot,
+        totalWinningSweepCoinAmount,
+        totalLosingSweepCoinAmount,
+        sweepCoinPlatformFee,
+        distributableSweepCoinPot,
       } = this.calculatePots(
         winningTokenBets,
         losingTokenBets,
-        winningCoinBets,
-        losingCoinBets,
+        winningSweepCoinBets,
+        losingSweepCoinBets,
       );
 
       // Process winning token bets only if there are any
@@ -833,15 +834,15 @@ export class BettingService {
         );
       }
 
-      // Process winning coin bets only if there are any
-      if (winningCoinBets.length > 0 && totalWinningCoinAmount > 0) {
-        await this.processWinningCoinBets(
+      // Process winning sweep coin bets only if there are any
+      if (winningSweepCoinBets.length > 0 && totalWinningSweepCoinAmount > 0) {
+        await this.processWinningSweepCoinBets(
           queryRunner,
-          winningCoinBets,
-          totalWinningCoinAmount,
-          distributableCoinPot,
+          winningSweepCoinBets,
+          totalWinningSweepCoinAmount,
+          distributableSweepCoinPot,
           bettingVariable,
-          totalLosingCoinAmount,
+          totalLosingSweepCoinAmount,
         );
       }
 
@@ -851,8 +852,8 @@ export class BettingService {
         if (winningTokenBets.length === 0) {
           await this.creditAmountVoidCase(queryRunner, losingTokenBets);
         }
-        if (winningCoinBets.length === 0) {
-          await this.creditAmountVoidCase(queryRunner, losingCoinBets);
+        if (winningSweepCoinBets.length === 0) {
+          await this.creditAmountVoidCase(queryRunner, losingSweepCoinBets);
         }
       }
 
@@ -922,7 +923,7 @@ export class BettingService {
       });
 
       lossingBetsWithUserInfo.map(async (bet) => {
-        if (winningCoinBets.length > 0 || winningTokenBets.length > 0) {
+        if (winningSweepCoinBets.length > 0 || winningTokenBets.length > 0) {
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
             bet.user?.username,
@@ -1079,9 +1080,9 @@ export class BettingService {
         winningBets: [],
         losingBets: [],
         winningTokenBets: [],
-        winningCoinBets: [],
+        winningSweepCoinBets: [],
         losingTokenBets: [],
-        losingCoinBets: [],
+        losingSweepCoinBets: [],
       };
     }
 
@@ -1091,9 +1092,9 @@ export class BettingService {
         winningBets: [],
         losingBets: [],
         winningTokenBets: [],
-        winningCoinBets: [],
+        winningSweepCoinBets: [],
         losingTokenBets: [],
-        losingCoinBets: [],
+        losingSweepCoinBets: [],
       };
     }
 
@@ -1106,31 +1107,31 @@ export class BettingService {
     const winningTokenBets = winningBets.filter(
       (bet) => bet && bet.currency === CurrencyType.FREE_TOKENS,
     );
-    const winningCoinBets = winningBets.filter(
-      (bet) => bet && bet.currency === CurrencyType.STREAM_COINS,
+    const winningSweepCoinBets = winningBets.filter(
+      (bet) => bet && bet.currency === CurrencyType.SWEEP_COINS,
     );
     const losingTokenBets = losingBets.filter(
       (bet) => bet && bet.currency === CurrencyType.FREE_TOKENS,
     );
-    const losingCoinBets = losingBets.filter(
-      (bet) => bet && bet.currency === CurrencyType.STREAM_COINS,
+    const losingSweepCoinBets = losingBets.filter(
+      (bet) => bet && bet.currency === CurrencyType.SWEEP_COINS,
     );
 
     return {
       winningBets,
       losingBets,
       winningTokenBets,
-      winningCoinBets,
+      winningSweepCoinBets,
       losingTokenBets,
-      losingCoinBets,
+      losingSweepCoinBets,
     };
   }
 
   private calculatePots(
     winningTokenBets,
     losingTokenBets,
-    winningCoinBets,
-    losingCoinBets,
+    winningSweepCoinBets,
+    losingSweepCoinBets,
   ) {
     // Validate inputs and provide defaults
     const safeWinningTokenBets = Array.isArray(winningTokenBets)
@@ -1139,11 +1140,11 @@ export class BettingService {
     const safeLosingTokenBets = Array.isArray(losingTokenBets)
       ? losingTokenBets
       : [];
-    const safeWinningCoinBets = Array.isArray(winningCoinBets)
-      ? winningCoinBets
+    const safeWinningSweepCoinBets = Array.isArray(winningSweepCoinBets)
+      ? winningSweepCoinBets
       : [];
-    const safeLosingCoinBets = Array.isArray(losingCoinBets)
-      ? losingCoinBets
+    const safeLosingSweepCoinBets = Array.isArray(losingSweepCoinBets)
+      ? losingSweepCoinBets
       : [];
 
     const totalWinningTokenAmount = safeWinningTokenBets.reduce(
@@ -1154,24 +1155,25 @@ export class BettingService {
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
-    const totalWinningCoinAmount = safeWinningCoinBets.reduce(
+    const totalWinningSweepCoinAmount = safeWinningSweepCoinBets.reduce(
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
-    const totalLosingCoinAmount = safeLosingCoinBets.reduce(
+    const totalLosingSweepCoinAmount = safeLosingSweepCoinBets.reduce(
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
-    const coinPlatformFee = Math.floor(totalLosingCoinAmount * 0.15);
-    const distributableCoinPot = totalLosingCoinAmount - coinPlatformFee;
+    const sweepCoinPlatformFee = Math.floor(totalLosingSweepCoinAmount * 0.15);
+    const distributableSweepCoinPot =
+      totalLosingSweepCoinAmount - sweepCoinPlatformFee;
 
     return {
       totalWinningTokenAmount,
       totalLosingTokenAmount,
-      totalWinningCoinAmount,
-      totalLosingCoinAmount,
-      coinPlatformFee,
-      distributableCoinPot,
+      totalWinningSweepCoinAmount,
+      totalLosingSweepCoinAmount,
+      sweepCoinPlatformFee,
+      distributableSweepCoinPot,
     };
   }
 
@@ -1224,37 +1226,40 @@ export class BettingService {
     }
   }
 
-  private async processWinningCoinBets(
+  private async processWinningSweepCoinBets(
     queryRunner,
-    winningCoinBets,
-    totalWinningCoinAmount,
-    distributableCoinPot,
+    winningSweepCoinBets,
+    totalWinningSweepCoinAmount,
+    distributableSweepCoinPot,
     bettingVariable,
-    totalLosingCoinAmount,
+    totalLosingSweepCoinAmount,
   ) {
     // Validate inputs to prevent division by zero
     if (
-      !winningCoinBets ||
-      winningCoinBets.length === 0 ||
-      totalWinningCoinAmount <= 0
+      !winningSweepCoinBets ||
+      winningSweepCoinBets.length === 0 ||
+      totalWinningSweepCoinAmount <= 0
     ) {
-      console.log('No winning coin bets to process or invalid total amount');
+      console.log(
+        'No winning Sweep coin bets to process or invalid total amount',
+      );
       return;
     }
 
-    for (const bet of winningCoinBets) {
+    for (const bet of winningSweepCoinBets) {
       try {
         const totalBetForWinningOption =
-          bet.bettingVariable?.totalBetsCoinAmount;
+          bet.bettingVariable?.totalBetsSweepCoinAmount;
         //bet amount placed by user
         const betAmount = bet.amount;
-        //reduce 15% - platform fee from total streamcoin pot amount
+        //reduce 15% - platform fee from total Sweep coin pot amount
         const potAmountAfterPlatformFee =
-          Number(totalWinningCoinAmount + totalLosingCoinAmount) * 0.85;
+          Number(totalWinningSweepCoinAmount + totalLosingSweepCoinAmount) *
+          0.85;
         //calculation
         let payout =
           (betAmount / totalBetForWinningOption) * potAmountAfterPlatformFee;
-        // reduce stream coin, upto 3 decimal place
+        // reduce Sweep coin, upto 3 decimal place
         payout = Number(payout.toFixed(3));
 
         bet.status = BetStatus.Won;
@@ -1265,7 +1270,7 @@ export class BettingService {
         await this.walletsService.creditWinnings(
           bet.userId,
           payout,
-          CurrencyType.STREAM_COINS,
+          CurrencyType.SWEEP_COINS,
           `Winnings from bet on ${bettingVariable.name}`,
         );
       } catch (error) {
@@ -1387,22 +1392,22 @@ export class BettingService {
           'bettingVariable.id AS variableId',
           'bettingVariable.name AS variablename',
           'bettingVariable.totalBetsTokenAmount AS variableTotalTokens',
-          'bettingVariable.totalBetsCoinAmount AS variableTotalCoins',
+          'bettingVariable.totalBetsSweepCoinAmount AS variableTotalSweepCoins',
           'bettingVariable.betCountFreeToken AS betCountFreeToken',
-          'bettingVariable.betCountCoin AS betCountCoin',
+          'bettingVariable.betCountSweepCoin AS betCountSweepCoin',
         ])
         .getRawOne();
       if (!bets || bets.betstatus !== BetStatus.Active) {
         return null;
       }
 
-      const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
+      const { potentialSweepCoinAmt, potentialFreeTokenAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
       return {
         betId: bets.betid,
         status: bettingRound.status,
         optionName: bets.variablename,
-        potentialCoinAmt,
+        potentialSweepCoinAmt,
         potentialFreeTokenAmt,
         betAmount,
         currencyType: bets.betcurrency,
@@ -1444,9 +1449,9 @@ export class BettingService {
           'bettingVariable.id AS variableId',
           'bettingVariable.name AS variablename',
           'bettingVariable.totalBetsTokenAmount AS variableTotalTokens',
-          'bettingVariable.totalBetsCoinAmount AS variableTotalCoins',
+          'bettingVariable.totalBetsSweepCoinAmount AS variableTotalSweepCoins',
           'bettingVariable.betCountFreeToken AS betCountFreeToken',
-          'bettingVariable.betCountCoin AS betCountCoin',
+          'bettingVariable.betCountSweepCoin AS betCountSweepCoin',
         ])
         .getRawMany();
 
@@ -1455,7 +1460,7 @@ export class BettingService {
       for (const bet of allBets) {
         if (bet.betstatus === BetStatus.Active) {
           try {
-            const { potentialCoinAmt, potentialFreeTokenAmt, betAmount } =
+            const { potentialSweepCoinAmt, potentialFreeTokenAmt, betAmount } =
               this.potentialAmountCal(bettingRound, bet);
 
             potentialAmounts.push({
@@ -1464,7 +1469,7 @@ export class BettingService {
               betId: bet.betid,
               status: bettingRound.status,
               optionName: bet.variablename,
-              potentialCoinAmt,
+              potentialSweepCoinAmt,
               potentialFreeTokenAmt,
               betAmount,
               currencyType: bet.betcurrency,
@@ -1493,8 +1498,8 @@ export class BettingService {
    * Calculates the potential winning amount for a user’s bet in a betting round.
    *
    * This method estimates the potential reward based on the total pool size,
-   * user's selected betting option, bet currency (FREE_TOKENS or STREAM_COINS),
-   * and bet amount. For STREAM_COINS, a platform fee of 15% is applied before payout.
+   * user's selected betting option, bet currency (FREE_TOKENS or SWEEP_COINS),
+   * and bet amount. For SWEEP_COINS, a platform fee of 15% is applied before payout.
    *
    * @param {any} bettingRound - The current betting round object which includes all betting variables.
    * @param {any} bets - The user's bet object containing details such as amount, currency, and selected variable.
@@ -1505,15 +1510,15 @@ export class BettingService {
   private potentialAmountCal(bettingRound, bets: any) {
     try {
       let freeTokenBetAmtForLoginUser = 0;
-      let stremCoinBetAmtForLoginUser = 0;
+      let sweepCoinBetAmtForLoginUser = 0;
       //bet amount of login user
       const betAmount = Number(bets?.betamount || 0);
 
       if (bets.betcurrency === CurrencyType.FREE_TOKENS) {
         freeTokenBetAmtForLoginUser = betAmount || 0;
       }
-      if (bets.betcurrency === CurrencyType.STREAM_COINS) {
-        stremCoinBetAmtForLoginUser = betAmount || 0;
+      if (bets.betcurrency === CurrencyType.SWEEP_COINS) {
+        sweepCoinBetAmtForLoginUser = betAmount || 0;
       }
 
       const bettingVariables = bettingRound?.bettingVariables || [];
@@ -1525,19 +1530,21 @@ export class BettingService {
       const userOptionTotalTokenAmount = Number(
         userOption?.totalBetsTokenAmount || 0,
       );
-      const userOptionTotalStreamCoinAmt = Number(
-        userOption?.totalBetsCoinAmount || 0,
+      const userOptionTotalSweepCoinAmt = Number(
+        userOption?.totalBetsSweepCoinAmount || 0,
       );
 
       const userOptionTokenCount = Number(userOption?.betCountFreeToken || 0);
-      const userOptionCoinCount = Number(userOption?.betCountCoin || 0);
+      const userOptionSweepCoinCount = Number(
+        userOption?.betCountSweepCoin || 0,
+      );
       // Calculate sum of all bets on other options
       const totalFreeTokenAmount = bettingVariables.reduce(
         (sum, v) => sum + Number(v.totalBetsTokenAmount || 0),
         0,
       );
-      const totalPotStreamCoinAmount = bettingVariables.reduce(
-        (sum, v) => sum + Number(v.totalBetsCoinAmount || 0),
+      const totalPotSweepCoinAmount = bettingVariables.reduce(
+        (sum, v) => sum + Number(v.totalBetsSweepCoinAmount || 0),
         0,
       );
 
@@ -1551,21 +1558,21 @@ export class BettingService {
           (freeTokenBetAmtForLoginUser / userOptionTotalTokenAmount) *
           totalFreeTokenAmount;
       }
-      let potentialCoinAmt = stremCoinBetAmtForLoginUser;
+      let potentialSweepCoinAmt = sweepCoinBetAmtForLoginUser;
       if (
-        bets.betcurrency === CurrencyType.STREAM_COINS &&
-        userOptionCoinCount > 0
+        bets.betcurrency === CurrencyType.SWEEP_COINS &&
+        userOptionSweepCoinCount > 0
       ) {
         // Apply platform fee (15%)
-        const potAmountAfterPlatformFee = totalPotStreamCoinAmount * 0.85;
-        potentialCoinAmt =
-          (stremCoinBetAmtForLoginUser / userOptionTotalStreamCoinAmt) *
+        const potAmountAfterPlatformFee = totalPotSweepCoinAmount * 0.85;
+        potentialSweepCoinAmt =
+          (sweepCoinBetAmtForLoginUser / userOptionTotalSweepCoinAmt) *
           potAmountAfterPlatformFee;
       }
       // --- END MAIN LOGIC ---
 
       return {
-        potentialCoinAmt,
+        potentialSweepCoinAmt,
         potentialFreeTokenAmt: Math.floor(potentialFreeTokenAmt),
         betAmount,
       };
@@ -1701,15 +1708,15 @@ export class BettingService {
             );
             variable.totalBetsTokenAmount -= Number(bet.amount);
             variable.betCountFreeToken -= 1;
-          } else if (bet.currency === CurrencyType.STREAM_COINS) {
-            await this.walletsService.addStreamCoins(
+          } else if (bet.currency === CurrencyType.SWEEP_COINS) {
+            await this.walletsService.addSweepCoins(
               bet.userId,
               bet.amount,
               `Refund for cancelled round ${round.roundName}`,
               'refund',
             );
-            variable.totalBetsCoinAmount -= Number(bet.amount);
-            variable.betCountCoin -= 1;
+            variable.totalBetsSweepCoinAmount -= Number(bet.amount);
+            variable.betCountSweepCoin -= 1;
           }
           bet.status = BetStatus.Cancelled;
           refundedBets.push(bet);
@@ -1753,12 +1760,12 @@ export class BettingService {
       (sum, v) => Number(sum) + Number(v.totalBetsTokenAmount || 0),
       0,
     );
-    const totalBetsCoinAmount = bettingVariables.reduce(
-      (sum, v) => Number(sum) + Number(v.totalBetsCoinAmount || 0),
+    const totalBetsSweepCoinAmount = bettingVariables.reduce(
+      (sum, v) => Number(sum) + Number(v.totalBetsSweepCoinAmount || 0),
       0,
     );
 
-    return { totalBetsTokenAmount, totalBetsCoinAmount };
+    return { totalBetsTokenAmount, totalBetsSweepCoinAmount };
   }
 
   getActiveBetsCount(): Promise<number> {
@@ -1770,13 +1777,13 @@ export class BettingService {
   }
 
   /**
-   * Returns the total bet value for a stream, separated by free tokens and coins.
+   * Returns the total bet value for a stream, separated by free tokens and Sweep coins.
    * @param streamId - The ID of the stream
-   * @returns Promise<{ freeTokens: number; coins: number }>
+   * @returns Promise<{ freeTokens: number; Sweep coins: number }>
    */
   async getTotalBetValueForStream(
     streamId: string,
-  ): Promise<{ freeTokens: number; coins: number }> {
+  ): Promise<{ freeTokens: number; sweepCoins: number }> {
     // Get total bet value for free tokens (exclude cancelled, pending, refunded)
     const tokenResult = await this.betsRepository
       .createQueryBuilder('bet')
@@ -1794,13 +1801,13 @@ export class BettingService {
       })
       .getRawOne();
 
-    // Get total bet value for coins (exclude cancelled, pending, refunded)
-    const coinResult = await this.betsRepository
+    // Get total bet value for sweep coins (exclude cancelled, pending, refunded)
+    const sweepCoinResult = await this.betsRepository
       .createQueryBuilder('bet')
       .select('SUM(bet.amount)', 'totalBetValue')
       .where('bet.streamId = :streamId', { streamId })
       .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.STREAM_COINS,
+        currency: CurrencyType.SWEEP_COINS,
       })
       .andWhere('bet.status NOT IN (:...excludedStatuses)', {
         excludedStatuses: [
@@ -1813,7 +1820,7 @@ export class BettingService {
 
     return {
       freeTokens: Number(tokenResult?.totalBetValue) || 0,
-      coins: Number(coinResult?.totalBetValue) || 0,
+      sweepCoins: Number(sweepCoinResult?.totalBetValue) || 0,
     };
   }
 
@@ -1848,15 +1855,15 @@ export class BettingService {
    *
    * The result includes:
    * - total token bets and amount (currency = freeToken)
-   * - total coin bets and amount (currency = coin)
+   * - total sweep coin bets and amount (currency = sweepCoin)
    *
    * @param streamId - The ID of the stream to filter bets by.
    * @returns An object containing:
    *  {
    *    totalTokenAmount: number,
    *    totalTokenBet: number,
-   *    totalCoinAmount: number,
-   *    totalCoinBet: number
+   *    totalSweepCoinAmount: number,
+   *    totalSweepCoinBet: number
    *  }
    *
    * @throws Will throw an error if the database query fails.
@@ -1864,8 +1871,8 @@ export class BettingService {
   async getBetStatsByStream(streamId: string): Promise<{
     totalTokenAmount: number;
     totalTokenBet: number;
-    totalCoinAmount: number;
-    totalCoinBet: number;
+    totalSweepCoinAmount: number;
+    totalSweepCoinBet: number;
   }> {
     try {
       const qb = this.betsRepository
@@ -1888,24 +1895,24 @@ export class BettingService {
           'totalTokenBet',
         )
         .addSelect(
-          'COALESCE(SUM(CASE WHEN bet.currency = :coin THEN bet.amount ELSE 0 END), 0)',
-          'totalCoinAmount',
+          'COALESCE(SUM(CASE WHEN bet.currency = :sweepCoin THEN bet.amount ELSE 0 END), 0)',
+          'totalSweepCoinAmount',
         )
         .addSelect(
-          'COALESCE(COUNT(CASE WHEN bet.currency = :coin THEN 1 END), 0)',
-          'totalCoinBet',
+          'COALESCE(COUNT(CASE WHEN bet.currency = :sweepCoin THEN 1 END), 0)',
+          'totalSweepCoinBet',
         )
         .setParameters({
           freeToken: CurrencyType.FREE_TOKENS,
-          coin: CurrencyType.STREAM_COINS,
+          sweepCoin: CurrencyType.SWEEP_COINS,
         })
         .getRawOne();
 
       return {
         totalTokenAmount: Number(betStat?.totalTokenAmount) || 0,
         totalTokenBet: Number(betStat?.totalTokenBet) || 0,
-        totalCoinAmount: Number(betStat?.totalCoinAmount) || 0,
-        totalCoinBet: Number(betStat?.totalCoinBet) || 0,
+        totalSweepCoinAmount: Number(betStat?.totalSweepCoinAmount) || 0,
+        totalSweepCoinBet: Number(betStat?.totalSweepCoinBet) || 0,
       };
     } catch (error) {
       Logger.error(
