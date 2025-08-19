@@ -18,8 +18,13 @@ export enum TransactionType {
 export enum CurrencyType {
   FREE_TOKENS = 'free_tokens',
   STREAM_COINS = 'stream_coins',
+  SWEEP_COINS = 'sweep_coins',
+  GOLD_COINS = 'gold_coins',
 }
-
+export enum CurrencyTypeText {
+  SWEEP_COINS_TEXT = 'sweep coins',
+  GOLD_COINS_TEXT = 'gold coins',
+}
 @Entity('transactions')
 export class Transaction extends BaseEntity {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
