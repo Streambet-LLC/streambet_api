@@ -5,7 +5,7 @@ export interface PlaceBetResult {
   bet: Bet;
   success: boolean;
   currencyType: CurrencyType;
-  potentialCoinWinningAmount: any;
+  potentialSweepCoinWinningAmount: any;
   potentialTokenWinningAmount: any;
   amount: number;
   selectedWinner: string;
@@ -13,6 +13,6 @@ export interface PlaceBetResult {
   title?: string;
   updatedWalletBalance: {
     freeTokens: number;
-    streamCoins: number;
+    sweepCoins: number;
   };
 }
