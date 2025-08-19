@@ -1274,7 +1274,10 @@ export class BettingService {
           `Winnings from bet on ${bettingVariable.name}`,
         );
       } catch (error) {
-        console.error(`Error processing winning coin bet ${bet.id}:`, error);
+        console.error(
+          `Error processing winning sweep coin bet ${bet.id}:`,
+          error,
+        );
         throw error;
       }
     }
