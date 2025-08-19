@@ -71,7 +71,7 @@ export class WalletsService {
     );
   }
 
-  async addStreamCoins(
+  async addSweepCoins(
     userId: string,
     amount: number,
     description: string,
@@ -84,7 +84,7 @@ export class WalletsService {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.STREAM_COINS,
+      CurrencyType.SWEEP_COINS,
       addType,
       description,
     );
@@ -155,11 +155,11 @@ export class WalletsService {
         }
         wallet.freeTokens = Number(newBalance);
       } else {
-        newBalance = Number(wallet.streamCoins) + Number(amount);
+        newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient stream coins');
+          throw new BadRequestException('Insufficient sweep coins');
         }
-        wallet.streamCoins = Number(newBalance);
+        wallet.sweepCoins = Number(newBalance);
       }
 
       // Save the updated wallet
@@ -239,7 +239,7 @@ export class WalletsService {
       }
 */
 
-      if (currencyType === CurrencyType.STREAM_COINS) {
+      if (currencyType === CurrencyType.SWEEP_COINS) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
           includedTypes: [
             TransactionType.INITIAL_CREDIT,
@@ -353,7 +353,7 @@ export class WalletsService {
     const balanceAfter =
       currencyType === CurrencyType.FREE_TOKENS
         ? wallet.freeTokens
-        : wallet.streamCoins;
+        : wallet.sweepCoins;
     const transactionObj = this.transactionsRepository.create({
       userId,
       type: transactionType,
