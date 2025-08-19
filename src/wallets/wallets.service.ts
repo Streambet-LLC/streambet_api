@@ -28,7 +28,7 @@ export class WalletsService {
   ) {}
 
   async create(userId: string): Promise<Wallet> {
-    // Create wallet with initial 1000 free tokens
+    // Create wallet with initial 1000 Gold Coin
     const wallet = this.walletsRepository.create({ userId });
     const savedWallet = await this.walletsRepository.save(wallet);
 
@@ -36,10 +36,10 @@ export class WalletsService {
     await this.createTransaction({
       userId,
       type: TransactionType.INITIAL_CREDIT,
-      currencyType: CurrencyType.FREE_TOKENS,
+      currencyType: CurrencyType.GOLD_COINS,
       amount: 1000,
       balanceAfter: 1000,
-      description: 'Initial free tokens on registration',
+      description: 'Initial Gold Coins on registration',
     });
 
     return savedWallet;
@@ -57,7 +57,7 @@ export class WalletsService {
     return wallet;
   }
 
-  async addFreeTokens(
+  async addGoldCoins(
     userId: string,
     amount: number,
     description: string,
@@ -65,7 +65,7 @@ export class WalletsService {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.FREE_TOKENS,
+      CurrencyType.GOLD_COINS,
       TransactionType.REFUND,
       description,
     );
@@ -148,12 +148,12 @@ export class WalletsService {
 
       // Calculate new balance
       let newBalance: number;
-      if (currencyType === CurrencyType.FREE_TOKENS) {
-        newBalance = Number(wallet.freeTokens) + Number(amount);
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        newBalance = Number(wallet.goldCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient free tokens');
+          throw new BadRequestException('Insufficient free Gold Coins');
         }
-        wallet.freeTokens = Number(newBalance);
+        wallet.goldCoins = Number(newBalance);
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
@@ -289,7 +289,7 @@ export class WalletsService {
     const transaction = this.transactionsRepository.create(transactionData);
     return this.transactionsRepository.save(transaction);
   }
-  async updateFreeTokensByAdmin(
+  async updateGoldCoinsByAdmin(
     userId: string,
     amount: number,
     description: string,
@@ -307,9 +307,9 @@ export class WalletsService {
       throw new BadRequestException('Invalid Amount');
     }
 
-    if (currencyType === CurrencyType.FREE_TOKENS) {
-      await this.walletsRepository.update(wallet.id, { freeTokens: amount });
-      const addedAmount = amount - wallet.freeTokens;
+    if (currencyType === CurrencyType.GOLD_COINS) {
+      await this.walletsRepository.update(wallet.id, { goldCoins: amount });
+      const addedAmount = amount - wallet.goldCoins;
 
       const transactionType =
         addedAmount >= 0
@@ -351,8 +351,8 @@ export class WalletsService {
     }
 
     const balanceAfter =
-      currencyType === CurrencyType.FREE_TOKENS
-        ? wallet.freeTokens
+      currencyType === CurrencyType.GOLD_COINS
+        ? wallet.goldCoins
         : wallet.sweepCoins;
     const transactionObj = this.transactionsRepository.create({
       userId,

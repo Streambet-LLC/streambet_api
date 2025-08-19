@@ -39,13 +39,13 @@ export class BettingVariable extends BaseEntity {
   status: BettingVariableStatus;
 
   @Column({ type: 'bigint', default: 0 })
-  totalBetsTokenAmount: number;
+  totalBetsGoldCoinAmount: number;
 
   @Column({ type: 'bigint', default: 0 })
   totalBetsSweepCoinAmount: number;
 
   @Column({ type: 'int', default: 0 })
-  betCountFreeToken: number;
+  betCountGoldCoin: number;
 
   @Column({ type: 'int', default: 0 })
   betCountSweepCoin: number;

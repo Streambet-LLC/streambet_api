@@ -46,7 +46,7 @@ export class UsersService {
       const { password: _unused, wallet, ...sanitizedUser } = user;
       const result = {
         ...sanitizedUser,
-        walletBalanceToken: user.wallet?.freeTokens ?? 0,
+        walletBalanceGoldCoin: user.wallet?.goldCoins ?? 0,
         walletBalanceSweepCoin: user.wallet?.sweepCoins ?? 0,
       };
       // Exclude password from the response

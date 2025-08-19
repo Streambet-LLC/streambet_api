@@ -6,13 +6,13 @@ export interface PlaceBetResult {
   success: boolean;
   currencyType: CurrencyType;
   potentialSweepCoinWinningAmount: any;
-  potentialTokenWinningAmount: any;
+  potentialGoldCoinWinningAmount: any;
   amount: number;
   selectedWinner: string;
   message?: string;
   title?: string;
   updatedWalletBalance: {
-    freeTokens: number;
+    goldCoins: number;
     sweepCoins: number;
   };
 }

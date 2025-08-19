@@ -60,8 +60,8 @@ export class NotificationService {
           streamName,
         });
         let updatedCurrencyType =
-          currencyType === CurrencyType.FREE_TOKENS
-            ? 'free token'
+          currencyType === CurrencyType.GOLD_COINS
+            ? CurrencyTypeText.GOLD_COINS_TEXT
             : CurrencyTypeText.SWEEP_COINS_TEXT;
         const emailData = {
           toAddress: [receiverEmail],

@@ -14,8 +14,8 @@ import {
   TransactionType,
 } from 'src/wallets/entities/transaction.entity';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { BetStatus } from 'src/enums/bet-status.enum';
+import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
 
 @Injectable()
 export class AdminService {
@@ -63,20 +63,20 @@ export class AdminService {
     return this.userRepository.save(user);
   }
 
-  async updateFreeTokensByAdmin(
-    addFreeTokenDto: AddFreeTokenDto,
+  async updateGoldCoinsByAdmin(
+    addGoldCoinDto: AddGoldCoinDto,
   ): Promise<Wallet> {
-    const { userId, amount } = addFreeTokenDto;
+    const { userId, amount } = addGoldCoinDto;
     // Ensure amount is positive for admin updates
     if (amount <= 0) {
       throw new BadRequestException('Invalid amount');
     }
-    const description = `Admin credit adjustment of ${amount} free tokens for user ${userId}`;
-    return this.walletsService.updateFreeTokensByAdmin(
+    const description = `Admin credit adjustment of ${amount} Gold Coins for user ${userId}`;
+    return this.walletsService.updateGoldCoinsByAdmin(
       userId,
       amount,
       description,
-      CurrencyType.FREE_TOKENS,
+      CurrencyType.GOLD_COINS,
       TransactionType.ADMIN_CREDIT,
     );
   }
@@ -114,12 +114,14 @@ export class AdminService {
       const winningOptions = round.bettingVariables.filter(
         (v) => v.is_winning_option,
       );
-      let winners = { freeTokens: [], sweepCoins: [] };
-      let winnerAmount = { freeTokens: null, sweepCoins: null };
+      let winners = { goldCoins: [], sweepCoins: [] };
+      let winnerAmount = { goldCoins: null, sweepCoins: null };
       if (winningOptions.length > 0) {
         // For each winning option, get all bets by currency
-        const winnerBetsFreeTokens = winningOptions.flatMap((v) =>
-          (v.bets || []).filter((bet) => bet.currency === 'free_tokens'),
+        const winnerBetsGoldCoins = winningOptions.flatMap((v) =>
+          (v.bets || []).filter(
+            (bet) => bet.currency === CurrencyType.GOLD_COINS,
+          ),
         );
         const winnerBetsSweepCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter(
@@ -127,14 +129,14 @@ export class AdminService {
           ),
         );
         // Remove duplicate users (in case a user bet multiple times)
-        const winnerUsersMapFreeTokens = new Map();
-        for (const bet of winnerBetsFreeTokens) {
+        const winnerUsersMapGoldCoins = new Map();
+        for (const bet of winnerBetsGoldCoins) {
           if (
             bet.user &&
-            !winnerUsersMapFreeTokens.has(bet.user.id) &&
+            !winnerUsersMapGoldCoins.has(bet.user.id) &&
             bet.status === BetStatus.Won
           ) {
-            winnerUsersMapFreeTokens.set(bet.user.id, {
+            winnerUsersMapGoldCoins.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
               avatar: bet.user.profileImageUrl,
@@ -151,10 +153,10 @@ export class AdminService {
             });
           }
         }
-        winners.freeTokens = Array.from(winnerUsersMapFreeTokens.values());
+        winners.goldCoins = Array.from(winnerUsersMapGoldCoins.values());
         winners.sweepCoins = Array.from(winnerUsersMapSweepCoins.values());
         // Calculate winnerAmount (sum of payouts for this round's winning bets)
-        const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
+        const winnerAmountGoldCoins = winnerBetsGoldCoins.reduce(
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
@@ -162,8 +164,8 @@ export class AdminService {
           (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
           0,
         );
-        winnerAmount.freeTokens = winnerAmountFreeTokens
-          ? winnerAmountFreeTokens
+        winnerAmount.goldCoins = winnerAmountGoldCoins
+          ? winnerAmountGoldCoins
           : null;
         winnerAmount.sweepCoins = winnerAmountSweepCoins
           ? winnerAmountSweepCoins

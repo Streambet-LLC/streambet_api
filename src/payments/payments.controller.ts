@@ -45,7 +45,7 @@ export class PaymentsController {
       properties: {
         packageId: {
           type: 'string',
-          description: 'Token package ID to purchase',
+          description: 'Gold Coin package ID to purchase',
         },
       },
     },
@@ -156,7 +156,10 @@ export class PaymentsController {
 
   /** Retrieves Coinflow withdrawer data for the authenticated user. */
   @ApiOperation({ summary: 'Get Coinflow withdraw' })
-  @ApiResponse({ status: 200, description: 'Coinflow withdraw payload fetched' })
+  @ApiResponse({
+    status: 200,
+    description: 'Coinflow withdraw payload fetched',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)

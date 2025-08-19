@@ -27,11 +27,11 @@ export class StreamAnalyticsResponseDto {
   @ApiProperty({
     type: 'object',
     description:
-      'Total bet value for the stream, separated by freeTokens and sweep coins',
+      'Total bet value for the stream, separated by Gold Coin and sweep coins',
     properties: {
-      freeTokens: {
+      goldCoins: {
         type: 'number',
-        description: 'Total bet value in free tokens',
+        description: 'Total bet value in Gold Coin',
       },
       sweepCoins: {
         type: 'number',
@@ -40,7 +40,7 @@ export class StreamAnalyticsResponseDto {
     },
   })
   totalBetValue: {
-    freeTokens: number;
+    goldCoins: number;
     sweepCoins: number;
   };
 
