@@ -380,7 +380,7 @@ export class BettingGateway
          .emit('bettingUpdate', {
            roundId: roundIdEmit,
            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-           totalBetsGoldCoinsAmount: roundTotals.totalBetsGoldCoinAmount,
+           totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
            ...betStat,
          });
         await this.sendPersonalizedPotentialAmounts(
@@ -562,7 +562,7 @@ export class BettingGateway
         potentialSweepCoinWinningAmount:
           potentialAmount?.potentialSweepCoinAmt || 0,
         potentialGoldCoinWinningAmount:
-          potentialAmount?.potentialFreeGoldCoinAmt || 0,
+          potentialAmount?.potentialGoldCoinAmt || 0,
         amount: editedBet.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
