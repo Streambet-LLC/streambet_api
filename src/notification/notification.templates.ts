@@ -1,4 +1,7 @@
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  CurrencyTypeText,
+} from 'src/wallets/entities/transaction.entity';
 
 interface BetNotificationData {
   amount?: number;
@@ -12,22 +15,22 @@ interface BetNotificationData {
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You bet ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
+      `You bet ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Bet Placed Successfully`,
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
-      `You changed your bet to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
+      `You changed your bet to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Bet Modified`,
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your bet of ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} has been cancelled for ${data.roundName}`,
+      `Your bet of ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} has been cancelled for ${data.roundName}`,
     TITLE: () => `Bet Cancelled`,
   },
   BET_WON: {
     MESSAGE: (data: BetNotificationData) =>
-      `🎉 Congratulations! You won ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} in "${data.roundName}". Your wallet has been updated `,
+      `🎉 Congratulations! You won ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `'s` : ''} in "${data.roundName}". Your wallet has been updated `,
     TITLE: () => `🎉 Oh Snap! You Won!`,
   },
   BET_LOST: {
@@ -64,7 +67,7 @@ export const NOTIFICATION_TEMPLATE = {
   EMAIL_PASSWORD_RESET: {
     TITLE: () => `Password Reset Request`,
   },
-  EMAIL_FREE_COIN_WON: {
+  EMAIL_GOLD_COIN_WON: {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}, but could you have done better?`,
   },
