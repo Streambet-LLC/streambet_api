@@ -396,18 +396,37 @@ export class PaymentsService {
       }
 
       const rawCustomerId: string | undefined = payload?.data?.rawCustomerId;
-      const webhookInfo = (payload?.data?.webhookInfo || {}) as Record<string, unknown>;
-
-      // Some providers send stringified JSON values inside webhookInfo; parse them defensively
-      const parsedInfo: Record<string, unknown> = { ...webhookInfo };
-      for (const [k, v] of Object.entries(webhookInfo)) {
-        if (typeof v === 'string') {
-          const trimmed = v.trim();
-          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-            try {
-              parsedInfo[k] = JSON.parse(trimmed);
-            } catch {
-              // keep original string if JSON.parse fails
+      const rawWebhookInfo = payload?.data?.webhookInfo as unknown;
+      let parsedInfo: Record<string, unknown> = {};
+      // If the entire webhookInfo is a JSON string, parse it
+      if (typeof rawWebhookInfo === 'string') {
+        const trimmed = rawWebhookInfo.trim();
+        if (
+          (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))
+        ) {
+          try {
+            const obj = JSON.parse(trimmed);
+            if (obj && typeof obj === 'object') parsedInfo = obj as Record<string, unknown>;
+          } catch {
+            // leave parsedInfo empty
+          }
+        }
+      } else if (rawWebhookInfo && typeof rawWebhookInfo === 'object') {
+        parsedInfo = { ...(rawWebhookInfo as Record<string, unknown>) };
+        // Some providers send nested stringified JSON values; parse them defensively
+        for (const [k, v] of Object.entries(rawWebhookInfo as Record<string, unknown>)) {
+          if (typeof v === 'string') {
+            const s = v.trim();
+            if (
+              (s.startsWith('{') && s.endsWith('}')) ||
+              (s.startsWith('[') && s.endsWith(']'))
+            ) {
+              try {
+                parsedInfo[k] = JSON.parse(s);
+              } catch {
+                // keep original string if JSON.parse fails
+              }
             }
           }
         }

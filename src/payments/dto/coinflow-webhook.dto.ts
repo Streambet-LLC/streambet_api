@@ -32,8 +32,8 @@ import {
     wallet?: string;
   
     @IsOptional()
-    @IsObject()
-    webhookInfo?: Record<string, string> | null;
+    // Accept string or object from providers
+    webhookInfo?: Record<string, string> | string | null;
   
     @ValidateNested()
     @Type(() => AmountDto)
