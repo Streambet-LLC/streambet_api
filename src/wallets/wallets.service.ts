@@ -127,6 +127,7 @@ export class WalletsService {
     transactionType: TransactionType,
     description: string,
     metadata?: Record<string, any>,
+    options?: { relatedEntityId?: string; relatedEntityType?: string },
   ): Promise<Wallet> {
     // Use a transaction to ensure data consistency
     const queryRunner = this.dataSource.createQueryRunner();
@@ -144,6 +145,23 @@ export class WalletsService {
         throw new NotFoundException(
           `Wallet for user with ID ${userId} not found`,
         );
+      }
+
+      // If a related entity id is provided, ensure we haven't created a purchase transaction for it already
+      if (options?.relatedEntityId) {
+        const existingCount = await queryRunner.manager.getRepository(Transaction).count({
+          where: {
+            relatedEntityId: options.relatedEntityId,
+            ...(options.relatedEntityType ? { relatedEntityType: options.relatedEntityType } : {}),
+            type: transactionType,
+            currencyType,
+          },
+        });
+        if (existingCount > 0) {
+          await queryRunner.rollbackTransaction();
+          await queryRunner.release();
+          return wallet;
+        }
       }
 
       // Calculate new balance
@@ -174,6 +192,8 @@ export class WalletsService {
         balanceAfter: newBalance,
         description,
         metadata,
+        relatedEntityId: options?.relatedEntityId,
+        relatedEntityType: options?.relatedEntityType,
       });
 
       await queryRunner.manager.save(transaction);
@@ -190,6 +210,20 @@ export class WalletsService {
       // Release the query runner
       await queryRunner.release();
     }
+  }
+
+  async hasTransactionForRelatedEntity(
+    relatedEntityId: string,
+    relatedEntityType?: string,
+    currencyType?: CurrencyType,
+  ): Promise<boolean> {
+    const where: any = { relatedEntityId };
+    if (relatedEntityType) where.relatedEntityType = relatedEntityType;
+    if (currencyType) where.currencyType = currencyType;
+    // Only consider purchase transactions for idempotency check
+    where.type = TransactionType.PURCHASE;
+    const count = await this.transactionsRepository.count({ where });
+    return count > 0;
   }
 
   async getAllTransactionHistory(

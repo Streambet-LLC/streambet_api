@@ -1,6 +1,9 @@
-import { Injectable, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
+import { CurrencyType, TransactionType } from '../wallets/entities/transaction.entity';
+import { CoinPackageService } from '../coin-package/coin-package.service';
+import { BettingGateway } from '../betting/betting.gateway';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
@@ -21,6 +24,8 @@ export class PaymentsService {
   constructor(
     private configService: ConfigService,
     private walletsService: WalletsService,
+    private coinPackageService: CoinPackageService,
+    private bettingGateway: BettingGateway,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -373,5 +378,145 @@ export class PaymentsService {
         ? status
         : HttpStatus.BAD_GATEWAY;
     return new HttpException(message, httpStatus);
+  }
+
+  /**
+   * Handle Coinflow webhook events. On 'settled', credit coins and record purchase transactions.
+   * Expected payload contains data.webhookInfo with at least userId and coinPackageId.
+   */
+  async handleCoinflowWebhookEvent(payload: any) {
+    try {
+      const eventType: string = payload?.eventType || payload?.event || '';
+      if (!eventType) {
+        throw new BadRequestException('Missing event type');
+      }
+
+      if (eventType.toLowerCase() !== 'settled') {
+        return { ignored: true };
+      }
+
+      const rawCustomerId: string | undefined = payload?.data?.rawCustomerId;
+      const webhookInfo = (payload?.data?.webhookInfo || {}) as Record<string, unknown>;
+
+      // Some providers send stringified JSON values inside webhookInfo; parse them defensively
+      const parsedInfo: Record<string, unknown> = { ...webhookInfo };
+      for (const [k, v] of Object.entries(webhookInfo)) {
+        if (typeof v === 'string') {
+          const trimmed = v.trim();
+          if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+              parsedInfo[k] = JSON.parse(trimmed);
+            } catch {
+              // keep original string if JSON.parse fails
+            }
+          }
+        }
+      }
+
+      // Attempt to read coin package id from known keys or nested objects
+      const tryGetFrom = (obj: any, key: string): string | undefined => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        if (typeof obj[key] === 'string') return obj[key];
+        for (const val of Object.values(obj)) {
+          if (val && typeof val === 'object') {
+            const found = tryGetFrom(val, key);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
+
+      const userId: string | undefined = rawCustomerId;
+      const coinPackageId: string | undefined =
+        (parsedInfo['coin_package_id'] as string | undefined) ||
+        (parsedInfo['coinPackageId'] as string | undefined) ||
+        tryGetFrom(parsedInfo, 'coin_package_id') ||
+        tryGetFrom(parsedInfo, 'coinPackageId') ||
+        (payload?.data?.coinPackageId as string | undefined);
+
+      if (!userId) {
+        throw new BadRequestException('Missing userId (rawCustomerId)');
+      }
+      if (!coinPackageId) {
+        throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
+      }
+
+      const coinPackage = await this.coinPackageService.findById(coinPackageId);
+      if (!coinPackage) {
+        throw new NotFoundException('Coin package not found');
+      }
+
+      const relatedEntityId = payload?.data?.id as string | undefined;
+      const relatedEntityType = 'coinflow';
+
+      // If we've already processed this purchase for a given currency, skip credit for that currency
+      // Sweep coins
+      if (Number(coinPackage.sweepCoinCount) > 0) {
+        const exists = relatedEntityId
+          ? await this.walletsService.hasTransactionForRelatedEntity(
+              relatedEntityId,
+              relatedEntityType,
+              CurrencyType.SWEEP_COINS,
+            )
+          : false;
+        if (!exists) {
+          await this.walletsService.updateBalance(
+            userId,
+            Number(coinPackage.sweepCoinCount),
+            CurrencyType.SWEEP_COINS,
+            TransactionType.PURCHASE,
+            `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} sweep coins`,
+            { coinPackageId: coinPackage.id, source: 'coinflow' },
+            { relatedEntityId, relatedEntityType },
+          );
+        }
+      }
+
+      // Gold coins
+      if (Number(coinPackage.goldCoinCount) > 0) {
+        const exists = relatedEntityId
+          ? await this.walletsService.hasTransactionForRelatedEntity(
+              relatedEntityId,
+              relatedEntityType,
+              CurrencyType.GOLD_COINS,
+            )
+          : false;
+        if (!exists) {
+          await this.walletsService.updateBalance(
+            userId,
+            Number(coinPackage.goldCoinCount),
+            CurrencyType.GOLD_COINS,
+            TransactionType.PURCHASE,
+            `Purchase of ${coinPackage.name}: ${coinPackage.goldCoinCount} gold coins`,
+            { coinPackageId: coinPackage.id, source: 'coinflow' },
+            { relatedEntityId, relatedEntityType },
+          );
+        }
+      }
+
+      Logger.log(`Coinflow settled credited for user ${userId} and package ${coinPackageId}`);
+
+      // Emit socket notification to all of the user's active connections
+      const updatedWallet = await this.walletsService.findByUserId(userId);
+      this.bettingGateway.emitPurchaseSettled(userId, {
+        message: `Purchase successful: ${coinPackage.name}`,
+        updatedWalletBalance: {
+          goldCoins: updatedWallet.goldCoins,
+          sweepCoins: updatedWallet.sweepCoins,
+        },
+        coinPackage: {
+          id: coinPackage.id,
+          name: coinPackage.name,
+          sweepCoins: Number(coinPackage.sweepCoinCount) || 0,
+          goldCoins: Number(coinPackage.goldCoinCount) || 0,
+        },
+      });
+      return { processed: true };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new BadRequestException((error as Error)?.message || 'Failed to process Coinflow webhook');
+    }
   }
 }
