@@ -159,8 +159,7 @@ export class WalletsService {
         });
         if (existingCount > 0) {
           await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return wallet;
+          return wallet; // finally will release
         }
       }
 
