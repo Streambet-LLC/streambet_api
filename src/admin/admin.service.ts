@@ -124,12 +124,16 @@ export class AdminService {
         // For each winning option, get all bets by currency
         const winnerBetsGoldCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter(
-            (bet) => bet.currency === CurrencyType.GOLD_COINS,
+            (bet) =>
+              bet.currency === CurrencyType.GOLD_COINS &&
+              bet.status === BetStatus.Won,
           ),
         );
         const winnerBetsSweepCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter(
-            (bet) => bet.currency === CurrencyType.SWEEP_COINS,
+            (bet) =>
+              bet.currency === CurrencyType.SWEEP_COINS &&
+              bet.status === BetStatus.Won,
           ),
         );
         // Remove duplicate users (in case a user bet multiple times)
