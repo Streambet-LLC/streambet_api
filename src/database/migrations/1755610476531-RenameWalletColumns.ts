@@ -21,7 +21,7 @@ export class RenameWalletColumns1755610476531 implements MigrationInterface {
     // Rollback sweep_coin -> streamCoin
     await queryRunner.query(`
       ALTER TABLE "wallets"
-      RENAME COLUMN "sweep_coins" TO "streamCoin"
+      RENAME COLUMN "sweep_coins" TO "streamCoins"
     `);
 
     // Rollback gold_coin -> freeTokens
