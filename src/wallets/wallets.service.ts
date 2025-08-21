@@ -16,6 +16,7 @@ import {
 } from './entities/transaction.entity';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
+import { HistoryType } from 'src/enums/history-type.enum';
 
 @Injectable()
 export class WalletsService {
@@ -149,14 +150,18 @@ export class WalletsService {
 
       // If a related entity id is provided, ensure we haven't created a purchase transaction for it already
       if (options?.relatedEntityId) {
-        const existingCount = await queryRunner.manager.getRepository(Transaction).count({
-          where: {
-            relatedEntityId: options.relatedEntityId,
-            ...(options.relatedEntityType ? { relatedEntityType: options.relatedEntityType } : {}),
-            type: transactionType,
-            currencyType,
-          },
-        });
+        const existingCount = await queryRunner.manager
+          .getRepository(Transaction)
+          .count({
+            where: {
+              relatedEntityId: options.relatedEntityId,
+              ...(options.relatedEntityType
+                ? { relatedEntityType: options.relatedEntityType }
+                : {}),
+              type: transactionType,
+              currencyType,
+            },
+          });
         if (existingCount > 0) {
           await queryRunner.rollbackTransaction();
           return wallet; // finally will release
@@ -248,13 +253,23 @@ export class WalletsService {
         throw new BadRequestException('Invalid filter format');
       }
 
-      const { pagination = true, currencyType } = transactionFilterDto;
+      const { pagination = true, historyType } = transactionFilterDto;
 
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
-
-      if (!currencyType) {
+      if (historyType === HistoryType.Transaction) {
+        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
+          includedTypes: [
+            TransactionType.ADMIN_CREDIT,
+            TransactionType.DEPOSIT,
+            TransactionType.WITHDRAWAL,
+            TransactionType.PURCHASE,
+            TransactionType.INITIAL_CREDIT,
+          ],
+        });
+      }
+      if (historyType === HistoryType.Bet) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
           includedTypes: [TransactionType.BET_LOST, TransactionType.BET_WON],
         });
@@ -262,23 +277,6 @@ export class WalletsService {
       if (filter?.q) {
         transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
-        });
-      }
-      /*  
-      if (currencyType) {
-        transactionQB.andWhere(`t.currencyType = :currencyType`, {
-          currencyType,
-        });
-      }
-*/
-
-      if (currencyType === CurrencyType.SWEEP_COINS) {
-        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
-          includedTypes: [
-            TransactionType.INITIAL_CREDIT,
-            TransactionType.ADMIN_CREDIT,
-            TransactionType.ADMIN_DEBITED,
-          ],
         });
       }
       if (sort) {
