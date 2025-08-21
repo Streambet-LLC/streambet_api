@@ -369,22 +369,22 @@ export class BettingGateway
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
-       let betStat = {};
-       if (user.role === UserRole.ADMIN) {
-         betStat = await this.bettingService.getBetStatsByStream(
-           bettingVariable.stream.id,
-         );
-       }
-       this.server
-         .to(`stream_${bettingVariable.stream.id}`)
-         .emit('bettingUpdate', {
-           roundId: roundIdEmit,
-           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-           totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-           totalSweepCoinBet: roundTotals.totalSweepCoinBet,
-           totalGoldCoinBet: roundTotals.totalGoldCoinBet,
-           ...betStat,
-         });
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
+        this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('bettingUpdate', {
+            roundId: roundIdEmit,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            ...betStat,
+          });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
           roundIdEmit,
@@ -489,12 +489,12 @@ export class BettingGateway
       if (bettingVariable) {
         const updatedBettingVariable =
           await this.bettingService.findBettingVariableById(bettingVariable.id);
-          let betStat={}
-          if (user.role === UserRole.ADMIN) {
-              betStat = await this.bettingService.getBetStatsByStream(
-               bettingVariable.stream.id,
-             );
-           }
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
@@ -523,7 +523,6 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
-     
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -640,7 +639,7 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-      }    
+      }
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -1030,7 +1029,12 @@ export class BettingGateway
     payload: {
       message: string;
       updatedWalletBalance: { goldCoins: number; sweepCoins: number };
-      coinPackage?: { id: string; name: string; sweepCoins: number; goldCoins: number };
+      coinPackage?: {
+        id: string;
+        name: string;
+        sweepCoins: number;
+        goldCoins: number;
+      };
     },
   ): void {
     const sockets = this.server.sockets.sockets;
