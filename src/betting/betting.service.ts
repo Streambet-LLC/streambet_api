@@ -797,8 +797,9 @@ export class BettingService {
           bettingVariable.id,
           bettingVariable.name,
           [], // No winners
+          [], // No lossers
         );
-        this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
         return;
       }
 
@@ -877,7 +878,17 @@ export class BettingService {
         roundName: bettingVariable?.round?.roundName,
         email: bet.user?.email,
       }));
-
+      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: {
+          roundId: bettingVariable.roundId,
+          status: BetStatus.Lost,
+        },
+        relations: ['user', 'bettingVariable', 'round'],
+      });
+      const lossers = lossingBetsWithUserInfo.map((bet) => ({
+        userId: bet.userId,
+        username: bet.user?.username,
+      }));
       await queryRunner.commitTransaction();
 
       this.bettingGateway.emitWinnerDeclared(
@@ -885,9 +896,10 @@ export class BettingService {
         bettingVariable.id,
         bettingVariable.name,
         winners,
+        lossers,
       );
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       for (const winner of winners) {
         await this.bettingGateway.emitBotMessageToWinner(
@@ -918,13 +930,7 @@ export class BettingService {
         }
           */
       }
-      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: {
-          roundId: bettingVariable.roundId,
-          status: BetStatus.Lost,
-        },
-        relations: ['user', 'bettingVariable', 'round'],
-      });
+      
 
       lossingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
