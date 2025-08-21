@@ -29,6 +29,7 @@ import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
+import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 
 @Injectable()
 export class StreamService {
@@ -308,35 +309,60 @@ END
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
-  async findStreamById(streamId: string): Promise<Stream> {
+  async findStreamById(streamId: string): Promise<any> {
     try {
-      const stream = await this.streamsRepository.findOne({
-        where: {
-          id: streamId,
-          status: In([
+      const stream = await this.streamsRepository
+        .createQueryBuilder('stream')
+        .leftJoinAndSelect('stream.bettingRounds', 'br')
+        .leftJoinAndSelect('br.bettingVariables', 'bv')
+        .leftJoinAndSelect('bv.bets', 'b')
+        .leftJoinAndSelect('b.user', 'u')
+        .where('stream.id = :streamId', { streamId })
+        .andWhere('stream.status IN (:...statuses)', {
+          statuses: [
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED,
             StreamStatus.ENDED,
-          ]), // Include both LIVE and SCHEDULED
-        },
-        select: {
-          id: true,
-          embeddedUrl: true,
-          name: true,
-          platformName: true,
-          status: true,
-          scheduledStartTime: true,
-          thumbnailUrl: true,
-        },
-      });
+          ],
+        })
+        .getOne();
 
       if (!stream) {
         throw new NotFoundException(
           `Could not find an active stream with the specified ID. Please check the ID and try again.`,
         );
       }
-
-      return stream;
+      let rounds = [];
+      if (stream.bettingRounds && stream.bettingRounds.length > 0) {
+        rounds = stream.bettingRounds.map((round) => ({
+          roundName: round.roundName,
+          roundStatus: round.status,
+          winningOption: round.bettingVariables
+            .filter((variable) => variable.is_winning_option === true)
+            .map((variable) => ({
+              variableName: variable.name,
+              totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
+              totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
+              winners: variable.bets.map((bet) => ({
+                userName: bet.user.username,
+                userProfileUrl: bet.user.profileImageUrl,
+              })),
+            })),
+        }));
+      }
+      const streamDetails = {
+        id: stream.id,
+        name: stream.name,
+        embeddedUrl: stream.embeddedUrl,
+        thumbnailUrl: stream.thumbnailUrl,
+        platformName: stream.platformName,
+        status: stream.status,
+        scheduledStartTime: stream.scheduledStartTime,
+        discription: stream.description,
+        viewerCount: stream.viewerCount,
+        roundDetails: rounds || [],
+      };
+      return streamDetails;
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw e;
@@ -1022,12 +1048,12 @@ END
         .addSelect('s.thumbnailUrl', 'thumbnailUrl')
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsGoldCoinAmount), 0)',
+          'COALESCE(SUM(bv.total_bets_gold_coin_amount), 0)',
           'totalBetsGoldCoinAmount',
         )
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
-          'totalBetsCoinAmount',
+          'COALESCE(SUM(bv.total_bets_sweep_coin_amount), 0)',
+          'totalBetsSweepCoinAmount',
         )
         .addSelect(
           `CASE

@@ -21,4 +21,11 @@ export class CoinPackageService {
     });
     return coinPackages;
   }
+
+  /**
+   * Fetch a coin package by its id if active.
+   */
+  async findById(id: string) {
+    return this.coinPackagesRepository.findOne({ where: { id, status: true } });
+  }
 }

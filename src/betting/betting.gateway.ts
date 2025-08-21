@@ -1021,4 +1021,22 @@ export class BettingGateway
     this.server.to('streambet').emit('streamListUpdated', payload);
     Logger.log(`Emitting stream list event: ${event}`);
   }
+
+  // Emit purchase settled event to all active sockets of a user
+  emitPurchaseSettled(
+    userId: string,
+    payload: {
+      message: string;
+      updatedWalletBalance: { goldCoins: number; sweepCoins: number };
+      coinPackage?: { id: string; name: string; sweepCoins: number; goldCoins: number };
+    },
+  ): void {
+    const sockets = this.server.sockets.sockets;
+    sockets.forEach((socket) => {
+      const authenticatedSocket = socket as AuthenticatedSocket;
+      if (authenticatedSocket.data?.user?.sub === userId) {
+        authenticatedSocket.emit('purchaseSettled', payload);
+      }
+    });
+  }
 }

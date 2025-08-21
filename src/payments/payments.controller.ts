@@ -197,10 +197,7 @@ export class PaymentsController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   async handleCoinflowWebhook(@Body() payload: CoinflowWebhookDto) {
-    Logger.log(
-      `Coinflow webhook received: ${JSON.stringify(payload)}`,
-      PaymentsController.name,
-    );
-    return { received: true };
+    Logger.log(`Coinflow webhook received`, PaymentsController.name);
+    return this.paymentsService.handleCoinflowWebhookEvent(payload);
   }
 }

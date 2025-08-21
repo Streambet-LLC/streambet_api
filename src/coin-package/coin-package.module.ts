@@ -8,5 +8,6 @@ import { CoinPackage } from './entities/coin-package.entity';
   imports: [TypeOrmModule.forFeature([CoinPackage])],
   controllers: [CoinPackageController],
   providers: [CoinPackageService],
+  exports: [CoinPackageService],
 })
 export class CoinPackageModule {}
