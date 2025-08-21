@@ -797,7 +797,7 @@ export class BettingService {
           bettingVariable.id,
           bettingVariable.name,
           [], // No winners
-          [], // No lossers
+          [], // No losers
         );
         this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
         return;
