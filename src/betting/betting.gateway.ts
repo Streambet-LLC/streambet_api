@@ -905,18 +905,23 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-
-      const chatMessage: ChatMessage = {
-        type: 'system',
-        username: 'StreambetBot',
-        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
-          amount: amount,
-          currencyType: currencyType,
-          roundName: roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
-        timestamp: new Date(),
-      };
+const message =
+  currencyType === CurrencyType.GOLD_COINS
+    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({
+        amount: amount,
+      })
+    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
+const title =
+  currencyType === CurrencyType.GOLD_COINS
+    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
+    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
+const chatMessage: ChatMessage = {
+  type: 'system',
+  username: 'StreambetBot',
+  message,
+  title,
+  timestamp: new Date(),
+};
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
