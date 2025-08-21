@@ -15,8 +15,7 @@ interface BetNotificationData {
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You bet ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption} for ${data.roundName}`,
-    TITLE: () => `Bet Placed Successfully`,
+      `Congratulations, you’ve successfully put ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption} for ‘${data.roundName}’! Feeling Lucky? You can always increase your position`,
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
