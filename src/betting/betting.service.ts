@@ -885,7 +885,7 @@ export class BettingService {
         },
         relations: ['user', 'bettingVariable', 'round'],
       });
-      const lossers = lossingBetsWithUserInfo.map((bet) => ({
+      const losers = lossingBetsWithUserInfo.map((bet) => ({
         userId: bet.userId,
         username: bet.user?.username,
       }));
@@ -896,7 +896,7 @@ export class BettingService {
         bettingVariable.id,
         bettingVariable.name,
         winners,
-        lossers,
+        losers,
       );
 
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);

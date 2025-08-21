@@ -724,13 +724,13 @@ export class BettingGateway
     bettingVariableId: string,
     winnerName: string,
     winners: { userId: string; username: string }[],
-    lossers: { userId: string; username: string }[],
+    losers: { userId: string; username: string }[],
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
       winners,
-      lossers,
+      losers,
     });
 
     const chatMessage: ChatMessage = {
