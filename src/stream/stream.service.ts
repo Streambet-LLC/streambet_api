@@ -33,6 +33,8 @@ import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 
 @Injectable()
 export class StreamService {
+  private readonly logger = new Logger(StreamService.name);
+
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
@@ -289,7 +291,7 @@ END
       const data = await streamQB.getRawMany();
       return { data, total };
     } catch (e) {
-      console.log(e);
+      this.logger.log(e);
 
       Logger.error(e);
       throw new HttpException(

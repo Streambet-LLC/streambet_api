@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
@@ -15,6 +15,9 @@ import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class UsersService {
+  
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -52,7 +55,7 @@ export class UsersService {
       // Exclude password from the response
       return result;
     } catch (e) {
-      console.error(`Error finding user with ID ${id}:`, e);
+      this.logger.error(`Error finding user with ID ${id}:`, e);
       throw new NotFoundException((e as Error).message);
     }
   }
@@ -146,7 +149,7 @@ export class UsersService {
       await this.usersRepository.update({ id }, profileUpdateDto);
       return this.findOne(id);
     } catch (e) {
-      console.error(`Error updating profile for user with ID ${id}:`, e);
+      this.logger.error(`Error updating profile for user with ID ${id}:`, e);
       throw new NotFoundException((e as Error).message);
     }
   }
