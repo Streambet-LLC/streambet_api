@@ -3,6 +3,7 @@ import { Transform, TransformFnParams } from 'class-transformer';
 import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
 import { CurrencyType } from '../entities/transaction.entity';
+import { HistoryType } from 'src/enums/history-type.enum';
 
 export class TransactionFilterDto extends AdminFilterDto {
   @ApiProperty({
@@ -34,12 +35,11 @@ export class TransactionFilterDto extends AdminFilterDto {
   )
   pagination?: boolean;
 
-  @ApiPropertyOptional({
-    enum: CurrencyType,
-    default: CurrencyType.SWEEP_COINS,
-    description: `available  currencyType -> GoldCoin and SweepCoins`,
+  @ApiProperty({
+    enum: HistoryType,
+    default: HistoryType.Bet,
+    description: `available  bet  and transaction`,
   })
-  @IsOptional()
-  @IsEnum(CurrencyType)
-  currencyType?: CurrencyType;
+  @IsEnum(HistoryType)
+  historyType: HistoryType;
 }

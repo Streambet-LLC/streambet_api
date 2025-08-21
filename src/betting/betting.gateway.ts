@@ -369,20 +369,22 @@ export class BettingGateway
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
-       let betStat = {};
-       if (user.role === UserRole.ADMIN) {
-         betStat = await this.bettingService.getBetStatsByStream(
-           bettingVariable.stream.id,
-         );
-       }
-       this.server
-         .to(`stream_${bettingVariable.stream.id}`)
-         .emit('bettingUpdate', {
-           roundId: roundIdEmit,
-           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-           totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-           ...betStat,
-         });
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
+        this.server
+          .to(`stream_${bettingVariable.stream.id}`)
+          .emit('bettingUpdate', {
+            roundId: roundIdEmit,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            ...betStat,
+          });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
           roundIdEmit,
@@ -487,12 +489,12 @@ export class BettingGateway
       if (bettingVariable) {
         const updatedBettingVariable =
           await this.bettingService.findBettingVariableById(bettingVariable.id);
-          let betStat={}
-          if (user.role === UserRole.ADMIN) {
-              betStat = await this.bettingService.getBetStatsByStream(
-               bettingVariable.stream.id,
-             );
-           }
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
@@ -503,6 +505,8 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
             ...betStat,
           });
         await this.sendPersonalizedPotentialAmounts(
@@ -519,7 +523,6 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
-     
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -618,6 +621,8 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
             ...betStat,
           });
         // Use the latest round for personalized potential amounts
@@ -634,7 +639,7 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-      }    
+      }
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -719,11 +724,13 @@ export class BettingGateway
     bettingVariableId: string,
     winnerName: string,
     winners: { userId: string; username: string }[],
+    losers: { userId: string; username: string }[],
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
       winners,
+      losers,
     });
 
     const chatMessage: ChatMessage = {
@@ -899,18 +906,23 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-
-      const chatMessage: ChatMessage = {
-        type: 'system',
-        username: 'StreambetBot',
-        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
-          amount: amount,
-          currencyType: currencyType,
-          roundName: roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
-        timestamp: new Date(),
-      };
+const message =
+  currencyType === CurrencyType.GOLD_COINS
+    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({
+        amount: amount,
+      })
+    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
+const title =
+  currencyType === CurrencyType.GOLD_COINS
+    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
+    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
+const chatMessage: ChatMessage = {
+  type: 'system',
+  username: 'StreambetBot',
+  message,
+  title,
+  timestamp: new Date(),
+};
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
@@ -1022,7 +1034,12 @@ export class BettingGateway
     payload: {
       message: string;
       updatedWalletBalance: { goldCoins: number; sweepCoins: number };
-      coinPackage?: { id: string; name: string; sweepCoins: number; goldCoins: number };
+      coinPackage?: {
+        id: string;
+        name: string;
+        sweepCoins: number;
+        goldCoins: number;
+      };
     },
   ): void {
     const sockets = this.server.sockets.sockets;
