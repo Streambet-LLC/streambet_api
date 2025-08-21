@@ -1780,8 +1780,20 @@ export class BettingService {
       (sum, v) => Number(sum) + Number(v.totalBetsSweepCoinAmount || 0),
       0,
     );
-
-    return { totalBetsGoldCoinAmount, totalBetsSweepCoinAmount };
+const totalGoldCoinBet = bettingVariables.reduce(
+  (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
+  0,
+);
+const totalSweepCoinBet = bettingVariables.reduce(
+  (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
+  0,
+);
+return {
+  totalBetsGoldCoinAmount,
+  totalBetsSweepCoinAmount,
+  totalSweepCoinBet,
+  totalGoldCoinBet,
+};
   }
 
   getActiveBetsCount(): Promise<number> {

@@ -381,6 +381,8 @@ export class BettingGateway
            roundId: roundIdEmit,
            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+           totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+           totalGoldCoinBet: roundTotals.totalGoldCoinBet,
            ...betStat,
          });
         await this.sendPersonalizedPotentialAmounts(
@@ -503,6 +505,8 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
             ...betStat,
           });
         await this.sendPersonalizedPotentialAmounts(
@@ -618,6 +622,8 @@ export class BettingGateway
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
             ...betStat,
           });
         // Use the latest round for personalized potential amounts
