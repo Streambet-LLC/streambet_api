@@ -1022,12 +1022,12 @@ END
         .addSelect('s.thumbnailUrl', 'thumbnailUrl')
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsGoldCoinAmount), 0)',
+          'COALESCE(SUM(bv.total_bets_gold_coin_amount), 0)',
           'totalBetsGoldCoinAmount',
         )
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
-          'totalBetsCoinAmount',
+          'COALESCE(SUM(bv.total_bets_sweep_coin_amount), 0)',
+          'totalBetsSweepCoinAmount',
         )
         .addSelect(
           `CASE
