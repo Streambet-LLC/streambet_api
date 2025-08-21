@@ -239,8 +239,8 @@ export class AuthController {
   ): Promise<void> {
     try {
       // Log the user object for debugging
-      this.logger.log('Google callback user:', req.user);
-      this.logger.log('Available keys:', Object.keys(req.user || {}));
+      // this.logger.log('Google callback user:', req.user);
+      // this.logger.log('Available keys:', Object.keys(req.user || {}));
 
       // Verify tokens exist
       if (!req.user?.accessToken || !req.user?.refreshToken) {
