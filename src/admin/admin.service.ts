@@ -14,8 +14,8 @@ import {
   TransactionType,
 } from 'src/wallets/entities/transaction.entity';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { BetStatus } from 'src/enums/bet-status.enum';
+import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
 
 @Injectable()
 export class AdminService {
@@ -58,125 +58,30 @@ export class AdminService {
     user.email = updatedEmail;
     user.username = updatedUsername;
     user.deletedAt = new Date();
+    // Deactivate and invalidate tokens immediately
+    user.isActive = false;
+    user.refreshToken = null;
+    user.refreshTokenExpiresAt = null;
 
     // Save the updated user
     return this.userRepository.save(user);
   }
 
-  async updateFreeTokensByAdmin(
-    addFreeTokenDto: AddFreeTokenDto,
+  async updateGoldCoinsByAdmin(
+    addGoldCoinDto: AddGoldCoinDto,
   ): Promise<Wallet> {
-    const { userId, amount } = addFreeTokenDto;
+    const { userId, amount } = addGoldCoinDto;
     // Ensure amount is positive for admin updates
     if (amount <= 0) {
       throw new BadRequestException('Invalid amount');
     }
-    const description = `Admin credit adjustment of ${amount} free tokens for user ${userId}`;
-    return this.walletsService.updateFreeTokensByAdmin(
+    const description = `Admin credit adjustment of ${amount} Gold Coins for user ${userId}`;
+    return this.walletsService.updateGoldCoinsByAdmin(
       userId,
       amount,
       description,
-      CurrencyType.FREE_TOKENS,
+      CurrencyType.GOLD_COINS,
       TransactionType.ADMIN_CREDIT,
     );
-  }
-
-  /**
-   * Returns all rounds for a stream, with their options and winners (if any), separated by currency type.
-   * @param streamId string
-   */
-  async getStreamRoundsWithWinners(streamId: string) {
-    // Get all rounds for the stream, with their betting variables and bets
-    const rounds = await this.bettingService['bettingRoundsRepository'].find({
-      where: { streamId },
-      relations: [
-        'bettingVariables',
-        'bettingVariables.bets',
-        'bettingVariables.bets.user',
-      ],
-      order: { createdAt: 'ASC' },
-    });
-
-    // Compose the response
-    const result = {
-      streamId,
-      rounds: [] as any[],
-    };
-
-    for (const round of rounds) {
-      // Get all options for this round
-      const options = round.bettingVariables.map((variable) => ({
-        id: variable.id,
-        option: variable.name,
-      }));
-
-      // Find the winning option(s)
-      const winningOptions = round.bettingVariables.filter(
-        (v) => v.is_winning_option,
-      );
-      let winners = { freeTokens: [], streamCoins: [] };
-      let winnerAmount = { freeTokens: null, streamCoins: null };
-      if (winningOptions.length > 0) {
-        // For each winning option, get all bets by currency
-        const winnerBetsFreeTokens = winningOptions.flatMap((v) =>
-          (v.bets || []).filter((bet) => bet.currency === 'free_tokens'),
-        );
-        const winnerBetsStreamCoins = winningOptions.flatMap((v) =>
-          (v.bets || []).filter((bet) => bet.currency === 'stream_coins'),
-        );
-        // Remove duplicate users (in case a user bet multiple times)
-        const winnerUsersMapFreeTokens = new Map();
-        for (const bet of winnerBetsFreeTokens) {
-          if (
-            bet.user &&
-            !winnerUsersMapFreeTokens.has(bet.user.id) &&
-            bet.status === BetStatus.Won
-          ) {
-            winnerUsersMapFreeTokens.set(bet.user.id, {
-              userId: bet.user.id,
-              userName: bet.user.username,
-              avatar: bet.user.profileImageUrl,
-            });
-          }
-        }
-        const winnerUsersMapStreamCoins = new Map();
-        for (const bet of winnerBetsStreamCoins) {
-          if (bet.user && !winnerUsersMapStreamCoins.has(bet.user.id)) {
-            winnerUsersMapStreamCoins.set(bet.user.id, {
-              userId: bet.user.id,
-              userName: bet.user.username,
-              avatar: bet.user.profileImageUrl,
-            });
-          }
-        }
-        winners.freeTokens = Array.from(winnerUsersMapFreeTokens.values());
-        winners.streamCoins = Array.from(winnerUsersMapStreamCoins.values());
-        // Calculate winnerAmount (sum of payouts for this round's winning bets)
-        const winnerAmountFreeTokens = winnerBetsFreeTokens.reduce(
-          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
-          0,
-        );
-        const winnerAmountStreamCoins = winnerBetsStreamCoins.reduce(
-          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
-          0,
-        );
-        winnerAmount.freeTokens = winnerAmountFreeTokens
-          ? winnerAmountFreeTokens
-          : null;
-        winnerAmount.streamCoins = winnerAmountStreamCoins
-          ? winnerAmountStreamCoins
-          : null;
-      }
-
-      result.rounds.push({
-        roundId: round.id,
-        roundName: round.roundName,
-        status: round.status,
-        winnerAmount,
-        winners,
-        options,
-      });
-    }
-    return result;
   }
 }

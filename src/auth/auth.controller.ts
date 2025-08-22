@@ -8,6 +8,7 @@ import {
   Get,
   Res,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
@@ -52,6 +53,9 @@ interface GoogleAuthResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  
+  private readonly logger = new Logger(AuthController.name);
+  
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -235,12 +239,12 @@ export class AuthController {
   ): Promise<void> {
     try {
       // Log the user object for debugging
-      console.log('Google callback user:', req.user);
-      console.log('Available keys:', Object.keys(req.user || {}));
+      // this.logger.log('Google callback user:', req.user);
+      // this.logger.log('Available keys:', Object.keys(req.user || {}));
 
       // Verify tokens exist
       if (!req.user?.accessToken || !req.user?.refreshToken) {
-        console.error('Missing tokens in callback:', {
+        this.logger.error('Missing tokens in callback:', {
           hasAccessToken: !!req.user?.accessToken,
           hasRefreshToken: !!req.user?.refreshToken,
           userKeys: Object.keys(req.user || {}),
@@ -263,7 +267,7 @@ export class AuthController {
       const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
       return res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
+      this.logger.error('Google OAuth callback error:', error);
 
       const clientUrl = this.configService.get<string>(
         'app.clientUrl',

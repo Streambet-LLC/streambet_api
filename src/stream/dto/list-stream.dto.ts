@@ -4,7 +4,7 @@ import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
 import { StreamStatus } from '../entities/stream.entity';
 
-export class StreamFilterDto extends AdminFilterDto {
+export class LiveScheduledStreamListDto extends AdminFilterDto {
   @ApiProperty({
     description: `
   Filter params pass the data as key value pair
@@ -32,7 +32,9 @@ export class StreamFilterDto extends AdminFilterDto {
     value && value === 'false' ? false : true,
   )
   pagination?: boolean;
+}
 
+export class StreamFilterDto extends LiveScheduledStreamListDto {
   @ApiPropertyOptional({
     enum: StreamStatus,
     default: 'active',
@@ -43,3 +45,4 @@ export class StreamFilterDto extends AdminFilterDto {
   @IsEnum(StreamStatus)
   streamStatus?: string;
 }
+

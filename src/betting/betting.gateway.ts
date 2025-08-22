@@ -31,6 +31,7 @@ import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
 import { User } from 'src/users/entities/user.entity';
 import { UserRole } from 'src/users/entities/user.entity';
+import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -387,14 +388,15 @@ export class BettingGateway
         bet,
         success: true,
         currencyType: placeBetDto.currencyType,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-        potentialTokenWinningAmount:
-          potentialAmount?.potentialFreeTokenAmt || 0,
+        potentialSweepCoinWinningAmount:
+          potentialAmount?.potentialSweepCoinAmt || 0,
+        potentialGoldCoinWinningAmount:
+          potentialAmount?.potentialGoldCoinAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          goldCoins: updatedWallet.goldCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -430,19 +432,16 @@ export class BettingGateway
           betStat = await this.bettingService.getBetStatsByStream(
             bettingVariable.stream.id,
           );
-          this.server.emit('bettingStat', {
-            roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
-          });
         }
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
-            betStat,
             roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            ...betStat,
           });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
@@ -500,8 +499,8 @@ export class BettingGateway
         bet,
         success: true,
         updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          goldCoins: updatedWallet.goldCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -529,6 +528,12 @@ export class BettingGateway
       if (bettingVariable) {
         const updatedBettingVariable =
           await this.bettingService.findBettingVariableById(bettingVariable.id);
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
         const roundTotals =
@@ -537,8 +542,11 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
             roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            ...betStat,
           });
         await this.sendPersonalizedPotentialAmounts(
           bettingVariable.stream.id,
@@ -605,14 +613,15 @@ export class BettingGateway
         success: true,
         timestamp: new Date(),
         currencyType: editedBet.currency,
-        potentialCoinWinningAmount: potentialAmount?.potentialCoinAmt || 0,
-        potentialTokenWinningAmount:
-          potentialAmount?.potentialFreeTokenAmt || 0,
+        potentialSweepCoinWinningAmount:
+          potentialAmount?.potentialSweepCoinAmt || 0,
+        potentialGoldCoinWinningAmount:
+          potentialAmount?.potentialGoldCoinAmt || 0,
         amount: editedBet.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
-          freeTokens: updatedWallet.freeTokens,
-          streamCoins: updatedWallet.streamCoins,
+          goldCoins: updatedWallet.goldCoins,
+          sweepCoins: updatedWallet.sweepCoins,
         },
       };
       const receiverNotificationPermission =
@@ -649,14 +658,23 @@ export class BettingGateway
           where: { id: roundIdEmit },
           relations: ['bettingVariables'],
         });
+        let betStat = {};
+        if (user.role === UserRole.ADMIN) {
+          betStat = await this.bettingService.getBetStatsByStream(
+            bettingVariable.stream.id,
+          );
+        }
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('bettingUpdate', {
             roundId: roundIdEmit,
-            totalBetsCoinAmount: roundTotals.totalBetsCoinAmount,
-            totalBetsTokenAmount: roundTotals.totalBetsTokenAmount,
+            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            ...betStat,
           });
         // Use the latest round for personalized potential amounts
         await this.sendPersonalizedPotentialAmounts(
@@ -744,10 +762,10 @@ export class BettingGateway
       .then(async (bettingVariable) => {
         this.server.to(`stream_${streamId}`).emit('bettingUpdate', {
           bettingVariableId: bettingVariable.id,
-          totalBetsCoinAmount: bettingVariable.totalBetsCoinAmount,
-          totalBetsTokenAmount: bettingVariable.totalBetsTokenAmount,
-          betCountCoin: bettingVariable.betCountCoin,
-          betCountFreeToken: bettingVariable.betCountFreeToken,
+          totalBetsSweepCoinAmount: bettingVariable.totalBetsSweepCoinAmount,
+          totalBetsGoldCoinAmount: bettingVariable.totalBetsGoldCoinAmount,
+          betCountSweepCoin: bettingVariable.betCountSweepCoin,
+          betCountGoldCoin: bettingVariable.betCountGoldCoin,
           status: bettingVariable.status,
         });
 
@@ -770,11 +788,13 @@ export class BettingGateway
     bettingVariableId: string,
     winnerName: string,
     winners: { userId: string; username: string }[],
+    losers: { userId: string; username: string }[],
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
       winners,
+      losers,
     });
 
     const chatMessage: ChatMessage = {
@@ -879,9 +899,10 @@ export class BettingGateway
             const potentialAmount = userPotentialMap.get(userId);
             socket.emit('potentialAmountUpdate', {
               bettingVariableId: potentialAmount.bettingVariableId,
-              potentialCoinWinningAmount: potentialAmount.potentialCoinAmt,
-              potentialTokenWinningAmount:
-                potentialAmount.potentialFreeTokenAmt,
+              potentialSweepCoinWinningAmount:
+                potentialAmount.potentialSweepCoinAmt,
+              potentialGoldCoinWinningAmount:
+                potentialAmount.potentialGoldCoinAmt,
               currencyType: potentialAmount.currencyType,
               optionName: potentialAmount.optionName,
             });
@@ -949,16 +970,21 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-
+      const message =
+        currencyType === CurrencyType.GOLD_COINS
+          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({
+              amount: amount,
+            })
+          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
+      const title =
+        currencyType === CurrencyType.GOLD_COINS
+          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
+          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
       const chatMessage: ChatMessage = {
         type: 'system',
         username: 'StreambetBot',
-        message: NOTIFICATION_TEMPLATE.BET_WON.MESSAGE({
-          amount: amount,
-          currencyType: currencyType,
-          roundName: roundName || '',
-        }),
-        title: NOTIFICATION_TEMPLATE.BET_WON.TITLE(),
+        message,
+        title,
         timestamp: new Date(),
       };
       void this.server.to(socketId).emit('botMessage', chatMessage);
@@ -1007,7 +1033,6 @@ export class BettingGateway
         title: NOTIFICATION_TEMPLATE.BET_ROUND_VOID.TITLE(),
         timestamp: new Date(),
       };
-
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
@@ -1064,5 +1089,49 @@ export class BettingGateway
     const payload = { event };
     this.server.to('streambet').emit('streamListUpdated', payload);
     Logger.log(`Emitting stream list event: ${event}`);
+  }
+
+  // Emit purchase settled event to all active sockets of a user
+  emitPurchaseSettled(
+    userId: string,
+    payload: {
+      message: string;
+      updatedWalletBalance: { goldCoins: number; sweepCoins: number };
+      coinPackage?: {
+        id: string;
+        name: string;
+        sweepCoins: number;
+        goldCoins: number;
+      };
+    },
+  ): void {
+    const sockets = this.server.sockets.sockets;
+    sockets.forEach((socket) => {
+      const authenticatedSocket = socket as AuthenticatedSocket;
+      if (authenticatedSocket.data?.user?.sub === userId) {
+        authenticatedSocket.emit('purchaseSettled', payload);
+      }
+    });
+  }
+  /**
+   * Emits the roundUpdated event to all clients connected to the room stream_{streamId} whenever the admin creates, edits, or deletes round details.
+   *
+   * @param {string} streamId - The unique identifier of the stream.
+   * @param {any} roundDetails - The details of the stream round to be shared with clients.
+   *
+   * @returns {Promise<void>} - Resolves once the roundUpdated event has been emitted.
+   *
+   * @description
+   * This method constructs a payload containing the `roundDetails` and broadcasts it
+   * via WebSocket to all clients subscribed to the room `stream_{streamId}`.
+   * The emitted event is named `roundUpdated`.
+   *@author: Reshma
+   */
+  async emitRoundDetails(
+    streamId: string,
+    streamDetails: StreamRoundsResponseDto,
+  ): Promise<void> {
+    const payload = { roundDetails: streamDetails.rounds };
+    void this.server.to(`stream_${streamId}`).emit('roundUpdated', payload);
   }
 }

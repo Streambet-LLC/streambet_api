@@ -40,10 +40,28 @@ export class RefreshTokenGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+    if (user.deletedAt) {
+      throw new UnauthorizedException({
+        message: 'Your account has been deleted by Admin',
+        userDeleted: true,
+      });
+    }
+    if (user.isActive === false) {
+      throw new UnauthorizedException('User is no longer active');
+    }
 
     const storedUser = await this.usersService.findByRefreshToken(refreshToken);
     if (!storedUser || storedUser.id !== payload.sub) {
       throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (storedUser.deletedAt) {
+      throw new UnauthorizedException({
+        message: 'Your account has been deleted by Admin',
+        userDeleted: true,
+      });
+    }
+    if (storedUser.isActive === false) {
+      throw new UnauthorizedException('User is no longer active');
     }
 
     if (

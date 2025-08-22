@@ -11,7 +11,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Stream, StreamStatus } from './entities/stream.entity';
-import { StreamFilterDto } from './dto/list-stream.dto';
+import {
+  LiveScheduledStreamListDto,
+  StreamFilterDto,
+} from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
@@ -26,9 +29,12 @@ import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
+import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 
 @Injectable()
 export class StreamService {
+  private readonly logger = new Logger(StreamService.name);
+
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
@@ -86,12 +92,12 @@ export class StreamService {
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
         .addSelect('s.endTime', 'endTime')
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsTokenAmount), 0)',
-          'totalBetsTokenAmount',
+          'COALESCE(SUM(bv.totalBetsGoldCoinAmount), 0)',
+          'totalBetsGoldCoinAmount',
         )
         .addSelect(
-          'COALESCE(SUM(bv.totalBetsCoinAmount), 0)',
-          'totalBetsCoinAmount',
+          'COALESCE(SUM(bv.totalBetsSweepCoinAmount), 0)',
+          'totalBetsSweepCoinAmount',
         )
         .groupBy('s.id');
 
@@ -285,7 +291,7 @@ END
       const data = await streamQB.getRawMany();
       return { data, total };
     } catch (e) {
-      console.log(e);
+      this.logger.log(e);
 
       Logger.error(e);
       throw new HttpException(
@@ -305,35 +311,60 @@ END
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
-  async findStreamById(streamId: string): Promise<Stream> {
+  async findStreamById(streamId: string): Promise<any> {
     try {
-      const stream = await this.streamsRepository.findOne({
-        where: {
-          id: streamId,
-          status: In([
+      const stream = await this.streamsRepository
+        .createQueryBuilder('stream')
+        .leftJoinAndSelect('stream.bettingRounds', 'br')
+        .leftJoinAndSelect('br.bettingVariables', 'bv')
+        .leftJoinAndSelect('bv.bets', 'b')
+        .leftJoinAndSelect('b.user', 'u')
+        .where('stream.id = :streamId', { streamId })
+        .andWhere('stream.status IN (:...statuses)', {
+          statuses: [
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED,
             StreamStatus.ENDED,
-          ]), // Include both LIVE and SCHEDULED
-        },
-        select: {
-          id: true,
-          embeddedUrl: true,
-          name: true,
-          platformName: true,
-          status: true,
-          scheduledStartTime: true,
-          thumbnailUrl: true,
-        },
-      });
+          ],
+        })
+        .getOne();
 
       if (!stream) {
         throw new NotFoundException(
           `Could not find an active stream with the specified ID. Please check the ID and try again.`,
         );
       }
-
-      return stream;
+      let rounds = [];
+      if (stream.bettingRounds && stream.bettingRounds.length > 0) {
+        rounds = stream.bettingRounds.map((round) => ({
+          roundName: round.roundName,
+          roundStatus: round.status,
+          winningOption: round.bettingVariables
+            .filter((variable) => variable.is_winning_option === true)
+            .map((variable) => ({
+              variableName: variable.name,
+              totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
+              totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
+              winners: variable.bets.map((bet) => ({
+                userName: bet.user.username,
+                userProfileUrl: bet.user.profileImageUrl,
+              })),
+            })),
+        }));
+      }
+      const streamDetails = {
+        id: stream.id,
+        name: stream.name,
+        embeddedUrl: stream.embeddedUrl,
+        thumbnailUrl: stream.thumbnailUrl,
+        platformName: stream.platformName,
+        status: stream.status,
+        scheduledStartTime: stream.scheduledStartTime,
+        discription: stream.description,
+        viewerCount: stream.viewerCount,
+        roundDetails: rounds || [],
+      };
+      return streamDetails;
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw e;
@@ -345,8 +376,8 @@ END
   }
   async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
     try {
-      let userBetFreeTokens: number;
-      let userBetStreamCoin: number;
+      let userBetGoldCoins: number;
+      let userBetSweepCoin: number;
       let wallet: Wallet;
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
@@ -373,7 +404,7 @@ END
           `Could not find a live stream with the specified ID. Please check the ID and try again.`,
         );
       }
-      const total = { tokenSum: 0, coinSum: 0 };
+      const total = { goldCoinSum: 0, sweepCoinSum: 0 };
 
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
@@ -382,20 +413,24 @@ END
           if (round.bettingVariables) {
             const roundTotals = round.bettingVariables.reduce(
               (acc, variable) => {
-                acc.tokenSum += Number(variable.totalBetsTokenAmount || 0);
-                acc.coinSum += Number(variable.totalBetsCoinAmount || 0);
+                acc.goldCoinSum += Number(
+                  variable.totalBetsGoldCoinAmount || 0,
+                );
+                acc.sweepCoinSum += Number(
+                  variable.totalBetsSweepCoinAmount || 0,
+                );
                 return acc;
               },
-              { tokenSum: 0, coinSum: 0 },
+              { goldCoinSum: 0, sweepCoinSum: 0 },
             );
-            total.tokenSum += roundTotals.tokenSum;
-            total.coinSum += roundTotals.coinSum;
+            total.goldCoinSum += roundTotals.goldCoinSum;
+            total.sweepCoinSum += roundTotals.sweepCoinSum;
           }
         }
       }
       const {
-        tokenSum: roundTotalBetsTokenAmount,
-        coinSum: roundTotalBetsCoinAmount,
+        goldCoinSum: roundTotalBetsGoldCoinAmount,
+        sweepCoinSum: roundTotalBetsSweepCoinAmount,
       } = total;
       stream.bettingRounds.forEach((round) => {
         //sort betting varirable,
@@ -404,15 +439,15 @@ END
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
           );
         });
-        // userBetFreeTokens, userBetStreamCoin  passing through response
+        // userBetGoldCoins, userBetSweepCoin  passing through response
         round.bettingVariables.forEach((variable) => {
           if (variable.bets && variable.bets.length > 0) {
             variable.bets.forEach((bet) => {
               if (bet.status === BetStatus.Active) {
-                if (bet.currency === CurrencyType.FREE_TOKENS) {
-                  userBetFreeTokens = bet.amount;
+                if (bet.currency === CurrencyType.GOLD_COINS) {
+                  userBetGoldCoins = bet.amount;
                 } else {
-                  userBetStreamCoin = bet.amount;
+                  userBetSweepCoin = bet.amount;
                 }
               }
             });
@@ -422,12 +457,12 @@ END
       });
 
       const result = {
-        walletFreeToken: wallet?.freeTokens || 0,
-        walletCoin: wallet?.streamCoins || 0,
-        userBetFreeTokens: userBetFreeTokens || 0,
-        userBetStreamCoin: userBetStreamCoin || 0,
-        roundTotalBetsTokenAmount,
-        roundTotalBetsCoinAmount,
+        walletGoldCoin: wallet?.goldCoins || 0,
+        walletSweepCoin: wallet?.sweepCoins || 0,
+        userBetGoldCoins: userBetGoldCoins || 0,
+        userBetSweepCoin: userBetSweepCoin || 0,
+        roundTotalBetsGoldCoinAmount,
+        roundTotalBetsSweepCoinAmount,
         ...stream,
       };
       return result;
@@ -470,7 +505,7 @@ END
     return await this.simplifyStreamResponse(
       stream,
       bettingRoundStatus,
-       betStat || {},
+      betStat || {},
     );
   }
 
@@ -931,4 +966,153 @@ END
       ])
       .getOne();
   }
+
+  /**
+   * Retrieves a paginated list of live and scheduled streams for the home page view.
+   * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
+  
+   * Ordering logic:
+   * - Live streams appear first, ordered by createdAt in descending order.
+   * - Scheduled streams appear next, ordered by scheduledStartTime in ascending order.
+   *
+   * Selects essential fields  along with
+   * derived values:
+   * - bettingRoundStatus (calculated from related betting rounds)   *
+   * Applies pagination with a default range of [0, 24] if not specified.
+   * Returns both the filtered data and the total count of matching streams.
+   * Logs errors and throws an HttpException in case of failures.
+   *
+   * @param liveScheduledStreamListDto - DTO containing optional sort and range for pagination.
+   * @returns A Promise resolving to an object with:
+   *          - data: Array of stream records with selected and derived fields.
+   *          - total: Total number of matching stream records.
+   * @throws HttpException - If an error occurs during query execution.
+   * @author Reshma M S
+   */
+
+  async getScheduledAndLiveStreams(
+    liveScheduledStreamListDto: LiveScheduledStreamListDto,
+  ): Promise<{ data: Stream[]; total: number }> {
+    try {
+      const range: Range = liveScheduledStreamListDto.range
+        ? (JSON.parse(liveScheduledStreamListDto.range) as Range)
+        : [0, 24];
+
+      const { pagination = true } = liveScheduledStreamListDto;
+
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.bettingRounds', 'r')
+        .leftJoinAndSelect('r.bettingVariables', 'bv');
+      streamQB.andWhere(`s.status = :scheduled or s.status = :live`, {
+        scheduled: StreamStatus.SCHEDULED,
+        live: StreamStatus.LIVE,
+      });
+      /** Custom ordering:
+       *  - LIVE streams first (createdAt DESC)
+       *  - SCHEDULED streams next (scheduledStartTime ASC)
+       *  - Fallback to user-defined sort if provided
+       */
+
+      streamQB
+        .orderBy(
+          `CASE 
+        WHEN s.status = :live THEN 1
+        WHEN s.status = :scheduled THEN 2
+        ELSE 3
+      END`,
+          'ASC',
+        )
+        .addOrderBy(
+          `CASE 
+        WHEN s.status = :live THEN s."createdAt"
+      END`,
+          'DESC',
+          'NULLS LAST',
+        )
+        .addOrderBy(
+          `CASE 
+        WHEN s.status = :scheduled THEN s."scheduledStartTime"
+      END`,
+          'ASC',
+          'NULLS LAST',
+        )
+        .setParameters({
+          live: StreamStatus.LIVE,
+          scheduled: StreamStatus.SCHEDULED,
+        });
+
+      /** Select fields + betting round status calculation */
+      streamQB
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.status', 'streamStatus')
+        .addSelect('s.thumbnailUrl', 'thumbnailUrl')
+        .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect(
+          'COALESCE(SUM(bv.total_bets_gold_coin_amount), 0)',
+          'totalBetsGoldCoinAmount',
+        )
+        .addSelect(
+          'COALESCE(SUM(bv.total_bets_sweep_coin_amount), 0)',
+          'totalBetsSweepCoinAmount',
+        )
+        .addSelect(
+          `CASE
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
+          THEN '${BettingRoundStatus.OPEN}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
+          THEN '${BettingRoundStatus.LOCKED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CREATED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CLOSED}'
+
+        WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
+          AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
+          THEN '${BettingRoundStatus.CANCELLED}'
+
+        ELSE '${BettingRoundStatus.NO_BET_ROUND}'
+      END`,
+          'bettingRoundStatus',
+        )
+        .addSelect(
+          `(SELECT COUNT(DISTINCT bet."user_id")
+        FROM bets bet
+        WHERE bet."stream_id" = s.id
+          AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
+      )`,
+          'userBetCount',
+        )
+        .groupBy('s.id');
+
+      /**  Total count */
+      const total = await streamQB.getCount();
+
+      /**  Pagination */
+      if (pagination && range) {
+        const [offset, limit] = range;
+        streamQB.offset(offset).limit(limit);
+      }
+
+      const data = await streamQB.getRawMany();
+      return { data, total };
+    } catch (e) {
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
+
+
+
+  

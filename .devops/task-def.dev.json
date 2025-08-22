@@ -22,10 +22,14 @@
         { "name": "REDIS_PORT", "value": "6301" },
         { "name": "REDIS_USERNAME", "value": "default" },
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_DEV" },
+        { "name": "REDIS_DB", "value": "0" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
-        { "name": "BLOCKED_REGION", "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia" },
-        { "name": "BLOCK_VPN", "value": "true" },
+        {
+          "name": "BLOCKED_REGION",
+          "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
+        },
+        { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
         { "name": "REDIS_TLS", "value": "false" }
       ],
@@ -140,7 +144,31 @@
          {
            "name": "ABSTRACT_API_KEY",
            "valueFrom": "/streambet/dev/ABSTRACT_API_KEY"
-         }
+         },
+         {
+          "name": "COINFLOW_API_URL",
+          "valueFrom": "/streambet/dev/COINFLOW_API_URL"
+        },
+        {
+          "name": "COINFLOW_API_KEY",
+          "valueFrom": "/streambet/dev/COINFLOW_API_KEY"
+        },
+        {
+          "name": "COINFLOW_DEFAULT_TOKEN",
+          "valueFrom": "/streambet/dev/COINFLOW_DEFAULT_TOKEN"
+        },
+        {
+          "name": "COINFLOW_MERCHANT_ID",
+          "valueFrom": "/streambet/dev/COINFLOW_MERCHANT_ID"
+        },
+        {
+          "name": "COINFLOW_BLOCKCHAIN",
+          "valueFrom": "/streambet/dev/COINFLOW_BLOCKCHAIN"
+        },
+        {
+          "name": "COINFLOW_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/dev/COINFLOW_WEBHOOK_SECRET"
+        }
       ],
       "mountPoints": [],
       "volumesFrom": [],

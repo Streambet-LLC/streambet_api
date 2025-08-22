@@ -41,9 +41,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/bet_loss.ejs',
       schemaPath: './src/templates/bet_loss.json',
     },
-    bet_won_free_coin: {
-      templatePath: './src/templates/bet_won_free_coin.ejs',
-      schemaPath: './src/templates/bet_won_free_coin.json',
+    bet_won_gold_coin: {
+      templatePath: './src/templates/bet_won_gold_coin.ejs',
+      schemaPath: './src/templates/bet_won_gold_coin.json',
     },
   },
 }));

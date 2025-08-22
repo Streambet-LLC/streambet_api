@@ -16,6 +16,7 @@ import {
 } from './entities/transaction.entity';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
+import { HistoryType } from 'src/enums/history-type.enum';
 
 @Injectable()
 export class WalletsService {
@@ -28,7 +29,7 @@ export class WalletsService {
   ) {}
 
   async create(userId: string): Promise<Wallet> {
-    // Create wallet with initial 1000 free tokens
+    // Create wallet with initial 1000 Gold Coin
     const wallet = this.walletsRepository.create({ userId });
     const savedWallet = await this.walletsRepository.save(wallet);
 
@@ -36,10 +37,10 @@ export class WalletsService {
     await this.createTransaction({
       userId,
       type: TransactionType.INITIAL_CREDIT,
-      currencyType: CurrencyType.FREE_TOKENS,
+      currencyType: CurrencyType.GOLD_COINS,
       amount: 1000,
       balanceAfter: 1000,
-      description: 'Initial free tokens on registration',
+      description: 'Initial Gold Coins on registration',
     });
 
     return savedWallet;
@@ -57,7 +58,7 @@ export class WalletsService {
     return wallet;
   }
 
-  async addFreeTokens(
+  async addGoldCoins(
     userId: string,
     amount: number,
     description: string,
@@ -65,13 +66,13 @@ export class WalletsService {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.FREE_TOKENS,
+      CurrencyType.GOLD_COINS,
       TransactionType.REFUND,
       description,
     );
   }
 
-  async addStreamCoins(
+  async addSweepCoins(
     userId: string,
     amount: number,
     description: string,
@@ -84,7 +85,7 @@ export class WalletsService {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.STREAM_COINS,
+      CurrencyType.SWEEP_COINS,
       addType,
       description,
     );
@@ -127,6 +128,7 @@ export class WalletsService {
     transactionType: TransactionType,
     description: string,
     metadata?: Record<string, any>,
+    options?: { relatedEntityId?: string; relatedEntityType?: string },
   ): Promise<Wallet> {
     // Use a transaction to ensure data consistency
     const queryRunner = this.dataSource.createQueryRunner();
@@ -146,20 +148,40 @@ export class WalletsService {
         );
       }
 
+      // If a related entity id is provided, ensure we haven't created a purchase transaction for it already
+      if (options?.relatedEntityId) {
+        const existingCount = await queryRunner.manager
+          .getRepository(Transaction)
+          .count({
+            where: {
+              relatedEntityId: options.relatedEntityId,
+              ...(options.relatedEntityType
+                ? { relatedEntityType: options.relatedEntityType }
+                : {}),
+              type: transactionType,
+              currencyType,
+            },
+          });
+        if (existingCount > 0) {
+          await queryRunner.rollbackTransaction();
+          return wallet; // finally will release
+        }
+      }
+
       // Calculate new balance
       let newBalance: number;
-      if (currencyType === CurrencyType.FREE_TOKENS) {
-        newBalance = Number(wallet.freeTokens) + Number(amount);
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        newBalance = Number(wallet.goldCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient free tokens');
+          throw new BadRequestException('Insufficient free Gold Coins');
         }
-        wallet.freeTokens = Number(newBalance);
+        wallet.goldCoins = Number(newBalance);
       } else {
-        newBalance = Number(wallet.streamCoins) + Number(amount);
+        newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient stream coins');
+          throw new BadRequestException('Insufficient sweep coins');
         }
-        wallet.streamCoins = Number(newBalance);
+        wallet.sweepCoins = Number(newBalance);
       }
 
       // Save the updated wallet
@@ -174,6 +196,8 @@ export class WalletsService {
         balanceAfter: newBalance,
         description,
         metadata,
+        relatedEntityId: options?.relatedEntityId,
+        relatedEntityType: options?.relatedEntityType,
       });
 
       await queryRunner.manager.save(transaction);
@@ -190,6 +214,20 @@ export class WalletsService {
       // Release the query runner
       await queryRunner.release();
     }
+  }
+
+  async hasTransactionForRelatedEntity(
+    relatedEntityId: string,
+    relatedEntityType?: string,
+    currencyType?: CurrencyType,
+  ): Promise<boolean> {
+    const where: any = { relatedEntityId };
+    if (relatedEntityType) where.relatedEntityType = relatedEntityType;
+    if (currencyType) where.currencyType = currencyType;
+    // Only consider purchase transactions for idempotency check
+    where.type = TransactionType.PURCHASE;
+    const count = await this.transactionsRepository.count({ where });
+    return count > 0;
   }
 
   async getAllTransactionHistory(
@@ -215,13 +253,23 @@ export class WalletsService {
         throw new BadRequestException('Invalid filter format');
       }
 
-      const { pagination = true, currencyType } = transactionFilterDto;
+      const { pagination = true, historyType } = transactionFilterDto;
 
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
-
-      if (!currencyType) {
+      if (historyType === HistoryType.Transaction) {
+        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
+          includedTypes: [
+            TransactionType.ADMIN_CREDIT,
+            TransactionType.DEPOSIT,
+            TransactionType.WITHDRAWAL,
+            TransactionType.PURCHASE,
+            TransactionType.INITIAL_CREDIT,
+          ],
+        });
+      }
+      if (historyType === HistoryType.Bet) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
           includedTypes: [TransactionType.BET_LOST, TransactionType.BET_WON],
         });
@@ -229,23 +277,6 @@ export class WalletsService {
       if (filter?.q) {
         transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
-        });
-      }
-      /*  
-      if (currencyType) {
-        transactionQB.andWhere(`t.currencyType = :currencyType`, {
-          currencyType,
-        });
-      }
-*/
-
-      if (currencyType === CurrencyType.STREAM_COINS) {
-        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
-          includedTypes: [
-            TransactionType.INITIAL_CREDIT,
-            TransactionType.ADMIN_CREDIT,
-            TransactionType.ADMIN_DEBITED,
-          ],
         });
       }
       if (sort) {
@@ -289,7 +320,7 @@ export class WalletsService {
     const transaction = this.transactionsRepository.create(transactionData);
     return this.transactionsRepository.save(transaction);
   }
-  async updateFreeTokensByAdmin(
+  async updateGoldCoinsByAdmin(
     userId: string,
     amount: number,
     description: string,
@@ -307,9 +338,9 @@ export class WalletsService {
       throw new BadRequestException('Invalid Amount');
     }
 
-    if (currencyType === CurrencyType.FREE_TOKENS) {
-      await this.walletsRepository.update(wallet.id, { freeTokens: amount });
-      const addedAmount = amount - wallet.freeTokens;
+    if (currencyType === CurrencyType.GOLD_COINS) {
+      await this.walletsRepository.update(wallet.id, { goldCoins: amount });
+      const addedAmount = amount - wallet.goldCoins;
 
       const transactionType =
         addedAmount >= 0
@@ -351,9 +382,9 @@ export class WalletsService {
     }
 
     const balanceAfter =
-      currencyType === CurrencyType.FREE_TOKENS
-        ? wallet.freeTokens
-        : wallet.streamCoins;
+      currencyType === CurrencyType.GOLD_COINS
+        ? wallet.goldCoins
+        : wallet.sweepCoins;
     const transactionObj = this.transactionsRepository.create({
       userId,
       type: transactionType,

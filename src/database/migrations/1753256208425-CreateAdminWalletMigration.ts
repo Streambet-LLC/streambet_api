@@ -25,8 +25,8 @@ export class CreateAdminWalletMigration1753256208425
       INSERT INTO wallets (
         id,
         "userId",
-        "freeTokens",
-        "streamCoins",
+        "gold_coins",
+        "sweep_coins",
        "autoReloadEnabled",
         "autoReloadAmount",
         "createdAt",

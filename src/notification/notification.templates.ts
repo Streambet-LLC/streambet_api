@@ -1,4 +1,7 @@
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  CurrencyTypeText,
+} from 'src/wallets/entities/transaction.entity';
 
 interface BetNotificationData {
   amount?: number;
@@ -12,37 +15,53 @@ interface BetNotificationData {
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You bet ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
+      `Congratulations, you’ve successfully put ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption} for ‘${data.roundName}’! Feeling Lucky? You can always increase your position`,
     TITLE: () => `Bet Placed Successfully`,
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
-      `You changed your bet to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} for ${data.roundName}`,
+      `You changed your bet to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Bet Modified`,
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your bet of ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} on ${data.bettingOption} has been cancelled for ${data.roundName}`,
+      `"Are you sure you want to cancel your bet? You've got to be in it to win it...". If they confirm then bring the "Ok, your bet on ${data.roundName} been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been returned to your wallet"`,
     TITLE: () => `Bet Cancelled`,
   },
-  BET_WON: {
+
+  BET_WON_GOLD_COIN: {
     MESSAGE: (data: BetNotificationData) =>
-      `🎉 Congratulations! You won ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.FREE_TOKENS ? 'free token' : 'stream coin'}${data.amount !== 1 ? `'s` : ''} in "${data.roundName}". Your wallet has been updated `,
-    TITLE: () => `🎉 Oh Snap! You Won!`,
+      `Big winner! ${data.amount.toLocaleString('en-US')} ${CurrencyTypeText.GOLD_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been added to your wallet. Now imagine if those were Sweepcoins…`,
+    TITLE: () => `Win - ${CurrencyTypeText.GOLD_COINS_TEXT}`,
+  },
+  BET_WON_SWEEP_COIN: {
+    MESSAGE: () =>
+      `You’re on a roll! Your wallet’s been updated with your winnings. Keep up the good work!`,
+    TITLE: () => `Win - ${CurrencyTypeText.SWEEP_COINS_TEXT}`,
   },
   BET_LOST: {
     MESSAGE: (data: BetNotificationData) =>
-      `"${data.roundName}" has ended and unfortunately you Lost. Better luck next time!`,
-    TITLE: () => `You Lost 😭`,
+      `So close! We bet you’ll be on the winning side next time!`,
+    TITLE: () => `That was close - better luck next time!`,
+  },
+  BET_MODIFIED_INCREASE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `You increased your position to ‘${data.amount.toLocaleString('en-US')}’ - love the confidence! Good luck. Why not check out some more streams while you wait?`,
+    TITLE: () => `Bet Modified (Increase)`,
+  },
+  BET_MODIFIED_DECREASE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `You decreased your position to ‘${data.amount.toLocaleString('en-US')}’ - try not to doubt yourself, you’ve got this! Why not check out another stream while you wait?`,
+    TITLE: () => `Bet Modified (Decrease)`,
   },
   BET_OPEN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting is open for "${data.roundName}" of ${data.streamName} . Place your bets and good luck!`,
+      `Hurry, betting is now open! Bets are being accepted for ${data.roundName} of ${data.streamName}. Place yours now before time runs out!`,
     TITLE: () => `Betting Phase Change - Betting Open`,
   },
   BET_LOCKED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Betting has been locked for "${data.roundName}". Results will be announced shortly.`,
+      `Time's up! Betting has been locked for ${data.roundName}. Good luck people!`,
     TITLE: () => `Betting Phase Change - Betting Locked`,
   },
   BET_ROUND_VOID: {
@@ -50,21 +69,27 @@ export const NOTIFICATION_TEMPLATE = {
       `"${data.roundName}" has been voided due to technical issues. All bets have been refunded to your wallet.`,
     TITLE: () => `Round Voided`,
   },
+  BET_WINNER_DECLARED: {
+    MESSAGE: (data: BetNotificationData) =>
+      `Results are in… Congrats if you selected ${data.bettingOption}!`,
+    TITLE: () => `Winner Declared`,
+  },
   EMAIL_BET_WON: {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}! `,
   },
   EMAIL_BET_LOSS: {
     TITLE: (data: BetNotificationData) =>
-      `${data.streamName} round complete! See your results... `,
+      `Round Complete - Click to see if you won...`,
   },
   EMAIL_WELCOME: {
-    TITLE: () => `You've passed go, collect 1000 Free Tokens`,
+    TITLE: () =>
+      `You've passed go, collect 1000 ${CurrencyTypeText.GOLD_COINS_TEXT}`,
   },
   EMAIL_PASSWORD_RESET: {
     TITLE: () => `Password Reset Request`,
   },
-  EMAIL_FREE_COIN_WON: {
+  EMAIL_GOLD_COIN_WON: {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a bet on ${data.streamName}, but could you have done better?`,
   },

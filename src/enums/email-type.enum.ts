@@ -4,5 +4,5 @@ export enum EmailType {
   Welcome = 'welcome',
   BetWon = 'bet_won',
   BetLoss = 'bet_loss',
-  BetWonFreeCoin = 'bet_won_free_coin',
+  BetWonGoldCoin = 'bet_won_gold_coin',
 }
