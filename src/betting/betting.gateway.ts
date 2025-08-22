@@ -299,37 +299,62 @@ export class BettingGateway
     console.log(`User ${username} left streambet`);
     return { event: 'leaveStreamBet', data: { username } };
   }
+  /**
+   * Sends a system-generated chat notification to all users connected to a given stream.
+   *
+   * @param {AuthenticatedSocketPayload} user - The authenticated user triggering the notification.
+   * @param {string} streamId - The unique identifier of the stream where the message will be sent.
+   * @param {string} systemMessage - The system-generated message to broadcast.
+   *
+   * @returns {Promise<void>} - Resolves once the system message has been saved and emitted.
+   *
+   * @description
+   * This method performs the following actions:
+   * 1. Creates and saves a system chat message in the database via `chatService.createChatMessage`.
+   * 2. Constructs a `ChatMessage` object containing system details, including the username,
+   *    timestamp, and profile image URL of the user.
+   * 3. Emits the `newMessage` event with the constructed `ChatMessage` to all clients in the
+   *    WebSocket room `stream_{streamId}`.
+   * @description: Reshma
+   */
   private async chatNotification(
-    user,
-    payoutAmount,
-    variableName,
-    stringId,
-    systemMessage,
-  ) {
-    const timestamp = new Date();
+    user: AuthenticatedSocketPayload,
+    streamId: string,
+    systemMessage: string,
+  ): Promise<void> {
     try {
-      await this.chatService.createChatMessage(
-        stringId,
-        user.sub,
-        undefined,
-        undefined,
-        timestamp,
+      const timestamp = new Date();
+      try {
+        await this.chatService.createChatMessage(
+          streamId,
+          user.sub,
+          undefined,
+          undefined,
+          timestamp,
+          systemMessage,
+        );
+      } catch (e) {
+        Logger.error('Failed to save system chat message:', e.message);
+      }
+      const systemChatMessage: ChatMessage = {
+        type: 'user',
+        username: user.username,
+        message: '',
         systemMessage,
-      );
+        imageURL: '',
+        timestamp: timestamp,
+        profileUrl: user?.profileImageUrl,
+      };
+      //emmit to all users in a stream - chat
+      return void this.server
+        .to(`stream_${streamId}`)
+        .emit('newMessage', systemChatMessage);
     } catch (e) {
-      Logger.error('Failed to save system chat message:', e.message);
+      Logger.warn({
+        function: 'chatNotification',
+        message: `Oops! Match has ${e}`,
+      });
     }
-    const systemChatMessage: ChatMessage = {
-      type: 'user',
-      username: user.username,
-      message: '',
-      systemMessage,
-      imageURL: '',
-      timestamp: timestamp,
-      profileUrl: user?.profileImageUrl,
-    };
-    //emmit to all users in a stream - chat
-    this.server.to(`stream_${stringId}`).emit('newMessage', systemChatMessage);
   }
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('placeBet')
@@ -439,10 +464,9 @@ export class BettingGateway
             amount: bet.amount,
             bettingOption: bettingVariable.name,
           });
+
         await this.chatNotification(
           user,
-          bet.amount,
-          bettingVariable.name,
           bettingVariable.stream.id,
           systemMessage,
         );
@@ -529,14 +553,6 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-        //sending bet place updation in chat
-        await this.chatNotification(
-          user,
-          bet.amount,
-          bettingVariable.name,
-          bettingVariable.stream.id,
-        );
-
         //sending bet cancel updation in chat
         const systemMessage =
           NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
@@ -546,8 +562,6 @@ export class BettingGateway
           });
         await this.chatNotification(
           user,
-          bet.amount,
-          bettingVariable.name,
           bettingVariable.stream.id,
           systemMessage,
         );
@@ -669,8 +683,6 @@ export class BettingGateway
       );
       await this.chatNotification(
         user,
-        editedBet.amount,
-        bettingVariable.name,
         bettingVariable.stream.id,
         systemMessage,
       );
