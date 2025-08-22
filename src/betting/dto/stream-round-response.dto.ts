@@ -1,10 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsArray,
+  IsInt,
   IsNotEmpty,
+  IsNumberString,
   IsOptional,
   IsString,
   IsUUID,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -16,6 +19,7 @@ export class WinnerAmountDto {
 
   @ApiProperty({ description: 'Amount won in this coin type', example: '100' })
   @IsString()
+  @IsNumberString()
   amount: string;
 }
 
@@ -58,17 +62,21 @@ export class OptionDto {
   is_winning_option?: boolean;
 
   @ApiProperty({ description: 'Total sweep coin bet amount', example: '0' })
-  @IsString()
+  @IsNumberString()
   totalBetsSweepCoinAmount: string;
 
   @ApiProperty({ description: 'Total gold coin bet amount', example: '0' })
-  @IsString()
+  @IsNumberString()
   totalBetsGoldCoinAmount: string;
 
   @ApiProperty({ description: 'Number of sweep coin bets placed', example: 0 })
+  @IsInt()
+  @Min(0)
   betCountSweepCoin: number;
 
   @ApiProperty({ description: 'Number of gold coin bets placed', example: 0 })
+  @IsInt()
+  @Min(0)
   betCountGoldCoin: number;
 }
 
