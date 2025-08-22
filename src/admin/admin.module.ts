@@ -18,5 +18,6 @@ import { StreamModule } from 'src/stream/stream.module';
   ],
   controllers: [AdminController],
   providers: [AdminService],
+  exports: [AdminService],
 })
 export class AdminModule {}

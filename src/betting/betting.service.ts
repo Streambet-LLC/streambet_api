@@ -239,6 +239,104 @@ export class BettingService {
 
     return updatedVariable;
   }
+  /**
+   * Returns all rounds for a stream, with their options and winners (if any), separated by currency type.
+   * @param streamId string
+   */
+  async getStreamRoundsWithWinners(streamId: string) {
+    // Get all rounds for the stream, with their betting variables and bets
+    const rounds = await this.bettingRoundsRepository.find({
+      where: { streamId },
+      relations: [
+        'bettingVariables',
+        'bettingVariables.bets',
+        'bettingVariables.bets.user',
+      ],
+      order: { createdAt: 'ASC' },
+    });
+
+    // Compose the response
+    const result = {
+      streamId,
+      rounds: [] as any[],
+    };
+
+    for (const round of rounds) {
+      // Get all options for this round
+      const options = round.bettingVariables.map((variable) => ({
+        id: variable.id,
+        option: variable.name,
+      }));
+
+      // Find the winning option(s)
+      const winningOptions = round.bettingVariables.filter(
+        (v) => v.is_winning_option,
+      );
+      let winners = { goldCoins: [], sweepCoins: [] };
+      let winnerAmount = { goldCoins: null, sweepCoins: null };
+      if (winningOptions.length > 0) {
+        // For each winning option, get all bets by currency
+        const winnerBetsGoldCoins = winningOptions.flatMap((v) =>
+          (v.bets || []).filter(
+            (bet) =>
+              bet.currency === CurrencyType.GOLD_COINS &&
+              bet.status === BetStatus.Won,
+          ),
+        );
+        const winnerBetsSweepCoins = winningOptions.flatMap((v) =>
+          (v.bets || []).filter(
+            (bet) =>
+              bet.currency === CurrencyType.SWEEP_COINS &&
+              bet.status === BetStatus.Won,
+          ),
+        );
+        // Remove duplicate users (in case a user bet multiple times)
+        const winnerUsersMapGoldCoins = new Map();
+        for (const bet of winnerBetsGoldCoins) {
+          if (
+            bet.user &&
+            !winnerUsersMapGoldCoins.has(bet.user.id) &&
+            bet.status === BetStatus.Won
+          ) {
+            winnerUsersMapGoldCoins.set(bet.user.id, {
+              userId: bet.user.id,
+              userName: bet.user.username,
+              avatar: bet.user.profileImageUrl,
+            });
+          }
+        }
+        const winnerUsersMapSweepCoins = new Map();
+        for (const bet of winnerBetsSweepCoins) {
+          if (
+            bet.user &&
+            !winnerUsersMapSweepCoins.has(bet.user.id) &&
+            bet.status === BetStatus.Won
+          ) {
+            winnerUsersMapSweepCoins.set(bet.user.id, {
+              userId: bet.user.id,
+              userName: bet.user.username,
+              avatar: bet.user.profileImageUrl,
+            });
+          }
+        }
+        winners.goldCoins = Array.from(winnerUsersMapGoldCoins.values());
+        winners.sweepCoins = Array.from(winnerUsersMapSweepCoins.values());
+        // Calculate winnerAmount (sum of payouts for this round's winning bets)
+        const winnerAmountGoldCoins = winnerBetsGoldCoins.reduce(
+          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
+          0,
+        );
+        const winnerAmountSweepCoins = winnerBetsSweepCoins.reduce(
+          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
+          0,
+        );
+        winnerAmount.goldCoins = winnerAmountGoldCoins
+          ? winnerAmountGoldCoins
+          : null;
+        winnerAmount.sweepCoins = winnerAmountSweepCoins
+          ? winnerAmountSweepCoins
+          : null;
+      }
 
   async editBettingVariable(
     editBettingVariableDto: EditBettingVariableDto,
@@ -930,7 +1028,6 @@ export class BettingService {
         }
           */
       }
-      
 
       lossingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
