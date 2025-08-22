@@ -36,7 +36,6 @@ import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { StreamList } from 'src/enums/stream-list.enum';
-import { AdminService } from 'src/admin/admin.service';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 
 @Injectable()
