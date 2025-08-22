@@ -1586,10 +1586,10 @@ export class BettingService {
           'user.username AS username',
           'bettingVariable.id AS variableId',
           'bettingVariable.name AS variablename',
-          'bettingVariable.totalBetsGoldCoinAmount AS variableTotalGoldCoins',
-          'bettingVariable.totalBetsSweepCoinAmount AS variableTotalSweepCoins',
-          'bettingVariable.betCountFreeGoldCoin AS betCountFreeGoldCoin',
-          'bettingVariable.betCountSweepCoin AS betCountSweepCoin',
+          'bettingVariable.total_bets_gold_coin_amount AS variableTotalGoldCoins',
+          'bettingVariable.total_bets_sweep_coin_amount AS variableTotalSweepCoins',
+          'bettingVariable.bet_count_gold_coin AS betCountFreeGoldCoin',
+          'bettingVariable.bet_count_sweep_coin AS betCountSweepCoin',
         ])
         .getRawMany();
 
