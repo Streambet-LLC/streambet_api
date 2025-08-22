@@ -23,7 +23,8 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
     UsersModule,
     AuthModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
-    ChatModule,GeoFencingModule
+    ChatModule,
+    GeoFencingModule,
   ],
   controllers: [BettingController],
   providers: [

@@ -25,7 +25,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `"Are you sure you want to cancel your bet? You've got to be in it to win it...". If they confirm then bring the "Ok, your bet on ${data.roundName} been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been returned to your wallet"`,
+      `Your bet on ${data.roundName} been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been returned to your wallet`,
     TITLE: () => `Bet Cancelled`,
   },
 
@@ -96,5 +96,13 @@ export const NOTIFICATION_TEMPLATE = {
   PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
       `${data.username} bet ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+  },
+  EDIT_BET_CHAT_MESSAGE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.username} updated bet to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+  },
+  CANCEL_BET_CHAT_MESSAGE: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.username} cancel bet on ${data.bettingOption}`,
   },
 };

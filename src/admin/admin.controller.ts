@@ -512,7 +512,7 @@ export class AdminController {
     @Param('streamId') streamId: string,
   ) {
     this.ensureAdmin(req.user);
-    const data = await this.adminService.getStreamRoundsWithWinners(streamId);
+    const data = await this.bettingService.getStreamRoundsWithWinners(streamId);
     return {
       message: 'Details fetched successfully',
       status: HttpStatus.OK,

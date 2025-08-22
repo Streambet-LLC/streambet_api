@@ -469,28 +469,6 @@ export class PaymentsService {
       const relatedEntityType = 'coinflow';
 
       // If we've already processed this purchase for a given currency, skip credit for that currency
-      // Sweep coins
-      if (Number(coinPackage.sweepCoinCount) > 0) {
-        const exists = relatedEntityId
-          ? await this.walletsService.hasTransactionForRelatedEntity(
-              relatedEntityId,
-              relatedEntityType,
-              CurrencyType.SWEEP_COINS,
-            )
-          : false;
-        if (!exists) {
-          await this.walletsService.updateBalance(
-            userId,
-            Number(coinPackage.sweepCoinCount),
-            CurrencyType.SWEEP_COINS,
-            TransactionType.PURCHASE,
-            `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} sweep coins`,
-            { coinPackageId: coinPackage.id, source: 'coinflow' },
-            { relatedEntityId, relatedEntityType },
-          );
-        }
-      }
-
       // Gold coins
       if (Number(coinPackage.goldCoinCount) > 0) {
         const exists = relatedEntityId
@@ -507,6 +485,28 @@ export class PaymentsService {
             CurrencyType.GOLD_COINS,
             TransactionType.PURCHASE,
             `Purchase of ${coinPackage.name}: ${coinPackage.goldCoinCount} gold coins`,
+            { coinPackageId: coinPackage.id, source: 'coinflow' },
+            { relatedEntityId, relatedEntityType },
+          );
+        }
+      }
+
+       // Sweep coins
+      if (Number(coinPackage.sweepCoinCount) > 0) {
+        const exists = relatedEntityId
+          ? await this.walletsService.hasTransactionForRelatedEntity(
+              relatedEntityId,
+              relatedEntityType,
+              CurrencyType.SWEEP_COINS,
+            )
+          : false;
+        if (!exists) {
+          await this.walletsService.updateBalance(
+            userId,
+            Number(coinPackage.sweepCoinCount),
+            CurrencyType.SWEEP_COINS,
+            TransactionType.BONUS,
+            `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} bonus sweep coins`,
             { coinPackageId: coinPackage.id, source: 'coinflow' },
             { relatedEntityId, relatedEntityType },
           );

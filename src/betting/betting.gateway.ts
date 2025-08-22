@@ -29,7 +29,9 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
+import { User } from 'src/users/entities/user.entity';
 import { UserRole } from 'src/users/entities/user.entity';
+import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -298,7 +300,63 @@ export class BettingGateway
     console.log(`User ${username} left streambet`);
     return { event: 'leaveStreamBet', data: { username } };
   }
-
+  /**
+   * Sends a system-generated chat notification to all users connected to a given stream.
+   *
+   * @param {AuthenticatedSocketPayload} user - The authenticated user triggering the notification.
+   * @param {string} streamId - The unique identifier of the stream where the message will be sent.
+   * @param {string} systemMessage - The system-generated message to broadcast.
+   *
+   * @returns {Promise<void>} - Resolves once the system message has been saved and emitted.
+   *
+   * @description
+   * This method performs the following actions:
+   * 1. Creates and saves a system chat message in the database via `chatService.createChatMessage`.
+   * 2. Constructs a `ChatMessage` object containing system details, including the username,
+   *    timestamp, and profile image URL of the user.
+   * 3. Emits the `newMessage` event with the constructed `ChatMessage` to all clients in the
+   *    WebSocket room `stream_{streamId}`.
+   * @description: Reshma
+   */
+  private async chatNotification(
+    user: AuthenticatedSocketPayload,
+    streamId: string,
+    systemMessage: string,
+  ): Promise<void> {
+    try {
+      const timestamp = new Date();
+      try {
+        await this.chatService.createChatMessage(
+          streamId,
+          user.sub,
+          undefined,
+          undefined,
+          timestamp,
+          systemMessage,
+        );
+      } catch (e) {
+        Logger.error('Failed to save system chat message:', e.message);
+      }
+      const systemChatMessage: ChatMessage = {
+        type: 'user',
+        username: user.username,
+        message: '',
+        systemMessage,
+        imageURL: '',
+        timestamp: timestamp,
+        profileUrl: user?.profileImageUrl,
+      };
+      //emmit to all users in a stream - chat
+      return void this.server
+        .to(`stream_${streamId}`)
+        .emit('newMessage', systemChatMessage);
+    } catch (e) {
+      Logger.error(
+        'chatNotification failed',
+        e instanceof Error ? e.stack : String(e),
+      );
+    }
+  }
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
@@ -398,38 +456,19 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
-        const timestamp = new Date();
+        //sending bet place updation in chat
         const systemMessage =
           NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
             username: user.username,
             amount: bet.amount,
             bettingOption: bettingVariable.name,
           });
-        try {
-          await this.chatService.createChatMessage(
-            bettingVariable.stream.id,
-            user.sub,
-            undefined,
-            undefined,
-            timestamp,
-            systemMessage,
-          );
-        } catch (e) {
-          Logger.error('Failed to save system chat message:', e.message);
-        }
-        const systemChatMessage: ChatMessage = {
-          type: 'user',
-          username: user.username,
-          message: '',
+
+        await this.chatNotification(
+          user,
+          bettingVariable.stream.id,
           systemMessage,
-          imageURL: '',
-          timestamp: timestamp,
-          profileUrl: user?.profileImageUrl,
-        };
-        //emmit to all users in a stream - chat
-        this.server
-          .to(`stream_${bettingVariable.stream.id}`)
-          .emit('newMessage', systemChatMessage);
+        );
       }
     } catch (error) {
       void client.emit('error', {
@@ -522,6 +561,18 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+        //sending bet cancel updation in chat
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.CANCEL_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatNotification(
+          user,
+          bettingVariable.stream.id,
+          systemMessage,
+        );
       }
     } catch (error) {
       client.emit('error', {
@@ -639,6 +690,20 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+      }
+      //sending bet edit updation in chat
+      if (bettingVariable) {
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: editedBet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatNotification(
+          user,
+          bettingVariable.stream.id,
+          systemMessage,
+        );
       }
     } catch (error) {
       client.emit('error', {
@@ -969,7 +1034,6 @@ export class BettingGateway
         title: NOTIFICATION_TEMPLATE.BET_ROUND_VOID.TITLE(),
         timestamp: new Date(),
       };
-
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
@@ -1067,5 +1131,26 @@ export class BettingGateway
         authenticatedSocket.emit('purchaseSettled', payload);
       }
     });
+  }
+  /**
+   * Emits the roundUpdated event to all clients connected to the room stream_{streamId} whenever the admin creates, edits, or deletes round details.
+   *
+   * @param {string} streamId - The unique identifier of the stream.
+   * @param {any} roundDetails - The details of the stream round to be shared with clients.
+   *
+   * @returns {Promise<void>} - Resolves once the roundUpdated event has been emitted.
+   *
+   * @description
+   * This method constructs a payload containing the `roundDetails` and broadcasts it
+   * via WebSocket to all clients subscribed to the room `stream_{streamId}`.
+   * The emitted event is named `roundUpdated`.
+   *@author: Reshma
+   */
+  async emitRoundDetails(
+    streamId: string,
+    streamDetails: StreamRoundsResponseDto,
+  ): Promise<void> {
+    const payload = { roundDetails: streamDetails.rounds };
+    void this.server.to(`stream_${streamId}`).emit('roundUpdated', payload);
   }
 }
