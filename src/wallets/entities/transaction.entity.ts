@@ -13,6 +13,7 @@ export enum TransactionType {
   INITIAL_CREDIT = 'Initial credit',
   ADMIN_CREDIT = 'Admin credit',
   ADMIN_DEBITED = 'Admin debited',
+  BONUS = 'Bonus coins'
 }
 
 export enum CurrencyType {
