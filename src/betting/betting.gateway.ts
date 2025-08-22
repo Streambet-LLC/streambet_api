@@ -906,23 +906,23 @@ export class BettingGateway
       await this.notificationService.addNotificationPermision(userId);
     if (receiverNotificationPermission['inAppNotification']) {
       const socketId = this.userSocketMap.get(username);
-const message =
-  currencyType === CurrencyType.GOLD_COINS
-    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({
-        amount: amount,
-      })
-    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
-const title =
-  currencyType === CurrencyType.GOLD_COINS
-    ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
-    : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
-const chatMessage: ChatMessage = {
-  type: 'system',
-  username: 'StreambetBot',
-  message,
-  title,
-  timestamp: new Date(),
-};
+      const message =
+        currencyType === CurrencyType.GOLD_COINS
+          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({
+              amount: amount,
+            })
+          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
+      const title =
+        currencyType === CurrencyType.GOLD_COINS
+          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
+          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message,
+        title,
+        timestamp: new Date(),
+      };
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
@@ -974,16 +974,30 @@ const chatMessage: ChatMessage = {
     }
   }
 
+  /**
+   * Emits a "bet open" notification to all users in the 'streambet' room
+   * who have in-app notifications enabled.
+   *
+   * @param roundName - The name of the betting round being opened.
+   * @param streamName - The name of the stream where the round is opened.
+   */
   async emitOpenBetRound(roundName: string, streamName: string) {
+    // Fetch all sockets currently connected to the 'streambet' room
     const sockets = await this.server.in('streambet').fetchSockets();
+
+    // Iterate through each connected socket
     for (const socket of sockets) {
+
+      // Extract user ID from socket data (if available)
       const userId = socket.data?.user?.sub;
-      if (!userId) continue;
-      const username = socket.data.user?.username;
+      if (!userId) continue; // Skip if user is not authenticated
+
+      // Check if the user has in-app notification permissions enabled
       const receiverNotificationPermission =
         await this.notificationService.addNotificationPermision(userId);
+
       if (receiverNotificationPermission['inAppNotification']) {
-        const socketId = this.userSocketMap.get(username);
+        // Prepare the notification payload using the template
         const payload = {
           type: 'system',
           username: 'StreamBet Bot',
@@ -994,8 +1008,12 @@ const chatMessage: ChatMessage = {
           title: NOTIFICATION_TEMPLATE.BET_OPEN.TITLE(),
           timestamp: new Date(),
         };
-        void this.server.to(socketId).emit('botMessage', payload);
-        Logger.log(`Emitted betRound to room 'streambet': ${roundName}`);
+
+        // Emit the notification directly to this user's socket
+        void this.server.to(socket.id).emit('botMessage', payload);
+
+        // Log the emission for debugging/audit purposes
+        Logger.log(`Emitted open bet round to 'streambet': ${roundName}`);
       }
     }
   }
