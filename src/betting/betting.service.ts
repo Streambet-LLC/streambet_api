@@ -430,7 +430,14 @@ export class BettingService {
     });
     // emit event when user update, create, delete a bet round
     const streamDetails = await this.getStreamRoundsWithWinners(streamId);
-    this.bettingGateway.emitRoundDetails(streamId, streamDetails);
+    try {
+      await this.bettingGateway.emitRoundDetails(streamId, streamDetails);
+    } catch (err) {
+      Logger.warn(
+        `emitRoundDetails failed for stream ${streamId}: ${err?.message ?? err}`,
+      );
+    }
+
     return {
       streamId,
       rounds: allRounds,
