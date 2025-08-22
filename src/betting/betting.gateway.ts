@@ -1050,4 +1050,9 @@ const chatMessage: ChatMessage = {
       }
     });
   }
+
+  async emitRoundStatus(streamId: string, streamDetails: any): Promise<void> {
+    const payload = { streamDetails };
+    void this.server.to(`stream_${streamId}`).emit('roundStatus', payload);
+  }
 }

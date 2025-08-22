@@ -414,7 +414,9 @@ export class BettingService {
         new Date(roundB.createdAt).getTime()
       );
     });
-
+    // emit event when user update, create, delete a bet round
+    const streamDetails = await this.getStreamRoundsWithWinners(streamId);
+    this.bettingGateway.emitRoundStatus(streamId, streamDetails.rounds || []);
     return {
       streamId,
       rounds: allRounds,
