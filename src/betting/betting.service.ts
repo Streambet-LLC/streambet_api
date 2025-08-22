@@ -37,6 +37,7 @@ import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { AdminService } from 'src/admin/admin.service';
+import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 
 @Injectable()
 export class BettingService {
@@ -244,7 +245,9 @@ export class BettingService {
    * Returns all rounds for a stream, with their options and winners (if any), separated by currency type.
    * @param streamId string
    */
-  async getStreamRoundsWithWinners(streamId: string) {
+  async getStreamRoundsWithWinners(
+    streamId: string,
+  ): Promise<StreamRoundsResponseDto> {
     // Get all rounds for the stream, with their betting variables and bets
     const rounds = await this.bettingRoundsRepository.find({
       where: { streamId },
@@ -428,7 +431,7 @@ export class BettingService {
     });
     // emit event when user update, create, delete a bet round
     const streamDetails = await this.getStreamRoundsWithWinners(streamId);
-    this.bettingGateway.emitRoundStatus(streamId, streamDetails.rounds || []);
+    this.bettingGateway.emitRoundDetails(streamId, streamDetails);
     return {
       streamId,
       rounds: allRounds,

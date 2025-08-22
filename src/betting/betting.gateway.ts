@@ -30,6 +30,7 @@ import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'src/users/entities/user.entity';
+import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -1049,9 +1050,25 @@ export class BettingGateway
       }
     });
   }
-
-  async emitRoundStatus(streamId: string, streamDetails: any): Promise<void> {
-    const payload = { streamDetails };
-    void this.server.to(`stream_${streamId}`).emit('roundStatus', payload);
+  /**
+   * Emits the roundUpdated event to all clients connected to the room stream_{streamId} whenever the admin creates, edits, or deletes round details.
+   *
+   * @param {string} streamId - The unique identifier of the stream.
+   * @param {any} roundDetails - The details of the stream round to be shared with clients.
+   *
+   * @returns {Promise<void>} - Resolves once the roundUpdated event has been emitted.
+   *
+   * @description
+   * This method constructs a payload containing the `roundDetails` and broadcasts it
+   * via WebSocket to all clients subscribed to the room `stream_{streamId}`.
+   * The emitted event is named `roundUpdated`.
+   *@author: Reshma
+   */
+  async emitRoundDetails(
+    streamId: string,
+    streamDetails: StreamRoundsResponseDto,
+  ): Promise<void> {
+    const payload = { roundDetails: streamDetails.rounds };
+    void this.server.to(`stream_${streamId}`).emit('roundUpdated', payload);
   }
 }
