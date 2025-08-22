@@ -351,10 +351,10 @@ export class BettingGateway
         .to(`stream_${streamId}`)
         .emit('newMessage', systemChatMessage);
     } catch (e) {
-      Logger.warn({
-        function: 'chatNotification',
-        message: `Oops! Match has ${e}`,
-      });
+      Logger.error(
+        'chatNotification failed',
+        e instanceof Error ? e.stack : String(e),
+      );
     }
   }
   @UseGuards(WsJwtGuard)
@@ -563,7 +563,7 @@ export class BettingGateway
           .emit('chatMessage', chatMessage);
         //sending bet cancel updation in chat
         const systemMessage =
-          NOTIFICATION_TEMPLATE.PLACE_BET_CHAT_MESSAGE.MESSAGE({
+          NOTIFICATION_TEMPLATE.CANCEL_BET_CHAT_MESSAGE.MESSAGE({
             username: user.username,
             amount: bet.amount,
             bettingOption: bettingVariable.name,
@@ -692,18 +692,19 @@ export class BettingGateway
           .emit('chatMessage', chatMessage);
       }
       //sending bet edit updation in chat
-      const systemMessage = NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE(
-        {
-          username: user.username,
-          amount: editedBet.amount,
-          bettingOption: bettingVariable.name,
-        },
-      );
-      await this.chatNotification(
-        user,
-        bettingVariable.stream.id,
-        systemMessage,
-      );
+      if (bettingVariable) {
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: editedBet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatNotification(
+          user,
+          bettingVariable.stream.id,
+          systemMessage,
+        );
+      }
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
