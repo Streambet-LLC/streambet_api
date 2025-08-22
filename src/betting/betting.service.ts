@@ -36,6 +36,7 @@ import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { StreamList } from 'src/enums/stream-list.enum';
+import { AdminService } from 'src/admin/admin.service';
 
 @Injectable()
 export class BettingService {
@@ -338,6 +339,17 @@ export class BettingService {
           : null;
       }
 
+      result.rounds.push({
+        roundId: round.id,
+        roundName: round.roundName,
+        status: round.status,
+        winnerAmount,
+        winners,
+        options,
+      });
+    }
+    return result;
+  }
   async editBettingVariable(
     editBettingVariableDto: EditBettingVariableDto,
   ): Promise<any> {
@@ -1783,7 +1795,7 @@ export class BettingService {
         }
       }
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
       return savedRound;
     } else {
       throw new BadRequestException(
@@ -1861,7 +1873,7 @@ export class BettingService {
         );
       }
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated)
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       return { refundedBets };
     } catch (error) {
@@ -1885,20 +1897,20 @@ export class BettingService {
       (sum, v) => Number(sum) + Number(v.totalBetsSweepCoinAmount || 0),
       0,
     );
-const totalGoldCoinBet = bettingVariables.reduce(
-  (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
-  0,
-);
-const totalSweepCoinBet = bettingVariables.reduce(
-  (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
-  0,
-);
-return {
-  totalBetsGoldCoinAmount,
-  totalBetsSweepCoinAmount,
-  totalSweepCoinBet,
-  totalGoldCoinBet,
-};
+    const totalGoldCoinBet = bettingVariables.reduce(
+      (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
+      0,
+    );
+    const totalSweepCoinBet = bettingVariables.reduce(
+      (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
+      0,
+    );
+    return {
+      totalBetsGoldCoinAmount,
+      totalBetsSweepCoinAmount,
+      totalSweepCoinBet,
+      totalGoldCoinBet,
+    };
   }
 
   getActiveBetsCount(): Promise<number> {
