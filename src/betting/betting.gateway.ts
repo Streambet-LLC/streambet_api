@@ -29,6 +29,7 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { extractIpFromSocket } from 'src/common/utils/ip-utils';
 import { GeoFencingService } from 'src/geo-fencing/geo-fencing.service';
 import { ConfigService } from '@nestjs/config';
+import { User } from 'src/users/entities/user.entity';
 import { UserRole } from 'src/users/entities/user.entity';
 
 // Define socket with user data
@@ -528,6 +529,13 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+        //sending bet place updation in chat
+        await this.chatNotification(
+          user,
+          bet.amount,
+          bettingVariable.name,
+          bettingVariable.stream.id,
+        );
 
         //sending bet cancel updation in chat
         const systemMessage =
