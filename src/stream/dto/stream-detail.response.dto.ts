@@ -13,10 +13,10 @@ export class WinningOptionDto {
   variableName: string;
 
   @ApiProperty({ example: '0' })
-  totalSweepCoinAmt: string;
+  totalSweepCoinAmt: number;
 
   @ApiProperty({ example: '112' })
-  totalGoldCoinAmt: string;
+  totalGoldCoinAmt: number;
 
   @ApiProperty({ type: [WinnerDto] })
   winners: WinnerDto[];
