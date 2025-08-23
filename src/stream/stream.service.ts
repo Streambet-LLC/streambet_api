@@ -355,7 +355,7 @@ END
               new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
           )
           .filter((round) => {
-            if (round.status === 'created') {
+            if (round.status === BettingRoundStatus.CREATED) {
               if (!createdFound) {
                 createdFound = true; // keep only the first "created"
                 return true;
@@ -367,17 +367,19 @@ END
           .map((round) => ({
             roundName: round.roundName,
             roundStatus: round.status,
-            createdAt: round.createdAt,
+            createdAt: new Date(round.createdAt).toISOString(),
             winningOption: round.bettingVariables
               .filter((variable) => variable.is_winning_option === true)
               .map((variable) => ({
                 variableName: variable.name,
                 totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
                 totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
-                winners: variable.bets.map((bet) => ({
-                  userName: bet.user.username,
-                  userProfileUrl: bet.user.profileImageUrl,
-                })),
+                winners: (variable.bets ?? [])
+                  .filter((bet) => bet.status === BetStatus.Won && bet.user)
+                  .map((bet) => ({
+                    userName: bet.user.username,
+                    userProfileUrl: bet.user.profileImageUrl ?? null,
+                  })),
               })),
           }));
       }
