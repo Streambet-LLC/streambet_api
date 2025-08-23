@@ -352,23 +352,55 @@ export class BettingService {
     }
     return result;
   }
+
+  /**
+   * Creates, updates, or deletes betting rounds and their variables for a given stream.
+   *
+   * Workflow:
+   *  1. Validates the stream status:
+   *     - Throws an error if the stream is ENDED or CANCELLED.
+   *
+   *  2. Retrieves all existing rounds for the stream (with their betting variables).
+   *
+   *  3. Iterates over the request `rounds`:
+   *     - If a `roundId` is provided and exists → update the round name.
+   *     - If no `roundId` is provided → create a new round with status CREATED.
+   *     - For each round, updates its betting options using `updateRoundOptions`.
+   *
+   *  4. Removes any rounds (and their betting variables) that exist in the database
+   *     but are not included in the request payload.
+   *
+   *  5. Sorts all rounds in ascending order based on `createdAt`.
+   *
+   *  6. Emits updated round details to connected clients via `bettingGateway`.
+   *
+   * @param editBettingVariableDto - DTO containing:
+   *   - streamId: The unique identifier of the stream.
+   *   - rounds: An array of rounds, each containing:
+   *       - roundId (optional, for updating existing rounds)
+   *       - roundName
+   *       - options (betting options for that round)
+   *
+   * @returns An object containing:
+   *   - streamId: The stream ID for which rounds were modified.
+   *   - rounds: The updated list of all rounds (created, updated, or kept).
+   *
+   * @throws BadRequestException - If betting variables are modified for ENDED or CANCELLED streams.
+   * @throws HttpException (500) - If an unexpected error occurs during persistence or event emission.
+   */
   async editBettingVariable(
     editBettingVariableDto: EditBettingVariableDto,
   ): Promise<any> {
     const { streamId, rounds } = editBettingVariableDto;
     const stream = await this.findStreamById(streamId);
 
-    if (stream.status === StreamStatus.ENDED) {
+    // Prevent editing if stream is ended or cancelled
+    if ([StreamStatus.ENDED, StreamStatus.CANCELLED].includes(stream.status)) {
       throw new BadRequestException(
-        'Cannot edit betting variables for ended streams',
+        `Cannot edit betting variables for ${stream.status.toLowerCase()} streams`,
       );
     }
-    if (stream.status === StreamStatus.CANCELLED) {
-      throw new BadRequestException(
-        'Cannot edit betting variables for cancelled streams',
-      );
-    }
-    // Get existing rounds for this stream
+    // Fetch existing rounds with variables
     const existingRounds = await this.bettingRoundsRepository.find({
       where: { streamId },
       relations: ['bettingVariables'],
@@ -429,7 +461,7 @@ export class BettingService {
       );
     });
     // emit event when user update, create, delete a bet round
-    const streamDetails = await this.getStreamRoundsWithWinners(streamId);
+    const streamDetails = await this.streamService.findStreamById(streamId);
     try {
       await this.bettingGateway.emitRoundDetails(streamId, streamDetails);
     } catch (err) {

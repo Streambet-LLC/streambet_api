@@ -32,6 +32,7 @@ import { ConfigService } from '@nestjs/config';
 import { User } from 'src/users/entities/user.entity';
 import { UserRole } from 'src/users/entities/user.entity';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
+import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -1051,7 +1052,6 @@ export class BettingGateway
 
     // Iterate through each connected socket
     for (const socket of sockets) {
-
       // Extract user ID from socket data (if available)
       const userId = socket.data?.user?.sub;
       if (!userId) continue; // Skip if user is not authenticated
@@ -1148,9 +1148,9 @@ export class BettingGateway
    */
   async emitRoundDetails(
     streamId: string,
-    streamDetails: StreamRoundsResponseDto,
+    streamDetails: StreamDetailsDto,
   ): Promise<void> {
-    const payload = { roundDetails: streamDetails.rounds };
+    const payload = { roundDetails: streamDetails.roundDetails };
     void this.server.to(`stream_${streamId}`).emit('roundUpdated', payload);
   }
 }
