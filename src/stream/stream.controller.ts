@@ -155,9 +155,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   @ApiResponse({
     status: 200,
     description: 'Stream details retrieved successfully.',
-    schema: {
-      example: StreamResponseDto,
-    },
+    type: StreamResponseDto,
   })
   @UseGuards(GeoFencingGuard)
   @Get('/:id')
