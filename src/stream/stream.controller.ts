@@ -27,6 +27,7 @@ import {
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
 import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { StreamResponseDto } from './dto/stream-detail.response.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -126,17 +127,41 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
    * @throws NotFoundException | HttpException
    * @author Reshma M S
    */
+  /**
+   * Retrieves detailed information about a stream by its ID.
+   *
+   * This endpoint is public and returns stream details only if the stream
+   * is in LIVE, SCHEDULED, or ENDED status. The response includes:
+   *   - Stream metadata (ID, name, platform, status, viewer count, etc.)
+   *   - Betting rounds, sorted by `createdAt` in ascending order
+   *   - Only the first occurrence of a "created" round is kept
+   *   - Winning options for each round, along with winner details
+   *
+   * @param id - The unique identifier of the stream.
+   * @returns An object containing stream details and betting round information.
+   * @throws NotFoundException - If no stream with the given ID is found.
+   * @throws HttpException (500) - For unexpected server errors.
+   */
   @ApiOperation({
-    summary: 'Get stream by ID',
-    description: 'Public API for listing stream details based on stream id',
+    summary: 'Retrieve stream details by ID',
+    description: `
+    Retrieves detailed information about a specific stream using its ID.
+    - Works for streams with status: LIVE, SCHEDULED, or ENDED.
+    - Includes betting rounds, winning options, and winners.
+    - Ensures only the first "created" round is included, discarding duplicates.
+    - Protected by GeoFencingGuard for region-based access restrictions.
+  `,
   })
   @ApiResponse({
     status: 200,
-    description: 'Stream details retrieved successfully',
+    description: 'Stream details retrieved successfully.',
+    schema: {
+      example: StreamResponseDto,
+    },
   })
   @UseGuards(GeoFencingGuard)
   @Get('/:id')
-  async findStreamById(@Param('id') id: string) {
+  async findStreamById(@Param('id') id: string): Promise<StreamResponseDto> {
     const stream = await this.streamService.findStreamById(id);
     return {
       message: 'Stream details retrieved successfully',

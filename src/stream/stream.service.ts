@@ -30,6 +30,7 @@ import { BettingService } from 'src/betting/betting.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
+import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 
 @Injectable()
 export class StreamService {
@@ -302,17 +303,23 @@ END
   }
 
   /**
-   * Retrieves a stream by its ID with selected fields (id, kickEmbedUrl, name).
-   * Throws a NotFoundException if no stream is found with the given ID.
-   * Logs and throws an HttpException in case of any internal errors during retrieval.
+   * Finds a stream by its ID and retrieves detailed information including betting rounds,
+   * betting variables, bets, and user details. The function ensures:
+   *   - Only streams with status LIVE, SCHEDULED, or ENDED are considered.
+   *   - Betting rounds are sorted by `createdAt` in ascending order.
+   *   - Only the first occurrence of a round with status "created" is kept,
+   *     subsequent "created" rounds are removed.
+   *   - For each round, the winning betting options and corresponding winners are returned.
    *
-   * @param id - The unique identifier of the stream to retrieve.
-   * @returns A Promise resolving to the stream details.
-   * @throws NotFoundException | HttpException
-   * @author Reshma M S
+   * @param streamId - The unique identifier of the stream to retrieve.
+   * @returns A structured object containing stream details, round details, and winners.
+   * @throws NotFoundException - If no active stream with the given ID is found.
+   * @throws HttpException (500) - If any other unexpected error occurs while retrieving the stream.
+   * @author: Reshma M S
    */
-  async findStreamById(streamId: string): Promise<any> {
+  async findStreamById(streamId: string): Promise<StreamDetailsDto> {
     try {
+      // Query the stream with relations: bettingRounds -> bettingVariables -> bets -> user
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
         .leftJoinAndSelect('stream.bettingRounds', 'br')
@@ -329,29 +336,53 @@ END
         })
         .getOne();
 
+      // If no valid stream is found, throw a NotFoundException
       if (!stream) {
         throw new NotFoundException(
           `Could not find an active stream with the specified ID. Please check the ID and try again.`,
         );
       }
+
       let rounds = [];
       if (stream.bettingRounds && stream.bettingRounds.length > 0) {
-        rounds = stream.bettingRounds.map((round) => ({
-          roundName: round.roundName,
-          roundStatus: round.status,
-          winningOption: round.bettingVariables
-            .filter((variable) => variable.is_winning_option === true)
-            .map((variable) => ({
-              variableName: variable.name,
-              totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
-              totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
-              winners: variable.bets.map((bet) => ({
-                userName: bet.user.username,
-                userProfileUrl: bet.user.profileImageUrl,
+        let createdFound = false;
+
+        // Sort rounds by createdAt ASC, remove duplicate "created" rounds,
+        // and transform into the desired response format
+        rounds = stream.bettingRounds
+          .sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          )
+          .filter((round) => {
+            if (round.status === 'created') {
+              if (!createdFound) {
+                createdFound = true; // keep only the first "created"
+                return true;
+              }
+              return false; // skip subsequent "created"
+            }
+            return true; // keep other statuses
+          })
+          .map((round) => ({
+            roundName: round.roundName,
+            roundStatus: round.status,
+            createdAt: round.createdAt,
+            winningOption: round.bettingVariables
+              .filter((variable) => variable.is_winning_option === true)
+              .map((variable) => ({
+                variableName: variable.name,
+                totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
+                totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
+                winners: variable.bets.map((bet) => ({
+                  userName: bet.user.username,
+                  userProfileUrl: bet.user.profileImageUrl,
+                })),
               })),
-            })),
-        }));
+          }));
       }
+
+      // Prepare the final structured response
       const streamDetails = {
         id: stream.id,
         name: stream.name,
@@ -360,20 +391,23 @@ END
         platformName: stream.platformName,
         status: stream.status,
         scheduledStartTime: stream.scheduledStartTime,
-        discription: stream.description,
+        discription: stream.description, // typo in field kept as in entity
         viewerCount: stream.viewerCount,
         roundDetails: rounds || [],
       };
+
       return streamDetails;
     } catch (e) {
       if (e instanceof NotFoundException) {
-        throw e;
+        throw e; // rethrow expected error
       }
 
+      // Log unexpected errors and throw 500
       Logger.error('Unable to retrieve stream details', e);
       throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
   async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
     try {
       let userBetGoldCoins: number;
@@ -1112,7 +1146,3 @@ END
     }
   }
 }
-
-
-
-  
