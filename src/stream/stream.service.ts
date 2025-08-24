@@ -51,12 +51,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private queueService: QueueService,
   ) {}
   async onModuleDestroy() {
-    // Clear all timers
-    for (const timer of this.updateTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.updateTimers.clear();
-    this.latestCounts.clear();
+    await this.flushViewerCounts('moduleDestroy');
   }
   /**
    * Retrieves a paginated list of streams for the home page view.
@@ -726,48 +721,49 @@ END
 
     this.updateTimers.set(streamId, timer);
   }
+  // Add inside StreamService class
+  private async flushViewerCounts(reason?: string): Promise<void> {
+    try {
+      Logger.log(
+        `[viewerCount] Flushing pending updates (${reason ?? 'shutdown'})`,
+      );
+
+      // Stop timers to prevent post-flush writes
+      for (const timer of this.updateTimers.values()) clearTimeout(timer);
+      this.updateTimers.clear();
+
+      const entries = Array.from(this.latestCounts.entries());
+      this.latestCounts.clear();
+
+      if (entries.length === 0) return;
+
+      // Parameterized CASE WHEN
+      const qb = this.streamsRepository.createQueryBuilder().update(Stream);
+
+      const whenThens: string[] = [];
+      entries.forEach(([id, count], i) => {
+        whenThens.push(`WHEN :id${i} THEN :count${i}`);
+        qb.setParameter(`id${i}`, id);
+        qb.setParameter(`count${i}`, count);
+      });
+
+      qb.set({
+        viewerCount: () => `CASE "id" ${whenThens.join(' ')} END`,
+      }).where(`id IN (${entries.map((_, i) => `:id${i}`).join(', ')})`);
+
+      await qb.execute();
+
+      Logger.log(`[viewerCount] Flushed ${entries.length} viewer counts to DB`);
+    } catch (err) {
+      Logger.error('[viewerCount] Flush failed', err?.stack ?? String(err));
+    }
+  }
 
   /**
    * Flush any pending viewer count updates to DB before shutdown (batch update)
    */
   async onApplicationShutdown(signal?: string) {
-    Logger.log(`Shutting down due to signal: ${signal}`);
-
-    // Clear timers
-    for (const timer of this.updateTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.updateTimers.clear();
-
-    const updates = Array.from(this.latestCounts.entries()); // [[streamId, count], ...]
-    this.latestCounts.clear();
-
-    if (updates.length === 0) {
-      return;
-    }
-
-    try {
-      // Bulk update using CASE WHEN for efficiency
-      const query = this.streamsRepository
-        .createQueryBuilder()
-        .update(Stream) // use entity name or table name
-        .set({
-          viewerCount: () => `
-          CASE "id"
-            ${updates
-              .map(([id, count]) => `WHEN '${id}' THEN ${count}`)
-              .join(' ')}
-          END
-        `,
-        })
-        .where('id IN (:...ids)', { ids: updates.map(([id]) => id) });
-
-      await query.execute();
-
-      Logger.log(`Flushed ${updates.length} viewer counts to DB in batch`);
-    } catch (err) {
-      Logger.error(' Failed to flush viewer counts on shutdown', err.stack);
-    }
+    await this.flushViewerCounts(signal);
   }
   async updateStreamStatus(streamId: string) {
     try {
