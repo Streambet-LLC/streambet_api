@@ -7,6 +7,8 @@ import {
   BadRequestException,
   forwardRef,
   Inject,
+  OnModuleDestroy,
+  OnApplicationShutdown,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -33,9 +35,10 @@ import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 
 @Injectable()
-export class StreamService {
+export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
   private readonly logger = new Logger(StreamService.name);
-
+  private updateTimers = new Map<string, NodeJS.Timeout>();
+  private latestCounts = new Map<string, number>();
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
@@ -47,7 +50,9 @@ export class StreamService {
     private dataSource: DataSource,
     private queueService: QueueService,
   ) {}
-
+  async onModuleDestroy() {
+    await this.flushViewerCounts('moduleDestroy');
+  }
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -679,45 +684,87 @@ END
     return savedStream;
   }
   /**
-   * Decrements the viewer count for a given stream ID in the database.
-   * Ensures the count does not go below zero.
-   * @param streamId The ID of the stream.
-   * @returns The updated viewer count.
+   * Schedule a debounced update of the viewer count for a given stream.
+   *
+   * @param streamId - The unique identifier of the stream
+   * @param count - The latest number of active viewers
+   *
+   * @remarks
+   * - Uses a debounce mechanism to reduce excessive DB writes.
+   * - The update is delayed by 2 seconds after the last change.
+   * - If new updates come in before the timer finishes, the timer resets.
    */
-  async decrementViewerCount(streamId: string): Promise<number> {
-    const result = await this.streamsRepository
-      .createQueryBuilder()
-      .update(Stream)
-      .set({ viewerCount: () => 'GREATEST(0, "viewerCount" - 1)' })
-      .where('id = :streamId', { streamId })
-      .returning('viewerCount')
-      .execute();
+  async updateViewerCount(streamId: string, count: number) {
+    this.latestCounts.set(streamId, count);
 
-    if (result.affected === 0) {
-      throw new NotFoundException(`Stream with ID ${streamId} not found`);
+    if (this.updateTimers.has(streamId)) {
+      clearTimeout(this.updateTimers.get(streamId));
     }
-    const updatedCount = result.raw[0].viewerCount;
 
-    Logger.log(`Stream ${streamId}: Viewers decremented to ${updatedCount}`);
-    return updatedCount;
+    const timer = setTimeout(async () => {
+      const latest = this.latestCounts.get(streamId);
+      if (latest !== undefined) {
+        try {
+          await this.streamsRepository.update(streamId, {
+            viewerCount: latest,
+          });
+        } catch (err) {
+          Logger.error(
+            ` Failed to update viewer count for stream ${streamId}`,
+            err.stack,
+          );
+        }
+        this.latestCounts.delete(streamId);
+      }
+      this.updateTimers.delete(streamId);
+    }, 2000);
+
+    this.updateTimers.set(streamId, timer);
   }
+  // Add inside StreamService class
+  private async flushViewerCounts(reason?: string): Promise<void> {
+    try {
+      Logger.log(
+        `[viewerCount] Flushing pending updates (${reason ?? 'shutdown'})`,
+      );
+
+      // Stop timers to prevent post-flush writes
+      for (const timer of this.updateTimers.values()) clearTimeout(timer);
+      this.updateTimers.clear();
+
+      const entries = Array.from(this.latestCounts.entries());
+      this.latestCounts.clear();
+
+      if (entries.length === 0) return;
+
+      // Parameterized CASE WHEN
+      const qb = this.streamsRepository.createQueryBuilder().update(Stream);
+
+      const whenThens: string[] = [];
+      entries.forEach(([id, count], i) => {
+        whenThens.push(`WHEN :id${i} THEN :count${i}`);
+        qb.setParameter(`id${i}`, id);
+        qb.setParameter(`count${i}`, count);
+      });
+
+      qb.set({
+        viewerCount: () => `CASE "id" ${whenThens.join(' ')} END`,
+      }).where(`id IN (${entries.map((_, i) => `:id${i}`).join(', ')})`);
+
+      await qb.execute();
+
+      Logger.log(`[viewerCount] Flushed ${entries.length} viewer counts to DB`);
+    } catch (err) {
+      Logger.error('[viewerCount] Flush failed', err?.stack ?? String(err));
+    }
+  }
+
   /**
-   * Increments the viewer count for a given stream ID in the database.
-   * @param streamId The ID of the stream.
-   * @returns The updated viewer count.
+   * Flush any pending viewer count updates to DB before shutdown (batch update)
    */
-  async incrementViewerCount(streamId: string): Promise<number> {
-    const stream = await this.streamsRepository.findOne({
-      where: { id: streamId },
-    });
-    stream.viewerCount++;
-    await this.streamsRepository.save(stream);
-    Logger.log(
-      `Stream ${streamId}: Viewers incremented to ${stream.viewerCount}`,
-    );
-    return stream.viewerCount;
+  async onApplicationShutdown(signal?: string) {
+    await this.flushViewerCounts(signal);
   }
-
   async updateStreamStatus(streamId: string) {
     try {
       const stream = await this.streamsRepository.findOne({
