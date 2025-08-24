@@ -60,7 +60,6 @@ export class Transaction extends BaseEntity {
     precision: 12,
     scale: 3,
     nullable: true,
-    name: 'balance_after',
   })
   balanceAfter: number;
 
