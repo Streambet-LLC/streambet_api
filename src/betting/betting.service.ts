@@ -699,6 +699,16 @@ export class BettingService {
       const oldCurrency = betDetails.currency;
       const newCurrency = newCurrencyType;
 
+      if (!Number.isFinite(newAmt) || newAmt <= 0) {
+        throw new BadRequestException(
+          'New amount must be a positive number greater than 0.',
+        );
+      }
+      if (!Object.values(CurrencyType).includes(newCurrency)) {
+        throw new BadRequestException('Invalid currency type.');
+      }
+
+
       if (newCurrency !== oldCurrency) {
         // Refund full old amount in old currency
         if (oldCurrency === CurrencyType.GOLD_COINS) {
