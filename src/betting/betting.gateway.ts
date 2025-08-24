@@ -39,7 +39,7 @@ import { UserMeta } from 'src/interface/user-meta.interface';
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
   data: {
-    meta?: { userId: any; streamId: string };
+    meta?: UserMeta;
     user: AuthenticatedSocketPayload;
   };
 }
