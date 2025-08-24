@@ -393,7 +393,7 @@ END
         platformName: stream.platformName,
         status: stream.status,
         scheduledStartTime: stream.scheduledStartTime,
-        discription: stream.description, // typo in field kept as in entity
+        description: stream.description, // typo in field kept as in entity
         viewerCount: stream.viewerCount,
         roundDetails: rounds || [],
       };
