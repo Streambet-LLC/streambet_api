@@ -6,6 +6,7 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
@@ -66,7 +67,7 @@ interface Notification {
   },
 })
 export class BettingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server: Server;
