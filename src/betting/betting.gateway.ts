@@ -34,6 +34,7 @@ import { User } from 'src/users/entities/user.entity';
 import { UserRole } from 'src/users/entities/user.entity';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
+import { UserMeta } from 'src/interface/user-meta.interface';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -73,7 +74,7 @@ export class BettingGateway
   @WebSocketServer()
   server: Server;
   // Memory store: streamId -> userId -> connectionCount
-  private viewers = new Map<string, Map<string, number>>();
+  private viewers = new Map<string, Set<string>>();
   private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
@@ -224,30 +225,23 @@ export class BettingGateway
     this.addViewer(streamId, userId);
     await this.broadcastCount(streamId);
   }
+
   private addViewer(streamId: string, userId: string) {
     if (!this.viewers.has(streamId)) {
-      this.viewers.set(streamId, new Map());
+      this.viewers.set(streamId, new Set());
     }
 
-    const userConnections = this.viewers.get(streamId)!;
-    const count = userConnections.get(userId) || 0;
-    userConnections.set(userId, count + 1);
+    const userSet = this.viewers.get(streamId)!;
+    userSet.add(userId); // Set ensures uniqueness
   }
 
   private removeViewer(streamId: string, userId: string) {
-    const streamViewers = this.viewers.get(streamId);
-    if (!streamViewers) return;
+    const userSet = this.viewers.get(streamId);
+    if (!userSet) return;
 
-    const count = streamViewers.get(userId);
-    if (!count) return;
+    userSet.delete(userId);
 
-    if (count <= 1) {
-      streamViewers.delete(userId);
-    } else {
-      streamViewers.set(userId, count - 1);
-    }
-
-    if (streamViewers.size === 0) {
+    if (userSet.size === 0) {
       this.viewers.delete(streamId);
     }
   }
@@ -257,7 +251,7 @@ export class BettingGateway
     const count = streamViewers ? streamViewers.size : 0;
 
     // Send to all clients in this stream room
-    this.server.to(streamId).emit('viewerCountUpdated', { count });
+    this.server.to(`stream_${streamId}`).emit('viewerCountUpdated', { count });
 
     // Update DB (debounce/throttle in real prod)
     await this.streamService.updateViewerCount(streamId, count);
@@ -275,7 +269,7 @@ export class BettingGateway
 
     // Clear meta if they are leaving the stream
     if (client.data?.meta?.streamId === streamId) {
-      client.data.meta = null;
+      delete client.data.meta;
     }
 
     // Broadcast updated count
