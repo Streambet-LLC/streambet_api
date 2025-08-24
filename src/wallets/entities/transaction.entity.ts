@@ -13,7 +13,7 @@ export enum TransactionType {
   INITIAL_CREDIT = 'Initial credit',
   ADMIN_CREDIT = 'Admin credit',
   ADMIN_DEBITED = 'Admin debited',
-  BONUS = 'Bonus coins'
+  BONUS = 'Bonus coins',
 }
 
 export enum CurrencyType {
@@ -47,10 +47,21 @@ export class Transaction extends BaseEntity {
   })
   currencyType: CurrencyType;
 
-  @Column({ type: 'integer' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    nullable: true,
+  })
   amount: number;
 
-  @Column({ type: 'integer' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    nullable: true,
+    name: 'balance_after',
+  })
   balanceAfter: number;
 
   @Column({ type: 'text', nullable: true })
