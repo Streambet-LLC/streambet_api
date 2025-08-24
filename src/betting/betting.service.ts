@@ -605,6 +605,7 @@ export class BettingService {
         amount,
         currencyType,
         `Bet ${amount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
+        queryRunner.manager,
       );
       const bet = this.betsRepository.create({
         userId,
@@ -615,17 +616,32 @@ export class BettingService {
         roundId: bettingVariable.roundId,
       });
       const savedBet = await queryRunner.manager.save(bet);
-      if (currencyType === CurrencyType.GOLD_COINS) {
-        bettingVariable.totalBetsGoldCoinAmount =
-          Number(bettingVariable.totalBetsGoldCoinAmount) + Number(amount);
-        bettingVariable.betCountGoldCoin += 1;
-      } else if (currencyType === CurrencyType.SWEEP_COINS) {
-        bettingVariable.totalBetsSweepCoinAmount =
-          Number(bettingVariable.totalBetsSweepCoinAmount) + Number(amount);
-        bettingVariable.betCountSweepCoin += 1;
+      // Re-fetch the betting variable inside the transaction with a write lock to prevent lost updates
+      const lockedBettingVariable = await queryRunner.manager.findOne(
+        BettingVariable,
+        {
+          where: { id: bettingVariableId },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+      if (!lockedBettingVariable) {
+        throw new NotFoundException('Betting variable not found');
       }
-      await queryRunner.manager.save(bettingVariable);
-      roundIdToUpdate = bettingVariable.roundId;
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        lockedBettingVariable.totalBetsGoldCoinAmount =
+          Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
+          Number(amount);
+        lockedBettingVariable.betCountGoldCoin =
+          Number(lockedBettingVariable.betCountGoldCoin) + 1;
+      } else if (currencyType === CurrencyType.SWEEP_COINS) {
+        lockedBettingVariable.totalBetsSweepCoinAmount =
+          Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
+          Number(amount);
+        lockedBettingVariable.betCountSweepCoin =
+          Number(lockedBettingVariable.betCountSweepCoin) + 1;
+      }
+      await queryRunner.manager.save(lockedBettingVariable);
+      roundIdToUpdate = lockedBettingVariable.roundId;
       await queryRunner.commitTransaction();
       return { bet: savedBet, roundId: roundIdToUpdate };
     } catch (error) {
@@ -683,76 +699,191 @@ export class BettingService {
     let roundIdToUpdate: string | null = null;
     try {
       // Handle wallet operations for currency/amount changes
-      const amountDiff = Number(newAmount) - Number(betDetails.amount);
+      const oldAmount = Number(betDetails.amount);
+      const newAmt = Number(newAmount);
+      const oldCurrency = betDetails.currency;
+      const newCurrency = newCurrencyType;
 
-      if (amountDiff > 0) {
-        await this.walletsService.deductForBet(
-          userId,
-          amountDiff,
-          newCurrencyType,
-          `Additional bet amount for edit: ${amountDiff}`,
+      if (!Number.isFinite(newAmt) || newAmt <= 0) {
+        throw new BadRequestException(
+          'New amount must be a positive number greater than 0.',
         );
-      } else if (amountDiff < 0) {
-        // Refund difference
-        const refundAmount = Math.abs(amountDiff);
-        if (betDetails.currency === CurrencyType.GOLD_COINS) {
+      }
+      if (!Object.values(CurrencyType).includes(newCurrency)) {
+        throw new BadRequestException('Invalid currency type.');
+      }
+
+      if (newCurrency !== oldCurrency) {
+        // Refund full old amount in old currency
+        if (oldCurrency === CurrencyType.GOLD_COINS) {
           await this.walletsService.addGoldCoins(
             userId,
-            refundAmount,
-            `Refund from bet edit: ${refundAmount}`,
+            oldAmount,
+            `Refund from bet currency change: ${oldAmount}`,
+            queryRunner.manager,
           );
         } else {
           await this.walletsService.addSweepCoins(
             userId,
-            refundAmount,
-            `Refund from bet edit: ${refundAmount}`,
+            oldAmount,
+            `Refund from bet currency change: ${oldAmount}`,
             'refund',
+            queryRunner.manager,
           );
+        }
+        // Deduct full new amount in new currency
+        await this.walletsService.deductForBet(
+          userId,
+          newAmt,
+          newCurrency,
+          `Bet amount deducted after currency change: ${newAmt}`,
+          queryRunner.manager,
+        );
+      } else {
+        // Same currency: only handle the difference
+        const amountDiff = newAmt - oldAmount;
+        if (amountDiff > 0) {
+          await this.walletsService.deductForBet(
+            userId,
+            amountDiff,
+            newCurrency,
+            `Additional bet amount for edit: ${amountDiff}`,
+            queryRunner.manager,
+          );
+        } else if (amountDiff < 0) {
+          const refundAmount = Math.abs(amountDiff);
+          if (oldCurrency === CurrencyType.GOLD_COINS) {
+            await this.walletsService.addGoldCoins(
+              userId,
+              refundAmount,
+              `Refund from bet edit: ${refundAmount}`,
+              queryRunner.manager,
+            );
+          } else {
+            await this.walletsService.addSweepCoins(
+              userId,
+              refundAmount,
+              `Refund from bet edit: ${refundAmount}`,
+              'refund',
+              queryRunner.manager,
+            );
+          }
         }
       }
 
-      // Update betting variable statistics
-      const oldBettingVariable = await this.bettingVariablesRepository.findOne({
-        where: { id: betDetails.bettingVariableId },
-      });
+      // Update betting variable statistics with locked rows to avoid lost updates
+      const lockedOldBettingVariable = await queryRunner.manager.findOne(
+        BettingVariable,
+        {
+          where: { id: betDetails.bettingVariableId },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+      const lockedNewBettingVariable = await queryRunner.manager.findOne(
+        BettingVariable,
+        {
+          where: { id: newBettingVariableId },
+          lock: { mode: 'pessimistic_write' },
+        },
+      );
+      if (!lockedOldBettingVariable || !lockedNewBettingVariable) {
+        throw new NotFoundException('Betting variable not found');
+      }
 
-      const isSameOption = oldBettingVariable.id === bettingVariable.id;
+      const isSameOption =
+        lockedOldBettingVariable.id === lockedNewBettingVariable.id;
 
-      // Update totals correctly for same or different option
-      if (betDetails.currency === CurrencyType.GOLD_COINS) {
-        if (isSameOption) {
-          bettingVariable.totalBetsGoldCoinAmount =
-            Number(bettingVariable.totalBetsGoldCoinAmount) -
-            Number(betDetails.amount) +
-            Number(newAmount);
+      // Adjust totals and counts considering option and currency changes
+      if (isSameOption) {
+        if (oldCurrency === newCurrency) {
+          // Same option, same currency: adjust totals only
+          if (newCurrency === CurrencyType.GOLD_COINS) {
+            lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
+                oldAmount +
+                newAmt,
+            );
+          } else {
+            lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
+                oldAmount +
+                newAmt,
+            );
+          }
+          // counts unchanged
         } else {
-          oldBettingVariable.totalBetsGoldCoinAmount =
-            Number(oldBettingVariable.totalBetsGoldCoinAmount) -
-            Number(betDetails.amount);
-          bettingVariable.totalBetsGoldCoinAmount =
-            Number(bettingVariable.totalBetsGoldCoinAmount) + Number(newAmount);
-        }
-        if (!isSameOption) {
-          oldBettingVariable.betCountGoldCoin -= 1;
-          bettingVariable.betCountGoldCoin += 1;
+          // Same option, different currency: move amount and count across currencies
+          if (oldCurrency === CurrencyType.GOLD_COINS) {
+            lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
+                oldAmount,
+            );
+            lockedNewBettingVariable.betCountGoldCoin = Math.max(
+              0,
+              Number(lockedNewBettingVariable.betCountGoldCoin) - 1,
+            );
+          } else {
+            lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
+                oldAmount,
+            );
+            lockedNewBettingVariable.betCountSweepCoin = Math.max(
+              0,
+              Number(lockedNewBettingVariable.betCountSweepCoin) - 1,
+            );
+          }
+
+          if (newCurrency === CurrencyType.GOLD_COINS) {
+            lockedNewBettingVariable.totalBetsGoldCoinAmount =
+              Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) + newAmt;
+            lockedNewBettingVariable.betCountGoldCoin =
+              Number(lockedNewBettingVariable.betCountGoldCoin) + 1;
+          } else {
+            lockedNewBettingVariable.totalBetsSweepCoinAmount =
+              Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) +
+              newAmt;
+            lockedNewBettingVariable.betCountSweepCoin =
+              Number(lockedNewBettingVariable.betCountSweepCoin) + 1;
+          }
         }
       } else {
-        if (isSameOption) {
-          bettingVariable.totalBetsSweepCoinAmount =
-            Number(bettingVariable.totalBetsSweepCoinAmount) -
-            Number(betDetails.amount) +
-            Number(newAmount);
+        // Different option: remove from old variable (old currency) and add to new variable (new currency)
+        if (oldCurrency === CurrencyType.GOLD_COINS) {
+          lockedOldBettingVariable.totalBetsGoldCoinAmount = Math.max(
+            0,
+            Number(lockedOldBettingVariable.totalBetsGoldCoinAmount) -
+              oldAmount,
+          );
+          lockedOldBettingVariable.betCountGoldCoin = Math.max(
+            0,
+            Number(lockedOldBettingVariable.betCountGoldCoin) - 1,
+          );
         } else {
-          oldBettingVariable.totalBetsSweepCoinAmount =
-            Number(oldBettingVariable.totalBetsSweepCoinAmount) -
-            Number(betDetails.amount);
-          bettingVariable.totalBetsSweepCoinAmount =
-            Number(bettingVariable.totalBetsSweepCoinAmount) +
-            Number(newAmount);
+          lockedOldBettingVariable.totalBetsSweepCoinAmount = Math.max(
+            0,
+            Number(lockedOldBettingVariable.totalBetsSweepCoinAmount) -
+              oldAmount,
+          );
+          lockedOldBettingVariable.betCountSweepCoin = Math.max(
+            0,
+            Number(lockedOldBettingVariable.betCountSweepCoin) - 1,
+          );
         }
-        if (!isSameOption) {
-          oldBettingVariable.betCountSweepCoin -= 1;
-          bettingVariable.betCountSweepCoin += 1;
+
+        if (newCurrency === CurrencyType.GOLD_COINS) {
+          lockedNewBettingVariable.totalBetsGoldCoinAmount =
+            Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) + newAmt;
+          lockedNewBettingVariable.betCountGoldCoin =
+            Number(lockedNewBettingVariable.betCountGoldCoin) + 1;
+        } else {
+          lockedNewBettingVariable.totalBetsSweepCoinAmount =
+            Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) + newAmt;
+          lockedNewBettingVariable.betCountSweepCoin =
+            Number(lockedNewBettingVariable.betCountSweepCoin) + 1;
         }
       }
 
@@ -764,21 +895,27 @@ export class BettingService {
 
       // Save all changes
       await queryRunner.manager.save(betDetails);
-      await queryRunner.manager.save(oldBettingVariable);
-      await queryRunner.manager.save(bettingVariable);
+      await queryRunner.manager.save(lockedOldBettingVariable);
+      await queryRunner.manager.save(lockedNewBettingVariable);
 
-      roundIdToUpdate = bettingVariable.roundId;
+      roundIdToUpdate = lockedNewBettingVariable.roundId;
       await queryRunner.commitTransaction();
+      // Emit after successful transaction
+      if (roundIdToUpdate) {
+        try {
+          await this.bettingGateway.emitPotentialAmountsUpdate(roundIdToUpdate);
+        } catch (err) {
+          Logger.warn(
+            `emitPotentialAmountsUpdate failed for round ${roundIdToUpdate}: ${err?.message ?? err}`,
+          );
+        }
+      }
       return betDetails;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
-    }
-    // Emit after transaction and release
-    if (roundIdToUpdate) {
-      await this.bettingGateway.emitPotentialAmountsUpdate(roundIdToUpdate);
     }
   }
 
@@ -871,9 +1008,13 @@ export class BettingService {
     try {
       const { bettingRound, bet } = data;
 
-      const bettingVariable = bettingRound.bettingVariables.find(
-        (variable) => variable.id === bet.bettingVariableId,
-      );
+      // Lock the betting variable row before mutating totals to avoid races
+      const bettingVariable = await queryRunner.manager
+        .getRepository(BettingVariable)
+        .createQueryBuilder('bv')
+        .where('bv.id = :id', { id: bet.bettingVariableId })
+        .setLock('pessimistic_write')
+        .getOne();
 
       if (!bettingVariable) {
         throw new NotFoundException('Betting variable not found for this bet');
@@ -887,6 +1028,7 @@ export class BettingService {
           userId,
           bet.amount,
           refundMessage,
+          queryRunner.manager,
         );
         bettingVariable.totalBetsGoldCoinAmount =
           Number(bettingVariable.totalBetsGoldCoinAmount) - amount;
@@ -897,6 +1039,7 @@ export class BettingService {
           bet.amount,
           refundMessage,
           'refund',
+          queryRunner.manager,
         );
         bettingVariable.totalBetsSweepCoinAmount =
           Number(bettingVariable.totalBetsSweepCoinAmount) - amount;
@@ -1134,6 +1277,9 @@ export class BettingService {
           currency,
           transactionType,
           description,
+          undefined,
+          undefined,
+          queryRunner.manager,
         );
         const userObj = await this.usersService.findById(userId);
         await this.bettingGateway.emitBotMessageVoidRound(
@@ -1382,6 +1528,7 @@ export class BettingService {
           payout,
           CurrencyType.GOLD_COINS,
           `Winnings from bet on ${bettingVariable.name}`,
+          queryRunner.manager,
         );
       } catch (error) {
         console.error(
@@ -1439,6 +1586,7 @@ export class BettingService {
           payout,
           CurrencyType.SWEEP_COINS,
           `Winnings from bet on ${bettingVariable.name}`,
+          queryRunner.manager,
         );
       } catch (error) {
         console.error(
@@ -1474,6 +1622,7 @@ export class BettingService {
           bet.currency,
           bet.amount,
           `${bet.amount} ${bet.currency} debited - bet lost.`,
+          queryRunner.manager,
         );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
