@@ -74,7 +74,7 @@ export class BettingGateway
   @WebSocketServer()
   server: Server;
   // Memory store: streamId -> userId -> connectionCount
-  private viewers = new Map<string, Set<string>>();
+  private viewers = new Map<string, Map<string, number>>();
   private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
@@ -200,22 +200,6 @@ export class BettingGateway
     @MessageBody() streamId: string,
   ) {
     const userId = client.data.user.sub;
-    // If the client was already in a stream, make them leave it first
-    //commented -> solving issue for same user place bet in different stream through multiple tab
-    /*
-    const previousStreamId = this.socketToStreamMap.get(client.id);
-    if (previousStreamId && previousStreamId !== streamId) {
-      client.leave(`stream_${previousStreamId}`);
-      const prevCount =
-        await this.streamService.decrementViewerCount(previousStreamId);
-      this.server
-        .to(`stream_${previousStreamId}`)
-        .emit('viewerCountUpdate', prevCount);
-      Logger.log(
-        `Client ${client.id} left previous stream ${previousStreamId}. New count: ${prevCount}`,
-      );
-    }
-    */
     client.join(`stream_${streamId}`);
     this.server.to(`stream_${streamId}`).emit('joinedStream', { streamId });
     Logger.log(`User ${client.data.user.username} joined stream ${streamId}`);
@@ -226,29 +210,43 @@ export class BettingGateway
     await this.broadcastCount(streamId);
   }
 
+  // Add viewer (track tabs)
   private addViewer(streamId: string, userId: string) {
     if (!this.viewers.has(streamId)) {
-      this.viewers.set(streamId, new Set());
+      this.viewers.set(streamId, new Map());
     }
 
-    const userSet = this.viewers.get(streamId)!;
-    userSet.add(userId); // Set ensures uniqueness
+    const userConnections = this.viewers.get(streamId)!;
+    const count = userConnections.get(userId) || 0;
+    userConnections.set(userId, count + 1);
   }
 
+  // Remove viewer (track tab close)
   private removeViewer(streamId: string, userId: string) {
-    const userSet = this.viewers.get(streamId);
-    if (!userSet) return;
+    const streamViewers = this.viewers.get(streamId);
+    if (!streamViewers) return;
 
-    userSet.delete(userId);
+    const count = streamViewers.get(userId);
+    if (!count) return;
 
-    if (userSet.size === 0) {
+    if (count <= 1) {
+      streamViewers.delete(userId);
+    } else {
+      streamViewers.set(userId, count - 1);
+    }
+
+    if (streamViewers.size === 0) {
       this.viewers.delete(streamId);
     }
   }
 
+  // Get total unique viewers (not tabs)
+  private getViewerCount(streamId: string): number {
+    return this.viewers.get(streamId)?.size || 0;
+  }
+
   private async broadcastCount(streamId: string) {
-    const streamViewers = this.viewers.get(streamId);
-    const count = streamViewers ? streamViewers.size : 0;
+    const count = this.getViewerCount(streamId);
 
     // Send to all clients in this stream room
     this.server.to(`stream_${streamId}`).emit('viewerCountUpdated', { count });
