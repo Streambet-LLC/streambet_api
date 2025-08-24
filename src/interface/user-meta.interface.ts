@@ -1,4 +1,4 @@
-interface UserMeta {
+export interface UserMeta {
   userId: string;
   streamId: string;
 }
