@@ -1,10 +1,29 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateCoinPackageMigration1755515899887 implements MigrationInterface {
-    name = 'CreateCoinPackageMigration1755515899887'
+export class CreateCoinPackageMigration1755515899887
+  implements MigrationInterface
+{
+  name = 'CreateCoinPackageMigration1755515899887';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create table matching entity definition
+    await queryRunner.query(`
+          CREATE TABLE IF NOT EXISTS coin_packages (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            name varchar(255) NOT NULL,
+            total_amount decimal(10,2) NOT NULL,
+            description text NULL,
+            sweep_coin_count decimal(10,2) NOT NULL,
+            gold_coin_count bigint NOT NULL,
+            image_url varchar(500) NULL,
+            status boolean DEFAULT true,
+            "createdAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+    // Seed initial data
+    await queryRunner.query(`
           INSERT INTO coin_packages (
             id,
             name,
@@ -66,13 +85,9 @@ export class CreateCoinPackageMigration1755515899887 implements MigrationInterfa
               CURRENT_TIMESTAMP
             )
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
-          DELETE FROM coin_packages
-          WHERE name IN ('Starter Pack', 'Silver Pack', 'Gold Pack', 'Mega Pack')
-        `);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS coin_packages`);
+  }
 }
