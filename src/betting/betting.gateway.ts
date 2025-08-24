@@ -87,7 +87,8 @@ export class BettingGateway
   ) {}
 
   // global for all socket events, runs on every incoming connection before any events are handled.
-  afterInit() {
+  afterInit(server: Server): void {
+    this.server = server;
     this.server.use(async (socket: any, next: (err?: any) => void) => {
       try {
         const ip = extractIpFromSocket(socket);
