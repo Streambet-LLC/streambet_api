@@ -341,6 +341,7 @@ export class WalletsService {
             TransactionType.WITHDRAWAL,
             TransactionType.PURCHASE,
             TransactionType.INITIAL_CREDIT,
+            TransactionType.BONUS
           ],
         });
       }
