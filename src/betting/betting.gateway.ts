@@ -263,9 +263,7 @@ export class BettingGateway
     const count = this.getViewerCount(streamId);
     try {
       // Send to all clients in this stream room
-      this.server
-        .to(`stream_${streamId}`)
-        .emit('viewerCountUpdated', { count });
+      this.server.to(`stream_${streamId}`).emit('viewerCountUpdated', count);
 
       // Update DB (debounce/throttle in real prod)
       await this.streamService.updateViewerCount(streamId, count);
