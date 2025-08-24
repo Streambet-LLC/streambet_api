@@ -187,7 +187,7 @@ export class BettingGateway
     const meta = client.data.meta as UserMeta;
     if (!meta) return;
     this.removeViewer(meta.streamId, meta.userId);
-    this.broadcastCount(meta.streamId);
+    void this.broadcastCount(meta.streamId);
     //live stream user count
     console.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
@@ -200,11 +200,25 @@ export class BettingGateway
     @MessageBody() streamId: string,
   ) {
     const userId = client.data.user.sub;
+    const prev = client.data.meta;
+
+    // If already joined to the same stream, make this idempotent
+    if (prev?.streamId === streamId) {
+      client.join(`stream_${streamId}`); // idempotent in socket.io
+      return void this.broadcastCount(streamId);
+    }
+
+    // If switching streams on the same socket, clean up the previous stream
+    if (prev?.streamId && prev.streamId !== streamId) {
+      client.leave(`stream_${prev.streamId}`);
+      this.removeViewer(prev.streamId, userId);
+      void this.broadcastCount(prev.streamId);
+    }
+
     client.join(`stream_${streamId}`);
     this.server.to(`stream_${streamId}`).emit('joinedStream', { streamId });
     Logger.log(`User ${client.data.user.username} joined stream ${streamId}`);
-    // Save user meta to socket
-    client.data.meta = { userId, streamId };
+    client.data.meta = { userId, streamId }; // Save user meta to socket
 
     this.addViewer(streamId, userId);
     await this.broadcastCount(streamId);
@@ -247,12 +261,19 @@ export class BettingGateway
 
   private async broadcastCount(streamId: string) {
     const count = this.getViewerCount(streamId);
+    try {
+      // Send to all clients in this stream room
+      this.server
+        .to(`stream_${streamId}`)
+        .emit('viewerCountUpdated', { count });
 
-    // Send to all clients in this stream room
-    this.server.to(`stream_${streamId}`).emit('viewerCountUpdated', { count });
-
-    // Update DB (debounce/throttle in real prod)
-    await this.streamService.updateViewerCount(streamId, count);
+      // Update DB (debounce/throttle in real prod)
+      await this.streamService.updateViewerCount(streamId, count);
+    } catch (err) {
+      Logger.error(
+        `broadcastCount failed for stream ${streamId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('leaveStream')
