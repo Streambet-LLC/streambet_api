@@ -72,7 +72,31 @@
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
-        {"name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/stag/ABSTRACT_API_KEY" }
+        {"name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/stag/ABSTRACT_API_KEY" },
+        {
+          "name": "COINFLOW_API_URL",
+          "valueFrom": "/streambet/stag/COINFLOW_API_URL"
+        },
+        {
+          "name": "COINFLOW_API_KEY",
+          "valueFrom": "/streambet/stag/COINFLOW_API_KEY"
+        },
+        {
+          "name": "COINFLOW_DEFAULT_TOKEN",
+          "valueFrom": "/streambet/stag/COINFLOW_DEFAULT_TOKEN"
+        },
+        {
+          "name": "COINFLOW_MERCHANT_ID",
+          "valueFrom": "/streambet/stag/COINFLOW_MERCHANT_ID"
+        },
+        {
+          "name": "COINFLOW_BLOCKCHAIN",
+          "valueFrom": "/streambet/stag/COINFLOW_BLOCKCHAIN"
+        },
+        {
+          "name": "COINFLOW_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/stag/COINFLOW_WEBHOOK_SECRET"
+        }
 
       ],
       "mountPoints": [],
