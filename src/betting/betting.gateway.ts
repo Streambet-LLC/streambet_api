@@ -37,6 +37,7 @@ import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
   data: {
+    meta?: { userId: any; streamId: string };
     user: AuthenticatedSocketPayload;
   };
 }
@@ -70,7 +71,8 @@ export class BettingGateway
 {
   @WebSocketServer()
   server: Server;
-  private socketToStreamMap: Map<string, string> = new Map();
+  // Memory store: streamId -> userId -> connectionCount
+  private viewers = new Map<string, Map<string, number>>();
   private userSocketMap = new Map<string, string>();
   constructor(
     @Inject(forwardRef(() => BettingService))
@@ -178,27 +180,12 @@ export class BettingGateway
     if (username) {
       this.userSocketMap.delete(username);
     }
-    //live stream viewer count
-    const streamId = this.socketToStreamMap.get(client.id);
-    if (streamId) {
-      try {
-        const updatedCount =
-          await this.streamService.decrementViewerCount(streamId);
-        const roomName = `stream_${streamId}`;
-        this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
-        Logger.log(
-          `Stream ${streamId}: Viewers after disconnect: ${updatedCount}`,
-        );
-        this.socketToStreamMap.delete(client.id);
-      } catch (error) {
-        Logger.error(
-          `Error updating viewer count on disconnect for stream ${streamId}:`,
-          error,
-        );
-        // Still remove from map to prevent memory leaks
-        this.socketToStreamMap.delete(client.id);
-      }
-    }
+    //live stream user count
+    const meta = client.data.meta as UserMeta;
+    if (!meta) return;
+    this.removeViewer(meta.streamId, meta.userId);
+    this.broadcastCount(meta.streamId);
+    //live stream user count
     console.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
@@ -209,6 +196,7 @@ export class BettingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
+    const userId = client.data.user.sub;
     // If the client was already in a stream, make them leave it first
     //commented -> solving issue for same user place bet in different stream through multiple tab
     /*
@@ -227,33 +215,51 @@ export class BettingGateway
     */
     client.join(`stream_${streamId}`);
     this.server.to(`stream_${streamId}`).emit('joinedStream', { streamId });
-    console.log(`User ${client.data.user.username} joined stream ${streamId}`);
-    this.socketToStreamMap.set(client.id, streamId);
-    // Increment viewer count in DB
-    try {
-      const updatedCount =
-        await this.streamService.incrementViewerCount(streamId);
+    Logger.log(`User ${client.data.user.username} joined stream ${streamId}`);
+    // Save user meta to socket
+    client.data.meta = { userId, streamId };
 
-      // Emit updated count to all clients in this stream's room
-      this.server
-        .to(`stream_${streamId}`)
-        .emit('viewerCountUpdate', updatedCount);
-      Logger.log(
-        `Client ${client.id} joined stream ${streamId}. Current viewers: ${updatedCount}`,
-      );
-    } catch (error) {
-      Logger.error(
-        `Error updating viewer count for stream ${streamId}:`,
-        error,
-      );
-      // Remove from map if database operation failed
-      this.socketToStreamMap.delete(client.id);
-      throw error;
+    this.addViewer(streamId, userId);
+    await this.broadcastCount(streamId);
+  }
+  private addViewer(streamId: string, userId: string) {
+    if (!this.viewers.has(streamId)) {
+      this.viewers.set(streamId, new Map());
     }
 
-    // return { event: 'joinedStream', data: { streamId } };
+    const userConnections = this.viewers.get(streamId)!;
+    const count = userConnections.get(userId) || 0;
+    userConnections.set(userId, count + 1);
   }
 
+  private removeViewer(streamId: string, userId: string) {
+    const streamViewers = this.viewers.get(streamId);
+    if (!streamViewers) return;
+
+    const count = streamViewers.get(userId);
+    if (!count) return;
+
+    if (count <= 1) {
+      streamViewers.delete(userId);
+    } else {
+      streamViewers.set(userId, count - 1);
+    }
+
+    if (streamViewers.size === 0) {
+      this.viewers.delete(streamId);
+    }
+  }
+
+  private async broadcastCount(streamId: string) {
+    const streamViewers = this.viewers.get(streamId);
+    const count = streamViewers ? streamViewers.size : 0;
+
+    // Send to all clients in this stream room
+    this.server.to(streamId).emit('viewerCountUpdated', { count });
+
+    // Update DB (debounce/throttle in real prod)
+    await this.streamService.updateViewerCount(streamId, count);
+  }
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('leaveStream')
   async handleLeaveStream(
@@ -261,25 +267,17 @@ export class BettingGateway
     @MessageBody() streamId: string,
   ) {
     const roomName = `stream_${streamId}`;
-    if (this.socketToStreamMap.get(client.id) === streamId) {
-      client.leave(roomName);
-      this.socketToStreamMap.delete(client.id);
+    client.leave(roomName);
+    // Remove viewer from our in-memory map
+    this.removeViewer(streamId, client.data.user.sub);
 
-      // Decrement viewer count in DB
-      const updatedCount =
-        await this.streamService.decrementViewerCount(streamId);
-
-      // Emit updated count to all remaining clients in this stream's room
-      this.server.to(roomName).emit('viewerCountUpdate', updatedCount);
-      Logger.log(
-        `Client ${client.id} left stream ${streamId}. Current viewers: ${updatedCount}`,
-      );
-      return { event: 'leftStream', data: { streamId } };
-    } else {
-      Logger.warn(
-        `Client ${client.id} tried to leave stream ${streamId} but was not registered as viewing it.`,
-      );
+    // Clear meta if they are leaving the stream
+    if (client.data?.meta?.streamId === streamId) {
+      client.data.meta = null;
     }
+
+    // Broadcast updated count
+    await this.broadcastCount(streamId);
   }
 
   @UseGuards(WsJwtGuard)
