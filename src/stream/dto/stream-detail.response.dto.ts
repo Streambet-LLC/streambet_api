@@ -63,7 +63,7 @@ export class StreamDetailsDto {
   scheduledStartTime: Date;
 
   @ApiProperty({ example: '', description: 'Stream description' })
-  discription: string;
+  description: string;
 
   @ApiProperty({ example: 34 })
   viewerCount: number;
