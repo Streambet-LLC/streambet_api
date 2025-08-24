@@ -6,6 +6,7 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UseGuards, Inject, forwardRef, Logger } from '@nestjs/common';
@@ -66,7 +67,7 @@ interface Notification {
   },
 })
 export class BettingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server: Server;
@@ -86,7 +87,8 @@ export class BettingGateway
   ) {}
 
   // global for all socket events, runs on every incoming connection before any events are handled.
-  afterInit() {
+  afterInit(server: Server): void {
+    this.server = server;
     this.server.use(async (socket: any, next: (err?: any) => void) => {
       try {
         const ip = extractIpFromSocket(socket);
