@@ -266,7 +266,6 @@ export class BettingService {
 
     for (const round of rounds) {
       // Get all options for this round
-      console.log(round, 'ddd');
       const options = round.bettingVariables
         .map((variable) => ({
           id: variable.id,
