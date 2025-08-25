@@ -16,6 +16,7 @@ import {
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
+import { BettingGateway } from 'src/betting/betting.gateway';
 
 @Injectable()
 export class AdminService {
@@ -23,7 +24,7 @@ export class AdminService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly bettingService: BettingService,
-    private readonly usersService: UsersService,
+    private readonly bettingGateway: BettingGateway,
     private readonly walletsService: WalletsService,
   ) {}
 
@@ -76,12 +77,15 @@ export class AdminService {
       throw new BadRequestException('Invalid amount');
     }
     const description = `Admin credit adjustment of ${amount} Gold Coins for user ${userId}`;
-    return this.walletsService.updateGoldCoinsByAdmin(
+    const updateResult = this.walletsService.updateGoldCoinsByAdmin(
       userId,
       amount,
       description,
       CurrencyType.GOLD_COINS,
       TransactionType.ADMIN_CREDIT,
     );
+    //emit an event to the user, notify about the coin updation
+    await this.bettingGateway.emitAdminAddedGoldCoin(userId);
+    return updateResult;
   }
 }
