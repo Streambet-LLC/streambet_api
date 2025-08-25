@@ -7,6 +7,7 @@ export class CreateCoinPackageMigration1755515899887
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create table matching entity definition
+    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
     await queryRunner.query(`
           CREATE TABLE IF NOT EXISTS coin_packages (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -16,9 +17,14 @@ export class CreateCoinPackageMigration1755515899887
             sweep_coin_count decimal(10,2) NOT NULL,
             gold_coin_count bigint NOT NULL,
             image_url varchar(500) NULL,
-            status boolean DEFAULT true,
-            "createdAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            "updatedAt" TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            status boolean NOT NULL DEFAULT true,
+            "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (name),
+            CHECK (total_amount >= 0),
+            CHECK (sweep_coin_count >= 0),
+            CHECK (gold_coin_count >= 0)
+
           )
         `);
 
