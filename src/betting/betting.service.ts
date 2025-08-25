@@ -266,6 +266,7 @@ export class BettingService {
 
     for (const round of rounds) {
       // Get all options for this round
+      console.log(round, 'ddd');
       const options = round.bettingVariables
         .map((variable) => ({
           id: variable.id,
@@ -275,7 +276,11 @@ export class BettingService {
         .sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        );
+        )
+        .map(({ id, option }) => ({
+          id,
+          option,
+        }));
 
       // Find the winning option(s)
       const winningOptions = round.bettingVariables.filter(
