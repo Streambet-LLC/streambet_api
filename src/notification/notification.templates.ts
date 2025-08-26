@@ -84,7 +84,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   EMAIL_WELCOME: {
     TITLE: () =>
-      `You've passed go, collect 1000 ${CurrencyTypeText.GOLD_COINS_TEXT}`,
+      `You've passed go, collect 1000 ${CurrencyTypeText.GOLD_COINS_TEXT}s`,
   },
   EMAIL_PASSWORD_RESET: {
     TITLE: () => `Password Reset Request`,
