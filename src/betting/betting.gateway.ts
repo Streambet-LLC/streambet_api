@@ -582,6 +582,7 @@ export class BettingGateway
         this.server
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
+        /*
         //sending bet cancel updation in chat
         const systemMessage =
           NOTIFICATION_TEMPLATE.CANCEL_BET_CHAT_MESSAGE.MESSAGE({
@@ -594,6 +595,7 @@ export class BettingGateway
           bettingVariable.stream.id,
           systemMessage,
         );
+         */
       }
     } catch (error) {
       client.emit('error', {
@@ -712,6 +714,7 @@ export class BettingGateway
           .to(`stream_${bettingVariable.stream.id}`)
           .emit('chatMessage', chatMessage);
       }
+      /*
       //sending bet edit updation in chat
       if (bettingVariable) {
         const systemMessage =
@@ -725,7 +728,9 @@ export class BettingGateway
           bettingVariable.stream.id,
           systemMessage,
         );
+         
       }
+        */
     } catch (error) {
       client.emit('error', {
         message: error instanceof Error ? error.message : 'Unknown error',
