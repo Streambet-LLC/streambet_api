@@ -77,7 +77,7 @@ export class AdminService {
       throw new BadRequestException('Invalid amount');
     }
     const description = `Admin credit adjustment of ${amount} Gold Coins for user ${userId}`;
-    const updateResult = this.walletsService.updateGoldCoinsByAdmin(
+    const updateResult = await this.walletsService.updateGoldCoinsByAdmin(
       userId,
       amount,
       description,
