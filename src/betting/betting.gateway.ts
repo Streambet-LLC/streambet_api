@@ -194,7 +194,7 @@ export class BettingGateway
     this.removeViewer(meta.streamId, meta.userId);
     void this.broadcastCount(meta.streamId);
     //live stream user count
-    const userId = client.data.userId;
+    const userId = client.data?.user?.sub;
     if (userId) {
       client.leave(`user_${userId}`);
     }
