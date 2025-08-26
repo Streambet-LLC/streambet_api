@@ -832,6 +832,7 @@ export class BettingGateway
     };
 
     this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+    Logger.log(`Emitted winner declared to ${streamId}`);
   }
 
   sendUserNotification(userId: string, notification: Notification): void {
