@@ -35,6 +35,8 @@ import { UserRole } from 'src/users/entities/user.entity';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 import { UserMeta } from 'src/interface/user-meta.interface';
+import { emitToUser } from 'src/common/common';
+import { SocketEventName } from 'src/enums/socket-event-name.enum';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -164,7 +166,10 @@ export class BettingGateway
           user: { ...decoded, profileImageUrl: undefined },
         };
       }
-
+      const userId = client.data?.user?.sub;
+      if (userId) {
+        client.join(`user_${userId}`); // <-- automatic index in adapter
+      }
       console.log(
         `Client connected: ${client.id}, user: ${
           typeof decoded.username === 'string' ? decoded.username : 'unknown'
@@ -189,6 +194,10 @@ export class BettingGateway
     this.removeViewer(meta.streamId, meta.userId);
     void this.broadcastCount(meta.streamId);
     //live stream user count
+    const userId = client.data?.user?.sub;
+    if (userId) {
+      client.leave(`user_${userId}`);
+    }
     console.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
@@ -802,12 +811,17 @@ export class BettingGateway
     winnerName: string,
     winners: { userId: string; username: string }[],
     losers: { userId: string; username: string }[],
+    voided: { goldCoin: boolean; sweepCoin: boolean } = {
+      goldCoin: false,
+      sweepCoin: false,
+    },
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
       winners,
       losers,
+      voided,
     });
 
     const chatMessage: ChatMessage = {
@@ -818,6 +832,7 @@ export class BettingGateway
     };
 
     this.server.to(`stream_${streamId}`).emit('chatMessage', chatMessage);
+    Logger.log(`Emitted winner declared to ${streamId}`);
   }
 
   sendUserNotification(userId: string, notification: Notification): void {
@@ -1163,5 +1178,18 @@ export class BettingGateway
   ): Promise<void> {
     const payload = { roundDetails: streamDetails.roundDetails };
     void this.server.to(`stream_${streamId}`).emit('roundUpdated', payload);
+  }
+  /**
+   * Emits a socket event to a specific user when an admin adds gold coins.
+   *
+   * @param userId - The unique identifier of the user to notify.
+   *
+   * Behavior:
+   * - Sends the `SocketEventName.RefechEvent` to the user's socket room (`user_<userId>`).
+   * - Client applications can listen to this event to refresh wallet balance or related UI.
+   * - Currently sends an empty payload, but can be extended with additional details in the future.
+   */
+  async emitAdminAddedGoldCoin(userId: string): Promise<void> {
+    emitToUser(this.server, userId, SocketEventName.RefetchEvent, {});
   }
 }

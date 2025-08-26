@@ -1203,6 +1203,10 @@ export class BettingService {
         bettingVariable.name,
         winners,
         losers,
+        {
+          goldCoin:winningGoldCoinBets.length === 0,
+          sweepCoin:winningSweepCoinBets.length === 0
+        }
       );
 
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
