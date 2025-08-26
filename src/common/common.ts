@@ -5,5 +5,6 @@ export function emitToUser(
   event: string,
   payload: {},
 ) {
-  server.to(userId).emit(event, payload);
+  const room = userId.startsWith('user_') ? userId : `user_${userId}`;
+  server.to(room).emit(event, payload);
 }
