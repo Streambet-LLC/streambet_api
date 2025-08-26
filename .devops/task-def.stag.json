@@ -70,7 +70,7 @@
         { "name": "MAIL_DEFAULT_EMAIL", "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL" },
         { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
-        { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
+        { "name": "APP_HOST_URL", "valueFrom": "/streambet/stagv2/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
         {"name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/stag/ABSTRACT_API_KEY" },
         {
