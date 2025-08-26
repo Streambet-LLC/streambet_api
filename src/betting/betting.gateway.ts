@@ -811,12 +811,17 @@ export class BettingGateway
     winnerName: string,
     winners: { userId: string; username: string }[],
     losers: { userId: string; username: string }[],
+    voided: { goldCoin: boolean; sweepCoin: boolean } = {
+      goldCoin: false,
+      sweepCoin: false,
+    },
   ): void {
     this.server.to(`stream_${streamId}`).emit('winnerDeclared', {
       bettingVariableId,
       winnerName,
       winners,
       losers,
+      voided,
     });
 
     const chatMessage: ChatMessage = {
