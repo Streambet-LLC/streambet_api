@@ -613,7 +613,7 @@ export class BettingGateway
     try {
       const user = client.data.user;
 
-      const { betDetails: editedBet, oldBetAmount } =
+      const { betDetails: editedBet, oldBettingAmount } =
         await this.bettingService.editBet(user.sub, editBetDto);
       const [updatedWallet, bettingVariable] = await Promise.all([
         this.walletsService.findByUserId(user.sub),
@@ -654,14 +654,14 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        if (Number(oldBetAmount) < Number(editedBet.amount)) {
+        if (Number(oldBettingAmount) < Number(editedBet.amount)) {
           betEditedPayload.message =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.MESSAGE({
               amount: editedBet.amount,
             });
           betEditedPayload.title =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.TITLE();
-        } else if (Number(oldBetAmount) > Number(editedBet.amount)) {
+        } else if (Number(oldBettingAmount) > Number(editedBet.amount)) {
           betEditedPayload.message =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.MESSAGE({
               amount: editedBet.amount,

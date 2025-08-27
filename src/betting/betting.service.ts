@@ -679,7 +679,7 @@ export class BettingService {
     const betDetails = await this.betsRepository.findOne({
       where: { id: betId, userId }, // Add userId for security
     });
-
+    const oldBettingAmount = betDetails?.amount;
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
@@ -931,7 +931,7 @@ export class BettingService {
           );
         }
       }
-      return { betDetails, oldBetAmount: betDetails.amount };
+      return { betDetails, oldBettingAmount };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
