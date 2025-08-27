@@ -369,24 +369,35 @@ END
             }
             return true; // keep other statuses
           })
-          .map((round) => ({
-            roundName: round.roundName,
-            roundStatus: round.status,
-            createdAt: new Date(round.createdAt).toISOString(),
-            winningOption: round.bettingVariables
-              .filter((variable) => variable.is_winning_option === true)
-              .map((variable) => ({
-                variableName: variable.name,
-                totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
-                totalGoldCoinAmt: variable.totalBetsGoldCoinAmount,
-                winners: (variable.bets ?? [])
-                  .filter((bet) => bet.status === BetStatus.Won && bet.user)
-                  .map((bet) => ({
-                    userName: bet.user.username,
-                    userProfileUrl: bet.user.profileImageUrl ?? null,
-                  })),
-              })),
-          }));
+          .map((round) => {
+            // Calculate sum of totalBetsGoldCoinAmount for non-winning options
+            const nonWinningGoldCoinSum = (round.bettingVariables ?? [])
+              .filter((variable) => variable.is_winning_option === false)
+              .reduce(
+                (sum, variable) =>
+                  Number(sum) + (Number(variable.totalBetsGoldCoinAmount) || 0),
+                0,
+              );
+
+            return {
+              roundName: round.roundName,
+              roundStatus: round.status,
+              createdAt: new Date(round.createdAt).toISOString(),
+              winningOption: (round.bettingVariables ?? [])
+                .filter((variable) => variable.is_winning_option === true)
+                .map((variable) => ({
+                  variableName: variable.name,
+                  totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
+                  totalGoldCoinAmt: nonWinningGoldCoinSum,
+                  winners: (variable.bets ?? [])
+                    .filter((bet) => bet.status === BetStatus.Won && bet.user)
+                    .map((bet) => ({
+                      userName: bet.user.username,
+                      userProfileUrl: bet.user.profileImageUrl ?? null,
+                    })),
+                })),
+            };
+          });
       }
 
       // Prepare the final structured response
