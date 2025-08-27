@@ -1197,4 +1197,22 @@ export class BettingGateway
   async emitAdminAddedGoldCoin(userId: string): Promise<void> {
     emitToUser(this.server, userId, SocketEventName.RefetchEvent, {});
   }
+
+  /**
+   * Emits a "scheduledStreamUpdatedToLive" event to all clients connected to the stream room.
+   *
+   * @param streamId - The unique identifier of the stream that has transitioned from scheduled to live.
+   *
+   * @description
+   * Notifies all users in the `stream_{streamId}` room that the scheduled stream is now live.
+   * This event can be used by clients to update UI or trigger actions when a stream goes live.
+   */
+  emitScheduledStreamUpdatedToLive(streamId: string) {
+    void this.server
+      .to(`stream_${streamId}`)
+      .emit('scheduledStreamUpdatedToLive', { streamId });
+    Logger.log(
+      `Scheduled stream updated to live event triggered to: ${streamId}`,
+    );
+  }
 }
