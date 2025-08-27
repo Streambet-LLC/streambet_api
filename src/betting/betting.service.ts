@@ -285,6 +285,12 @@ export class BettingService {
       const winningOptions = round.bettingVariables.filter(
         (v) => v.is_winning_option,
       );
+
+      // Find the lossing option(s)
+      const lossingOptions = round.bettingVariables.filter(
+        (v) => !v.is_winning_option,
+      );
+
       let winners = { goldCoins: [], sweepCoins: [] };
       let winnerAmount = { goldCoins: null, sweepCoins: null };
       if (winningOptions.length > 0) {
@@ -334,13 +340,14 @@ export class BettingService {
         }
         winners.goldCoins = Array.from(winnerUsersMapGoldCoins.values());
         winners.sweepCoins = Array.from(winnerUsersMapSweepCoins.values());
-        // Calculate winnerAmount (sum of payouts for this round's winning bets)
-        const winnerAmountGoldCoins = winnerBetsGoldCoins.reduce(
-          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
+
+        // Calculate winnerAmount (Sum of total amount placed in lossing option)
+        const winnerAmountGoldCoins = lossingOptions.reduce(
+          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
           0,
         );
-        const winnerAmountSweepCoins = winnerBetsSweepCoins.reduce(
-          (sum, bet) => Number(sum) + (Number(bet.payoutAmount) || 0),
+        const winnerAmountSweepCoins = lossingOptions.reduce(
+          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
           0,
         );
         winnerAmount.goldCoins = winnerAmountGoldCoins
