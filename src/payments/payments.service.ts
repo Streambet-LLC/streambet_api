@@ -452,7 +452,7 @@ export class PaymentsService {
         tryGetFrom(parsedInfo, 'coin_package_id') ||
         tryGetFrom(parsedInfo, 'coinPackageId') ||
         (payload?.data?.coinPackageId as string | undefined);
-        
+
       const webhookEnv: string | undefined =
         (parsedInfo['env'] as string | undefined) ||
         (parsedInfo['env'] as string | undefined) ||
@@ -468,7 +468,7 @@ export class PaymentsService {
       }
 
       if(webhookEnv !== this.configService.get<string>('coinflow.webhookEnv')){
-        Logger.log(`Coinflow settled credited for user ${userId} and package ${coinPackageId}`);
+        Logger.log(`Env mismatch: Webhook triggered by ${webhookEnv}`);
         return { ignored: true };
       }
 
