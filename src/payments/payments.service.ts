@@ -452,12 +452,24 @@ export class PaymentsService {
         tryGetFrom(parsedInfo, 'coin_package_id') ||
         tryGetFrom(parsedInfo, 'coinPackageId') ||
         (payload?.data?.coinPackageId as string | undefined);
+        
+      const webhookEnv: string | undefined =
+        (parsedInfo['env'] as string | undefined) ||
+        (parsedInfo['env'] as string | undefined) ||
+        tryGetFrom(parsedInfo, 'env') ||
+        tryGetFrom(parsedInfo, 'env') ||
+        (payload?.data?.env as string | undefined);
 
       if (!userId) {
         throw new BadRequestException('Missing userId (rawCustomerId)');
       }
       if (!coinPackageId) {
         throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
+      }
+
+      if(webhookEnv !== this.configService.get<string>('coinflow.webhookEnv')){
+        Logger.log(`Coinflow settled credited for user ${userId} and package ${coinPackageId}`);
+        return { ignored: true };
       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);

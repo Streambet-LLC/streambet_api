@@ -36,7 +36,8 @@
         },
         { "name": "BLOCK_VPN", "value": "true" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "false" }
+        { "name": "REDIS_TLS", "value": "false" },
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "qa" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/qa/CLIENT_URL" },
