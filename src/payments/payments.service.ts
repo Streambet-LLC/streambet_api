@@ -467,10 +467,19 @@ export class PaymentsService {
         throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
       }
 
-      if(webhookEnv !== this.configService.get<string>('coinflow.webhookEnv')){
-        Logger.log(`Env mismatch: Webhook triggered by ${webhookEnv}`);
-        return { ignored: true };
-      }
+       const expected = (
+         this.configService.get<string>('coinflow.webhookEnv') || 'dev'
+       )
+         .trim()
+         .toLowerCase();
+       const received = webhookEnv?.trim().toLowerCase();
+       if (!received || received !== expected) {
+         Logger.log(
+           `Ignored Coinflow webhook due to env mismatch (received="${received ?? 'undefined'}", expected="${expected}")`,
+           PaymentsService.name,
+         );
+         return { ignored: true };
+       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);
       if (!coinPackage) {
