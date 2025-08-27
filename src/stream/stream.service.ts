@@ -786,8 +786,11 @@ END
       } else if (stream.status === StreamStatus.LIVE) {
         return stream;
       }
-
-      return await this.streamsRepository.save(stream);
+      
+      const streamUpdated = await this.streamsRepository.save(stream);
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated)
+      this.bettingGateway.emitScheduledStreamUpdatedToLive(stream.id)
+      return streamUpdated
     } catch (error) {
       Logger.error(`Failed to update stream status for ${streamId}`, error);
       throw error;
