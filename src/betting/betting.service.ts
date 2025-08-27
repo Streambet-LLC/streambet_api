@@ -1132,7 +1132,11 @@ export class BettingService {
       );
 
       // Process winning Gold Coin bets only if there are any
-      if (winningGoldCoinBets.length > 0 && totalWinningGoldCoinAmount > 0) {
+      if (
+        winningGoldCoinBets.length > 0 &&
+        totalWinningGoldCoinAmount > 0 &&
+        losingGoldCoinBets.length > 0
+      ) {
         await this.processWinningGoldCoinBets(
           queryRunner,
           winningGoldCoinBets,
@@ -1143,7 +1147,11 @@ export class BettingService {
       }
 
       // Process winning sweep coin bets only if there are any
-      if (winningSweepCoinBets.length > 0 && totalWinningSweepCoinAmount > 0) {
+      if (
+        winningSweepCoinBets.length > 0 &&
+        totalWinningSweepCoinAmount > 0 &&
+        losingSweepCoinBets.length > 0
+      ) {
         await this.processWinningSweepCoinBets(
           queryRunner,
           winningSweepCoinBets,
@@ -1153,16 +1161,34 @@ export class BettingService {
           totalLosingSweepCoinAmount,
         );
       }
-
-      // Process losing bets
-      if (losingBets.length > 0) {
-        await this.processLosingBets(queryRunner, losingBets);
-        if (winningGoldCoinBets.length === 0) {
-          await this.creditAmountVoidCase(queryRunner, losingGoldCoinBets);
-        }
-        if (winningSweepCoinBets.length === 0) {
-          await this.creditAmountVoidCase(queryRunner, losingSweepCoinBets);
-        }
+      if (
+        losingGoldCoinBets.length > 0 &&
+        totalLosingGoldCoinAmount > 0 &&
+        winningGoldCoinBets.length > 0
+      ) {
+        await this.processLosingBets(queryRunner, losingGoldCoinBets);
+      }
+      if (
+        losingSweepCoinBets.length > 0 &&
+        totalLosingSweepCoinAmount > 0 &&
+        winningSweepCoinBets.length > 0
+      ) {
+        await this.processLosingBets(queryRunner, losingSweepCoinBets);
+      }
+      // Process void scenario bets
+      if (
+        (losingGoldCoinBets.length > 0 && winningGoldCoinBets.length === 0) ||
+        (winningGoldCoinBets.length > 0 && losingGoldCoinBets.length === 0)
+      ) {
+        await this.creditAmountVoidCase(queryRunner, losingGoldCoinBets);
+        await this.creditAmountVoidCase(queryRunner, winningGoldCoinBets);
+      }
+      if (
+        (losingSweepCoinBets.length > 0 && winningSweepCoinBets.length === 0) ||
+        (winningSweepCoinBets.length > 0 && losingSweepCoinBets.length === 0)
+      ) {
+        await this.creditAmountVoidCase(queryRunner, losingSweepCoinBets);
+        await this.creditAmountVoidCase(queryRunner, winningSweepCoinBets);
       }
 
       await this.closeRound(queryRunner, bettingVariable);
@@ -1204,9 +1230,9 @@ export class BettingService {
         winners,
         losers,
         {
-          goldCoin:winningGoldCoinBets.length === 0,
-          sweepCoin:winningSweepCoinBets.length === 0
-        }
+          goldCoin: winningGoldCoinBets.length === 0,
+          sweepCoin: winningSweepCoinBets.length === 0,
+        },
       );
 
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
