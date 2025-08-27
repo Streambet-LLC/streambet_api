@@ -39,7 +39,7 @@
           "name": "BLOCKED_REGION",
           "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
         },
-        { "name": "BLOCK_VPN", "value": "true" },
+        { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
         { "name": "REDIS_TLS", "value": "false" }
       ],
@@ -50,29 +50,86 @@
         { "name": "DB_DATABASE", "valueFrom": "/streambet/stag/DB_DATABASE" },
 
         { "name": "JWT_SECRET", "valueFrom": "/streambet/stag/JWT_SECRET" },
-        { "name": "REFRESH_TOKEN_SECRET", "valueFrom": "/streambet/stag/REFRESH_TOKEN_SECRET" },
+        {
+          "name": "REFRESH_TOKEN_SECRET",
+          "valueFrom": "/streambet/stag/REFRESH_TOKEN_SECRET"
+        },
 
-        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "/streambet/stag/GOOGLE_CLIENT_ID" },
-        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/streambet/stag/GOOGLE_CLIENT_SECRET" },
-        { "name": "GOOGLE_CALLBACK_URL", "valueFrom": "/streambet/stag/GOOGLE_CALLBACK_URL" },
+        {
+          "name": "GOOGLE_CLIENT_ID",
+          "valueFrom": "/streambet/stag/GOOGLE_CLIENT_ID"
+        },
+        {
+          "name": "GOOGLE_CLIENT_SECRET",
+          "valueFrom": "/streambet/stag/GOOGLE_CLIENT_SECRET"
+        },
+        {
+          "name": "GOOGLE_CALLBACK_URL",
+          "valueFrom": "/streambet/stag/GOOGLE_CALLBACK_URL"
+        },
 
-        { "name": "STRIPE_SECRET_KEY", "valueFrom": "/streambet/stag/STRIPE_SECRET_KEY" },
-        { "name": "STRIPE_WEBHOOK_SECRET", "valueFrom": "/streambet/stag/STRIPE_WEBHOOK_SECRET" },
+        {
+          "name": "STRIPE_SECRET_KEY",
+          "valueFrom": "/streambet/stag/STRIPE_SECRET_KEY"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/stag/STRIPE_WEBHOOK_SECRET"
+        },
 
-        { "name": "ACCESS_KEY_ID", "valueFrom": "/streambet/stag/ACCESS_KEY_ID" },
-        { "name": "SECRET_ACCESS_KEY", "valueFrom": "/streambet/stag/SECRET_ACCESS_KEY" },
-        { "name": "AWS_DEFAULT_S3_BUCKET", "valueFrom": "/streambet/stag/AWS_DEFAULT_S3_BUCKET" },
-        { "name": "AWS_S3_REGION", "valueFrom": "/streambet/stag/AWS_S3_REGION" },
+        {
+          "name": "ACCESS_KEY_ID",
+          "valueFrom": "/streambet/stag/ACCESS_KEY_ID"
+        },
+        {
+          "name": "SECRET_ACCESS_KEY",
+          "valueFrom": "/streambet/stag/SECRET_ACCESS_KEY"
+        },
+        {
+          "name": "AWS_DEFAULT_S3_BUCKET",
+          "valueFrom": "/streambet/stag/AWS_DEFAULT_S3_BUCKET"
+        },
+        {
+          "name": "AWS_S3_REGION",
+          "valueFrom": "/streambet/stag/AWS_S3_REGION"
+        },
 
-        { "name": "AWS_SMTP_USER", "valueFrom": "/streambet/stag/AWS_SMTP_USER" },
-        { "name": "AWS_SMTP_PASSWORD", "valueFrom": "/streambet/stag/AWS_SMTP_PASSWORD" },
-        { "name": "AWS_SMTP_HOST", "valueFrom": "/streambet/stag/AWS_SMTP_HOST" },
-        { "name": "MAIL_DEFAULT_EMAIL", "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL" },
-        { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
-        { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
-        { "name": "APP_HOST_URL", "valueFrom": "/streambet/stagv2/APP_HOST_URL" },
-        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
-        {"name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/stag/ABSTRACT_API_KEY" },
+        {
+          "name": "AWS_SMTP_USER",
+          "valueFrom": "/streambet/stag/AWS_SMTP_USER"
+        },
+        {
+          "name": "AWS_SMTP_PASSWORD",
+          "valueFrom": "/streambet/stag/AWS_SMTP_PASSWORD"
+        },
+        {
+          "name": "AWS_SMTP_HOST",
+          "valueFrom": "/streambet/stag/AWS_SMTP_HOST"
+        },
+        {
+          "name": "MAIL_DEFAULT_EMAIL",
+          "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL"
+        },
+        {
+          "name": "AWS_SMTP_REGION",
+          "valueFrom": "/streambet/stag/AWS_SMTP_REGION"
+        },
+        {
+          "name": "AWS_EMAIL_FROM",
+          "valueFrom": "/streambet/stag/AWS_EMAIL_FROM"
+        },
+        {
+          "name": "APP_HOST_URL",
+          "valueFrom": "/streambet/stagv2/APP_HOST_URL"
+        },
+        {
+          "name": "REDIS_PASSWORD",
+          "valueFrom": "/streambet/stag/REDIS_PASSWORD"
+        },
+        {
+          "name": "ABSTRACT_API_KEY",
+          "valueFrom": "/streambet/stag/ABSTRACT_API_KEY"
+        },
         {
           "name": "COINFLOW_API_URL",
           "valueFrom": "/streambet/stag/COINFLOW_API_URL"
@@ -97,7 +154,6 @@
           "name": "COINFLOW_WEBHOOK_SECRET",
           "valueFrom": "/streambet/stag/COINFLOW_WEBHOOK_SECRET"
         }
-
       ],
       "mountPoints": [],
       "volumesFrom": [],
