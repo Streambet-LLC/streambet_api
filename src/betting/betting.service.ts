@@ -1230,8 +1230,11 @@ export class BettingService {
         winners,
         losers,
         {
-          goldCoin: winningGoldCoinBets.length === 0,
-          sweepCoin: winningSweepCoinBets.length === 0,
+          goldCoin:
+            winningGoldCoinBets.length === 0 || losingGoldCoinBets.length === 0,
+          sweepCoin:
+            winningSweepCoinBets.length === 0 ||
+            losingSweepCoinBets.length === 0,
         },
       );
 
@@ -1321,13 +1324,20 @@ export class BettingService {
           undefined,
           queryRunner.manager,
         );
+
+        // mark bet as refunded and processed
+        bet.status = BetStatus.Refunded;
+        bet.isProcessed = true;
+        bet.payoutAmount = 0;
+        bet.processedAt = new Date();
+        await queryRunner.manager.save(bet);
+
         const userObj = await this.usersService.findById(userId);
         await this.bettingGateway.emitBotMessageVoidRound(
           userId,
           userObj.username,
           bet?.round?.roundName,
         );
-        await queryRunner.manager.save(bet);
 
         // Update bet status within transaction
       } catch (error) {
