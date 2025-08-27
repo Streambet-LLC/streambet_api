@@ -1252,6 +1252,11 @@ export class BettingService {
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+          winner.userId,
+          winner.username,
+          bettingVariable.name,
+        );
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
           winner.username,
@@ -1283,6 +1288,11 @@ export class BettingService {
 
       lossingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
+          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            bet.userId,
+            bet.user?.username,
+            bettingVariable.name,
+          );
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
             bet.user?.username,

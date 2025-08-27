@@ -1056,7 +1056,29 @@ export class BettingGateway
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
+  async emitBotMessageForWinnerDeclaration(
+    userId: string,
+    username: string,
+    bettingOption: string,
+  ) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
 
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.MESSAGE({
+          bettingOption: bettingOption || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.TITLE(),
+        timestamp: new Date(),
+      };
+
+      void this.server.to(socketId).emit('botMessage', chatMessage);
+    }
+  }
   async emitBotMessageVoidRound(
     userId: string,
     username: string,
