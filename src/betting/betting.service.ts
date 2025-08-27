@@ -343,11 +343,15 @@ export class BettingService {
 
         // Calculate winnerAmount (Sum of total amount placed in lossing option)
         const winnerAmountGoldCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
           0,
         );
         const winnerAmountSweepCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
           0,
         );
         winnerAmount.goldCoins = winnerAmountGoldCoins
@@ -927,7 +931,7 @@ export class BettingService {
           );
         }
       }
-      return betDetails;
+      return { betDetails, oldBetAmount: betDetails.amount };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

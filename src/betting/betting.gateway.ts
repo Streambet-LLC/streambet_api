@@ -612,7 +612,9 @@ export class BettingGateway
   ) {
     try {
       const user = client.data.user;
-      const editedBet = await this.bettingService.editBet(user.sub, editBetDto);
+
+      const { betDetails: editedBet, oldBetAmount } =
+        await this.bettingService.editBet(user.sub, editBetDto);
       const [updatedWallet, bettingVariable] = await Promise.all([
         this.walletsService.findByUserId(user.sub),
         this.bettingService.findBettingVariableById(
@@ -652,13 +654,21 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-          amount: editedBet.amount,
-          currencyType: editedBet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        });
-        betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
+        if (Number(oldBetAmount) < Number(editedBet.amount)) {
+          betEditedPayload.message =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.MESSAGE({
+              amount: editedBet.amount,
+            });
+          betEditedPayload.title =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.TITLE();
+        } else if (Number(oldBetAmount) > Number(editedBet.amount)) {
+          betEditedPayload.message =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.MESSAGE({
+              amount: editedBet.amount,
+            });
+          betEditedPayload.title =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.TITLE();
+        }
       }
 
       // Emit edit confirmation only to the user's own active sockets
