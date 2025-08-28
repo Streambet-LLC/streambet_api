@@ -6,6 +6,7 @@ import { CoinPackageService } from '../coin-package/coin-package.service';
 import { BettingGateway } from '../betting/betting.gateway';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class PaymentsService {
@@ -26,6 +27,7 @@ export class PaymentsService {
     private walletsService: WalletsService,
     private coinPackageService: CoinPackageService,
     private bettingGateway: BettingGateway,
+    private notificationService:NotificationService
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -530,6 +532,11 @@ export class PaymentsService {
           goldCoins: Number(coinPackage.goldCoinCount) || 0,
         },
       });
+      this.notificationService.sendSMTPForCoinPurchaseSuccess(
+        userId,
+        Number(coinPackage.sweepCoinCount) || 0,
+        Number(coinPackage.goldCoinCount) || 0,
+      );
       return { processed: true };
     } catch (error) {
       if (error instanceof HttpException) {
