@@ -14,7 +14,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { getQueueToken } from '@nestjs/bullmq';
 
 
@@ -34,12 +34,13 @@ if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable o
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
+  const sendEmailQueue = app.get<Queue>(getQueueToken(EMAIL_QUEUE));
 
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
   createBullBoard({
-    queues: [new BullMQAdapter(streamLiveQueue)],
+    queues: [new BullMQAdapter(streamLiveQueue), new BullMQAdapter(sendEmailQueue)],
     serverAdapter,
   });
 
