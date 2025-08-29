@@ -98,7 +98,7 @@ export class BettingGateway
       try {
         const ip = extractIpFromSocket(socket);
         //for debugging, will remove after checking
-        console.log(ip, 'ip in socket connection');
+        Logger.log(ip, 'ip in socket connection');
 
         if (!ip) return next(new Error('Could not determine IP'));
 
@@ -170,7 +170,7 @@ export class BettingGateway
       if (userId) {
         client.join(`user_${userId}`); // <-- automatic index in adapter
       }
-      console.log(
+      Logger.log(
         `Client connected: ${client.id}, user: ${
           typeof decoded.username === 'string' ? decoded.username : 'unknown'
         }`,
@@ -198,7 +198,7 @@ export class BettingGateway
     if (userId) {
       client.leave(`user_${userId}`);
     }
-    console.log(`${username || client.id} disconnected`);
+    Logger.log(`${username || client.id} disconnected`);
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
 
@@ -309,7 +309,7 @@ export class BettingGateway
     client.join(`streambet`);
     this.userSocketMap.set(username, client.id);
     this.server.to(`streambet`).emit('joinedStreamBet', { username });
-    console.log(`User ${username} joined room  streambet`);
+    Logger.log(`User ${username} joined room  streambet`);
     //  return { event: 'joinedStreamBet', data: { username } };
   }
 
@@ -318,7 +318,7 @@ export class BettingGateway
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
     client.leave(`streambet`);
-    console.log(`User ${username} left streambet`);
+    Logger.log(`User ${username} left streambet`);
     return { event: 'leaveStreamBet', data: { username } };
   }
   /**

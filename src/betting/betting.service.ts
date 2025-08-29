@@ -343,11 +343,15 @@ export class BettingService {
 
         // Calculate winnerAmount (Sum of total amount placed in lossing option)
         const winnerAmountGoldCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
           0,
         );
         const winnerAmountSweepCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
           0,
         );
         winnerAmount.goldCoins = winnerAmountGoldCoins
@@ -1101,7 +1105,7 @@ export class BettingService {
 
       // Check if there are any active bets
       if (!allStreamBets || allStreamBets.length === 0) {
-        console.log('No active bets found for this round');
+        Logger.log('No active bets found for this round');
         await this.closeRound(queryRunner, bettingVariable);
         await queryRunner.commitTransaction();
         // Emit winner declared event even if no bets (optional)
@@ -1304,14 +1308,14 @@ export class BettingService {
   }
   private async creditAmountVoidCase(queryRunner, bets) {
     if (!bets || !Array.isArray(bets) || bets.length === 0) {
-      console.log('No bets to refund in void case');
+      Logger.log('No bets to refund in void case');
       return;
     }
 
     for (const bet of bets) {
       try {
         if (!bet || !bet.userId || !bet.amount || !bet.currency) {
-          console.log('Invalid bet found in void case refund:', bet);
+          Logger.log('Invalid bet found in void case refund:', bet);
           continue;
         }
 
@@ -1407,7 +1411,7 @@ export class BettingService {
         !bettingVariable.stream ||
         !bettingVariable.roundId
       ) {
-        console.log('Invalid bettingVariable provided to fetchActiveBets');
+        Logger.log('Invalid bettingVariable provided to fetchActiveBets');
         return [];
       }
 
@@ -1440,7 +1444,7 @@ export class BettingService {
   private splitBets(allStreamBets, variableId) {
     // Validate inputs
     if (!allStreamBets || !Array.isArray(allStreamBets)) {
-      console.log('Invalid allStreamBets input:', allStreamBets);
+      Logger.log('Invalid allStreamBets input:', allStreamBets);
       return {
         winningBets: [],
         losingBets: [],
@@ -1452,7 +1456,7 @@ export class BettingService {
     }
 
     if (!variableId) {
-      console.log('Invalid variableId input:', variableId);
+      Logger.log('Invalid variableId input:', variableId);
       return {
         winningBets: [],
         losingBets: [],
@@ -1555,7 +1559,7 @@ export class BettingService {
       winningGoldCoinBets.length === 0 ||
       totalWinningGoldCoinAmount <= 0
     ) {
-      console.log(
+      Logger.log(
         'No winning Gold Coin bets to process or invalid total amount',
       );
       return;
@@ -1611,7 +1615,7 @@ export class BettingService {
       winningSweepCoinBets.length === 0 ||
       totalWinningSweepCoinAmount <= 0
     ) {
-      console.log(
+      Logger.log(
         'No winning Sweep coin bets to process or invalid total amount',
       );
       return;
@@ -1657,14 +1661,14 @@ export class BettingService {
 
   private async processLosingBets(queryRunner, losingBets) {
     if (!losingBets || !Array.isArray(losingBets) || losingBets.length === 0) {
-      console.log('No losing bets to process');
+      Logger.log('No losing bets to process');
       return;
     }
 
     for (const bet of losingBets) {
       try {
         if (!bet || !bet.id) {
-          console.log('Invalid bet found in losingBets:', bet);
+          Logger.log('Invalid bet found in losingBets:', bet);
           continue;
         }
 
@@ -1711,7 +1715,7 @@ export class BettingService {
 
   async getUserBets(userId: string, active: boolean = false): Promise<Bet[]> {
     const whereClause: Record<string, unknown> = { userId };
-    console.log('debug');
+    Logger.log('debug');
 
     if (active) {
       whereClause.status = BetStatus.Active;
