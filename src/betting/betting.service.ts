@@ -343,11 +343,15 @@ export class BettingService {
 
         // Calculate winnerAmount (Sum of total amount placed in lossing option)
         const winnerAmountGoldCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
           0,
         );
         const winnerAmountSweepCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
           0,
         );
         winnerAmount.goldCoins = winnerAmountGoldCoins
@@ -675,7 +679,7 @@ export class BettingService {
     const betDetails = await this.betsRepository.findOne({
       where: { id: betId, userId }, // Add userId for security
     });
-
+    const oldBettingAmount = betDetails?.amount;
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
@@ -927,7 +931,7 @@ export class BettingService {
           );
         }
       }
-      return betDetails;
+      return { betDetails, oldBettingAmount };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1248,6 +1252,11 @@ export class BettingService {
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+          winner.userId,
+          winner.username,
+          bettingVariable.name,
+        );
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
           winner.username,
@@ -1279,6 +1288,11 @@ export class BettingService {
 
       lossingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
+          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            bet.userId,
+            bet.user?.username,
+            bettingVariable.name,
+          );
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
             bet.user?.username,
