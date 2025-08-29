@@ -122,7 +122,7 @@ export class BettingController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Post('place-bet')
   async placeBet(
     @Request() req: RequestWithUser,
@@ -149,7 +149,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Delete('bets/cancel')
   async cancelBet(
     @Request() req: RequestWithUser,
@@ -177,7 +177,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('user-bets')
   async getUserBets(
     @Request() req: RequestWithUser,
@@ -194,7 +194,7 @@ export class BettingController {
 
   @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string,
@@ -230,7 +230,7 @@ export class BettingController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Patch('edit-bet')
   async editBet(
     @Request() req: RequestWithUser,
