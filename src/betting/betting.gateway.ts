@@ -37,6 +37,7 @@ import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 import { UserMeta } from 'src/interface/user-meta.interface';
 import { emitToUser } from 'src/common/common';
 import { SocketEventName } from 'src/enums/socket-event-name.enum';
+import { GeoFencingSocketGuard } from 'src/geo-fencing/geo-fencing-socket.guard';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -71,7 +72,7 @@ interface Notification {
   },
 })
 export class BettingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
@@ -87,10 +88,8 @@ export class BettingGateway
     private readonly notificationService: NotificationService,
     private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
-    private readonly geoFencingService: GeoFencingService,
-    private readonly configService: ConfigService,
   ) {}
-
+  /* logic move to authguard
   // global for all socket events, runs on every incoming connection before any events are handled.
   afterInit(server: Server): void {
     this.server = server;
@@ -130,6 +129,7 @@ export class BettingGateway
       }
     });
   }
+*/
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract token from handshake
@@ -202,7 +202,7 @@ export class BettingGateway
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStream')
   async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -282,7 +282,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStream')
   async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -302,7 +302,7 @@ export class BettingGateway
     await this.broadcastCount(streamId);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -313,7 +313,7 @@ export class BettingGateway
     //  return { event: 'joinedStreamBet', data: { username } };
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStreamBet')
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -378,7 +378,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -498,7 +498,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('cancelBet')
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -604,7 +604,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('editBet')
   async handleEditBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -612,7 +612,9 @@ export class BettingGateway
   ) {
     try {
       const user = client.data.user;
-      const editedBet = await this.bettingService.editBet(user.sub, editBetDto);
+
+      const { betDetails: editedBet, oldBettingAmount } =
+        await this.bettingService.editBet(user.sub, editBetDto);
       const [updatedWallet, bettingVariable] = await Promise.all([
         this.walletsService.findByUserId(user.sub),
         this.bettingService.findBettingVariableById(
@@ -652,13 +654,21 @@ export class BettingGateway
           client.data.user.sub,
         );
       if (receiverNotificationPermission['inAppNotification']) {
-        betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
-          amount: editedBet.amount,
-          currencyType: editedBet.currency,
-          bettingOption: bettingVariable?.name || '',
-          roundName: bettingVariable.round.roundName || '',
-        });
-        betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
+        if (Number(oldBettingAmount) < Number(editedBet.amount)) {
+          betEditedPayload.message =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.MESSAGE({
+              amount: editedBet.amount,
+            });
+          betEditedPayload.title =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.TITLE();
+        } else if (Number(oldBettingAmount) > Number(editedBet.amount)) {
+          betEditedPayload.message =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.MESSAGE({
+              amount: editedBet.amount,
+            });
+          betEditedPayload.title =
+            NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.TITLE();
+        }
       }
 
       // Emit edit confirmation only to the user's own active sockets
@@ -738,7 +748,7 @@ export class BettingGateway
     }
   }
   //live chat implementation
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('sendChatMessage')
   async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1046,7 +1056,29 @@ export class BettingGateway
       void this.server.to(socketId).emit('botMessage', chatMessage);
     }
   }
+  async emitBotMessageForWinnerDeclaration(
+    userId: string,
+    username: string,
+    bettingOption: string,
+  ) {
+    const receiverNotificationPermission =
+      await this.notificationService.addNotificationPermision(userId);
+    if (receiverNotificationPermission['inAppNotification']) {
+      const socketId = this.userSocketMap.get(username);
 
+      const chatMessage: ChatMessage = {
+        type: 'system',
+        username: 'StreambetBot',
+        message: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.MESSAGE({
+          bettingOption: bettingOption || '',
+        }),
+        title: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.TITLE(),
+        timestamp: new Date(),
+      };
+
+      void this.server.to(socketId).emit('botMessage', chatMessage);
+    }
+  }
   async emitBotMessageVoidRound(
     userId: string,
     username: string,

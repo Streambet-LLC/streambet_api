@@ -23,8 +23,8 @@ export enum CurrencyType {
   GOLD_COINS = 'gold_coins',
 }
 export enum CurrencyTypeText {
-  SWEEP_COINS_TEXT = 'sweep coin',
-  GOLD_COINS_TEXT = 'gold coin',
+  SWEEP_COINS_TEXT = 'Sweep Coin',
+  GOLD_COINS_TEXT = 'Gold Coin',
 }
 @Entity('transactions')
 export class Transaction extends BaseEntity {

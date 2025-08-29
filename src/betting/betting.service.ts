@@ -37,6 +37,8 @@ import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
+import { BetHistoryFilterDto } from './dto/bet-history.dto';
+import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 
 @Injectable()
 export class BettingService {
@@ -679,7 +681,7 @@ export class BettingService {
     const betDetails = await this.betsRepository.findOne({
       where: { id: betId, userId }, // Add userId for security
     });
-
+    const oldBettingAmount = betDetails?.amount;
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
@@ -931,7 +933,7 @@ export class BettingService {
           );
         }
       }
-      return betDetails;
+      return { betDetails, oldBettingAmount };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1252,6 +1254,11 @@ export class BettingService {
       this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+          winner.userId,
+          winner.username,
+          bettingVariable.name,
+        );
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
           winner.username,
@@ -1283,6 +1290,11 @@ export class BettingService {
 
       lossingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
+          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            bet.userId,
+            bet.user?.username,
+            bettingVariable.name,
+          );
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
             bet.user?.username,
@@ -2317,6 +2329,99 @@ export class BettingService {
       );
       throw new InternalServerErrorException(
         'Could not retrieve bet statistics. Please try again later.',
+      );
+    }
+  }
+
+  /**
+   * Retrieves a user's betting history with optional search, sorting, and pagination.
+   *
+   * - Search: `filter.q` matches stream name (case-insensitive)
+   * - Sort: `sort` applies on bet created date (createdAt / created_at)
+   * - Pagination: `range` as [offset, limit]; disable via `pagination=false`
+   */
+  async getUserBettingHistory(
+    userId: string,
+    betHistoryFilterDto: BetHistoryFilterDto,
+  ): Promise<{ data: any[]; total: number }> {
+    try {
+      const sort: Sort = betHistoryFilterDto?.sort
+        ? (JSON.parse(betHistoryFilterDto.sort) as Sort)
+        : (['createdAt', 'DESC'] as unknown as Sort);
+      const range: Range = betHistoryFilterDto?.range
+        ? (JSON.parse(betHistoryFilterDto.range) as Range)
+        : [0, 24];
+      const { pagination = true } = betHistoryFilterDto || {};
+      const filter: FilterDto = betHistoryFilterDto?.filter
+        ? (JSON.parse(betHistoryFilterDto.filter) as FilterDto)
+        : undefined;
+
+      // Base query joining stream, round, and betting variable
+      const qb = this.betsRepository
+        .createQueryBuilder('b')
+        .leftJoin('b.stream', 's')
+        .leftJoin('b.round', 'r')
+        .leftJoin('b.bettingVariable', 'bv')
+        .where('b.userId = :userId', { userId });
+
+      if (filter?.q) {
+        qb.andWhere('(LOWER(s.name) ILIKE LOWER(:q))', { q: `%${filter.q}%` });
+      }
+
+      // Ordering by bet creation date
+      if (sort) {
+        const [sortColumn, sortOrder] = sort;
+        const column = sortColumn === 'created_at' ? 'created_at' : 'createdAt';
+        qb.orderBy(
+          `b.${column}`,
+          String(sortOrder).toUpperCase() === 'ASC' ? 'ASC' : 'DESC',
+        );
+      }
+
+      // Select requested fields in required schema
+      qb
+        .select('b.createdAt', 'date')
+        .addSelect('s.name', 'streamName')
+        .addSelect('r.roundName', 'roundName')
+        .addSelect('bv.name', 'optionName')
+        .addSelect('b.currency', 'coinType')
+        .addSelect('b.amount', 'amountPlaced')
+        .addSelect(
+          `CASE WHEN b.status = :won THEN b.payoutAmount ELSE 0 END`,
+          'amountWon',
+        )
+        .addSelect(
+          `CASE WHEN b.status = :lost THEN b.amount ELSE 0 END`,
+          'amountLost',
+        )
+        .addSelect('b.status', 'status')
+        .setParameters({ won: BetStatus.Won, lost: BetStatus.Lost });
+
+      // Count query for pagination total
+      const countQB = this.betsRepository
+        .createQueryBuilder('b')
+        .leftJoin('b.stream', 's')
+        .where('b.userId = :userId', { userId });
+
+      if (filter?.q) {
+        countQB.andWhere('(LOWER(s.name) ILIKE LOWER(:q))', {
+          q: `%${filter.q}%`,
+        });
+      }
+
+      const total = await countQB.getCount();
+
+      if (pagination && range) {
+        const [offset, limit] = range;
+        qb.offset(offset).limit(limit);
+      }
+
+      const data = await qb.getRawMany();
+      return { data, total };
+    } catch (e) {
+      Logger.error('Unable to retrieve betting history', e);
+      throw new InternalServerErrorException(
+        'Unable to retrieve betting history at the moment. Please try again later',
       );
     }
   }

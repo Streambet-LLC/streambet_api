@@ -36,6 +36,7 @@ import {
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { BetHistoryFilterDto, BetHistoryResponseDto } from './dto/bet-history.dto';
 
 // Define ApiResponse
 // Define the request type with user property
@@ -122,7 +123,7 @@ export class BettingController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Post('place-bet')
   async placeBet(
     @Request() req: RequestWithUser,
@@ -149,7 +150,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Delete('bets/cancel')
   async cancelBet(
     @Request() req: RequestWithUser,
@@ -177,7 +178,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('user-bets')
   async getUserBets(
     @Request() req: RequestWithUser,
@@ -194,7 +195,7 @@ export class BettingController {
 
   @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string,
@@ -220,6 +221,34 @@ export class BettingController {
     };
   }
 
+  // Get user's full betting history with search & pagination
+  @ApiOperation({ summary: "Get user's full betting history with search & pagination" })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Betting history retrieved successfully',
+    type: BetHistoryResponseDto,
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('history')
+  async getBettingHistory(
+    @Request() req: RequestWithUser,
+    @Query() betHistoryFilterDto: BetHistoryFilterDto,
+  ) {
+    // Delegate to service; supports range, sort, filter.q and pagination flag
+    const { data, total } = await this.bettingService.getUserBettingHistory(
+      req.user.id,
+      betHistoryFilterDto,
+    );
+    return {
+      message: 'Successfully Listed',
+      status: HttpStatus.OK,
+      data,
+      total,
+    };
+  }
+
   @ApiOperation({ summary: 'Edit a bet' })
   @SwaggerApiResponse({
     status: 201,
@@ -230,7 +259,7 @@ export class BettingController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Patch('edit-bet')
   async editBet(
     @Request() req: RequestWithUser,
