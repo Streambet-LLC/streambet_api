@@ -74,7 +74,7 @@ export class BetHistoryItemDto {
  */
 export class BetHistoryResponseDto {
   @ApiProperty({ example: 200 })
-  statusCode: number;
+  status: number;
 
   @ApiProperty({ example: 'Successfully Listed' })
   message: string;

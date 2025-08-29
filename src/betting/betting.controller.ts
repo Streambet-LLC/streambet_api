@@ -243,7 +243,7 @@ export class BettingController {
     );
     return {
       message: 'Successfully Listed',
-      statusCode: HttpStatus.OK,
+      status: HttpStatus.OK,
       data,
       total,
     };
