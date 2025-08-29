@@ -31,7 +31,7 @@ import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 import { UserMeta } from 'src/interface/user-meta.interface';
 import { emitToUser } from 'src/common/common';
 import { SocketEventName } from 'src/enums/socket-event-name.enum';
-import { GeoFencingSocketGuard } from 'src/geo-fencing/geo-fencing-socket.guard';
+import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
