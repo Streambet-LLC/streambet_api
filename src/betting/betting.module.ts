@@ -15,6 +15,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { EmailsService } from 'src/emails/email.service';
 import { ChatModule } from 'src/chat/chat.module';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
+import { GeoFencingSocketGuard } from 'src/geo-fencing/geo-fencing-socket.guard.guard';
 
 @Module({
   imports: [
@@ -32,7 +33,8 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
     BettingGateway,
     NotificationService,
     EmailsService,
+    GeoFencingSocketGuard,
   ],
-  exports: [BettingService, BettingGateway],
+  exports: [BettingService, BettingGateway, GeoFencingSocketGuard],
 })
 export class BettingModule {}

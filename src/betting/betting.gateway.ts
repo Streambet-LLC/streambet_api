@@ -37,6 +37,7 @@ import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 import { UserMeta } from 'src/interface/user-meta.interface';
 import { emitToUser } from 'src/common/common';
 import { SocketEventName } from 'src/enums/socket-event-name.enum';
+import { GeoFencingSocketGuard } from 'src/geo-fencing/geo-fencing-socket.guard.guard';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -71,7 +72,7 @@ interface Notification {
   },
 })
 export class BettingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
@@ -87,10 +88,8 @@ export class BettingGateway
     private readonly notificationService: NotificationService,
     private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
-    private readonly geoFencingService: GeoFencingService,
-    private readonly configService: ConfigService,
   ) {}
-
+  /* logic move to authguard
   // global for all socket events, runs on every incoming connection before any events are handled.
   afterInit(server: Server): void {
     this.server = server;
@@ -130,6 +129,7 @@ export class BettingGateway
       }
     });
   }
+*/
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract token from handshake
@@ -202,7 +202,7 @@ export class BettingGateway
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStream')
   async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -282,7 +282,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStream')
   async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -302,7 +302,7 @@ export class BettingGateway
     await this.broadcastCount(streamId);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -313,7 +313,7 @@ export class BettingGateway
     //  return { event: 'joinedStreamBet', data: { username } };
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStreamBet')
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -378,7 +378,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -498,7 +498,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('cancelBet')
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -604,7 +604,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('editBet')
   async handleEditBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -738,7 +738,7 @@ export class BettingGateway
     }
   }
   //live chat implementation
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('sendChatMessage')
   async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,

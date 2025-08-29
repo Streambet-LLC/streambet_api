@@ -30,6 +30,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
           ? errorResponse.message
           : exception.message || 'Internal server error',
     };
+    if (
+      typeof errorResponse === 'object' &&
+      errorResponse !== null &&
+      'isForcedLogout' in errorResponse
+    ) {
+      error['isForcedLogout'] = errorResponse.isForcedLogout;
+    }
 
     if (status === 500) {
       this.logger.error(
