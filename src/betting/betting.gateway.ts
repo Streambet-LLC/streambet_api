@@ -202,7 +202,7 @@ export class BettingGateway
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
 
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStream')
   async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -282,7 +282,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStream')
   async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -302,7 +302,7 @@ export class BettingGateway
     await this.broadcastCount(streamId);
   }
 
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -313,7 +313,7 @@ export class BettingGateway
     //  return { event: 'joinedStreamBet', data: { username } };
   }
 
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('leaveStreamBet')
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -378,7 +378,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -498,7 +498,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('cancelBet')
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -604,7 +604,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('editBet')
   async handleEditBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -748,7 +748,7 @@ export class BettingGateway
     }
   }
   //live chat implementation
-  @UseGuards(GeoFencingSocketGuard, WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('sendChatMessage')
   async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
