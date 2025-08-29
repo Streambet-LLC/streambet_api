@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
 import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { AdminFilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { BetStatus } from 'src/enums/bet-status.enum';
 
 /**
  * Request query DTO for betting history listing.
@@ -65,7 +66,7 @@ export class BetHistoryItemDto {
   @ApiProperty({ example: 50, nullable: true })
   amountLost: number | null;
 
-  @ApiProperty({ example: 'won', enum: ['active', 'won', 'lost', 'cancelled', 'refunded', 'pending'] })
+  @ApiProperty({ example: BetStatus.Won, enum: BetStatus })
   status: string;
 }
 
