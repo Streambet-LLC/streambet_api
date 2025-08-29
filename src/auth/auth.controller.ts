@@ -53,9 +53,8 @@ interface GoogleAuthResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  
   private readonly logger = new Logger(AuthController.name);
-  
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -144,7 +143,7 @@ export class AuthController {
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, RefreshTokenGuard)
+  @UseGuards(RefreshTokenGuard, GeoFencingGuard)
   @Post('refresh')
   async refreshToken(@Request() req: RequestWithUser) {
     // User is already validated by RefreshTokenGuard
@@ -199,7 +198,7 @@ export class AuthController {
     description: 'Unauthorized - Invalid or expired token',
   })
   @ApiBearerAuth()
-  @UseGuards(GeoFencingGuard, JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('me')
   getProfile(@Request() req: RequestWithUser) {
     // The user is automatically injected into the request by the JwtAuthGuard
@@ -218,7 +217,7 @@ export class AuthController {
     description: 'Redirects to Google authentication page',
   })
   @Get('google')
-  @UseGuards(GeoFencingGuard, AuthGuard('google'))
+  @UseGuards(AuthGuard('google'), GeoFencingGuard)
   async googleAuth(): Promise<void> {
     // This route triggers Google OAuth2 flow
     // The actual implementation is handled by Passport
@@ -232,7 +231,7 @@ export class AuthController {
     description: 'Redirects to frontend with authentication tokens',
   })
   @Get('google/callback')
-  @UseGuards(GeoFencingGuard, AuthGuard('google'))
+  @UseGuards(AuthGuard('google'), GeoFencingGuard)
   async googleAuthRedirect(
     @Request() req: { user: GoogleAuthResponse },
     @Res() res: Response,
