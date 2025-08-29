@@ -13,10 +13,17 @@ import { GeoFencingService } from './geo-fencing.service';
 type SocketWithGeo = Socket & { geo?: any };
 
 function getClientIp(client: Socket): string | null {
-  // prefer X-Forwarded-For (first ip), then handshake address, then transport address
+  // prefer X-Forwarded-For (first ip), then X-Real-IP, then handshake/transport address
   const xff = client.handshake?.headers?.['x-forwarded-for'];
+  if (Array.isArray(xff) && xff.length > 0) {
+    return xff[0].split(',')[0].trim();
+  }
   if (typeof xff === 'string' && xff.length > 0) {
     return xff.split(',')[0].trim();
+  }
+  const xri = client.handshake?.headers?.['x-real-ip'];
+  if (typeof xri === 'string' && xri.length > 0) {
+    return xri.trim();
   }
   const addr = client.handshake?.address || client.conn?.remoteAddress;
   return addr ? addr.replace('::ffff:', '') : null;
@@ -47,7 +54,7 @@ export class GeoFencingSocketGuard implements CanActivate {
     client.geo = loc ?? null;
 
     // blocked regions
-    const blockedRegion = this.config.get<string>('GEO_BLOCKED_REGION') ?? '';
+    const blockedRegion = this.config.get<string>('geo.blockedRegion') ?? '';
     const blocked = blockedRegion
       .split(',')
       .map((s) => s.trim())
@@ -62,8 +69,9 @@ export class GeoFencingSocketGuard implements CanActivate {
     }
 
     // block VPN
-    const isBlockVPN =
-      (this.config.get<string>('GEO_BLOCK_VPN') ?? '').toLowerCase() === 'true';
+    const blockVPN = this.config.get<string>('geo.blockVPN');
+
+    const isBlockVPN = blockVPN === 'true'; // Convert string to real boolean
     if (isBlockVPN && Boolean(loc?.isVpn)) {
       this.logger.warn(`Socket blocked by VPN/proxy ip=${ip}`);
       throw new WsException({
