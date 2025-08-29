@@ -36,6 +36,7 @@ import {
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { BetHistoryFilterDto, BetHistoryResponseDto } from './dto/bet-history.dto';
 
 // Define ApiResponse
 // Define the request type with user property
@@ -217,6 +218,34 @@ export class BettingController {
       message: 'Potential amount retrieved successfully',
       status: HttpStatus.OK,
       data: data,
+    };
+  }
+
+  // Get user's full betting history with search & pagination
+  @ApiOperation({ summary: "Get user's full betting history with search & pagination" })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Betting history retrieved successfully',
+    type: BetHistoryResponseDto,
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('history')
+  async getBettingHistory(
+    @Request() req: RequestWithUser,
+    @Query() betHistoryFilterDto: BetHistoryFilterDto,
+  ) {
+    // Delegate to service; supports range, sort, filter.q and pagination flag
+    const { data, total } = await this.bettingService.getUserBettingHistory(
+      req.user.id,
+      betHistoryFilterDto,
+    );
+    return {
+      message: 'Successfully Listed',
+      status: HttpStatus.OK,
+      data,
+      total,
     };
   }
 
