@@ -19,7 +19,7 @@ import { TransactionFilterDto } from './dto/transaction.list.dto';
 import { HistoryType } from 'src/enums/history-type.enum';
 import {
   SWEEP_COINS_PER_DOLLAR,
-  MIN_WITHDRAWABLE_DOLLARS,
+  MIN_WITHDRAWABLE_SWEEP_COINS,
 } from 'src/common/constants/currency.constants';
 
 @Injectable()
@@ -672,6 +672,10 @@ export class WalletsService {
     if (requestedCoins < 0) {
       throw new BadRequestException('Coins must be non-negative');
     }
+    
+    if (!Number.isInteger(requestedCoins)) {
+      throw new BadRequestException('Coins must be an integer');
+    }
 
     // Ensure the user's wallet exists and fetch current sweep coin balance
     const wallet = await this.findByUserId(userId);
@@ -681,8 +685,11 @@ export class WalletsService {
     }
 
     // Convert using fixed rate and enforce minimum withdrawable in coins
-    const dollars = requestedCoins / SWEEP_COINS_PER_DOLLAR;
-    const minCoins = MIN_WITHDRAWABLE_DOLLARS * SWEEP_COINS_PER_DOLLAR;
+    const dollars = Number(
+      (requestedCoins / SWEEP_COINS_PER_DOLLAR).toFixed(2),
+    );
+    const minCoins = MIN_WITHDRAWABLE_SWEEP_COINS;
+      
     if (requestedCoins < minCoins) {
       throw new BadRequestException(
         `Minimum withdrawable sweep coins is ${minCoins}`,

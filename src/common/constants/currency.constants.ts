@@ -8,6 +8,6 @@ export const SWEEP_COINS_PER_DOLLAR = 20;
  * Minimum dollar amount allowed for withdrawal-related conversions.
  * This value is used to compute the minimum sweep coins required.
  */
-export const MIN_WITHDRAWABLE_DOLLARS = 2;
+export const MIN_WITHDRAWABLE_SWEEP_COINS = 20;
 
 
