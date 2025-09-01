@@ -17,6 +17,7 @@ import {
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
 import { HistoryType } from 'src/enums/history-type.enum';
+import { SWEEP_COINS_PER_DOLLAR, MIN_WITHDRAWABLE_DOLLARS } from 'src/common/constants/currency.constants';
 
 @Injectable()
 export class WalletsService {
@@ -388,6 +389,51 @@ export class WalletsService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Converts a requested sweep coin amount to USD for the specified user.
+   *
+   * Validates input, checks wallet balance, converts using the fixed
+   * sweep-to-dollar rate, and enforces the minimum withdrawable threshold
+   * expressed in sweep coins.
+   *
+   * @param userId - Identifier of the authenticated user
+   * @param requestedCoins - Sweep coin amount to convert
+   * @returns Object containing the computed dollar amount
+   * @throws NotFoundException if the user's wallet is not found
+   * @throws BadRequestException for invalid input, insufficient balance,
+   *         or when below the minimum withdrawable sweep coin threshold
+   */
+  async convertSweepCoinsToDollars(
+    userId: string,
+    requestedCoins: number,
+  ): Promise<{ dollars: number }>
+  {
+    // Validate input
+    if (requestedCoins === undefined || requestedCoins === null || isNaN(Number(requestedCoins))) {
+      throw new BadRequestException('Invalid coins value');
+    }
+    if (requestedCoins < 0) {
+      throw new BadRequestException('Coins must be non-negative');
+    }
+
+    // Ensure the user's wallet exists and fetch current sweep coin balance
+    const wallet = await this.findByUserId(userId);
+    const available = Number(wallet.sweepCoins ?? 0);
+    if (requestedCoins > available) {
+      throw new BadRequestException('Insufficient sweep coins');
+    }
+
+    // Convert using fixed rate and enforce minimum withdrawable in coins
+    const dollars = requestedCoins / SWEEP_COINS_PER_DOLLAR;
+    const minCoins = MIN_WITHDRAWABLE_DOLLARS * SWEEP_COINS_PER_DOLLAR;
+    if (requestedCoins < minCoins) {
+      throw new BadRequestException(
+        `Minimum withdrawable sweep coins is ${minCoins}`,
+      );
+    }
+    return { dollars };
   }
 
   private async createTransaction(
