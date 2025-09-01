@@ -33,6 +33,11 @@ interface RequestWithUser extends Request {
 export class WalletsController {
   constructor(private readonly walletsService: WalletsService) {}
 
+  /**
+   * getBalance - API endpoint to fetch the user's wallet balance.
+   *
+   * - Returns the wallet entity.
+   */
   @ApiOperation({ summary: "Get user's wallet balance" })
   @ApiResponse({
     status: 200,
@@ -47,6 +52,11 @@ export class WalletsController {
     return this.walletsService.findByUserId(req.user.id);
   }
 
+  /**
+   * getTransactions - API endpoint to retrieve a user's transaction history.
+   *
+   * - Returns transaction list with total count.
+   */
   @ApiOperation({ summary: "Get user's transaction history" })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
