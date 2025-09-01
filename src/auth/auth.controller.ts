@@ -36,7 +36,7 @@ import {
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { userVerificationDto } from './dto/verify-password.dto';
-import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {

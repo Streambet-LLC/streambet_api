@@ -30,7 +30,7 @@ import {
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
-import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import {
   BetHistoryFilterDto,
   BetHistoryResponseDto,
