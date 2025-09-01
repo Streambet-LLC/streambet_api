@@ -17,19 +17,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
     const status = exception.getStatus();
     const errorResponse = exception.getResponse();
+    const er =
+      typeof errorResponse === 'object' && errorResponse !== null
+        ? (errorResponse as Record<string, any>)
+        : null;
 
-    const error = {
+    const error: Record<string, any> = {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      message:
-        typeof errorResponse === 'object' &&
-        errorResponse !== null &&
-        'message' in errorResponse
-          ? errorResponse.message
-          : exception.message || 'Internal server error',
+      message: er?.message ?? exception.message ?? 'Internal server error',
     };
+    if (er && 'isForcedLogout' in er) {
+      error.isForcedLogout = Boolean(er.isForcedLogout);
+    }
 
     if (status === 500) {
       this.logger.error(
