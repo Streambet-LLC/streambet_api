@@ -28,37 +28,11 @@ import { UsersService } from 'src/users/users.service';
 import { StreamList } from 'src/enums/stream-list.enum';
 import { UserRole } from 'src/users/entities/user.entity';
 import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
-import { UserMeta } from 'src/interface/user-meta.interface';
 import { emitToUser } from 'src/common/common';
-import { SocketEventName } from 'src/enums/socket-event-name.enum';
+import { ChatType, SocketEventName } from 'src/enums/socket.enum';
 import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
-
-// Define socket with user data
-interface AuthenticatedSocket extends Socket {
-  data: {
-    meta?: UserMeta;
-    user: AuthenticatedSocketPayload;
-  };
-}
-
-// Define chat message interface
-interface ChatMessage {
-  type: 'system' | 'user';
-  username: string;
-  message: string;
-  timestamp: Date;
-  imageURL?: string;
-  title?: string;
-  profileUrl?: string;
-  systemMessage?: string;
-}
-
-// Define notification interface
-interface Notification {
-  type: string;
-  message: string;
-  data?: Record<string, unknown>;
-}
+import { AuthenticatedSocket, UserMeta } from 'src/interface/socket.interface';
+import { ChatMessage } from 'src/interface/chat-message.interface';
 
 @WebSocketGateway({
   cors: {
@@ -486,7 +460,7 @@ export class BettingGateway
 
         // System chat notification for bet placement
         const chatMessage: ChatMessage = {
-          type: 'system',
+          type: ChatType.System,
           username: 'StreambetBot',
           message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
@@ -608,7 +582,7 @@ export class BettingGateway
 
         // System chat message
         const chatMessage: ChatMessage = {
-          type: 'system',
+          type: ChatType.System,
           username: 'StreambetBot',
           message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
@@ -746,7 +720,7 @@ export class BettingGateway
         );
 
         const chatMessage: ChatMessage = {
-          type: 'system',
+          type: ChatType.System,
           username: 'StreambetBot',
           message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
@@ -802,7 +776,7 @@ export class BettingGateway
     }
 
     const chatMessage: ChatMessage = {
-      type: 'user',
+      type: ChatType.User,
       username: user.username,
       message: message.trim(),
       imageURL: imageURL || '',
@@ -854,7 +828,7 @@ export class BettingGateway
         Logger.error('Failed to save system chat message:', e.message);
       }
       const systemChatMessage: ChatMessage = {
-        type: 'user',
+        type: ChatType.User,
         username: user.username,
         message: '',
         systemMessage,
@@ -934,7 +908,7 @@ export class BettingGateway
 
     // Send system chat message
     const chatMessage: ChatMessage = {
-      type: 'system',
+      type: ChatType.System,
       username: 'StreambetBot',
       message: `The winner is: ${winnerName}!`,
       timestamp: new Date(),
@@ -994,7 +968,7 @@ export class BettingGateway
     }
 
     const chatMessage: ChatMessage = {
-      type: 'system',
+      type: ChatType.System,
       username: 'StreambetBot',
       message,
       timestamp: new Date(),
@@ -1015,7 +989,7 @@ export class BettingGateway
     const payload = { streamId, ended: true };
 
     const chatMessage: ChatMessage = {
-      type: 'system',
+      type: ChatType.System,
       username: 'StreambetBot',
       message,
       timestamp: new Date(),
@@ -1161,7 +1135,7 @@ export class BettingGateway
 
       // Construct system chat message
       const chatMessage: ChatMessage = {
-        type: 'system',
+        type: ChatType.System,
         username: 'StreambetBot',
         message: NOTIFICATION_TEMPLATE.BET_CANCELLED.MESSAGE({
           amount,
@@ -1211,7 +1185,7 @@ export class BettingGateway
           : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
 
       const chatMessage: ChatMessage = {
-        type: 'system',
+        type: ChatType.System,
         username: 'StreambetBot',
         message,
         title,
@@ -1240,7 +1214,7 @@ export class BettingGateway
       const socketId = this.userSocketMap.get(username);
 
       const chatMessage: ChatMessage = {
-        type: 'system',
+        type: ChatType.System,
         username: 'StreambetBot',
         message: NOTIFICATION_TEMPLATE.BET_LOST.MESSAGE({
           roundName: roundName || '',
@@ -1271,7 +1245,7 @@ export class BettingGateway
       const socketId = this.userSocketMap.get(username);
 
       const chatMessage: ChatMessage = {
-        type: 'system',
+        type: ChatType.System,
         username: 'StreambetBot',
         message: NOTIFICATION_TEMPLATE.BET_WINNER_DECLARED.MESSAGE({
           bettingOption: bettingOption || '',
@@ -1302,7 +1276,7 @@ export class BettingGateway
       const socketId = this.userSocketMap.get(username);
 
       const chatMessage: ChatMessage = {
-        type: 'system',
+        type: ChatType.System,
         username: 'StreambetBot',
         message: NOTIFICATION_TEMPLATE.BET_ROUND_VOID.MESSAGE({
           roundName: roundName || '',
@@ -1330,7 +1304,7 @@ export class BettingGateway
       const socketId = this.userSocketMap.get(username); // get socket ID for the user
 
       const chatMessage: ChatMessage = {
-        type: 'system', // system message type
+        type: ChatType.System, // system message type
         username: 'StreambetBot', // bot username
         message: NOTIFICATION_TEMPLATE.BET_LOCKED.MESSAGE({
           roundName: roundName || '',
