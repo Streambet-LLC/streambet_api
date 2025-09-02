@@ -295,7 +295,7 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId);
+      const socketId = this.gatewayManager.getSocketIds(userId);
       if (!socketId) return;
 
       // Construct system chat message
@@ -732,8 +732,6 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId); // get the socket ID for the user
-
       // Construct message and title based on currency type
       const message =
         currencyType === CurrencyType.GOLD_COINS
@@ -773,8 +771,6 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId);
-
       const chatMessage: ChatMessage = {
         type: ChatType.System,
         username: 'StreambetBot',
@@ -804,8 +800,6 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId);
-
       const chatMessage: ChatMessage = {
         type: ChatType.System,
         username: ChatType.StreambetBot,
@@ -835,8 +829,6 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId);
-
       const chatMessage: ChatMessage = {
         type: ChatType.System,
         username: ChatType.StreambetBot,
@@ -863,8 +855,6 @@ export class BettingGateway {
       await this.notificationService.addNotificationPermision(userId);
 
     if (receiverNotificationPermission['inAppNotification']) {
-      const socketId = this.gatewayManager.userIdToSocketIds.get(userId); // get socket ID for the user
-
       const chatMessage: ChatMessage = {
         type: ChatType.System, // system message type
         username: 'StreambetBot', // bot username

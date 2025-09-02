@@ -8,8 +8,8 @@ export class GatewayManager {
   private resolveServer?: (server: Server) => void;
 
   // Maps for faster lookups
-  readonly socketIdToUserId = new Map<string, string>();
-  readonly userIdToSocketIds = new Map<string, Set<string>>();
+  private readonly socketIdToUserId = new Map<string, string>();
+  private readonly userIdToSocketIds = new Map<string, Set<string>>();
 
   constructor() {
     this.serverPromise = new Promise<Server>((resolve) => {
@@ -29,6 +29,10 @@ export class GatewayManager {
     this.server = server;
     this.resolveServer?.(server);
     this.resolveServer = undefined;
+  }
+
+  getUserIdForSocket(socketId: string): string | undefined {
+    return this.socketIdToUserId.get(socketId);
   }
 
   /** Async: always returns initialized server */
@@ -75,11 +79,6 @@ export class GatewayManager {
       sockets.delete(socket.id);
       if (sockets.size === 0) this.userIdToSocketIds.delete(userId);
     }
-  }
-
-  /** Get userId by socketId */
-  getUserId(socketId: string): string | undefined {
-    return this.socketIdToUserId.get(socketId);
   }
 
   /** Get all socketIds for a user */

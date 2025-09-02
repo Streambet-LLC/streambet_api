@@ -9,6 +9,7 @@ import {
   CurrencyType,
   CurrencyTypeText,
 } from 'src/wallets/entities/transaction.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class NotificationService {
@@ -291,6 +292,59 @@ export class NotificationService {
         await this.emailsService.sendEmailSMTP(
           emailData,
           EmailType.CoinPurchase,
+        );
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('Unable to send coin purchase success mail', e);
+    }
+  }
+
+  async sendSMTPForAccountVerification(
+    userId: string,
+    redirect: string,
+    token: string,
+    user: User,
+  ) {
+    try {
+      const receiver = await this.usersService.findUserByUserId(userId);
+      const receiverEmail = receiver?.email;
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+        const hostUrl = this.configService.get<string>('email.HOST_URL');
+        const profileLink = this.configService.get<string>(
+          'email.APPLICATION_HOST',
+        );
+
+        const host = this.configService.get<string>('email.APPLICATION_HOST');
+        const verifyLink = redirect
+          ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
+          : `${hostUrl}/auth/verify-email?token=${token}`;
+
+        const emailData = {
+          subject: 'Activate Email',
+          toAddress: [user.email],
+          params: {
+            host,
+            profileLink,
+            title: 'Activation Email',
+            verifyLink,
+            code: '',
+            fullName: user.name || user.username,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.AccountVerification,
         );
 
         return true;

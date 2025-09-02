@@ -6,14 +6,10 @@ import {
 } from 'src/wallets/entities/transaction.entity';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
-import { WalletGateway } from 'src/wallets/wallets.gateway';
 
 @Injectable()
 export class AdminService {
-  constructor(
-    private readonly walletGateway: WalletGateway,
-    private readonly walletsService: WalletsService,
-  ) {}
+  constructor(private readonly walletsService: WalletsService) {}
 
   // This service acts primarily as a facade for admin operations
   // Most of the actual business logic is delegated to the appropriate service
@@ -46,7 +42,7 @@ export class AdminService {
       TransactionType.ADMIN_CREDIT,
     );
     //emit an event to the user, notify about the coin updation
-    await this.walletGateway.emitAdminAddedGoldCoin(userId);
+
     return updateResult;
   }
 }

@@ -21,15 +21,18 @@ import {
   SWEEP_COINS_PER_DOLLAR,
   MIN_WITHDRAWABLE_SWEEP_COINS,
 } from 'src/common/constants/currency.constants';
+import { WalletGateway } from './wallets.gateway';
 
 @Injectable()
 export class WalletsService {
+  private readonly logger = new Logger(WalletsService.name);
   constructor(
     @InjectRepository(Wallet)
     private walletsRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private transactionsRepository: Repository<Transaction>,
     private dataSource: DataSource,
+    private walletGateway: WalletGateway,
   ) {}
 
   /**
@@ -578,6 +581,16 @@ export class WalletsService {
         description,
       });
       await this.transactionsRepository.save(trans);
+      await this.walletGateway.emitAdminAddedGoldCoin(userId);
+
+      // fire-and-forget; log on failure so admin API success isn't affected by WS issues
+      void this.walletGateway
+        .emitAdminAddedGoldCoin(userId)
+        .catch((err) =>
+          this.logger?.warn?.(
+            `emitAdminAddedGoldCoin failed for ${userId}: ${err?.message ?? err}`,
+          ),
+        );
     }
 
     return await this.findByUserId(userId);
@@ -672,7 +685,7 @@ export class WalletsService {
     if (requestedCoins < 0) {
       throw new BadRequestException('Coins must be non-negative');
     }
-    
+
     if (!Number.isInteger(requestedCoins)) {
       throw new BadRequestException('Coins must be an integer');
     }
@@ -689,7 +702,7 @@ export class WalletsService {
       (requestedCoins / SWEEP_COINS_PER_DOLLAR).toFixed(2),
     );
     const minCoins = MIN_WITHDRAWABLE_SWEEP_COINS;
-      
+
     if (requestedCoins < minCoins) {
       throw new BadRequestException(
         `Minimum withdrawable sweep coins is ${minCoins}`,

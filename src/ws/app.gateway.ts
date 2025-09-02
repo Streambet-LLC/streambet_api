@@ -93,14 +93,8 @@ export class AppGateway
         const userRoom = `${USER}${userId}`;
         client.join(userRoom);
 
-        // Track sockets for this user
-        if (!this.userSocketMap.has(userId)) {
-          this.userSocketMap.set(userId, new Set());
-        }
-        this.userSocketMap.get(userId)!.add(client.id);
-
-        // Add reverse lookup mapping (socket → user)
-        this.socketIdToUserId.set(client.id, userId);
+        // Delegate tracking to central manager
+        this.manager.registerConnection(client, userId);
       }
 
       Logger.log(
@@ -197,6 +191,6 @@ export class AppGateway
     }
 
     // Remove reverse mapping
-    this.socketIdToUserId.delete(client.id);
+    this.manager.removeConnection(client);
   }
 }

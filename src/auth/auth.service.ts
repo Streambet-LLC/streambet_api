@@ -16,8 +16,6 @@ import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User, UserRole } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
-import { EmailsService } from 'src/emails/email.service';
-import { EmailType } from 'src/enums/email-type.enum';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
@@ -43,7 +41,6 @@ export class AuthService {
     private walletsService: WalletsService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private emailsService: EmailsService,
     private notificationService: NotificationService,
   ) {}
 
@@ -414,12 +411,7 @@ export class AuthService {
     user: User,
     redirect: string | undefined,
   ) {
-    if (user.email.indexOf('@example.com') !== -1) {
-      return true;
-    }
     try {
-      //const token = this.generateJwtTokenForEmailValidation(user);
-
       const token = this.jwtService.sign(
         { sub: user.id },
         {
@@ -427,31 +419,12 @@ export class AuthService {
           expiresIn: '1d',
         },
       );
-      const hostUrl = this.configService.get<string>('email.HOST_URL');
-      const profileLink = this.configService.get<string>(
-        'email.APPLICATION_HOST',
-      );
 
-      const host = this.configService.get<string>('email.APPLICATION_HOST');
-      const verifyLink = redirect
-        ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
-        : `${hostUrl}/auth/verify-email?token=${token}`;
-
-      const emailData = {
-        subject: 'Activate Email',
-        toAddress: [user.email],
-        params: {
-          host,
-          profileLink,
-          title: 'Activation Email',
-          verifyLink,
-          code: '',
-          fullName: user.name || user.username,
-        },
-      };
-      return await this.emailsService.sendEmailSMTP(
-        emailData,
-        EmailType.AccountVerification,
+      return await this.notificationService.sendSMTPForAccountVerification(
+        user.id,
+        redirect,
+        token,
+        user,
       );
     } catch (e) {
       this.logger.error(

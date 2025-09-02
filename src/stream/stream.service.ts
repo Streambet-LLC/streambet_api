@@ -584,7 +584,7 @@ END
       if (!stream) {
         throw new NotFoundException(`Stream with ID ${id} not found`);
       }
-
+      const prevStatus = stream.status;
       // Update only the provided fields
       if (updateStreamDto.name !== undefined) {
         stream.name = updateStreamDto.name;
@@ -636,7 +636,10 @@ END
         }
       }
 
-      if (updateStreamDto.status === StreamStatus.ENDED && !stream.endTime) {
+      if (
+        prevStatus !== StreamStatus.ENDED &&
+        streamResponse.status === StreamStatus.ENDED
+      ) {
         this.streamGateway.emitStreamListEvent(StreamList.StreamEnded);
       } else {
         this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);

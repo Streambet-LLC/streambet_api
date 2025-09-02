@@ -25,7 +25,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { User } from '../users/entities/user.entity';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';

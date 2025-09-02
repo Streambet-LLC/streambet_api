@@ -94,7 +94,7 @@ export class UsersService {
    * @throws NotFoundException if the user does not exist
    * @throws InternalServerErrorException if any unexpected error occurs
    */
-  async findUserByUserId(userId: string): Promise<User | null> {
+  async findUserByUserId(userId: string): Promise<User> {
     try {
       // Attempt to find the user in the database by ID
       const user = await this.usersRepository.findOne({
@@ -111,7 +111,7 @@ export class UsersService {
     } catch (error) {
       // If the error is already a NotFoundException, rethrow it
       if (error instanceof NotFoundException) {
-        throw error;
+        throw error.message;
       }
 
       // Handle any other unexpected errors gracefully
@@ -123,11 +123,18 @@ export class UsersService {
 
   async softDeleteUser(userId: string): Promise<User> {
     const user = await this.findUserByUserId(userId);
-    const timestamp = new Date().getTime();
-
-    // Update email and username with timestamp
-    const updatedEmail = `${user.email}_${timestamp}`;
-    const updatedUsername = `${user.username}_${timestamp}`;
+    const timestamp = Date.now();
+    const suffix = `_del_${timestamp}`;
+    // Preserve domain by appending suffix into the local-part
+    let updatedEmail: string;
+    if (user.email?.includes('@')) {
+      const [local, domain] = user.email.split('@');
+      updatedEmail = `${local}${suffix}@${domain}`;
+    } else {
+      updatedEmail = `${user.email ?? 'user'}${suffix}`;
+    }
+    // Username fallback if nullish
+    const updatedUsername = `${user.username ?? 'user'}${suffix}`;
 
     // Set deletion fields
     user.email = updatedEmail;
