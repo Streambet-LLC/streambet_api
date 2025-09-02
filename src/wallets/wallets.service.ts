@@ -581,7 +581,6 @@ export class WalletsService {
         description,
       });
       await this.transactionsRepository.save(trans);
-      await this.walletGateway.emitAdminAddedGoldCoin(userId);
 
       // fire-and-forget; log on failure so admin API success isn't affected by WS issues
       void this.walletGateway

@@ -111,12 +111,13 @@ export class UsersService {
     } catch (error) {
       // If the error is already a NotFoundException, rethrow it
       if (error instanceof NotFoundException) {
-        throw error.message;
+        throw error;
       }
 
       // Handle any other unexpected errors gracefully
+      this.logger.log(`FindUserByUserId -${error}`);
       throw new InternalServerErrorException(
-        `Failed to retrieve user with ID ${userId}: ${error.message}`,
+        `Failed to retrieve user with ID ${userId}`,
       );
     }
   }

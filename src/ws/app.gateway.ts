@@ -189,7 +189,6 @@ export class AppGateway
     if (sockets?.size === 0) {
       this.userSocketMap.delete(userId);
     }
-
     // Remove reverse mapping
     this.manager.removeConnection(client);
   }
