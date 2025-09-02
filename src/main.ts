@@ -16,7 +16,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
 import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { getQueueToken } from '@nestjs/bullmq';
-
+import { SocketIoAdapter } from './ws/socket-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -29,8 +29,10 @@ async function bootstrap() {
   // Get ConfigService
   const configService = app.get(ConfigService);
 
+  // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
+
   const trustProxy = configService.get<string>('geo.trustProxy');
-if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+  if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));

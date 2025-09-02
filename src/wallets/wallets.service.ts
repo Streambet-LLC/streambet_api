@@ -160,18 +160,16 @@ export class WalletsService {
       }
 
       if (options?.relatedEntityId) {
-        const existingCount = await manager
-          .getRepository(Transaction)
-          .count({
-            where: {
-              relatedEntityId: options.relatedEntityId,
-              ...(options.relatedEntityType
-                ? { relatedEntityType: options.relatedEntityType }
-                : {}),
-              type: transactionType,
-              currencyType,
-            },
-          });
+        const existingCount = await manager.getRepository(Transaction).count({
+          where: {
+            relatedEntityId: options.relatedEntityId,
+            ...(options.relatedEntityType
+              ? { relatedEntityType: options.relatedEntityType }
+              : {}),
+            type: transactionType,
+            currencyType,
+          },
+        });
         if (existingCount > 0) {
           return wallet;
         }
@@ -264,17 +262,19 @@ export class WalletsService {
 
       await queryRunner.manager.save(wallet);
 
-      const transaction = queryRunner.manager.getRepository(Transaction).create({
-        userId,
-        type: transactionType,
-        currencyType,
-        amount,
-        balanceAfter: newBalance,
-        description,
-        metadata,
-        relatedEntityId: options?.relatedEntityId,
-        relatedEntityType: options?.relatedEntityType,
-      });
+      const transaction = queryRunner.manager
+        .getRepository(Transaction)
+        .create({
+          userId,
+          type: transactionType,
+          currencyType,
+          amount,
+          balanceAfter: newBalance,
+          description,
+          metadata,
+          relatedEntityId: options?.relatedEntityId,
+          relatedEntityType: options?.relatedEntityType,
+        });
       await queryRunner.manager.save(transaction);
 
       await queryRunner.commitTransaction();
@@ -341,7 +341,7 @@ export class WalletsService {
             TransactionType.WITHDRAWAL,
             TransactionType.PURCHASE,
             TransactionType.INITIAL_CREDIT,
-            TransactionType.BONUS
+            TransactionType.BONUS,
           ],
         });
       }

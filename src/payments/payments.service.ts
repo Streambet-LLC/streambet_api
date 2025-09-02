@@ -1,11 +1,21 @@
-import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
-import { CurrencyType, TransactionType } from '../wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  TransactionType,
+} from '../wallets/entities/transaction.entity';
 import { CoinPackageService } from '../coin-package/coin-package.service';
-import { BettingGateway } from '../betting/betting.gateway';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { WalletGateway } from 'src/wallets/wallets.gateway';
 
 @Injectable()
 export class PaymentsService {
@@ -25,7 +35,7 @@ export class PaymentsService {
     private configService: ConfigService,
     private walletsService: WalletsService,
     private coinPackageService: CoinPackageService,
-    private bettingGateway: BettingGateway,
+    private walletGateway: WalletGateway,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -73,7 +83,9 @@ export class PaymentsService {
           (isRetryableStatus || isNetworkError)
         ) {
           config.__retryCount += 1;
-          await new Promise((res) => setTimeout(res, this.coinflowRetryDelayMs));
+          await new Promise((res) =>
+            setTimeout(res, this.coinflowRetryDelayMs),
+          );
           return this.coinflowClient.request(config);
         }
         return Promise.reject(error);
@@ -286,7 +298,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow session key');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow session key',
+      );
     }
   }
 
@@ -313,7 +328,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw data');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow withdraw data',
+      );
     }
   }
 
@@ -353,7 +371,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw quote');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow withdraw quote',
+      );
     }
   }
 
@@ -366,8 +387,8 @@ export class PaymentsService {
       (responseData && typeof (responseData as any).message === 'string'
         ? (responseData as any).message
         : typeof responseData === 'string'
-        ? responseData
-        : axiosError.message) || 'Unknown Coinflow error';
+          ? responseData
+          : axiosError.message) || 'Unknown Coinflow error';
 
     const message = status
       ? `${prefix}: [${status}] ${safeDetail}`
@@ -407,7 +428,8 @@ export class PaymentsService {
         ) {
           try {
             const obj = JSON.parse(trimmed);
-            if (obj && typeof obj === 'object') parsedInfo = obj as Record<string, unknown>;
+            if (obj && typeof obj === 'object')
+              parsedInfo = obj as Record<string, unknown>;
           } catch {
             // leave parsedInfo empty
           }
@@ -415,7 +437,9 @@ export class PaymentsService {
       } else if (rawWebhookInfo && typeof rawWebhookInfo === 'object') {
         parsedInfo = { ...(rawWebhookInfo as Record<string, unknown>) };
         // Some providers send nested stringified JSON values; parse them defensively
-        for (const [k, v] of Object.entries(rawWebhookInfo as Record<string, unknown>)) {
+        for (const [k, v] of Object.entries(
+          rawWebhookInfo as Record<string, unknown>,
+        )) {
           if (typeof v === 'string') {
             const s = v.trim();
             if (
@@ -457,7 +481,9 @@ export class PaymentsService {
         throw new BadRequestException('Missing userId (rawCustomerId)');
       }
       if (!coinPackageId) {
-        throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
+        throw new BadRequestException(
+          'Missing coinPackageId (webhookInfo.coin_package_id)',
+        );
       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);
@@ -491,7 +517,7 @@ export class PaymentsService {
         }
       }
 
-       // Sweep coins
+      // Sweep coins
       if (Number(coinPackage.sweepCoinCount) > 0) {
         const exists = relatedEntityId
           ? await this.walletsService.hasTransactionForRelatedEntity(
@@ -513,11 +539,13 @@ export class PaymentsService {
         }
       }
 
-      Logger.log(`Coinflow settled credited for user ${userId} and package ${coinPackageId}`);
+      Logger.log(
+        `Coinflow settled credited for user ${userId} and package ${coinPackageId}`,
+      );
 
       // Emit socket notification to all of the user's active connections
       const updatedWallet = await this.walletsService.findByUserId(userId);
-      this.bettingGateway.emitPurchaseSettled(userId, {
+      this.walletGateway.emitPurchaseSettled(userId, {
         message: `Purchase successful: ${coinPackage.name}`,
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
@@ -535,7 +563,9 @@ export class PaymentsService {
       if (error instanceof HttpException) {
         throw error;
       }
-      throw new BadRequestException((error as Error)?.message || 'Failed to process Coinflow webhook');
+      throw new BadRequestException(
+        (error as Error)?.message || 'Failed to process Coinflow webhook',
+      );
     }
   }
 }

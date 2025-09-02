@@ -6,25 +6,21 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
-import { BettingService } from '../betting/betting.service';
-import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import {
   CurrencyType,
   TransactionType,
 } from 'src/wallets/entities/transaction.entity';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { BetStatus } from 'src/enums/bet-status.enum';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
-import { BettingGateway } from 'src/betting/betting.gateway';
+import { WalletGateway } from 'src/wallets/wallets.gateway';
 
 @Injectable()
 export class AdminService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly bettingService: BettingService,
-    private readonly bettingGateway: BettingGateway,
+    private readonly walletGateway: WalletGateway,
     private readonly walletsService: WalletsService,
   ) {}
 
@@ -85,7 +81,7 @@ export class AdminService {
       TransactionType.ADMIN_CREDIT,
     );
     //emit an event to the user, notify about the coin updation
-    await this.bettingGateway.emitAdminAddedGoldCoin(userId);
+    await this.walletGateway.emitAdminAddedGoldCoin(userId);
     return updateResult;
   }
 }

@@ -22,8 +22,6 @@ import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
-import { BettingGateway } from 'src/betting/betting.gateway';
-import { Queue } from 'bullmq';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
@@ -33,6 +31,8 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
+import { BettingGateway } from 'src/betting/betting.gateway';
+import { StreamGateway } from './stream.gateway';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -45,8 +45,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingService))
     private bettingService: BettingService,
-    @Inject(forwardRef(() => BettingGateway))
-    private bettingGateway: BettingGateway,
+    @Inject(forwardRef(() => StreamGateway))
+    private streamGateway: StreamGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
   ) {}
@@ -637,9 +637,9 @@ END
       }
 
       if (updateStreamDto.status === StreamStatus.ENDED && !stream.endTime) {
-        this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
+        this.streamGateway.emitStreamListEvent(StreamList.StreamEnded);
       } else {
-        this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);
+        this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
       }
 
       return streamResponse;
@@ -690,7 +690,7 @@ END
     const savedStream = await this.streamsRepository.save(stream);
 
     // Emit stream end socket event
-    this.bettingGateway.emitStreamEnd(streamId);
+    this.streamGateway.emitStreamEnd(streamId);
 
     return savedStream;
   }
@@ -797,11 +797,11 @@ END
       } else if (stream.status === StreamStatus.LIVE) {
         return stream;
       }
-      
+
       const streamUpdated = await this.streamsRepository.save(stream);
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated)
-      this.bettingGateway.emitScheduledStreamUpdatedToLive(stream.id)
-      return streamUpdated
+      this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
+      this.streamGateway.emitScheduledStreamUpdatedToLive(stream.id);
+      return streamUpdated;
     } catch (error) {
       Logger.error(`Failed to update stream status for ${streamId}`, error);
       throw error;
@@ -985,7 +985,7 @@ END
       }
 
       // Emit stream list event to update the UI
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamDeleted);
+      this.streamGateway.emitStreamListEvent(StreamList.StreamDeleted);
 
       return streamId;
     } catch (error) {

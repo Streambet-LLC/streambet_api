@@ -2,10 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  forwardRef,
-  Inject,
   Logger,
   InternalServerErrorException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -30,7 +30,6 @@ import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
-import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
@@ -38,6 +37,8 @@ import { StreamList } from 'src/enums/stream-list.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { StreamGateway } from 'src/stream/stream.gateway';
+import { BettingGateway } from './betting.gateway';
 
 @Injectable()
 export class BettingService {
@@ -54,9 +55,11 @@ export class BettingService {
     private notificationService: NotificationService,
     private usersService: UsersService,
     private dataSource: DataSource,
-    @Inject(forwardRef(() => BettingGateway))
     private readonly bettingGateway: BettingGateway,
+    @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
+    @Inject(forwardRef(() => StreamGateway))
+    private readonly streamGateway: StreamGateway,
   ) {}
 
   /**
@@ -152,7 +155,7 @@ export class BettingService {
     }
 
     // Emit event to notify connected clients that a new stream was created
-    this.bettingGateway.emitStreamListEvent(StreamList.StreamCreated);
+    this.streamGateway.emitStreamListEvent(StreamList.StreamCreated);
 
     return streamResponse;
   }
@@ -667,7 +670,7 @@ export class BettingService {
     // emit event when user update, create, delete a bet round
     const streamDetails = await this.streamService.findStreamById(streamId);
     try {
-      await this.bettingGateway.emitRoundDetails(streamId, streamDetails);
+      await this.streamGateway.emitRoundDetails(streamId, streamDetails);
     } catch (err) {
       Logger.warn(
         `emitRoundDetails failed for stream ${streamId}: ${err?.message ?? err}`,
@@ -1486,7 +1489,7 @@ export class BettingService {
           [], // No winners
           [], // No losers
         );
-        this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+        this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
         return;
       }
 
@@ -1625,7 +1628,7 @@ export class BettingService {
             losingSweepCoinBets.length === 0,
         },
       );
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       // Notify winners
       for (const winner of winners) {
@@ -2604,7 +2607,7 @@ export class BettingService {
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
-            'locked',
+            BettingRoundStatus.LOCKED,
             true,
           );
 
@@ -2639,7 +2642,7 @@ export class BettingService {
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
-            'open',
+            BettingRoundStatus.OPEN,
           );
           this.bettingGateway.emitOpenBetRound(
             round.roundName,
@@ -2649,7 +2652,7 @@ export class BettingService {
       }
 
       // Update stream list for frontend
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       return savedRound;
     } else {
@@ -2763,12 +2766,12 @@ export class BettingService {
         await this.bettingGateway.emitBettingStatus(
           round.streamId,
           roundId,
-          'canceled',
+          BettingRoundStatus.CANCELLED,
         );
       }
 
       // Update stream list for frontend
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       return { refundedBets };
     } catch (error) {

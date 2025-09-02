@@ -38,6 +38,7 @@ import { envValidationSchema } from './config/redis.validation';
 import coinflowConfig from './config/coinflow.config';
 
 import { CoinPackageModule } from './coin-package/coin-package.module';
+import { WsModule } from './ws/ws.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { CoinPackageModule } from './coin-package/coin-package.module';
         ],
       }),
     }),
+    WsModule,
     AuthModule,
     AssetsModule,
     UsersModule,
