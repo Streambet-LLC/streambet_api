@@ -63,16 +63,19 @@ export class AppGateway
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract token from handshake (either `auth` or `authorization` header)
+      const rawToken =
+        client.handshake.auth?.token ?? client.handshake.headers.authorization;
       const token =
-        client.handshake.auth.token ||
-        client.handshake.headers.authorization?.split(' ')[1];
+        typeof rawToken === 'string'
+          ? rawToken.replace(/^Bearer\s+/i, '')
+          : undefined;
 
       if (!token) {
         return this.forceDisconnect(client, 'Missing token');
       }
 
       // Verify JWT (returns decoded payload if valid)
-      const decoded = await this.authService.verifyRefreshToken(token);
+      const decoded = this.authService.verifyAccessToken(token);
       if (!decoded) {
         return this.forceDisconnect(client, 'Invalid token');
       }
@@ -121,7 +124,9 @@ export class AppGateway
    */
   private async fetchUserData(decoded: JwtPayload) {
     try {
-      const { profileImageUrl } = await this.userService.findById(decoded.sub);
+      const { profileImageUrl } = await this.userService.findUserByUserId(
+        decoded.sub,
+      );
       return { ...decoded, profileImageUrl };
     } catch (err) {
       Logger.warn(

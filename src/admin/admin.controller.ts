@@ -386,7 +386,7 @@ export class AdminController {
   async softDeleteUser(
     @Query() softDeleteUserDto: SoftDeleteUserDto,
   ): Promise<User> {
-    return this.adminService.softDeleteUser(softDeleteUserDto.userId);
+    return this.usersService.softDeleteUser(softDeleteUserDto.userId);
   }
 
   @ApiOperation({

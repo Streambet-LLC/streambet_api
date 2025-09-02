@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
@@ -15,7 +21,6 @@ import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 
 @Injectable()
 export class UsersService {
-  
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
@@ -81,8 +86,60 @@ export class UsersService {
     });
   }
 
-  async findById(id: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+  /**
+   * Finds a user by their unique userId.
+   *
+   * @param userId - The unique identifier of the user
+   * @returns The found user object if it exists
+   * @throws NotFoundException if the user does not exist
+   * @throws InternalServerErrorException if any unexpected error occurs
+   */
+  async findUserByUserId(userId: string): Promise<User | null> {
+    try {
+      // Attempt to find the user in the database by ID
+      const user = await this.usersRepository.findOne({
+        where: { id: userId },
+      });
+
+      // If no user is found, throw a NotFoundException
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Return the found user
+      return user;
+    } catch (error) {
+      // If the error is already a NotFoundException, rethrow it
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      // Handle any other unexpected errors gracefully
+      throw new InternalServerErrorException(
+        `Failed to retrieve user with ID ${userId}: ${error.message}`,
+      );
+    }
+  }
+
+  async softDeleteUser(userId: string): Promise<User> {
+    const user = await this.findUserByUserId(userId);
+    const timestamp = new Date().getTime();
+
+    // Update email and username with timestamp
+    const updatedEmail = `${user.email}_${timestamp}`;
+    const updatedUsername = `${user.username}_${timestamp}`;
+
+    // Set deletion fields
+    user.email = updatedEmail;
+    user.username = updatedUsername;
+    user.deletedAt = new Date();
+    // Deactivate and invalidate tokens immediately
+    user.isActive = false;
+    user.refreshToken = null;
+    user.refreshTokenExpiresAt = null;
+
+    // Save the updated user
+    return this.usersRepository.save(user);
   }
 
   async create(userData: Partial<User>): Promise<User> {
@@ -281,8 +338,8 @@ export class UsersService {
   getUsersCount(): Promise<number> {
     return this.usersRepository.count({
       where: {
-        isActive: true,      // Only include users who are active
-        deletedAt: null,     // Exclude users who have been soft-deleted
+        isActive: true, // Only include users who are active
+        deletedAt: null, // Exclude users who have been soft-deleted
         role: UserRole.USER, // Only count users with the USER role
       },
     });

@@ -36,7 +36,6 @@ interface GoogleProfile {
 
 @Injectable()
 export class AuthService {
-
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -249,7 +248,26 @@ export class AuthService {
       return null;
     }
   }
+  verifyAccessToken(token: string): JwtPayload | null {
+    try {
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.configService.get('auth.jwtSecret'),
+      });
 
+      if (
+        !payload.sub ||
+        !payload.username ||
+        !payload.email ||
+        !payload.role
+      ) {
+        return null;
+      }
+      return payload;
+    } catch (_: unknown) {
+      // Token verification failed
+      return null;
+    }
+  }
   /**
    * Logs out a user by invalidating their refresh token.
    * @param userId - The user ID.
@@ -436,7 +454,10 @@ export class AuthService {
         EmailType.AccountVerification,
       );
     } catch (e) {
-      this.logger.error('Error in AuthService.sendAccountVerificationEmail:', e);
+      this.logger.error(
+        'Error in AuthService.sendAccountVerificationEmail:',
+        e,
+      );
     }
   }
 
@@ -450,7 +471,7 @@ export class AuthService {
       });
 
       // Get user
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findUserByUserId(payload.sub);
 
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
@@ -535,7 +556,7 @@ export class AuthService {
       });
 
       // Get user
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findUserByUserId(payload.sub);
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
       }

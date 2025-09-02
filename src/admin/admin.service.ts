@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../users/entities/user.entity';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { WalletsService } from '../wallets/wallets.service';
 import {
   CurrencyType,
@@ -18,8 +11,6 @@ import { WalletGateway } from 'src/wallets/wallets.gateway';
 @Injectable()
 export class AdminService {
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     private readonly walletGateway: WalletGateway,
     private readonly walletsService: WalletsService,
   ) {}
@@ -36,32 +27,6 @@ export class AdminService {
       status: 'success',
       message: 'System statistics endpoint (to be implemented)',
     };
-  }
-
-  async softDeleteUser(userId: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
-    const timestamp = new Date().getTime();
-
-    // Update email and username with timestamp
-    const updatedEmail = `${user.email}_${timestamp}`;
-    const updatedUsername = `${user.username}_${timestamp}`;
-
-    // Set deletion fields
-    user.email = updatedEmail;
-    user.username = updatedUsername;
-    user.deletedAt = new Date();
-    // Deactivate and invalidate tokens immediately
-    user.isActive = false;
-    user.refreshToken = null;
-    user.refreshTokenExpiresAt = null;
-
-    // Save the updated user
-    return this.userRepository.save(user);
   }
 
   async updateGoldCoinsByAdmin(

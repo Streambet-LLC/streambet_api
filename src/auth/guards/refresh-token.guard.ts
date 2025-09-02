@@ -36,7 +36,7 @@ export class RefreshTokenGuard implements CanActivate {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const user = await this.usersService.findById(payload.sub);
+    const user = await this.usersService.findUserByUserId(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }

@@ -9,13 +9,7 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { StreamModule } from 'src/stream/stream.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User]),
-    UsersModule,
-    BettingModule,
-    WalletsModule,
-    StreamModule, // Import StreamModule
-  ],
+  imports: [UsersModule, BettingModule, WalletsModule, StreamModule],
   controllers: [AdminController],
   providers: [AdminService],
 })

@@ -17,7 +17,6 @@ import { WsModule } from 'src/ws/ws.module';
     forwardRef(() => BettingModule),
     forwardRef(() => QueueModule),
     GeoFencingModule,
-    forwardRef(() => StreamModule),
     forwardRef(() => WsModule),
   ],
   controllers: [StreamController],

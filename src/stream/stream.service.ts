@@ -798,9 +798,15 @@ END
         return stream;
       }
 
+      const prevStatus = stream.status;
       const streamUpdated = await this.streamsRepository.save(stream);
       this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
-      this.streamGateway.emitScheduledStreamUpdatedToLive(stream.id);
+      if (
+        prevStatus === StreamStatus.SCHEDULED &&
+        streamUpdated.status === StreamStatus.LIVE
+      ) {
+        this.streamGateway.emitScheduledStreamUpdatedToLive(streamUpdated.id);
+      }
       return streamUpdated;
     } catch (error) {
       Logger.error(`Failed to update stream status for ${streamId}`, error);

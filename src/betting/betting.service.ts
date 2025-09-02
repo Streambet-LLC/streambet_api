@@ -1735,7 +1735,7 @@ export class BettingService {
         await queryRunner.manager.save(bet);
 
         // Fetch user information for notification
-        const userObj = await this.usersService.findById(userId);
+        const userObj = await this.usersService.findUserByUserId(userId);
 
         // Emit bot message to notify the user about the void round
         await this.bettingGateway.emitBotMessageVoidRound(
@@ -2716,7 +2716,9 @@ export class BettingService {
           if (bet.status !== BetStatus.Active) continue;
 
           // Fetch username for notifications
-          const { username } = await this.usersService.findById(bet.userId);
+          const { username } = await this.usersService.findUserByUserId(
+            bet.userId,
+          );
 
           // Refund user based on currency type and update totals
           if (bet.currency === CurrencyType.GOLD_COINS) {

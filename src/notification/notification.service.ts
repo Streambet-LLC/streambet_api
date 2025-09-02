@@ -25,7 +25,7 @@ export class NotificationService {
     if (cachedNotificationSettings) {
       return cachedNotificationSettings;
     } else {
-      const userDetails = await this.usersService.findById(userId);
+      const userDetails = await this.usersService.findUserByUserId(userId);
       const settings = userDetails.notificationPreferences;
       if (settings) {
         const expireTime = this.configService.get<number>('email.ttls.fullDay');
@@ -43,7 +43,7 @@ export class NotificationService {
     roundName: string,
   ) {
     try {
-      const receiver = await this.usersService.findById(userId);
+      const receiver = await this.usersService.findUserByUserId(userId);
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
@@ -90,7 +90,7 @@ export class NotificationService {
     roundName: string,
   ) {
     try {
-      const receiver = await this.usersService.findById(userId);
+      const receiver = await this.usersService.findUserByUserId(userId);
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
@@ -264,7 +264,7 @@ export class NotificationService {
     sweepCoins: number,
   ) {
     try {
-      const receiver = await this.usersService.findById(userId);
+      const receiver = await this.usersService.findUserByUserId(userId);
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
@@ -288,7 +288,10 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.CoinPurchase);
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.CoinPurchase,
+        );
 
         return true;
       }

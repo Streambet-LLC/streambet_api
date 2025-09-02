@@ -26,7 +26,6 @@ import { WsModule } from 'src/ws/ws.module';
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
     ChatModule,
     GeoFencingModule,
-    forwardRef(() => BettingModule),
     forwardRef(() => WsModule),
   ],
   controllers: [BettingController],

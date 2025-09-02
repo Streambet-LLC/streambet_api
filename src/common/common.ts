@@ -1,6 +1,7 @@
 import { STREAM, STREAMBET, USER } from './constants/ws.constants';
 import { GatewayManager } from 'src/ws/gateway.manager';
 import { AuthenticatedSocket } from 'src/interface/socket.interface';
+
 export async function emitToUser(
   gatewayManager: GatewayManager,
   userId: string,
@@ -38,6 +39,7 @@ export async function emitToStreamBet(
   const server = await gatewayManager.getServer();
   server.to(STREAMBET).emit(event, payload);
 }
+
 export async function emitToSocket(
   gatewayManager: GatewayManager,
   socketId: string | string[],

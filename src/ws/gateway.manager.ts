@@ -94,7 +94,9 @@ export class GatewayManager {
     const sockets = this.userIdToSocketIds.get(userId);
     if (!sockets) return;
 
-    for (const socketId of sockets) {
+    for (const socketId of Array.from(sockets)) {
+      // proactively clear reverse mapping; disconnect will also trigger removeConnection
+      this.socketIdToUserId.delete(socketId);
       const socket = this.server.sockets.sockets.get(socketId);
       socket?.disconnect(true);
     }
