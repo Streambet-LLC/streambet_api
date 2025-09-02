@@ -455,12 +455,33 @@ export class PaymentsService {
         tryGetFrom(parsedInfo, 'coinPackageId') ||
         (payload?.data?.coinPackageId as string | undefined);
 
+      const webhookEnv: string | undefined =
+        (parsedInfo['env'] as string | undefined) ||
+        (parsedInfo['env'] as string | undefined) ||
+        tryGetFrom(parsedInfo, 'env') ||
+        tryGetFrom(parsedInfo, 'env') ||
+        (payload?.data?.env as string | undefined);
+
       if (!userId) {
         throw new BadRequestException('Missing userId (rawCustomerId)');
       }
       if (!coinPackageId) {
         throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
       }
+
+       const expected = (
+         this.configService.get<string>('coinflow.webhookEnv') || 'dev'
+       )
+         .trim()
+         .toLowerCase();
+       const received = webhookEnv?.trim().toLowerCase();
+       if (!received || received !== expected) {
+         Logger.log(
+           `Ignored Coinflow webhook due to env mismatch (received="${received ?? 'undefined'}", expected="${expected}")`,
+           PaymentsService.name,
+         );
+         return { ignored: true };
+       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);
       if (!coinPackage) {
