@@ -532,6 +532,7 @@ export class PaymentsService {
           goldCoins: Number(coinPackage.goldCoinCount) || 0,
         },
       });
+      // Send email notification to the user
       this.notificationService.sendSMTPForCoinPurchaseSuccess(
         userId,
         Number(coinPackage.sweepCoinCount) || 0,

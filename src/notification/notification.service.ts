@@ -288,7 +288,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetLoss);
+        await this.emailsService.sendEmailSMTP(emailData, EmailType.CoinPurchase);
 
         return true;
       }
