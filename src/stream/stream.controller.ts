@@ -26,7 +26,7 @@ import {
 } from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
-import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
 
 // Define the request type with user property
