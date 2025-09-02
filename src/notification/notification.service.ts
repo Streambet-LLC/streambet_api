@@ -260,8 +260,8 @@ export class NotificationService {
    */
   async sendSMTPForCoinPurchaseSuccess(
     userId: string,
-    goldCoin: number,
-    sweepCoin: number,
+    goldCoins: number,
+    sweepCoins: number,
   ) {
     try {
       const receiver = await this.usersService.findById(userId);
@@ -283,8 +283,8 @@ export class NotificationService {
           subject,
           params: {
             fullName: receiver.username,
-            goldCoin: goldCoin,
-            sweepCoin: sweepCoin,
+            goldCoins: goldCoins,
+            sweepCoins: sweepCoins,
           },
         };
 

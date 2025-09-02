@@ -556,8 +556,8 @@ export class PaymentsService {
       // Send email notification to the user
       this.notificationService.sendSMTPForCoinPurchaseSuccess(
         userId,
-        Number(coinPackage.sweepCoinCount) || 0,
         Number(coinPackage.goldCoinCount) || 0,
+        Number(coinPackage.sweepCoinCount) || 0,
       );
       return { processed: true };
     } catch (error) {
