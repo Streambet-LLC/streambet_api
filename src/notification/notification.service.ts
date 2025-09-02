@@ -248,4 +248,52 @@ export class NotificationService {
     }
   }
     */
+
+  /**
+   * Sends a coin purchase success email notification to the user via SMTP.
+   * Checks user notification preferences and skips sending to test/demo emails.
+   *
+   * @param userId - The ID of the user who purchased coins
+   * @param goldCoin - The number of gold coins purchased
+   * @param sweepCoin - The number of sweep coins purchased
+   * @returns Promise<boolean | void> - Returns true if email sent or skipped, void otherwise
+   */
+  async sendSMTPForCoinPurchaseSuccess(
+    userId: string,
+    goldCoins: number,
+    sweepCoins: number,
+  ) {
+    try {
+      const receiver = await this.usersService.findById(userId);
+      const receiverEmail = receiver?.email;
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_COIN_PURCHASED.TITLE();
+
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            fullName: receiver.username,
+            goldCoins: goldCoins,
+            sweepCoins: sweepCoins,
+          },
+        };
+
+        await this.emailsService.sendEmailSMTP(emailData, EmailType.CoinPurchase);
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('Unable to send coin purchase success mail', e);
+    }
+  }
 }

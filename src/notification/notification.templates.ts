@@ -105,4 +105,8 @@ export const NOTIFICATION_TEMPLATE = {
     MESSAGE: (data: BetNotificationData) =>
       `${data.username} cancel bet on ${data.bettingOption}`,
   },
+  EMAIL_COIN_PURCHASED: {
+    TITLE: () =>
+      `Gold Coins Added to Your Account`,
+  },
 };

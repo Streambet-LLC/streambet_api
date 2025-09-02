@@ -4,9 +4,16 @@ import { PaymentsController } from './payments.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { CoinPackageModule } from '../coin-package/coin-package.module';
 import { UsersModule } from '../users/users.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
-  imports: [WalletsModule, UsersModule, CoinPackageModule, WalletsModule],
+  imports: [
+    WalletsModule,
+    UsersModule,
+    CoinPackageModule,
+    WalletsModule,
+    NotificationModule,
+  ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
   exports: [PaymentsService],
