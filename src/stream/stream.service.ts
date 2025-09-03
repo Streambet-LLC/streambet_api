@@ -644,6 +644,12 @@ END
       } else {
         this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
       }
+      if (
+        prevStatus === StreamStatus.SCHEDULED &&
+        streamResponse.status === StreamStatus.LIVE
+      ) {
+        this.streamGateway.emitScheduledStreamUpdatedToLive(streamResponse.id);
+      }
 
       return streamResponse;
     } catch (e) {

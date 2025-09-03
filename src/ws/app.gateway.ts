@@ -88,14 +88,18 @@ export class AppGateway
       authenticatedSocket.data = { user: userData };
 
       const userId = userData.sub;
-      if (userId) {
-        // Create/join a dedicated room for this user
-        const userRoom = `${USER}${userId}`;
-        client.join(userRoom);
-
-        // Delegate tracking to central manager
-        this.manager.registerConnection(client, userId);
+      if (!userId) {
+        return this.forceDisconnect(
+          client,
+          'Invalid token payload (missing sub)',
+        );
       }
+      // Create/join a dedicated room for this user
+      const userRoom = `${USER}${userId}`;
+      client.join(userRoom);
+
+      // Delegate tracking to central manager
+      this.manager.registerConnection(client, userId);
 
       Logger.log(
         `Client connected: ${client.id}, user: ${userData.username ?? 'unknown'}`,
