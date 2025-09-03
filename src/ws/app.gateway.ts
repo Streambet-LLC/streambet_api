@@ -75,7 +75,7 @@ export class AppGateway
       }
 
       // Verify JWT (returns decoded payload if valid)
-      const decoded = this.authService.verifyAccessToken(token);
+      const decoded = this.authService.verifyRefreshToken(token);
       if (!decoded) {
         return this.forceDisconnect(client, 'Invalid token');
       }
