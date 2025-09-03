@@ -7,7 +7,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import {
   Transaction,
@@ -16,6 +16,7 @@ import {
 } from './entities/transaction.entity';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
+import { HistoryType } from 'src/enums/history-type.enum';
 
 @Injectable()
 export class WalletsService {
@@ -28,7 +29,7 @@ export class WalletsService {
   ) {}
 
   async create(userId: string): Promise<Wallet> {
-    // Create wallet with initial 1000 free tokens
+    // Create wallet with initial 1000 Gold Coin
     const wallet = this.walletsRepository.create({ userId });
     const savedWallet = await this.walletsRepository.save(wallet);
 
@@ -36,10 +37,10 @@ export class WalletsService {
     await this.createTransaction({
       userId,
       type: TransactionType.INITIAL_CREDIT,
-      currencyType: CurrencyType.FREE_TOKENS,
+      currencyType: CurrencyType.GOLD_COINS,
       amount: 1000,
       balanceAfter: 1000,
-      description: 'Initial free tokens on registration',
+      description: 'Initial Gold Coins on registration',
     });
 
     return savedWallet;
@@ -57,25 +58,30 @@ export class WalletsService {
     return wallet;
   }
 
-  async addFreeTokens(
+  async addGoldCoins(
     userId: string,
     amount: number,
     description: string,
+    manager?: EntityManager,
   ): Promise<Wallet> {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.FREE_TOKENS,
+      CurrencyType.GOLD_COINS,
       TransactionType.REFUND,
       description,
+      undefined,
+      undefined,
+      manager,
     );
   }
 
-  async addStreamCoins(
+  async addSweepCoins(
     userId: string,
     amount: number,
     description: string,
     type: string,
+    manager?: EntityManager,
   ): Promise<Wallet> {
     let addType = TransactionType.PURCHASE;
     if (type === 'refund') {
@@ -84,9 +90,12 @@ export class WalletsService {
     return this.updateBalance(
       userId,
       amount,
-      CurrencyType.STREAM_COINS,
+      CurrencyType.SWEEP_COINS,
       addType,
       description,
+      undefined,
+      undefined,
+      manager,
     );
   }
 
@@ -95,6 +104,7 @@ export class WalletsService {
     amount: number,
     currencyType: CurrencyType,
     description: string,
+    manager?: EntityManager,
   ): Promise<Wallet> {
     return this.updateBalance(
       userId,
@@ -102,6 +112,9 @@ export class WalletsService {
       currencyType,
       TransactionType.BET_PLACEMENT,
       description,
+      undefined,
+      undefined,
+      manager,
     );
   }
 
@@ -110,6 +123,7 @@ export class WalletsService {
     amount: number,
     currencyType: CurrencyType,
     description: string,
+    manager?: EntityManager,
   ): Promise<Wallet> {
     return this.updateBalance(
       userId,
@@ -117,6 +131,9 @@ export class WalletsService {
       currencyType,
       TransactionType.BET_WON,
       description,
+      undefined,
+      undefined,
+      manager,
     );
   }
 
@@ -127,17 +144,82 @@ export class WalletsService {
     transactionType: TransactionType,
     description: string,
     metadata?: Record<string, any>,
+    options?: { relatedEntityId?: string; relatedEntityType?: string },
+    manager?: EntityManager,
   ): Promise<Wallet> {
-    // Use a transaction to ensure data consistency
+    // If a manager is provided, use it; otherwise, manage our own transaction
+    if (manager) {
+      const wallet = await manager.findOne(Wallet, {
+        where: { userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!wallet) {
+        throw new NotFoundException(
+          `Wallet for user with ID ${userId} not found`,
+        );
+      }
+
+      if (options?.relatedEntityId) {
+        const existingCount = await manager
+          .getRepository(Transaction)
+          .count({
+            where: {
+              relatedEntityId: options.relatedEntityId,
+              ...(options.relatedEntityType
+                ? { relatedEntityType: options.relatedEntityType }
+                : {}),
+              type: transactionType,
+              currencyType,
+            },
+          });
+        if (existingCount > 0) {
+          return wallet;
+        }
+      }
+
+      let newBalance: number;
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        newBalance = Number(wallet.goldCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient free Gold Coins');
+        }
+        wallet.goldCoins = Number(newBalance);
+      } else {
+        newBalance = Number(wallet.sweepCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient sweep coins');
+        }
+        wallet.sweepCoins = Number(newBalance);
+      }
+
+      await manager.save(wallet);
+
+      const transactionRepo = manager.getRepository(Transaction);
+      const transaction = transactionRepo.create({
+        userId,
+        type: transactionType,
+        currencyType,
+        amount,
+        balanceAfter: newBalance,
+        description,
+        metadata,
+        relatedEntityId: options?.relatedEntityId,
+        relatedEntityType: options?.relatedEntityType,
+      });
+      await manager.save(transaction);
+
+      return wallet;
+    }
+
+    // Self-managed transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Get the wallet
       const wallet = await queryRunner.manager.findOne(Wallet, {
         where: { userId },
-        lock: { mode: 'pessimistic_write' }, // Lock the row for update
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!wallet) {
@@ -146,27 +228,43 @@ export class WalletsService {
         );
       }
 
-      // Calculate new balance
-      let newBalance: number;
-      if (currencyType === CurrencyType.FREE_TOKENS) {
-        newBalance = Number(wallet.freeTokens) + Number(amount);
-        if (newBalance < 0) {
-          throw new BadRequestException('Insufficient free tokens');
+      if (options?.relatedEntityId) {
+        const existingCount = await queryRunner.manager
+          .getRepository(Transaction)
+          .count({
+            where: {
+              relatedEntityId: options.relatedEntityId,
+              ...(options.relatedEntityType
+                ? { relatedEntityType: options.relatedEntityType }
+                : {}),
+              type: transactionType,
+              currencyType,
+            },
+          });
+        if (existingCount > 0) {
+          await queryRunner.rollbackTransaction();
+          return wallet;
         }
-        wallet.freeTokens = Number(newBalance);
-      } else {
-        newBalance = Number(wallet.streamCoins) + Number(amount);
-        if (newBalance < 0) {
-          throw new BadRequestException('Insufficient stream coins');
-        }
-        wallet.streamCoins = Number(newBalance);
       }
 
-      // Save the updated wallet
+      let newBalance: number;
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        newBalance = Number(wallet.goldCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient free Gold Coins');
+        }
+        wallet.goldCoins = Number(newBalance);
+      } else {
+        newBalance = Number(wallet.sweepCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient sweep coins');
+        }
+        wallet.sweepCoins = Number(newBalance);
+      }
+
       await queryRunner.manager.save(wallet);
 
-      // Create a transaction record
-      const transaction = this.transactionsRepository.create({
+      const transaction = queryRunner.manager.getRepository(Transaction).create({
         userId,
         type: transactionType,
         currencyType,
@@ -174,22 +272,37 @@ export class WalletsService {
         balanceAfter: newBalance,
         description,
         metadata,
+        relatedEntityId: options?.relatedEntityId,
+        relatedEntityType: options?.relatedEntityType,
       });
-
       await queryRunner.manager.save(transaction);
 
-      // Commit the transaction
       await queryRunner.commitTransaction();
-
       return wallet;
     } catch (error) {
-      // Rollback in case of error
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
-      // Release the query runner
       await queryRunner.release();
     }
+  }
+
+  async hasTransactionForRelatedEntity(
+    relatedEntityId: string,
+    relatedEntityType?: string,
+    currencyType?: CurrencyType,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    const where: any = { relatedEntityId };
+    if (relatedEntityType) where.relatedEntityType = relatedEntityType;
+    if (currencyType) where.currencyType = currencyType;
+    where.type = TransactionType.PURCHASE;
+    if (manager) {
+      const count = await manager.getRepository(Transaction).count({ where });
+      return count > 0;
+    }
+    const count = await this.transactionsRepository.count({ where });
+    return count > 0;
   }
 
   async getAllTransactionHistory(
@@ -215,13 +328,24 @@ export class WalletsService {
         throw new BadRequestException('Invalid filter format');
       }
 
-      const { pagination = true, currencyType } = transactionFilterDto;
+      const { pagination = true, historyType } = transactionFilterDto;
 
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
-
-      if (!currencyType) {
+      if (historyType === HistoryType.Transaction) {
+        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
+          includedTypes: [
+            TransactionType.ADMIN_CREDIT,
+            TransactionType.DEPOSIT,
+            TransactionType.WITHDRAWAL,
+            TransactionType.PURCHASE,
+            TransactionType.INITIAL_CREDIT,
+            TransactionType.BONUS
+          ],
+        });
+      }
+      if (historyType === HistoryType.Bet) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
           includedTypes: [TransactionType.BET_LOST, TransactionType.BET_WON],
         });
@@ -229,19 +353,6 @@ export class WalletsService {
       if (filter?.q) {
         transactionQB.andWhere(`(LOWER(t.description) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
-        });
-      }
-      /*  
-      if (currencyType) {
-        transactionQB.andWhere(`t.currencyType = :currencyType`, {
-          currencyType,
-        });
-      }
-*/
-
-      if (currencyType === CurrencyType.STREAM_COINS) {
-        transactionQB.andWhere('t.type  IN (:...includedTypes)', {
-          includedTypes: [TransactionType.INITIAL_CREDIT],
         });
       }
       if (sort) {
@@ -285,7 +396,7 @@ export class WalletsService {
     const transaction = this.transactionsRepository.create(transactionData);
     return this.transactionsRepository.save(transaction);
   }
-  async updateFreeTokensByAdmin(
+  async updateGoldCoinsByAdmin(
     userId: string,
     amount: number,
     description: string,
@@ -303,9 +414,9 @@ export class WalletsService {
       throw new BadRequestException('Invalid Amount');
     }
 
-    if (currencyType === CurrencyType.FREE_TOKENS) {
-      await this.walletsRepository.update(wallet.id, { freeTokens: amount });
-      const addedAmount = amount - wallet.freeTokens;
+    if (currencyType === CurrencyType.GOLD_COINS) {
+      await this.walletsRepository.update(wallet.id, { goldCoins: amount });
+      const addedAmount = amount - wallet.goldCoins;
 
       const transactionType =
         addedAmount >= 0
@@ -336,8 +447,10 @@ export class WalletsService {
     currencyType: CurrencyType,
     amount: number,
     description: string,
+    manager?: EntityManager,
   ) {
-    const wallet = await this.walletsRepository.findOne({
+    const repoManager = manager ?? this.dataSource.manager;
+    const wallet = await repoManager.findOne(Wallet, {
       where: { userId },
     });
     if (!wallet) {
@@ -347,10 +460,10 @@ export class WalletsService {
     }
 
     const balanceAfter =
-      currencyType === CurrencyType.FREE_TOKENS
-        ? wallet.freeTokens
-        : wallet.streamCoins;
-    const transactionObj = this.transactionsRepository.create({
+      currencyType === CurrencyType.GOLD_COINS
+        ? wallet.goldCoins
+        : wallet.sweepCoins;
+    const transactionObj = repoManager.getRepository(Transaction).create({
       userId,
       type: transactionType,
       currencyType,
@@ -358,6 +471,6 @@ export class WalletsService {
       balanceAfter,
       description,
     });
-    await this.transactionsRepository.save(transactionObj);
+    await repoManager.save(transactionObj);
   }
 }

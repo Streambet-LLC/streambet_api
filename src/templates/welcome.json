@@ -53,7 +53,7 @@
     },
     "params": {
       "type": "object",
-      "required": ["fullName", "dashboardLink"],
+      "required": ["fullName", "dashboardLink", "creatorSignUpForm"],
       "properties": {
         "fullName": {
           "type": "string",
@@ -62,6 +62,10 @@
         "dashboardLink": {
           "type": "string",
           "description": "Link to dashboard"
+        },
+        "creatorSignUpForm": {
+          "type": "string",
+          "description": "Link to Creator signup Form"
         }
       }
     }

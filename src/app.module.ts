@@ -24,22 +24,31 @@ import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
 import { QueueBoardModule } from './queue/queue-board.module';
+import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-redis-store';
+import { QueueModule } from './queue/queue.module';
+import { queueConfig } from './config/queue.config';
+import { GeoFencingModule } from './geo-fencing/geo-fencing.module';
+import { RedisModule } from './redis/redis.module';
+import redisConfig from './config/redis.config';
+import geoFencingConfig from './config/geo-fencing.config';
+import { envValidationSchema } from './config/redis.validation';
+import coinflowConfig from './config/coinflow.config';
+
+import { CoinPackageModule } from './coin-package/coin-package.module';
+
 @Module({
   imports: [
     CacheModule.register({
-      store: redisStore,
-      host: 'localhost',
-      port: 6379,
       ttl: 60, // seconds
       isGlobal: true, // ✅ Makes CACHE_MANAGER available globally
     }),
 
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
       load: [
         databaseConfig,
         authConfig,
@@ -47,7 +56,12 @@ import * as redisStore from 'cache-manager-redis-store';
         appConfig,
         fileConfig,
         emailConfig,
+        queueConfig,
+        redisConfig,
+        geoFencingConfig,
+        coinflowConfig,
       ] as ConfigFactory[],
+      envFilePath: ['./.env'],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -93,9 +107,13 @@ import * as redisStore from 'cache-manager-redis-store';
     StreamModule,
     NotificationModule,
     QueueBoardModule.register({
-      queues: [`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`],
+      queues: [STREAM_LIVE_QUEUE],
     }),
     ChatModule,
+    QueueModule,
+    GeoFencingModule,
+    RedisModule,
+    CoinPackageModule,
   ],
   controllers: [AppController],
   providers: [

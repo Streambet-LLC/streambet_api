@@ -8,6 +8,7 @@ import {
   Get,
   Res,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
@@ -35,6 +36,7 @@ import {
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { userVerificationDto } from './dto/verify-password.dto';
+import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -51,6 +53,9 @@ interface GoogleAuthResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  
+  private readonly logger = new Logger(AuthController.name);
+  
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -77,6 +82,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: RegisterDto })
+  @UseGuards(GeoFencingGuard)
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     const data = await this.authService.register(registerDto);
@@ -115,6 +121,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: LoginDto })
+  @UseGuards(GeoFencingGuard)
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const data = await this.authService.login(loginDto);
@@ -211,7 +218,7 @@ export class AuthController {
     description: 'Redirects to Google authentication page',
   })
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(AuthGuard('google'), GeoFencingGuard)
   async googleAuth(): Promise<void> {
     // This route triggers Google OAuth2 flow
     // The actual implementation is handled by Passport
@@ -232,12 +239,12 @@ export class AuthController {
   ): Promise<void> {
     try {
       // Log the user object for debugging
-      console.log('Google callback user:', req.user);
-      console.log('Available keys:', Object.keys(req.user || {}));
+      // this.logger.log('Google callback user:', req.user);
+      // this.logger.log('Available keys:', Object.keys(req.user || {}));
 
       // Verify tokens exist
       if (!req.user?.accessToken || !req.user?.refreshToken) {
-        console.error('Missing tokens in callback:', {
+        this.logger.error('Missing tokens in callback:', {
           hasAccessToken: !!req.user?.accessToken,
           hasRefreshToken: !!req.user?.refreshToken,
           userKeys: Object.keys(req.user || {}),
@@ -260,7 +267,7 @@ export class AuthController {
       const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
       return res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
+      this.logger.error('Google OAuth callback error:', error);
 
       const clientUrl = this.configService.get<string>(
         'app.clientUrl',

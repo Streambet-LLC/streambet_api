@@ -12,6 +12,8 @@ import { EmailPayloadDto } from './dto/email.dto';
 
 @Injectable()
 export class EmailsService {
+  private readonly logger = new Logger(EmailsService.name);
+
   constructor(private configService: ConfigService) {}
   /**
    * Overrides the existing credentials for the
@@ -89,7 +91,7 @@ export class EmailsService {
         'email.SMTP_PASSWORD',
       );
       const region = this.configService.get<string>('email.SMTP_REGION');
-      const fromEmail = this.configService.get<string>('email.FROM_EMAIL');
+    
 
       let transporter, send;
 
@@ -102,7 +104,13 @@ export class EmailsService {
       );
 
       send = await transporter.sendMail({
-        from: email.from || fromEmail,
+        from: {
+          name: this.configService.getOrThrow('email.defaultName', {
+            infer: true,
+          }),
+          address:
+            email.from || this.configService.get<string>('email.FROM_EMAIL'),
+        },
         to: email.to,
         cc: email.cc,
         bcc: email.bcc,
@@ -112,7 +120,7 @@ export class EmailsService {
       });
 
       if (send) {
-        console.log('Email sent successfully');
+        this.logger.log('Email sent successfully');
         return {
           message: 'Email send successfully ',
           statusCode: HttpStatus.OK,

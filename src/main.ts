@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -8,27 +9,18 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import './queue/queue.processor';
 
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import redisConfig from './config/redis.config';
+import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import { getQueueToken } from '@nestjs/bullmq';
 
-// Create your queue instance
-const streamLiveQueue = new Queue(`${process.env.REDIS_KEY_PREFIX}_STREAM_LIVE`, { connection: redisConfig });
-
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath('/admin/queues');
-
-createBullBoard({
-  queues: [new BullMQAdapter(streamLiveQueue)],
-  serverAdapter,
-});
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
   const logger = new Logger('HTTP');
   app.setViewEngine('ejs');
 
@@ -42,6 +34,19 @@ async function bootstrap() {
       Logger.error('Failed to load New Relic:', err);
     });
   }
+  const trustProxy = configService.get<string>('geo.trustProxy');
+  if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+
+  // Create your queue instance
+  const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
+
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath('/admin/queues');
+
+  createBullBoard({
+    queues: [new BullMQAdapter(streamLiveQueue)],
+    serverAdapter,
+  });
 
   // Set up global prefix
   app.setGlobalPrefix('api');
@@ -64,30 +69,28 @@ async function bootstrap() {
   app.use(helmet());
   app.enableCors();
 
-  if(configService.get<boolean>('app.isBullmqUiEnabled')) {
+  if (configService.get<boolean>('app.isBullmqUiEnabled')) {
     app.use('/admin/queues', serverAdapter.getRouter());
   }
 
   // Enable based on env
-  if(configService.get<boolean>('app.isSwaggerEnable')) {
+  if (configService.get<boolean>('app.isSwaggerEnable')) {
+    // Swagger configuration
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Streambet API')
+      .setDescription('The Streambet API documentation')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('auth', 'Authentication endpoints')
+      .addTag('users', 'User management endpoints')
+      .addTag('wallets', 'Wallet and transaction endpoints')
+      .addTag('betting', 'Stream and betting endpoints')
+      .addTag('payments', 'Payment processing endpoints')
+      .addTag('admin', 'Admin control endpoints')
+      .build();
 
-  // Swagger configuration
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Streambet API')
-    .setDescription('The Streambet API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management endpoints')
-    .addTag('wallets', 'Wallet and transaction endpoints')
-    .addTag('betting', 'Stream and betting endpoints')
-    .addTag('payments', 'Payment processing endpoints')
-    .addTag('admin', 'Admin control endpoints')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
-  
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
   }
   // Start server
   const port = configService.get<number>('PORT', 3000);

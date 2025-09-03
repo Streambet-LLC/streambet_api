@@ -36,6 +36,9 @@ interface GoogleProfile {
 
 @Injectable()
 export class AuthService {
+
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private walletsService: WalletsService,
@@ -145,7 +148,7 @@ export class AuthService {
         role: user.role,
       };
     } catch (e) {
-      console.error('Error in AuthService.register:', e);
+      this.logger.error('Error in AuthService.register:', e);
       throw new BadRequestException((e as Error).message);
     }
   }
@@ -213,7 +216,7 @@ export class AuthService {
         refreshToken,
       };
     } catch (e) {
-      console.error('Error in AuthService.login:', e);
+      this.logger.error('Error in AuthService.login:', e);
       throw new BadRequestException((e as Error).message);
     }
   }
@@ -258,7 +261,7 @@ export class AuthService {
         refreshTokenExpiresAt: null,
       });
     } catch (e) {
-      console.error('Error in AuthService.logout:', e);
+      this.logger.error('Error in AuthService.logout:', e);
       throw new BadRequestException('Error during logout');
     }
   }
@@ -433,7 +436,7 @@ export class AuthService {
         EmailType.AccountVerification,
       );
     } catch (e) {
-      console.error('Error in AuthService.sendAccountVerificationEmail:', e);
+      this.logger.error('Error in AuthService.sendAccountVerificationEmail:', e);
     }
   }
 

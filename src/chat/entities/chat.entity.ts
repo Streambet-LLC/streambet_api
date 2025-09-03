@@ -15,12 +15,24 @@ export class Chat extends BaseEntity {
   @Index()
   user: User;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: true })
   message: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'image_url' })
   imageURL: string;
 
-  @Column({ type: 'timestamp', name: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  //store message for place bet
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'system_message',
+  })
+  systemMessage: string;
+
+  @Column({
+    type: 'timestamp',
+    name: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   timestamp: Date;
 } 

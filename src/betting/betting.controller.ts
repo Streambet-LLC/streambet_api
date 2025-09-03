@@ -35,6 +35,7 @@ import {
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
+import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
 
 // Define ApiResponse
 // Define the request type with user property
@@ -59,6 +60,7 @@ export class BettingController {
     description: 'List of streams retrieved successfully',
     type: [Stream],
   })
+  @UseGuards(GeoFencingGuard)
   @Get('streams')
   async findAllStreams(
     @Query('includeEnded', new DefaultValuePipe(false), ParseBoolPipe)
@@ -80,6 +82,7 @@ export class BettingController {
     type: Stream,
   })
   @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @UseGuards(GeoFencingGuard)
   @Get('streams/:id')
   async findStreamById(@Param('id') id: string): Promise<ApiResponse> {
     const stream = await this.bettingService.findStreamById(id);
@@ -98,6 +101,7 @@ export class BettingController {
     type: [BettingVariable],
   })
   @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @UseGuards(GeoFencingGuard)
   @Get('streams/:id/betting-variables')
   async getStreamBets(@Param('id') id: string): Promise<ApiResponse> {
     const bettingVariables = await this.bettingService.getStreamBets(id);
@@ -190,7 +194,7 @@ export class BettingController {
 
   @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(GeoFencingGuard, JwtAuthGuard)
   @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string,

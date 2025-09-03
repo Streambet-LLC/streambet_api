@@ -5,7 +5,10 @@ import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
 import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import {
+  CurrencyType,
+  CurrencyTypeText,
+} from 'src/wallets/entities/transaction.entity';
 
 @Injectable()
 export class NotificationService {
@@ -57,9 +60,9 @@ export class NotificationService {
           streamName,
         });
         let updatedCurrencyType =
-          currencyType === CurrencyType.FREE_TOKENS
-            ? 'free token'
-            : 'stream coin';
+          currencyType === CurrencyType.GOLD_COINS
+            ? CurrencyTypeText.GOLD_COINS_TEXT
+            : CurrencyTypeText.SWEEP_COINS_TEXT;
         const emailData = {
           toAddress: [receiverEmail],
           subject,
@@ -149,6 +152,7 @@ export class NotificationService {
           params: {
             fullName: username,
             dashboardLink,
+            creatorSignUpForm: `https://form.jotform.com/252037370862052`,
           },
         };
 
@@ -192,6 +196,9 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+
+  //As per client feedback, only one email should be sent to winners (bet_won)
+  /*
   async sendSMTPForWonFreeCoin(
     userId: string,
     receiverEmail: string,
@@ -240,4 +247,5 @@ export class NotificationService {
       Logger.error('unable to send email', e);
     }
   }
+    */
 }

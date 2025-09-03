@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Query,
   Delete,
+  HttpCode,
 } from '@nestjs/common';
 import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
@@ -40,11 +41,14 @@ import {
 import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
-import { AddFreeTokenDto } from './dto/free-token-update.dto';
 import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
-import { AnalyticsSummaryResponseDto, StreamAnalyticsResponseDto } from './dto/analytics.dto';
+import {
+  AnalyticsSummaryResponseDto,
+  StreamAnalyticsResponseDto,
+} from './dto/analytics.dto';
+import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -318,7 +322,7 @@ export class AdminController {
     @Body('description') description: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const wallet = await this.walletsService.addFreeTokens(
+    const wallet = await this.walletsService.addGoldCoins(
       id,
       amount,
       description,
@@ -386,20 +390,19 @@ export class AdminController {
   }
 
   @ApiOperation({
-    summary: `Add free token .`,
-    description: 'API to add free token by admin.',
+    summary: `Add Gold Coin .`,
+    description: 'API to add Gold Coin by admin.',
   })
-  @Patch('tokens/free')
-  async addFreeToken(
-    @Body() addFreeTokenDto: AddFreeTokenDto,
+  @Patch('gold-coins')
+  async addGoldCoin(
+    @Body() addGoldCoinDto: AddGoldCoinDto,
     @Request() req: RequestWithUser,
   ) {
     this.ensureAdmin(req.user);
-    const data =
-      await this.adminService.updateFreeTokensByAdmin(addFreeTokenDto);
+    const data = await this.adminService.updateGoldCoinsByAdmin(addGoldCoinDto);
     return {
       statusCode: HttpStatus.OK,
-      message: 'Successfully updated free tokens',
+      message: 'Successfully updated Gold Coins',
       data,
     };
   }
@@ -509,7 +512,7 @@ export class AdminController {
     @Param('streamId') streamId: string,
   ) {
     this.ensureAdmin(req.user);
-    const data = await this.adminService.getStreamRoundsWithWinners(streamId);
+    const data = await this.bettingService.getStreamRoundsWithWinners(streamId);
     return {
       message: 'Details fetched successfully',
       status: HttpStatus.OK,
@@ -563,19 +566,19 @@ export class AdminController {
   }
 
   /**
- * Retrieves analytics summary data for the admin dashboard.
- *
- * This endpoint returns key metrics including:
- * - Total number of active, non-deleted users with the USER role
- * - Total number of live streams
- * - Total number of active bets (implementation should be in bettingService)
- * - Total live time duration for all streams (formatted as a string)
- *
- * The endpoint is protected and only accessible by admin users.
- *
- * @param req - The request object containing the authenticated user
- * @returns An object containing the analytics summary data
- */
+   * Retrieves analytics summary data for the admin dashboard.
+   *
+   * This endpoint returns key metrics including:
+   * - Total number of active, non-deleted users with the USER role
+   * - Total number of live streams
+   * - Total number of active bets (implementation should be in bettingService)
+   * - Total live time duration for all streams (formatted as a string)
+   *
+   * The endpoint is protected and only accessible by admin users.
+   *
+   * @param req - The request object containing the authenticated user
+   * @returns An object containing the analytics summary data
+   */
   @ApiOperation({ summary: 'Get analytics summary for dashboard' })
   @SwaggerApiResponse({
     status: 200,
@@ -604,7 +607,7 @@ export class AdminController {
         totalUsers,
         totalActiveBets,
         totalLiveStreams,
-        totalLiveTime
+        totalLiveTime,
       },
     };
   }
@@ -634,14 +637,17 @@ export class AdminController {
     @Param('streamId') streamId: string,
   ) {
     this.ensureAdmin(req.user);
-  
+
     // Get stream details (including betting rounds and variables)
-    const { totalUsers, totalStreamTime } = await this.streamService.getStreamAnalytics(streamId);
-    
+    const { totalUsers, totalStreamTime } =
+      await this.streamService.getStreamAnalytics(streamId);
+
     // Get total bet value for the stream
-    const totalBetValue = await this.bettingService.getTotalBetValueForStream(streamId);
-    
-    const totalBetPlacedUsers = await this.bettingService.getTotalBetPlacedUsersForStream(streamId);
+    const totalBetValue =
+      await this.bettingService.getTotalBetValueForStream(streamId);
+
+    const totalBetPlacedUsers =
+      await this.bettingService.getTotalBetPlacedUsersForStream(streamId);
 
     return {
       statusCode: HttpStatus.OK,
@@ -650,9 +656,105 @@ export class AdminController {
         totalUsers,
         totalStreamTime,
         totalBetValue,
-        platformVig:'15%',
-        totalBetPlacedUsers
+        platformVig: '15%',
+        totalBetPlacedUsers,
       },
+    };
+  }
+  /**
+   * Cancel a scheduled stream by its stream ID.
+   *
+   * This endpoint cancels a scheduled stream, removes it from the processing queue,
+   * updates its status to `CANCELED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to cancel.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Patch('/stream/scheduled/cancel/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully canceled',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been canceled successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async cancelScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureAdmin(req.user);
+    const canceledStreamId =
+      await this.streamService.cancelScheduledStream(streamId);
+    return {
+      data: canceledStreamId,
+      message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
+      statusCode: HttpStatus.OK,
+    };
+  }
+  /**
+   * Soft Delete a scheduled stream by its stream ID. Update status to delete
+   *
+   * This endpoint delet a scheduled stream, removes it from the processing queue,
+   * updates its status to `DELETED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to delete.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Delete('/stream/scheduled/delete/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully deleted',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been deleted successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async deleteScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureAdmin(req.user);
+    const deletedStreamId =
+      await this.streamService.deleteScheduledStream(streamId);
+    return {
+      data: deletedStreamId,
+      message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
+      statusCode: HttpStatus.OK,
     };
   }
 }

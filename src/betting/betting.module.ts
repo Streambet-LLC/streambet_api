@@ -14,6 +14,7 @@ import { StreamModule } from 'src/stream/stream.module';
 import { NotificationService } from 'src/notification/notification.service';
 import { EmailsService } from 'src/emails/email.service';
 import { ChatModule } from 'src/chat/chat.module';
+import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 
 @Module({
   imports: [
@@ -22,7 +23,8 @@ import { ChatModule } from 'src/chat/chat.module';
     UsersModule,
     AuthModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
-    ChatModule
+    ChatModule,
+    GeoFencingModule,
   ],
   controllers: [BettingController],
   providers: [

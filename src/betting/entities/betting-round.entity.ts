@@ -3,6 +3,7 @@ import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { BettingRoundStatus } from '../../enums/round-status.enum';
+import { Bet } from './bet.entity';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {
@@ -27,4 +28,7 @@ export class BettingRound extends BaseEntity {
 
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];
+
+  @OneToMany(() => Bet, (bet) => bet.round)
+  bet: Bet[];
 }
