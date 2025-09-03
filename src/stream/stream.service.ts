@@ -816,8 +816,16 @@ END
 
       if (!changed) return stream;
 
-      const streamUpdated = await this.streamsRepository.save(stream);
+      await this.streamsRepository.update(
+        { id: stream.id },
+        { status: stream.status, actualStartTime: stream.actualStartTime },
+      );
+      const streamUpdated = await this.streamsRepository.findOne({
+        where: { id: stream.id },
+        select: ['id', 'status'],
+      });
       this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
+
       if (
         prevStatus === StreamStatus.SCHEDULED &&
         streamUpdated.status === StreamStatus.LIVE
