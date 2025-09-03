@@ -6,6 +6,7 @@ import { CoinPackageService } from '../coin-package/coin-package.service';
 import { BettingGateway } from '../betting/betting.gateway';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class PaymentsService {
@@ -26,6 +27,7 @@ export class PaymentsService {
     private walletsService: WalletsService,
     private coinPackageService: CoinPackageService,
     private bettingGateway: BettingGateway,
+    private notificationService:NotificationService
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -453,12 +455,33 @@ export class PaymentsService {
         tryGetFrom(parsedInfo, 'coinPackageId') ||
         (payload?.data?.coinPackageId as string | undefined);
 
+      const webhookEnv: string | undefined =
+        (parsedInfo['env'] as string | undefined) ||
+        (parsedInfo['env'] as string | undefined) ||
+        tryGetFrom(parsedInfo, 'env') ||
+        tryGetFrom(parsedInfo, 'env') ||
+        (payload?.data?.env as string | undefined);
+
       if (!userId) {
         throw new BadRequestException('Missing userId (rawCustomerId)');
       }
       if (!coinPackageId) {
         throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
       }
+
+       const expected = (
+         this.configService.get<string>('coinflow.webhookEnv') || 'dev'
+       )
+         .trim()
+         .toLowerCase();
+       const received = webhookEnv?.trim().toLowerCase();
+       if (!received || received !== expected) {
+         Logger.log(
+           `Ignored Coinflow webhook due to env mismatch (received="${received ?? 'undefined'}", expected="${expected}")`,
+           PaymentsService.name,
+         );
+         return { ignored: true };
+       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);
       if (!coinPackage) {
@@ -530,6 +553,12 @@ export class PaymentsService {
           goldCoins: Number(coinPackage.goldCoinCount) || 0,
         },
       });
+      // Send email notification to the user
+      await this.notificationService.sendSMTPForCoinPurchaseSuccess(
+        userId,
+        Number(coinPackage.goldCoinCount) || 0,
+        Number(coinPackage.sweepCoinCount) || 0,
+      );
       return { processed: true };
     } catch (error) {
       if (error instanceof HttpException) {

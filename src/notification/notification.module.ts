@@ -45,5 +45,6 @@ import { StreamModule } from 'src/stream/stream.module';
     AuthService,
     JwtService,
   ],
+  exports:[NotificationService]
 })
 export class NotificationModule {}

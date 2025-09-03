@@ -36,7 +36,7 @@ import {
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { userVerificationDto } from './dto/verify-password.dto';
-import { GeoFencingGuard } from 'src/geo-fencing/geo-fencing.guard';
+import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -53,9 +53,8 @@ interface GoogleAuthResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  
   private readonly logger = new Logger(AuthController.name);
-  
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -144,7 +143,7 @@ export class AuthController {
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiBearerAuth()
-  @UseGuards(RefreshTokenGuard)
+  @UseGuards(RefreshTokenGuard, GeoFencingGuard)
   @Post('refresh')
   async refreshToken(@Request() req: RequestWithUser) {
     // User is already validated by RefreshTokenGuard
@@ -199,7 +198,7 @@ export class AuthController {
     description: 'Unauthorized - Invalid or expired token',
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, GeoFencingGuard)
   @Get('me')
   getProfile(@Request() req: RequestWithUser) {
     // The user is automatically injected into the request by the JwtAuthGuard
@@ -232,7 +231,7 @@ export class AuthController {
     description: 'Redirects to frontend with authentication tokens',
   })
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(AuthGuard('google'), GeoFencingGuard)
   async googleAuthRedirect(
     @Request() req: { user: GoogleAuthResponse },
     @Res() res: Response,

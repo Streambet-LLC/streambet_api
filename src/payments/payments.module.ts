@@ -5,11 +5,12 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { CoinPackageModule } from '../coin-package/coin-package.module';
 import { BettingModule } from '../betting/betting.module';
 import { UsersModule } from '../users/users.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
-  imports: [WalletsModule, UsersModule, CoinPackageModule, BettingModule],
+  imports: [WalletsModule, UsersModule, CoinPackageModule, BettingModule, NotificationModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService],
+  providers: [PaymentsService,],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

@@ -17,6 +17,10 @@ import {
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
 import { HistoryType } from 'src/enums/history-type.enum';
+import {
+  SWEEP_COINS_PER_DOLLAR,
+  MIN_WITHDRAWABLE_SWEEP_COINS,
+} from 'src/common/constants/currency.constants';
 
 @Injectable()
 export class WalletsService {
@@ -28,6 +32,17 @@ export class WalletsService {
     private dataSource: DataSource,
   ) {}
 
+  /**
+   * Create a wallet for a user with initial balance.
+   *
+   * Purpose:
+   * - Creates a wallet for a new user.
+   * - Credits the wallet with an initial balance of 1000 Gold Coins.
+   * - Records the transaction in the transactions table.
+   *
+   * @param userId - The ID of the user for whom the wallet is created.
+   * @returns The saved wallet entity.
+   */
   async create(userId: string): Promise<Wallet> {
     // Create wallet with initial 1000 Gold Coin
     const wallet = this.walletsRepository.create({ userId });
@@ -46,6 +61,17 @@ export class WalletsService {
     return savedWallet;
   }
 
+  /**
+   * findByUserId - Retrieves a wallet by user ID.
+   *
+   * Purpose:
+   * - Fetches the wallet associated with a given user ID from the repository.
+   * - Ensures that the wallet exists before returning it.
+   *
+   * @param userId - The unique identifier of the user whose wallet is being retrieved.
+   * @returns Promise<Wallet> - The wallet entity corresponding to the user.
+   * @throws NotFoundException - If no wallet is found for the given user ID.
+   */
   async findByUserId(userId: string): Promise<Wallet> {
     const wallet = await this.walletsRepository.findOne({
       where: { userId },
@@ -58,6 +84,20 @@ export class WalletsService {
     return wallet;
   }
 
+  /**
+   * addGoldCoins - Credits gold coins to a user's wallet.
+   *
+   * Purpose:
+   * - Adds gold coins to the specified user's wallet balance.
+   * - Always uses `TransactionType.REFUND` as the transaction type since this method is designed
+   *   for refund scenarios (adjustments, reversals, or compensation).
+   *
+   * @param userId - The ID of the user whose wallet should be credited.
+   * @param amount - The number of gold coins to add.
+   * @param description - A description for the transaction record (e.g., "Bet refund").
+   * @param manager - Optional TypeORM EntityManager for transactional updates.
+   * @returns A Promise resolving to the updated Wallet entity.
+   */
   async addGoldCoins(
     userId: string,
     amount: number,
@@ -76,6 +116,14 @@ export class WalletsService {
     );
   }
 
+  /**
+   * addSweepCoins - Adds sweep coins to a user's wallet.
+   *
+   * Purpose:
+   * - Handles incrementing a user's sweep coin balance for purchases or refunds.
+   * - Creates a corresponding transaction record.
+   *
+   */
   async addSweepCoins(
     userId: string,
     amount: number,
@@ -99,6 +147,14 @@ export class WalletsService {
     );
   }
 
+  /**
+   * deductForBet - Deducts a specified bet amount from the user's wallet.
+   *
+   * Purpose:
+   * - Decreases the user's wallet balance in the specified currency.
+   * - Records the transaction as a bet placement (`TransactionType.BET_PLACEMENT`).
+   *
+   */
   async deductForBet(
     userId: string,
     amount: number,
@@ -118,6 +174,24 @@ export class WalletsService {
     );
   }
 
+  /**
+   * creditWinnings - Credits winnings to a user's wallet.
+   *
+   * Purpose:
+   * - Adds the specified winning amount to the user's wallet balance.
+   * - Records the transaction as `BET_WON` for tracking purposes.
+   *
+   * Parameters:
+   * - userId (string): The ID of the user receiving the winnings.
+   * - amount (number): The amount to credit.
+   * - currencyType (CurrencyType): Type of currency (e.g., GOLD, SWEEP).
+   * - description (string): A description of the transaction.
+   * - manager (EntityManager, optional): Used when part of a larger transaction flow.
+   *
+   * Returns:
+   * - Promise<Wallet>: The updated wallet after crediting the winnings.
+   *
+   */
   async creditWinnings(
     userId: string,
     amount: number,
@@ -137,6 +211,26 @@ export class WalletsService {
     );
   }
 
+  /**
+   * updateBalance - Updates a user's wallet balance and records the transaction.
+   *
+   * - Supports both externally managed (with EntityManager) and self-managed transactions.
+   * - Locks wallet row for safe concurrent balance updates.
+   * - Validates wallet existence and ensures balance does not go negative.
+   * - Optionally prevents duplicate transactions using relatedEntityId / relatedEntityType.
+   * - Creates and saves a corresponding transaction record with metadata.
+   * - Rolls back on failure when self-managing the transaction.
+   *
+   * @param userId - ID of the user whose balance will be updated
+   * @param amount - Amount to adjust (positive for credit, negative for debit)
+   * @param currencyType - Type of currency (Gold Coins / Sweep Coins)
+   * @param transactionType - Type of transaction (Deposit, Withdrawal, Bet, etc.)
+   * @param description - Description of the transaction
+   * @param metadata - Optional extra transaction metadata
+   * @param options - Optional related entity references for uniqueness checks
+   * @param manager - Optional EntityManager for external transaction handling
+   * @returns Updated Wallet entity
+   */
   async updateBalance(
     userId: string,
     amount: number,
@@ -160,18 +254,16 @@ export class WalletsService {
       }
 
       if (options?.relatedEntityId) {
-        const existingCount = await manager
-          .getRepository(Transaction)
-          .count({
-            where: {
-              relatedEntityId: options.relatedEntityId,
-              ...(options.relatedEntityType
-                ? { relatedEntityType: options.relatedEntityType }
-                : {}),
-              type: transactionType,
-              currencyType,
-            },
-          });
+        const existingCount = await manager.getRepository(Transaction).count({
+          where: {
+            relatedEntityId: options.relatedEntityId,
+            ...(options.relatedEntityType
+              ? { relatedEntityType: options.relatedEntityType }
+              : {}),
+            type: transactionType,
+            currencyType,
+          },
+        });
         if (existingCount > 0) {
           return wallet;
         }
@@ -264,17 +356,19 @@ export class WalletsService {
 
       await queryRunner.manager.save(wallet);
 
-      const transaction = queryRunner.manager.getRepository(Transaction).create({
-        userId,
-        type: transactionType,
-        currencyType,
-        amount,
-        balanceAfter: newBalance,
-        description,
-        metadata,
-        relatedEntityId: options?.relatedEntityId,
-        relatedEntityType: options?.relatedEntityType,
-      });
+      const transaction = queryRunner.manager
+        .getRepository(Transaction)
+        .create({
+          userId,
+          type: transactionType,
+          currencyType,
+          amount,
+          balanceAfter: newBalance,
+          description,
+          metadata,
+          relatedEntityId: options?.relatedEntityId,
+          relatedEntityType: options?.relatedEntityType,
+        });
       await queryRunner.manager.save(transaction);
 
       await queryRunner.commitTransaction();
@@ -287,6 +381,20 @@ export class WalletsService {
     }
   }
 
+  /**
+   * hasTransactionForRelatedEntity - Checks if a purchase transaction exists for a related entity.
+   *
+   * - Filters by relatedEntityId (required).
+   * - Optionally filters by relatedEntityType and currencyType.
+   * - Always checks for TransactionType.PURCHASE.
+   * - Uses provided EntityManager if available, otherwise default repository.
+   * - Returns true if at least one matching transaction exists, otherwise false.
+   *
+   * @param relatedEntityId - ID of the related entity
+   * @param relatedEntityType - Optional type of related entity
+   * @param currencyType - Optional currency type filter
+   * @param manager - Optional EntityManager for transactional queries
+   */
   async hasTransactionForRelatedEntity(
     relatedEntityId: string,
     relatedEntityType?: string,
@@ -305,6 +413,19 @@ export class WalletsService {
     return count > 0;
   }
 
+  /**
+   * getAllTransactionHistory - Retrieves paginated and filtered transaction history for a user.
+   *
+   * - Supports filtering by history type (Transaction / Bet).
+   * - Allows text search on description.
+   * - Supports sorting and pagination.
+   * - Returns matching transaction records and the total count.
+   * - Throws BadRequestException for invalid filter/sort format.
+   * - Throws HttpException if query execution fails.
+   *
+   * @param transactionFilterDto - DTO containing filters, sorting, and pagination details
+   * @param userId - ID of the user whose transactions are being fetched
+   */
   async getAllTransactionHistory(
     transactionFilterDto: TransactionFilterDto,
     userId: string,
@@ -341,7 +462,7 @@ export class WalletsService {
             TransactionType.WITHDRAWAL,
             TransactionType.PURCHASE,
             TransactionType.INITIAL_CREDIT,
-            TransactionType.BONUS
+            TransactionType.BONUS,
           ],
         });
       }
@@ -390,12 +511,38 @@ export class WalletsService {
     }
   }
 
+  /**
+   *    * createTransaction - Creates and saves a new transaction record.
+   *
+   * - Accepts partial transaction data.
+   * - Uses the transactions repository to create a transaction entity.
+   * - Persists the transaction in the database.
+   * - Returns the saved transaction.
+   *
+   * @param transactionData - Partial transaction details
+   */
   private async createTransaction(
     transactionData: Partial<Transaction>,
   ): Promise<Transaction> {
     const transaction = this.transactionsRepository.create(transactionData);
     return this.transactionsRepository.save(transaction);
   }
+
+  /**
+   * updateGoldCoinsByAdmin - Updates a user's gold coin balance by an admin.
+   *
+   * - Ensures the provided amount is positive.
+   * - Updates the user's gold coin balance.
+   * - Determines whether the operation is an admin credit or debit.
+   * - Creates and saves a corresponding transaction record.
+   * - Returns the updated wallet entity.
+   *
+   * @param userId - ID of the user whose wallet is being updated
+   * @param amount - New gold coin balance to set
+   * @param description - Description for the transaction
+   * @param currencyType - Type of currency (should be GOLD_COINS)
+   * @param transactionType - Original transaction type (overridden internally)
+   */
   async updateGoldCoinsByAdmin(
     userId: string,
     amount: number,
@@ -435,12 +582,34 @@ export class WalletsService {
 
     return await this.findByUserId(userId);
   }
+
+  /**
+   * walletDetailsByUserId - Fetches wallet details for a given user.
+   *
+   * - Returns the wallet entity if found, otherwise null.
+   *
+   * @param userId - ID of the user
+   */
   async walletDetailsByUserId(userId: string) {
     return await this.walletsRepository.findOne({
       where: { userId },
     });
   }
 
+  /**
+   * createTransactionData - Creates a transaction record for a user's wallet.
+   *
+   * - Looks up the user's wallet by userId.
+   * - Creates a new transaction entry with updated balance information.
+   * - Saves the transaction using the provided EntityManager or default manager.
+   *
+   * @param userId - ID of the user
+   * @param transactionType - Type of transaction
+   * @param currencyType - Type of currency (gold or sweep coins)
+   * @param amount - Transaction amount
+   * @param description - Description for the transaction
+   * @param manager - Optional EntityManager for transactional operations
+   */
   async createTransactionData(
     userId: string,
     transactionType: TransactionType,
@@ -472,5 +641,60 @@ export class WalletsService {
       description,
     });
     await repoManager.save(transactionObj);
+  }
+
+  /**
+   * Converts a requested sweep coin amount to USD for the specified user.
+   *
+   * Validates input, checks wallet balance, converts using the fixed
+   * sweep-to-dollar rate, and enforces the minimum withdrawable threshold
+   * expressed in sweep coins.
+   *
+   * @param userId - Identifier of the authenticated user
+   * @param requestedCoins - Sweep coin amount to convert
+   * @returns Object containing the computed dollar amount
+   * @throws NotFoundException if the user's wallet is not found
+   * @throws BadRequestException for invalid input, insufficient balance,
+   *         or when below the minimum withdrawable sweep coin threshold
+   */
+  async convertSweepCoinsToDollars(
+    userId: string,
+    requestedCoins: number,
+  ): Promise<{ dollars: number }> {
+    // Validate input
+    if (
+      requestedCoins === undefined ||
+      requestedCoins === null ||
+      isNaN(Number(requestedCoins))
+    ) {
+      throw new BadRequestException('Invalid coins value');
+    }
+    if (requestedCoins < 0) {
+      throw new BadRequestException('Coins must be non-negative');
+    }
+    
+    if (!Number.isInteger(requestedCoins)) {
+      throw new BadRequestException('Coins must be an integer');
+    }
+
+    // Ensure the user's wallet exists and fetch current sweep coin balance
+    const wallet = await this.findByUserId(userId);
+    const available = Number(wallet.sweepCoins ?? 0);
+    if (requestedCoins > available) {
+      throw new BadRequestException('Insufficient sweep coins');
+    }
+
+    // Convert using fixed rate and enforce minimum withdrawable in coins
+    const dollars = Number(
+      (requestedCoins / SWEEP_COINS_PER_DOLLAR).toFixed(2),
+    );
+    const minCoins = MIN_WITHDRAWABLE_SWEEP_COINS;
+      
+    if (requestedCoins < minCoins) {
+      throw new BadRequestException(
+        `Minimum withdrawable sweep coins is ${minCoins}`,
+      );
+    }
+    return { dollars };
   }
 }
