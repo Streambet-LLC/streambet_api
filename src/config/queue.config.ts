@@ -20,5 +20,17 @@ export const queueConfig = registerAs('queue', () => ({
         removeOnFail: 50,
       },
     },
+    email: {
+      name: `${process.env.REDIS_KEY_PREFIX}_EMAIL`,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    },
   },
 }));
