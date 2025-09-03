@@ -797,17 +797,25 @@ END
       }
 
       // Update status based on scheduled start time
+      const prevStatus = stream.status;
       const currentTime = new Date();
+      let changed = false;
+
       if (stream.status === StreamStatus.SCHEDULED) {
-        if (stream.scheduledStartTime <= currentTime) {
+        if (
+          stream.scheduledStartTime &&
+          stream.scheduledStartTime <= currentTime
+        ) {
           stream.status = StreamStatus.LIVE;
           stream.actualStartTime = currentTime;
+          changed = true;
         }
       } else if (stream.status === StreamStatus.LIVE) {
         return stream;
       }
 
-      const prevStatus = stream.status;
+      if (!changed) return stream;
+
       const streamUpdated = await this.streamsRepository.save(stream);
       this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
       if (
