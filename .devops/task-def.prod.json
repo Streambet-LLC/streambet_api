@@ -41,7 +41,9 @@
         },
         { "name": "BLOCK_VPN", "value": "true" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "true" }
+        { "name": "REDIS_TLS", "value": "true" },
+        { "name": "NEW_RELIC_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/prod/CLIENT_URL" },
@@ -73,7 +75,8 @@
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
-        {"name": "ABSTRACT_API_KEY","valueFrom": "/streambet/stag/ABSTRACT_API_KEY"}
+        {"name": "ABSTRACT_API_KEY","valueFrom": "/streambet/stag/ABSTRACT_API_KEY"},
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/prod/NEW_RELIC_LICENSE_KEY" }
       ],
       "mountPoints": [],
       "volumesFrom": [],
