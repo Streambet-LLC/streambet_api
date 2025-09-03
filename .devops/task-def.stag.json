@@ -36,7 +36,7 @@
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
         { "name": "NEW_RELIC_ENABLED", "value": "false" },
-        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" },
         {
           "name": "BLOCKED_REGION",
           "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
