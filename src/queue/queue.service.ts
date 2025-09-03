@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { EMAIL_QUEUE, MAKE_LIVE_JOB, SEND_EMAIL_JOB, STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  MAKE_LIVE_JOB,
+  SEND_EMAIL_JOB,
+  STREAM_LIVE_QUEUE,
+} from 'src/common/constants/queue.constants';
 import { EmailPayloadDto } from 'src/emails/dto/email.dto';
 import { EmailType } from 'src/enums/email-type.enum';
 
@@ -29,7 +34,7 @@ export class QueueService {
   ) {
     try {
       const delay = scheduledTime.getTime() - Date.now();
-      
+
       if (delay < 0) {
         throw new Error('Scheduled time must be in the future');
       }
@@ -44,23 +49,22 @@ export class QueueService {
         },
       );
 
-      this.logger.log(`Added stream live job for streamId: ${streamId}, scheduled for: ${scheduledTime}`);
+      this.logger.log(
+        `Added stream live job for streamId: ${streamId}, scheduled for: ${scheduledTime}`,
+      );
       return job;
     } catch (error) {
-      this.logger.error(`Failed to add stream live job for streamId: ${streamId}`, error.stack);
+      this.logger.error(
+        `Failed to add stream live job for streamId: ${streamId}`,
+        error.stack,
+      );
       throw error;
     }
   }
 
-  async addEmailJob(
-    data: EmailPayloadDto,
-    type: EmailType,
-  ) {
+  async addEmailJob(data: EmailPayloadDto, type: EmailType) {
     try {
-      const job = await this.mailQueue.add(
-        SEND_EMAIL_JOB,
-        { data, type },
-      );
+      const job = await this.mailQueue.add(SEND_EMAIL_JOB, { data, type });
 
       this.logger.log(`Added email job: ${job.id}`);
       return job;

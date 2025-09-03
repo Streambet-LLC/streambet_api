@@ -2,9 +2,14 @@ import { forwardRef, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QueueService } from './queue.service';
-import { StreamLiveProcessor } from './stream-live.processor';
 import { StreamModule } from 'src/stream/stream.module';
-import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  STREAM_LIVE_QUEUE,
+} from 'src/common/constants/queue.constants';
+import { StreamLiveProcessor } from './processor/stream-live.processor';
+import { EmailProcessor } from './processor/email.processor';
+import { EmailsModule } from 'src/emails/email.module';
 
 @Module({
   imports: [
@@ -52,8 +57,9 @@ import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from 'src/common/constants/queue.const
         }),
       },
     ),
+    EmailsModule,
   ],
-  providers: [StreamLiveProcessor, QueueService],
+  providers: [StreamLiveProcessor, QueueService, EmailProcessor],
   exports: [QueueService],
 })
 export class QueueModule {}

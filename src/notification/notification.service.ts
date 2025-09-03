@@ -3,13 +3,13 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
-import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
 import {
   CurrencyType,
   CurrencyTypeText,
 } from 'src/wallets/entities/transaction.entity';
 import { User } from 'src/users/entities/user.entity';
+import { QueueService } from 'src/queue/queue.service';
 
 @Injectable()
 export class NotificationService {
@@ -17,7 +17,7 @@ export class NotificationService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
-    private readonly emailsService: EmailsService,
+    private readonly queueService: QueueService,
   ) {}
 
   async addNotificationPermision(userId: string) {
@@ -77,7 +77,8 @@ export class NotificationService {
 `,
           },
         };
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
+
+        await this.queueService.addEmailJob(emailData, EmailType.BetWon);
 
         return true;
       }
@@ -120,7 +121,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetLoss);
+        await this.queueService.addEmailJob(emailData, EmailType.BetLoss);
 
         return true;
       }
@@ -157,7 +158,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.Welcome);
+        await this.queueService.addEmailJob(emailData, EmailType.Welcome);
 
         return true;
       }
@@ -186,10 +187,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
-          emailData,
-          EmailType.PasswordReset,
-        );
+        await this.queueService.addEmailJob(emailData, EmailType.PasswordReset);
 
         return true;
       }
@@ -237,7 +235,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
+        await this.queueService.addEmailJob(
           emailData,
           EmailType.BetWonFreeCoin,
         );
@@ -289,10 +287,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
-          emailData,
-          EmailType.CoinPurchase,
-        );
+        await this.queueService.addEmailJob(emailData, EmailType.CoinPurchase);
 
         return true;
       }
@@ -342,11 +337,10 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
+        await this.queueService.addEmailJob(
           emailData,
           EmailType.AccountVerification,
         );
-
         return true;
       }
     } catch (e) {
