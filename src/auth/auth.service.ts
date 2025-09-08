@@ -336,8 +336,9 @@ export class AuthService {
 
     if (!user) {
       // Create new user for Google auth
+      const username = `${name.givenName}${Math.floor(Math.random() * 10000)}`;
       user = await this.usersService.create({
-        username: `${name.givenName}${Math.floor(Math.random() * 10000)}`,
+        username,
         email,
         isGoogleAccount: true,
         tosAccepted: true,
@@ -352,6 +353,11 @@ export class AuthService {
       });
       // Create wallet for the user
       await this.walletsService.create(user.id);
+      await this.notificationService.sendSMTPForWelcome(
+        user.id,
+        user.email,
+        username,
+      );
     }
     // Generate tokens
     const accessToken = this.generateToken(user);
