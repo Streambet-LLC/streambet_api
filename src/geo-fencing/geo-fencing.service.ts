@@ -85,8 +85,12 @@ export class GeoFencingService {
       };
 
       try {
-        await this.redisService.set(key, JSON.stringify(loc), this.fullDay);
-        this.logger.debug(`Cache set: ${key}`);
+        if (loc.region) {
+          await this.redisService.set(key, JSON.stringify(loc), this.fullDay);
+          this.logger.debug(`Cache set: ${key}`);
+        } else {
+          this.logger.warn(`Redis SET failed, region is empty`);
+        }
       } catch (e) {
         this.logger.warn(`Redis SET failed: ${String(e)}`);
       }
