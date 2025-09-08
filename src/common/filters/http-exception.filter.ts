@@ -40,20 +40,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const errorResponse = exception.getResponse();
-
-    const error = {
+    const er =
+      typeof errorResponse === 'object' && errorResponse !== null
+        ? (errorResponse as Record<string, any>)
+        : null;
+    const error: Record<string, any> = {
       statusCode: httpStatus,
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      message:
-        typeof errorResponse === 'object' &&
-        errorResponse !== null &&
-        'message' in errorResponse
-          ? errorResponse.message
-          : exception.message || 'Internal server error',
+      message: er?.message ?? exception.message ?? 'Internal server error',
     };
-
+    if (er && 'isForcedLogout' in er) {
+      error.isForcedLogout = Boolean(er.isForcedLogout);
+    }
     if (httpStatus === HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url}`,

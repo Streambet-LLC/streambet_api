@@ -37,6 +37,7 @@ import { StreamDetailsDto } from 'src/stream/dto/stream-detail.response.dto';
 import { UserMeta } from 'src/interface/user-meta.interface';
 import { emitToUser } from 'src/common/common';
 import { SocketEventName } from 'src/enums/socket-event-name.enum';
+import { GeoFencingSocketGuard } from 'src/geo-fencing/geo-fencing.socket.guard';
 
 // Define socket with user data
 interface AuthenticatedSocket extends Socket {
@@ -71,7 +72,7 @@ interface Notification {
   },
 })
 export class BettingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
@@ -87,49 +88,8 @@ export class BettingGateway
     private readonly notificationService: NotificationService,
     private readonly userService: UsersService,
     private readonly chatService: ChatService, // Inject ChatService
-    private readonly geoFencingService: GeoFencingService,
-    private readonly configService: ConfigService,
   ) {}
 
-  // global for all socket events, runs on every incoming connection before any events are handled.
-  afterInit(server: Server): void {
-    this.server = server;
-    this.server.use(async (socket: any, next: (err?: any) => void) => {
-      try {
-        const ip = extractIpFromSocket(socket);
-        //for debugging, will remove after checking
-        console.log(ip, 'ip in socket connection');
-
-        if (!ip) return next(new Error('Could not determine IP'));
-
-        const loc = await this.geoFencingService.lookup(ip);
-        socket.data.geo = loc ?? null;
-        const blockedRegion =
-          this.configService.get<string>('geo.blockedRegion');
-        const blocked = (blockedRegion || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
-
-        if (loc?.region && blocked.includes(loc.region)) {
-          Logger.warn(
-            `Socket connection rejected: blocked country ${loc.region} ip=${ip}`,
-          );
-          return next(new Error('geolocation: forbidden'));
-        }
-        const blockVPN = this.configService.get<string>('geo.blockVPN');
-        if (blockVPN && loc?.isVpn) {
-          Logger.warn(`Socket connection rejected: VPN ip=${ip}`);
-          return next(new Error('geolocation: forbidden'));
-        }
-
-        return next();
-      } catch (err) {
-        Logger.log('Socket geolocation error', String(err));
-        return next(new Error('geolocation: error'));
-      }
-    });
-  }
   async handleConnection(client: Socket): Promise<void> {
     try {
       // Extract token from handshake
@@ -202,7 +162,7 @@ export class BettingGateway
     Logger.log(`Client disconnected: ${username || client.id}`);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStream')
   async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -302,7 +262,7 @@ export class BettingGateway
     await this.broadcastCount(streamId);
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('joinStreamBet')
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -378,7 +338,7 @@ export class BettingGateway
       );
     }
   }
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('placeBet')
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -498,7 +458,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('cancelBet')
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -604,7 +564,7 @@ export class BettingGateway
     }
   }
 
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('editBet')
   async handleEditBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -738,7 +698,7 @@ export class BettingGateway
     }
   }
   //live chat implementation
-  @UseGuards(WsJwtGuard)
+  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage('sendChatMessage')
   async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
