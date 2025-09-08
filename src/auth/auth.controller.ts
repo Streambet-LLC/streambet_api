@@ -130,6 +130,25 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({
+    summary: 'Check location is restricted or not',
+    description:
+      'This endpoint is used for developement. This will check the current user location is restricted or not.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Location is not restricted',
+  })
+  @UseGuards(GeoFencingGuard)
+  @Get('location-check')
+  async locationRestriction() {
+    return {
+      data: true,
+      message: 'Location is not restricted',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
     status: 200,
@@ -138,7 +157,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Invalid or expired refresh token',
+    description: 'Unauthorized Invalid or expired refresh token',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiBearerAuth()

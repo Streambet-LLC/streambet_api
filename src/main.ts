@@ -31,6 +31,11 @@ async function bootstrap() {
 
   // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
 
+  if (configService.getOrThrow('app.isNewRelicEnable', { infer: true })) {
+    import('newrelic').catch((err) => {
+      Logger.error('Failed to load New Relic:', err);
+    });
+  }
   const trustProxy = configService.get<string>('geo.trustProxy');
   if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
@@ -59,7 +64,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(configService));
   app.useGlobalInterceptors(new LoggingInterceptor(configService));
 
   // Security middleware

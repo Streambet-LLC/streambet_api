@@ -30,6 +30,8 @@
         { "name": "REDIS_DB", "value": "0" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_ENABLED", "value": "false" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" },
         {
           "name": "BLOCKED_REGION",
           "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
@@ -101,6 +103,7 @@
         { "name": "HOSTED", "valueFrom": "/streambet/dev/HOSTED" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/qa/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" },
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/dev/NEW_RELIC_LICENSE_KEY" },
         { "name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/dev/ABSTRACT_API_KEY" },
         {
           "name": "COINFLOW_API_URL",

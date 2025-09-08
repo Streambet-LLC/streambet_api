@@ -15,4 +15,5 @@ export default registerAs('app', () => ({
   },
   isSwaggerEnable: process.env.IS_SWAGGER_ENABLED === 'true',
   isBullmqUiEnabled: process.env.IS_BULLMQ_UI_ENABLED === 'true',
+  isNewRelicEnable: process.env.NEW_RELIC_ENABLED === 'true',
 }));

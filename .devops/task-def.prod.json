@@ -24,7 +24,7 @@
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
         { "name": "FILE_DRIVER", "value": "s3" },
         { "name": "AWS_SMTP_PORT", "value": "465" },
-        { "name": "MAIL_DEFAULT_NAME", "value": "smtp-streambet" },
+        { "name": "MAIL_DEFAULT_NAME", "value": "Streambet" },
         { "name": "MAIL_SECURE", "value": "true" },
         { "name": "MAIL_REQUIRE_TLS", "value": "true" },
         { "name": "HOSTED", "value": "false" },
@@ -34,15 +34,17 @@
         { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_PROD" },
         { "name": "REDIS_DB", "value": "0" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
-        { "name": "IS_BULLMQ_UI_ENABLED", "value": "false" },
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
         {
           "name": "BLOCKED_REGION",
           "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
         },
         { "name": "BLOCK_VPN", "value": "true" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "true" },
-        { "name": "COINFLOW_WEBHOOK_ENV", "value": "prod" }
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "prod" },
+        { "name": "REDIS_TLS", "value": "false" },
+        { "name": "NEW_RELIC_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/prod/CLIENT_URL" },
@@ -72,9 +74,34 @@
         { "name": "MAIL_DEFAULT_EMAIL", "valueFrom": "/streambet/stag/MAIL_DEFAULT_EMAIL" },
         { "name": "AWS_SMTP_REGION", "valueFrom": "/streambet/stag/AWS_SMTP_REGION" },
         { "name": "AWS_EMAIL_FROM", "valueFrom": "/streambet/stag/AWS_EMAIL_FROM" },
-        { "name": "APP_HOST_URL", "valueFrom": "/streambet/stag/APP_HOST_URL" },
+        { "name": "APP_HOST_URL", "valueFrom": "/streambet/prod/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/stag/REDIS_PASSWORD" },
-        {"name": "ABSTRACT_API_KEY","valueFrom": "/streambet/stag/ABSTRACT_API_KEY"}
+        {"name": "ABSTRACT_API_KEY","valueFrom": "/streambet/prod/ABSTRACT_API_KEY"},
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/prod/NEW_RELIC_LICENSE_KEY" },
+        {
+          "name": "COINFLOW_API_URL",
+          "valueFrom": "/streambet/prod/COINFLOW_API_URL"
+        },
+        {
+          "name": "COINFLOW_API_KEY",
+          "valueFrom": "/streambet/prod/COINFLOW_API_KEY"
+        },
+        {
+          "name": "COINFLOW_DEFAULT_TOKEN",
+          "valueFrom": "/streambet/prod/COINFLOW_DEFAULT_TOKEN"
+        },
+        {
+          "name": "COINFLOW_MERCHANT_ID",
+          "valueFrom": "/streambet/prod/COINFLOW_MERCHANT_ID"
+        },
+        {
+          "name": "COINFLOW_BLOCKCHAIN",
+          "valueFrom": "/streambet/prod/COINFLOW_BLOCKCHAIN"
+        },
+        {
+          "name": "COINFLOW_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/prod/COINFLOW_WEBHOOK_SECRET"
+        }
       ],
       "mountPoints": [],
       "volumesFrom": [],
