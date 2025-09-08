@@ -53,9 +53,8 @@ interface GoogleAuthResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  
   private readonly logger = new Logger(AuthController.name);
-  
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -159,7 +158,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Invalid or expired refresh token',
+    description: 'Unauthorized Invalid or expired refresh token',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiBearerAuth()
