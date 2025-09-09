@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { MAKE_LIVE_JOB, STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  MAKE_LIVE_JOB,
+  SEND_EMAIL_JOB,
+  STREAM_LIVE_QUEUE,
+} from 'src/common/constants/queue.constants';
+import { EmailPayloadDto } from 'src/emails/dto/email.dto';
+import { EmailType } from 'src/enums/email-type.enum';
 
 export interface QueueJobOptions {
   delay?: number;
@@ -17,7 +24,7 @@ export class QueueService {
 
   constructor(
     @InjectQueue(STREAM_LIVE_QUEUE) private streamLiveQueue: Queue,
-    // @InjectQueue('email') private emailQueue: Queue,
+    @InjectQueue(EMAIL_QUEUE) private mailQueue: Queue,
   ) {}
 
   async addStreamLiveJob(
@@ -27,7 +34,7 @@ export class QueueService {
   ) {
     try {
       const delay = scheduledTime.getTime() - Date.now();
-      
+
       if (delay < 0) {
         throw new Error('Scheduled time must be in the future');
       }
@@ -42,34 +49,32 @@ export class QueueService {
         },
       );
 
-      this.logger.log(`Added stream live job for streamId: ${streamId}, scheduled for: ${scheduledTime}`);
+      this.logger.log(
+        `Added stream live job for streamId: ${streamId}, scheduled for: ${scheduledTime}`,
+      );
       return job;
     } catch (error) {
-      this.logger.error(`Failed to add stream live job for streamId: ${streamId}`, error.stack);
+      this.logger.error(
+        `Failed to add stream live job for streamId: ${streamId}`,
+        error.stack,
+      );
       throw error;
     }
   }
 
-//   async addEmailJob(
-//     emailData: any,
-//     options?: QueueJobOptions,
-//   ) {
-//     try {
-//       const job = await this.emailQueue.add(
-//         'send-email',
-//         emailData,
-//         options,
-//       );
+  async addEmailJob(data: EmailPayloadDto, type: EmailType) {
+    try {
+      const job = await this.mailQueue.add(SEND_EMAIL_JOB, { data, type });
 
-//       this.logger.log(`Added email job: ${job.id}`);
-//       return job;
-//     } catch (error) {
-//       this.logger.error(`Failed to add email job`, error.stack);
-//       throw error;
-//     }
-//   }
+      this.logger.log(`Added email job: ${job.id}`);
+      return job;
+    } catch (error) {
+      this.logger.error(`Failed to add email job`, error.stack);
+      throw error;
+    }
+  }
 
-   async getJobStatus(queueName: string, jobId: string) {
+  async getJobStatus(queueName: string, jobId: string) {
     try {
       const queue = this.getQueueByName(queueName);
       const job = await queue.getJob(jobId);
@@ -100,8 +105,8 @@ export class QueueService {
     switch (queueName) {
       case STREAM_LIVE_QUEUE:
         return this.streamLiveQueue;
-    //   case 'email':
-    //     return this.emailQueue;
+      case EMAIL_QUEUE:
+        return this.mailQueue;
       default:
         throw new Error(`Unknown queue: ${queueName}`);
     }
