@@ -24,7 +24,7 @@
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
         { "name": "FILE_DRIVER", "value": "s3" },
         { "name": "AWS_SMTP_PORT", "value": "465" },
-        { "name": "MAIL_DEFAULT_NAME", "value": "smtp-streambet" },
+        { "name": "MAIL_DEFAULT_NAME", "value": "Streambet" },
         { "name": "MAIL_SECURE", "value": "true" },
         { "name": "MAIL_REQUIRE_TLS", "value": "true" },
         { "name": "HOSTED", "value": "false" },
@@ -121,7 +121,7 @@
         },
         {
           "name": "APP_HOST_URL",
-          "valueFrom": "/streambet/stagv2/APP_HOST_URL"
+          "valueFrom": "/streambet/stag/APP_HOST_URL"
         },
         {
           "name": "REDIS_PASSWORD",
