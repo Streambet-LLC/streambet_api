@@ -103,7 +103,7 @@
         { "name": "HOSTED", "valueFrom": "/streambet/dev/HOSTED" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/qa/APP_HOST_URL" },
         { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" },
-        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/dev/NEW_RELIC_LICENSE_KEY" },
+        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/qa/NEW_RELIC_LICENSE_KEY" },
         { "name": "ABSTRACT_API_KEY", "valueFrom": "/streambet/dev/ABSTRACT_API_KEY" },
         {
           "name": "COINFLOW_API_URL",
