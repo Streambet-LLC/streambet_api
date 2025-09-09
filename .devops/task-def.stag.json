@@ -123,7 +123,7 @@
         },
         {
           "name": "APP_HOST_URL",
-          "valueFrom": "/streambet/stagv2/APP_HOST_URL"
+          "valueFrom": "/streambet/stag/APP_HOST_URL"
         },
         {
           "name": "REDIS_PASSWORD",
