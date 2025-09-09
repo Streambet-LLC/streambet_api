@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { EMAIL_QUEUE } from 'src/common/constants/queue.constants';
 
 export const queueConfig = registerAs('queue', () => ({
   redis: {
@@ -21,7 +22,7 @@ export const queueConfig = registerAs('queue', () => ({
       },
     },
     email: {
-      name: `${process.env.REDIS_KEY_PREFIX}_EMAIL`,
+      name: EMAIL_QUEUE,
       defaultJobOptions: {
         attempts: 3,
         backoff: {
