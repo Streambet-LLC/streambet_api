@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import 'newrelic';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -31,8 +32,11 @@ async function bootstrap() {
 
   // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
 
+  
   const trustProxy = configService.get<string>('geo.trustProxy');
-  if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+  const enableTrustProxy =
+    trustProxy === 'true' || trustProxy === '1' || trustProxy === 'yes';
+  if (enableTrustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
@@ -60,7 +64,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(configService));
   app.useGlobalInterceptors(new LoggingInterceptor(configService));
 
   // Security middleware
