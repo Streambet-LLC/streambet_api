@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import 'newrelic';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -31,11 +32,7 @@ async function bootstrap() {
 
   // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
 
-  if (configService.getOrThrow('app.isNewRelicEnable', { infer: true })) {
-    import('newrelic').catch((err) => {
-      Logger.error('Failed to load New Relic:', err);
-    });
-  }
+  
   const trustProxy = configService.get<string>('geo.trustProxy');
   const enableTrustProxy =
     trustProxy === 'true' || trustProxy === '1' || trustProxy === 'yes';
