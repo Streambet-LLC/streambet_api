@@ -37,7 +37,9 @@ async function bootstrap() {
     });
   }
   const trustProxy = configService.get<string>('geo.trustProxy');
-  if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+  const enableTrustProxy =
+    trustProxy === 'true' || trustProxy === '1' || trustProxy === 'yes';
+  if (enableTrustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
