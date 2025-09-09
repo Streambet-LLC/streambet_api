@@ -9,6 +9,7 @@ import { QueueModule } from 'src/queue/queue.module';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { StreamGateway } from './stream.gateway';
 import { WsModule } from 'src/ws/ws.module';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { WsModule } from 'src/ws/ws.module';
     forwardRef(() => QueueModule),
     GeoFencingModule,
     forwardRef(() => WsModule),
+    RedisModule,
   ],
   controllers: [StreamController],
   providers: [StreamService, StreamGateway],

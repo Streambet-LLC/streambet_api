@@ -8,6 +8,7 @@ export interface UserMeta {
 
 export interface AuthenticatedSocket extends Socket {
   data: {
+    _disconnectBound?: any;
     meta?: UserMeta;
     user: AuthenticatedSocketPayload;
   };

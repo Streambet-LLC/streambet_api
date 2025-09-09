@@ -16,6 +16,7 @@ import { StreamService } from './stream.service';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { ChatMessage } from 'src/interface/chat-message.interface';
 import { StreamList } from 'src/enums/stream-list.enum';
+import { RedisViewerService } from 'src/redis/redis-viewer.service';
 
 @WebSocketGateway()
 export class StreamGateway {
@@ -31,6 +32,7 @@ export class StreamGateway {
     private readonly gatewayManager: GatewayManager,
     @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
+    private readonly redisViewerService: RedisViewerService,
   ) {}
 
   /**
@@ -38,9 +40,8 @@ export class StreamGateway {
    */
 
   /**
-   * Handles a user joining a stream.
+   * JOIN a stream (handles rejoin and cross-stream switching).
    */
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.JoinStream)
   async handleJoinStream(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -50,18 +51,21 @@ export class StreamGateway {
       const userId = client.data.user.sub;
       const prev = client.data.meta;
 
-      // Case 1: User is rejoining the same stream
+      // Case 1: User rejoining the SAME stream (e.g., page refresh or extra tab on same stream)
       if (prev?.streamId === streamId) {
         client.join(`${STREAM}${streamId}`);
-        return void this.broadcastCount(streamId);
+        await this.redisViewerService.addConnection(streamId, userId); // increment tab count
+        await this.broadcastCount(streamId);
+        return;
       }
 
-      // Case 2: User is switching from a previous stream
+      // Case 2: Switching from a previous stream
       if (prev?.streamId && prev.streamId !== streamId) {
         const prevRoom = `${STREAM}${prev.streamId}`;
         client.leave(prevRoom);
-        this.removeViewer(prev.streamId, userId);
-        void this.broadcastCount(prev.streamId);
+
+        await this.redisViewerService.removeConnection(prev.streamId, userId);
+        await this.broadcastCount(prev.streamId);
       }
 
       // --- Join new stream ---
@@ -81,36 +85,32 @@ export class StreamGateway {
 
       client.data.meta = { userId, streamId };
 
-      this.addViewer(streamId, userId);
+      await this.redisViewerService.addConnection(streamId, userId);
       await this.broadcastCount(streamId);
+
+      // IMPORTANT: ensure we clean up on disconnect.
+      if (!client.data._disconnectBound) {
+        client.data._disconnectBound = true;
+        client.on('disconnect', async () => {
+          try {
+            const meta = client.data.meta;
+            if (meta?.streamId && meta?.userId) {
+              await this.redisViewerService.removeConnection(
+                meta.streamId,
+                meta.userId,
+              );
+              await this.broadcastCount(meta.streamId);
+            }
+          } catch (err) {
+            this.logger.error(
+              `disconnect cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        });
+      }
     } catch (err) {
       this.logger.error(
         `handleJoinStream failed for user ${client.data.user?.sub} stream ${streamId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-
-  /**
-   * Increment viewer count for a stream.
-   */
-  private addViewer(streamId: string, userId: string) {
-    try {
-      if (!this.viewers.has(streamId)) {
-        this.viewers.set(streamId, new Map<string, number>());
-      }
-
-      const userConnections = this.viewers.get(streamId)!;
-      const count = userConnections.get(userId) || 0;
-      userConnections.set(userId, count + 1);
-
-      this.logger.log(
-        `Viewer added: stream=${streamId}, user=${userId}, connections=${count + 1}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `addViewer failed for stream ${streamId}, user ${userId}: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
@@ -145,13 +145,10 @@ export class StreamGateway {
       );
     }
   }
-
-  /**
-   * Broadcasts the current viewer count to all clients in the stream.
-   */
   async broadcastCount(streamId: string) {
     try {
-      const count = this.getViewerCount(streamId);
+      const count =
+        await this.redisViewerService.getUniqueViewerCount(streamId);
 
       void emitToStream(
         this.gatewayManager,
@@ -160,6 +157,7 @@ export class StreamGateway {
         count,
       );
 
+      // Debounced write handled by StreamService
       await this.streamService.updateViewerCount(streamId, count);
     } catch (err) {
       this.logger.error(
@@ -167,22 +165,6 @@ export class StreamGateway {
           err instanceof Error ? err.message : String(err)
         }`,
       );
-    }
-  }
-
-  /**
-   * Returns the number of unique viewers for a stream.
-   */
-  private getViewerCount(streamId: string): number {
-    try {
-      return this.viewers.get(streamId)?.size || 0;
-    } catch (err) {
-      this.logger.error(
-        `getViewerCount failed for stream ${streamId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return 0;
     }
   }
 
