@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   UseGuards,
   Request,
@@ -187,6 +188,28 @@ export class PaymentsController {
     }
     return this.paymentsService.getCoinflowWithdrawQuote(
       parsedAmount,
+      req.user.id,
+    );
+  }
+
+  /** Deletes a Coinflow withdrawer bank account for the authenticated user. */
+  @ApiOperation({ summary: 'Delete Coinflow withdrawer bank account' })
+  @ApiResponse({ status: 200, description: 'Coinflow withdrawer account deleted' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid token' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiQuery({ name: 'token', type: String, required: true })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Delete('coinflow/delete-withdrawer-account')
+  async deleteCoinflowWithdrawerAccount(
+    @Request() req: RequestWithUser,
+    @Query('token') token: string,
+  ) {
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      throw new BadRequestException('Missing or invalid token');
+    }
+    return this.paymentsService.deleteCoinflowWithdrawerAccount(
+      token,
       req.user.id,
     );
   }

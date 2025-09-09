@@ -380,6 +380,93 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * Deletes a Coinflow withdrawer bank account for the given token and user.
+   *
+   * @param token - The Coinflow withdrawer account token to delete.
+   * @param userId - The application user ID.
+   * @returns The deletion result payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing, the token is invalid, or the upstream request fails.
+   */
+  async deleteCoinflowWithdrawerAccount(token: string, userId: string) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      throw new BadRequestException('Missing or invalid token');
+    }
+
+    try {
+      // Fetch withdrawer details and ensure the token exists under bankAccounts
+      const withdrawer = await this.getCoinflowWithdraw(userId);
+
+      // Find the bankAccounts array somewhere in the withdrawer payload
+      const getBankAccountsArray = (root: any): any[] | undefined => {
+        if (!root || typeof root !== 'object') return undefined;
+        const queue: any[] = [root];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (current && typeof current === 'object') {
+            if (Array.isArray((current as any).bankAccounts)) {
+              return (current as any).bankAccounts as any[];
+            }
+            for (const value of Object.values(current)) {
+              if (value && typeof value === 'object') queue.push(value);
+            }
+          }
+        }
+        return undefined;
+      };
+
+      const bankAccounts = getBankAccountsArray(withdrawer);
+      if (!Array.isArray(bankAccounts) || bankAccounts.length === 0) {
+        throw new NotFoundException('No bank accounts found for withdrawer');
+      }
+
+      const normalizedToken = token.trim();
+      const tokenExists = bankAccounts.some((acc: any) => {
+        if (!acc || typeof acc !== 'object') return false;
+        const candidates = [
+          (acc as any).token,
+          (acc as any).accountToken,
+          (acc as any).bankAccountToken,
+          (acc as any).id,
+        ];
+        return candidates.some(
+          (v) => typeof v === 'string' && v.trim() === normalizedToken,
+        );
+      });
+
+      if (!tokenExists) {
+        throw new NotFoundException(
+          'Bank account token not found for withdrawer',
+        );
+      }
+
+      const { data } = await this.coinflowClient.delete(
+        `/api/withdraw/account/${token}`,
+        {
+          headers: {
+            'x-coinflow-auth-user-id': userId,
+          },
+        },
+      );
+
+      return data;
+    } catch (error) {
+      // Keep previously thrown HttpExceptions (e.g., 400/404) intact.
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw this.mapCoinflowError(
+        error,
+        'Failed to delete Coinflow withdrawer account',
+      );
+    }
+  }
+
   /** Maps an Axios error from Coinflow into a meaningful HttpException. */
   private mapCoinflowError(error: unknown, prefix: string): HttpException {
     const axiosError = error as AxiosError<any>;
