@@ -351,7 +351,9 @@ export class AuthService {
 
     if (!user) {
       // Create new user for Google auth
-      const username = `${name.givenName}${Math.floor(Math.random() * 10000)}`;
+      const baseUsername = name.givenName || email.split('@')[0];
+      const username = await this.generateUsernameSuggestion(baseUsername);
+
       user = await this.usersService.create({
         username,
         email,
