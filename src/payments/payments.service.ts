@@ -456,6 +456,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
+      // Keep previously thrown HttpExceptions (e.g., 400/404) intact.
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw this.mapCoinflowError(
         error,
         'Failed to delete Coinflow withdrawer account',
