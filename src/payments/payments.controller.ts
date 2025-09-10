@@ -29,6 +29,7 @@ import {
 } from '@nestjs/swagger';
 import { CoinflowWebhookGuard } from '../auth/guards/coinflow-webhook.guard';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
+import { CoinflowWithdrawDto } from './dto/coinflow-withdraw.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -222,5 +223,24 @@ export class PaymentsController {
   async handleCoinflowWebhook(@Body() payload: CoinflowWebhookDto) {
     Logger.log(`Coinflow webhook received`, PaymentsController.name);
     return this.paymentsService.handleCoinflowWebhookEvent(payload);
+  }
+
+  /** Initiates a delegated payout (withdrawal) to the authenticated user's account via Coinflow. */
+  @ApiOperation({ summary: 'Initiate Coinflow delegated payout (withdrawal)' })
+  @ApiResponse({ status: 201, description: 'Withdrawal initiated' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid amount/coins' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('coinflow/withdraw')
+  async initiateCoinflowWithdraw(
+    @Request() req: RequestWithUser,
+    @Body() body: CoinflowWithdrawDto,
+  ) {
+    return this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
+      coins: body.coins,
+      account: body.account,
+      speed: body.speed,
+    });
   }
 }
