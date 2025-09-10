@@ -17,6 +17,7 @@ import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { NotificationService } from 'src/notification/notification.service';
 import { WalletGateway } from 'src/wallets/wallets.gateway';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class PaymentsService {
@@ -479,10 +480,13 @@ export class PaymentsService {
           ? responseData
           : axiosError.message) || 'Unknown Coinflow error';
 
-    const message = status
-      ? `${prefix}: [${status}] ${safeDetail}`
-      : `${prefix}: ${safeDetail}`;
+    // If details exist, append them
+    const details =
+      responseData && (responseData as any).details
+        ? `, ${(responseData as any).details}`
+        : '';
 
+    const message = `${prefix}: ${safeDetail}${details}`;
     const httpStatus =
       typeof status === 'number' && status >= 400 && status < 600
         ? status
@@ -682,6 +686,92 @@ export class PaymentsService {
       throw new BadRequestException(
         (error as Error)?.message || 'Failed to process Coinflow webhook',
       );
+    }
+  }
+
+  
+  /**
+   * Initiates a delegated payout (withdrawal) via Coinflow for the authenticated user.
+   *
+   * Flow:
+   * - Validates Coinflow configuration.
+   * - Converts requested sweep coins to USD and validates balance/thresholds.
+   * - Calls Coinflow merchant delegated payout endpoint.
+   * - Records a Withdrawal transaction by deducting sweep coins.
+   *
+   * Notes:
+   * - By default, waits for on-chain confirmation.
+   * - When waitForConfirmation is false, the payout is queued and coins are still deducted
+   *   immediately to prevent double-spend. Upstream failures must be reconciled separately.
+   */
+  async initiateCoinflowDelegatedPayout(
+    userId: string,
+    params: {
+      coins: number;
+      account: string;
+      speed: string;
+      waitForConfirmation?: boolean;
+      idempotencyKey?: string;
+    },
+  ) {
+    if (
+      !this.coinflowApiUrl ||
+      !this.coinflowApiKey ||
+      !this.coinflowDefaultToken ||
+      !this.coinflowMerchantId
+    ) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, COINFLOW_DEFAULT_TOKEN, COINFLOW_MERCHANT_ID, and COINFLOW_BLOCKCHAIN',
+      );
+    }
+
+    const coins = Number(params?.coins);
+    if (!Number.isInteger(coins) || coins <= 0) {
+      throw new BadRequestException('Invalid coins value');
+    }
+    if (!params?.account || typeof params.account !== 'string') {
+      throw new BadRequestException('Missing payout account token');
+    }
+    if (!params?.speed || typeof params.speed !== 'string') {
+      throw new BadRequestException('Missing payout speed');
+    }
+
+    try {
+      // Convert coins to USD and validate balance and minimum thresholds
+      const { dollars } = await this.walletsService.convertSweepCoinsToDollars(
+        userId,
+        coins,
+      );
+
+      const idempotencyKey = randomUUID();
+
+      // Call Coinflow delegated payout endpoint (amount in cents)
+      const cents = Math.round(Number(dollars) * 100);
+      const { data } = await this.coinflowClient.post(
+        '/api/merchant/withdraws/payout/delegated',
+        {
+          amount: { cents },
+          speed: params.speed,
+          account: params.account,
+          userId,
+          idempotencyKey,
+        },
+      );
+
+      return {
+        amountOutUSD: dollars,
+        amountOutCents: cents,
+        coins,
+        speed: params.speed,
+        account: params.account,
+        idempotencyKey,
+        coinflow: data,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
     }
   }
 }
