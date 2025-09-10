@@ -39,6 +39,7 @@ import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { StreamGateway } from 'src/stream/stream.gateway';
 import { BettingGateway } from './betting.gateway';
+import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 
 @Injectable()
 export class BettingService {
@@ -799,7 +800,7 @@ export class BettingService {
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
-
+    this.enforceMax(amount);
     // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -921,6 +922,20 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+  /**
+   * Ensures that the provided bet amount does not exceed the allowed maximum.
+   *
+   * @param amount - The bet amount to validate.
+   * @throws {BadRequestException} If the bet amount exceeds MAX_AMOUNT_FOR_BETTING.
+   *
+   */
+  private enforceMax(amount: number) {
+    if (amount > MAX_AMOUNT_FOR_BETTING) {
+      throw new BadRequestException(
+        `Bet amount exceeds ${MAX_AMOUNT_FOR_BETTING.toLocaleString('en-US')}`,
+      );
+    }
+  }
 
   /**
    * Edits an existing bet for a user.
@@ -944,6 +959,7 @@ export class BettingService {
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
+    this.enforceMax(newAmount);
 
     // Fetch the bet and verify ownership
     const betDetails = await this.betsRepository.findOne({
