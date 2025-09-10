@@ -33,6 +33,7 @@ import { CancelBetDto } from './dto/cancel-bet.dto';
 import { CancelBetPayout } from 'src/interface/betCancel.interface';
 import { EditedBetPayload } from 'src/interface/betEdit.interface';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 
 @WebSocketGateway()
 export class BettingGateway {
@@ -91,7 +92,12 @@ export class BettingGateway {
   ) {
     try {
       const user = client.data.user;
-
+      if (placeBetDto.amount >= MAX_AMOUNT_FOR_BETTING) {
+        emitToUser(this.gatewayManager, user.sub, SocketEventName.Error, {
+          message: `Your bet amount exceeds the maximum limit of ${MAX_AMOUNT_FOR_BETTING}. Please place a lower bet.`,
+        });
+        return true;
+      }
       // Place the bet via service
       const { bet, roundId } = await this.bettingService.placeBet(
         user.sub,
@@ -440,7 +446,12 @@ export class BettingGateway {
   ) {
     try {
       const user = client.data.user;
-
+      if (editBetDto.newAmount >= MAX_AMOUNT_FOR_BETTING) {
+        emitToUser(this.gatewayManager, user.sub, SocketEventName.Error, {
+          message: `Your bet amount exceeds the maximum limit of ${MAX_AMOUNT_FOR_BETTING}. Please place a lower bet.`,
+        });
+        return true;
+      }
       // Edit bet in service
       const { betDetails: editedBet, oldBettingAmount } =
         await this.bettingService.editBet(user.sub, editBetDto);
