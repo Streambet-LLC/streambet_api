@@ -698,12 +698,6 @@ export class PaymentsService {
    * - Validates Coinflow configuration.
    * - Converts requested sweep coins to USD and validates balance/thresholds.
    * - Calls Coinflow merchant delegated payout endpoint.
-
-   *
-   * Notes:
-   * - By default, waits for on-chain confirmation.
-   * - When waitForConfirmation is false, the payout is queued and coins are still deducted
-   *   immediately to prevent double-spend. Upstream failures must be reconciled separately.
    */
   async initiateCoinflowDelegatedPayout(
     userId: string,
