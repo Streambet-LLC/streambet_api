@@ -1,0 +1,1 @@
+export const LIFETIME_PURCHASE_CAP_USD = 500;

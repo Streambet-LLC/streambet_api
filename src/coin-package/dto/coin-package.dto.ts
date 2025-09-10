@@ -30,6 +30,9 @@ export class CoinPackageDto {
 
   @ApiProperty({ example: true })
   status: boolean;
+
+  @ApiProperty({ example: true, description: 'Whether the authenticated user can purchase this package within their remaining lifetime limit' })
+  canPurchase: boolean;
 }
 
 export class CoinPackageListResponseDto {
@@ -41,6 +44,15 @@ export class CoinPackageListResponseDto {
 
   @ApiProperty({ type: [CoinPackageDto] })
   data: CoinPackageDto[];
+
+  @ApiProperty({ example: 100, description: 'Total USD amount the user has spent on Coinflow purchases' })
+  spentUSD: number;
+
+  @ApiProperty({ example: 400, description: 'USD amount the user can still spend before hitting the lifetime cap' })
+  remainingUSD: number;
+
+  @ApiProperty({ example: 500, description: 'Lifetime purchase cap in USD' })
+  capUSD: number;
 }
 
 
