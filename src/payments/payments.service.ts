@@ -18,6 +18,7 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 import { NotificationService } from 'src/notification/notification.service';
 import { WalletGateway } from 'src/wallets/wallets.gateway';
 import { randomUUID } from 'crypto';
+import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
 
 @Injectable()
 export class PaymentsService {
@@ -697,7 +698,7 @@ export class PaymentsService {
    * - Validates Coinflow configuration.
    * - Converts requested sweep coins to USD and validates balance/thresholds.
    * - Calls Coinflow merchant delegated payout endpoint.
-   * - Records a Withdrawal transaction by deducting sweep coins.
+
    *
    * Notes:
    * - By default, waits for on-chain confirmation.
@@ -709,9 +710,7 @@ export class PaymentsService {
     params: {
       coins: number;
       account: string;
-      speed: string;
-      waitForConfirmation?: boolean;
-      idempotencyKey?: string;
+      speed: CoinflowPayoutSpeed;
     },
   ) {
     if (
@@ -729,10 +728,10 @@ export class PaymentsService {
     if (!Number.isInteger(coins) || coins <= 0) {
       throw new BadRequestException('Invalid coins value');
     }
-    if (!params?.account || typeof params.account !== 'string') {
-      throw new BadRequestException('Missing payout account token');
+    if (!params?.account || typeof params.account !== 'string' || !params.account.trim()) {
+      throw new BadRequestException('Missing or invalid payout account token');
     }
-    if (!params?.speed || typeof params.speed !== 'string') {
+    if (!params?.speed) {
       throw new BadRequestException('Missing payout speed');
     }
 
