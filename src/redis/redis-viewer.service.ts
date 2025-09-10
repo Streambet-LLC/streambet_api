@@ -39,6 +39,30 @@ export class RedisViewerService {
   private async loadScript(lua: string): Promise<string> {
     return (await this.client.script('LOAD', lua)) as string;
   }
+  private isNoScriptError(err: unknown): boolean {
+    return (
+      typeof err === 'object' &&
+      err !== null &&
+      String((err as any).message ?? err).includes('NOSCRIPT')
+    );
+  }
+
+  private async evalshaOrEval(
+    lua: string,
+    sha: string,
+    numKeys: number,
+    ...args: (string | number)[]
+  ) {
+    try {
+      return await this.client.evalsha(sha, numKeys, ...args);
+    } catch (err) {
+      if (this.isNoScriptError(err)) {
+        // Redis restarted or SCRIPT FLUSH: degrade to EVAL
+        return this.client.eval(lua, numKeys, ...args);
+      }
+      throw err;
+    }
+  }
 
   private async ensureScripts() {
     if (!this.shas.add) {
@@ -56,13 +80,15 @@ export class RedisViewerService {
     ttlSeconds = DEFAULT_TTL_SECONDS,
   ): Promise<number> {
     await this.ensureScripts();
-    const res = await this.client.evalsha(
+    const res = await this.evalshaOrEval(
+      LUA_ADD,
       this.shas.add!,
       1,
       keyFor(streamId),
       userId,
       String(ttlSeconds),
     );
+
     const unique = Number(res ?? 0);
     return Number.isFinite(unique) ? unique : 0;
   }
@@ -70,12 +96,14 @@ export class RedisViewerService {
   /** Decrement, delete field if 0; returns unique viewer count. */
   async removeConnection(streamId: string, userId: string): Promise<number> {
     await this.ensureScripts();
-    const res = await this.client.evalsha(
+    const res = await this.evalshaOrEval(
+      LUA_REMOVE,
       this.shas.remove!,
       1,
       keyFor(streamId),
       userId,
     );
+
     const unique = Number(res ?? 0);
     return Number.isFinite(unique) ? unique : 0;
   }
