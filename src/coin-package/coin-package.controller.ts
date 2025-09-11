@@ -27,20 +27,19 @@ export class CoinPackageController {
    * GET /coin-package
    *
    * Purpose:
-   *   - Returns **all** active coin packages but adds a boolean `canPurchase`
-   *     flag to each indicating whether the user can afford it within their
+   *   - Returns **all** active coin packages, each with a `canPurchase` flag
+   *     indicating whether the user can afford it within their current
    *     remaining lifetime limit.
-   *   - Includes aggregate limit information (`spentUSD`, `remainingUSD`, `capUSD`)
-   *     in the response for UI display.
-   *   - Throws 400 (`Lifetime purchase limit reached`) if the user has exhausted
-   *     their lifetime limit and therefore cannot purchase any package.
+   *   - Throws 400 when `remainingUSD` is **less than the price of the cheapest
+   *     active package**; at that point the user cannot purchase anything even
+   *     though the numeric limit may not be strictly zero.
    *
    * @param req - Express request augmented by `JwtAuthGuard` to contain `user.id`.
    * @returns CoinPackageListResponseDto
    */
   @ApiOperation({ summary: 'List active coin packages with canPurchase flag by remaining lifetime limit' })
   @ApiOkResponse({ description: 'Coin packages retrieved successfully', type: CoinPackageListResponseDto })
-  @ApiBadRequestResponse({ description: 'Lifetime purchase limit reached. No coin packages available within your remaining limit.' })
+  @ApiBadRequestResponse({ description: 'No coin package can be purchased within your remaining lifetime limit.' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get()
