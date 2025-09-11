@@ -23,6 +23,12 @@ import {
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 
 import { Stream } from 'src/stream/entities/stream.entity';
+import {
+  CurrencyType,
+  CurrencyTypeText,
+  TransactionType,
+} from '../wallets/entities/transaction.entity';
+import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
