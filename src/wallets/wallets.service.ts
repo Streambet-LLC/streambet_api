@@ -707,4 +707,63 @@ export class WalletsService {
     }
     return { dollars };
   }
+
+  /**
+   * Computes lifetime USD spent by the user on Coinflow purchases.
+   *
+   * Strategy:
+   *  - Join the transactions table with the coin_packages table on
+   *    t.metadata ->> 'coinPackageId' = coin_packages.id.
+   *  - Filter for TransactionType.PURCHASE originating from Coinflow (metadata.source = 'coinflow').
+   *  - Sum coin_packages.total_amount (USD) for the authenticated user.
+   *
+   * @param userId - ID of the user
+   * @param manager - Optional EntityManager
+   * @returns Total lifetime USD spent via Coinflow
+   */
+  async getLifetimeSpentUSDFromCoinflow(
+    userId: string,
+    manager?: EntityManager,
+  ): Promise<number> {
+    const repo = manager
+      ? manager.getRepository(Transaction)
+      : this.transactionsRepository;
+
+    const { sum } = await repo
+      .createQueryBuilder('t')
+      // Cast cp.id to text to match JSONB extracted text to avoid uuid=text operator issues
+      .leftJoin(
+        'coin_packages',
+        'cp',
+        "cp.id::text = (t.metadata->>'coinPackageId')",
+      )
+      .select(
+        "COALESCE(SUM(COALESCE((t.metadata->>'usdAmount')::numeric, cp.total_amount, 0)), 0)",
+        'sum',
+      )
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.type = :type', { type: TransactionType.PURCHASE })
+      .andWhere("(t.metadata->>'source') = :source", { source: 'coinflow' })
+      .getRawOne<{ sum: string | number }>();
+
+    return Number(sum ?? 0);
+  }
+
+  /**
+   * Calculates how much USD the user can still spend given a lifetime cap.
+   *
+   * @param userId - The user ID
+   * @param capUSD - The lifetime spending cap in USD
+   * @param manager - Optional EntityManager
+   * @returns Object containing spentUSD, remainingUSD, and capUSD
+   */
+  async getLifetimeRemainingUSDFromCap(
+    userId: string,
+    capUSD: number,
+    manager?: EntityManager,
+  ): Promise<{ spentUSD: number; remainingUSD: number; capUSD: number }> {
+    const spentUSD = await this.getLifetimeSpentUSDFromCoinflow(userId, manager);
+    const remainingUSD = Math.max(0, Number(capUSD) - Number(spentUSD));
+    return { spentUSD, remainingUSD, capUSD: Number(capUSD) };
+  }
 }
