@@ -18,6 +18,10 @@ import {
 import { UserResponseDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import {
+  MIN_WITHDRAWABLE_SWEEP_COINS,
+  SWEEP_COINS_PER_DOLLAR,
+} from 'src/common/constants/currency.constants';
 
 @Injectable()
 export class UsersService {
@@ -54,6 +58,8 @@ export class UsersService {
       const { password: _unused, wallet, ...sanitizedUser } = user;
       const result = {
         ...sanitizedUser,
+        minWithdrawableSweepCoins: MIN_WITHDRAWABLE_SWEEP_COINS,
+        sweepCoinsPerDollar: SWEEP_COINS_PER_DOLLAR,
         walletBalanceGoldCoin: Number(user.wallet?.goldCoins ?? 0),
         walletBalanceSweepCoin: Number(user.wallet?.sweepCoins ?? 0),
       };

@@ -23,15 +23,15 @@ import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { BettingService } from './betting.service';
-import { PlaceBetResult } from 'src/interface/betPlace.interface';
+import { PlaceBetResult } from 'src/interface/bet-place.interface';
 import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
 import { UserRole } from 'src/users/entities/user.entity';
 import { ChatMessage } from 'src/interface/chat-message.interface';
 import { ChatGateway } from 'src/chat/chat.gateway';
 import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
-import { CancelBetPayout } from 'src/interface/betCancel.interface';
-import { EditedBetPayload } from 'src/interface/betEdit.interface';
+import { CancelBetPayout } from 'src/interface/bet-cancel.interface';
+import { EditedBetPayload } from 'src/interface/bet-edit.interface';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 

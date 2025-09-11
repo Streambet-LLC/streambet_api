@@ -13,12 +13,21 @@ export class UserProfileResponseDto {
 
   @ApiProperty()
   role: string;
+
   @ApiProperty()
   profileImageUrl: string;
+
   @ApiProperty()
   lastKnownIP: string;
+
   @ApiProperty()
   isActive?: boolean;
+
+  @ApiProperty({ type: Number, example: 100 })
+  minWithdrawableSweepCoins: number;
+
+  @ApiProperty({ type: Number, example: 10 })
+  sweepCoinsPerDollar: number;
 }
 
 export class UserResponseDto {
