@@ -7,6 +7,8 @@ import { WalletsService } from '../wallets/wallets.service';
 import { LIFETIME_PURCHASE_CAP_USD } from '../common/constants/purchase.constants';
 import { User } from '../users/entities/user.entity';
 import { Request as ExpressRequest } from 'express';
+import { plainToInstance } from 'class-transformer';
+import { CoinPackageDto } from './dto/coin-package.dto';
 
 // Define request with user
 interface RequestWithUser extends ExpressRequest {
@@ -51,12 +53,16 @@ export class CoinPackageController {
       capUSD,
     );
 
-    const coinPackages = await this.coinPackageService.findAll();
+    // Convert raw entities to DTO instances to ensure only whitelisted fields are exposed
+    const dtoPackages = plainToInstance(CoinPackageDto, await this.coinPackageService.findAll(), {
+      excludeExtraneousValues: true,
+    });
 
-    const enriched = coinPackages.map((pkg: any) => ({
-      ...pkg,
-      canPurchase: Number(pkg.totalAmount) <= remainingUSD,
-    }));
+    const enriched = dtoPackages.map((pkg) => {
+      const price = Number((pkg as any).totalAmount);
+      const safePrice = Number.isFinite(price) ? price : Infinity;
+      return { ...pkg, canPurchase: safePrice <= remainingUSD };
+    });
 
     // Check if the user can purchase at least one package; if not, throw 400
     const hasPurchasable = enriched.some((p: any) => p.canPurchase);
