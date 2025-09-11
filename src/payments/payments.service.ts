@@ -626,7 +626,7 @@ export class PaymentsService {
             CurrencyType.GOLD_COINS,
             TransactionType.PURCHASE,
             `Purchase of ${coinPackage.name}: ${coinPackage.goldCoinCount} gold coins`,
-            { coinPackageId: coinPackage.id, source: 'coinflow' },
+            { coinPackageId: coinPackage.id, source: 'coinflow', usdAmount: Number(coinPackage.totalAmount) },
             { relatedEntityId, relatedEntityType },
           );
         }

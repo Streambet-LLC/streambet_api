@@ -734,12 +734,15 @@ export class WalletsService {
     const { sum } = await repo
       .createQueryBuilder('t')
       // Cast cp.id to text to match JSONB extracted text to avoid uuid=text operator issues
-      .innerJoin(
+      .leftJoin(
         'coin_packages',
         'cp',
         "cp.id::text = (t.metadata->>'coinPackageId')",
       )
-      .select('COALESCE(SUM(cp.total_amount), 0)', 'sum')
+      .select(
+        "COALESCE(SUM(COALESCE((t.metadata->>'usdAmount')::numeric, cp.total_amount, 0)), 0)",
+        'sum',
+      )
       .where('t.userId = :userId', { userId })
       .andWhere('t.type = :type', { type: TransactionType.PURCHASE })
       .andWhere("(t.metadata->>'source') = :source", { source: 'coinflow' })
