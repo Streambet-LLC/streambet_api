@@ -1,7 +1,4 @@
-import {
-  CurrencyType,
-  CurrencyTypeText,
-} from 'src/wallets/entities/transaction.entity';
+import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 
 interface BetNotificationData {
   amount?: number;
@@ -106,7 +103,6 @@ export const NOTIFICATION_TEMPLATE = {
       `${data.username} cancel bet on ${data.bettingOption}`,
   },
   EMAIL_COIN_PURCHASED: {
-    TITLE: () =>
-      `Gold Coins Added to Your Account`,
+    TITLE: () => `Gold Coins Added to Your Account`,
   },
 };

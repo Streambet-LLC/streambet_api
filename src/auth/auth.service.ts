@@ -14,13 +14,14 @@ import { LoginDto } from './dto/login.dto';
 import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
 import { userVerificationDto } from './dto/verify-password.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { UserRole } from 'src/enums/user-role.enum';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {

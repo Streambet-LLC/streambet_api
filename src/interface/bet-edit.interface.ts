@@ -1,6 +1,5 @@
 import { Bet } from 'src/betting/entities/bet.entity';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
-
+import { CurrencyType } from 'src/enums/currency.enum';
 export interface EditedBetPayload {
   bet: Bet;
   success: Boolean;

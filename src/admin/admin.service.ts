@@ -1,11 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { WalletsService } from '../wallets/wallets.service';
-import {
-  CurrencyType,
-  TransactionType,
-} from 'src/wallets/entities/transaction.entity';
+
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class AdminService {

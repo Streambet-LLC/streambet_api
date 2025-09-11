@@ -25,14 +25,14 @@ import { NotificationService } from 'src/notification/notification.service';
 import { BettingService } from './betting.service';
 import { PlaceBetResult } from 'src/interface/bet-place.interface';
 import { NOTIFICATION_TEMPLATE } from 'src/notification/notification.templates';
-import { UserRole } from 'src/users/entities/user.entity';
 import { ChatMessage } from 'src/interface/chat-message.interface';
 import { ChatGateway } from 'src/chat/chat.gateway';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { CancelBetPayout } from 'src/interface/bet-cancel.interface';
 import { EditedBetPayload } from 'src/interface/bet-edit.interface';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @WebSocketGateway()
 export class BettingGateway {

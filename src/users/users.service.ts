@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
-import { User, UserRole } from './entities/user.entity';
+import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
   NotificationSettingsUpdateDto,
@@ -22,6 +22,7 @@ import {
   MIN_WITHDRAWABLE_SWEEP_COINS,
   SWEEP_COINS_PER_DOLLAR,
 } from 'src/common/constants/currency.constants';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @Injectable()
 export class UsersService {

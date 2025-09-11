@@ -9,11 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
-import {
-  Transaction,
-  TransactionType,
-  CurrencyType,
-} from './entities/transaction.entity';
+import { Transaction } from './entities/transaction.entity';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { TransactionFilterDto } from './dto/transaction.list.dto';
 import { HistoryType } from 'src/enums/history-type.enum';
@@ -22,6 +18,8 @@ import {
   MIN_WITHDRAWABLE_SWEEP_COINS,
 } from 'src/common/constants/currency.constants';
 import { WalletGateway } from './wallets.gateway';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class WalletsService {

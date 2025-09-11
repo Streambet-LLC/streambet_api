@@ -8,10 +8,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
-import {
-  CurrencyType,
-  TransactionType,
-} from '../wallets/entities/transaction.entity';
 import { CoinPackageService } from '../coin-package/coin-package.service';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
@@ -19,6 +15,8 @@ import { NotificationService } from 'src/notification/notification.service';
 import { WalletGateway } from 'src/wallets/wallets.gateway';
 import { randomUUID } from 'crypto';
 import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class PaymentsService {
@@ -690,7 +688,6 @@ export class PaymentsService {
     }
   }
 
-  
   /**
    * Initiates a delegated payout (withdrawal) via Coinflow for the authenticated user.
    *
@@ -722,7 +719,11 @@ export class PaymentsService {
     if (!Number.isInteger(coins) || coins <= 0) {
       throw new BadRequestException('Invalid coins value');
     }
-    if (!params?.account || typeof params.account !== 'string' || !params.account.trim()) {
+    if (
+      !params?.account ||
+      typeof params.account !== 'string' ||
+      !params.account.trim()
+    ) {
       throw new BadRequestException('Missing or invalid payout account token');
     }
     if (!params?.speed) {

@@ -4,12 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
 import { EmailType } from 'src/enums/email-type.enum';
-import {
-  CurrencyType,
-  CurrencyTypeText,
-} from 'src/wallets/entities/transaction.entity';
 import { User } from 'src/users/entities/user.entity';
 import { QueueService } from 'src/queue/queue.service';
+import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 
 @Injectable()
 export class NotificationService {

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { Stream, StreamStatus } from './entities/stream.entity';
+import { Stream } from './entities/stream.entity';
 import {
   LiveScheduledStreamListDto,
   StreamFilterDto,
@@ -24,15 +24,15 @@ import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
-import { StreamList } from 'src/enums/stream-list.enum';
+import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { BettingGateway } from 'src/betting/betting.gateway';
 import { StreamGateway } from './stream.gateway';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {

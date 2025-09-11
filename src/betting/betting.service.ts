@@ -21,11 +21,7 @@ import {
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
-import {
-  CurrencyType,
-  TransactionType,
-} from '../wallets/entities/transaction.entity';
-import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
+import { Stream } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
@@ -33,12 +29,14 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
-import { StreamList } from 'src/enums/stream-list.enum';
+import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { StreamGateway } from 'src/stream/stream.gateway';
 import { BettingGateway } from './betting.gateway';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class BettingService {

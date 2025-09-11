@@ -15,7 +15,7 @@ import { ChatType, SocketEventName } from 'src/enums/socket.enum';
 import { StreamService } from './stream.service';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { ChatMessage } from 'src/interface/chat-message.interface';
-import { StreamList } from 'src/enums/stream-list.enum';
+import { StreamList } from 'src/enums/stream.enum';
 import { RedisViewerService } from 'src/redis/redis-viewer.service';
 
 @WebSocketGateway()

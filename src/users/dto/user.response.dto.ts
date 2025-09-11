@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { NotificationPreference } from '../entities/user.entity';
+import { UserRole } from 'src/enums/user-role.enum';
 
 export class UserProfileResponseDto {
   @ApiProperty()
@@ -76,8 +77,8 @@ export class UserResponseDto {
   @ApiProperty({ example: false })
   isGoogleAccount: boolean;
 
-  @ApiProperty({ example: 'user', enum: ['user', 'admin'] })
-  role: 'user' | 'admin';
+  @ApiProperty({ example: UserRole.USER, enum: UserRole })
+  role: UserRole;
 
   @ApiProperty({ example: '2025-06-13T10:50:04.593Z' })
   lastLogin: Date;

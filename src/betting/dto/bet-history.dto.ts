@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { AdminFilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { BetStatus } from 'src/enums/bet-status.enum';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 /**
  * Request query DTO for betting history listing.
@@ -87,6 +93,3 @@ export class BetHistoryResponseDto {
   @ApiProperty({ example: 42 })
   total: number;
 }
-
-
-

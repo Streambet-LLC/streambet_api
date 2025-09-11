@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
 import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
-import { CurrencyType } from '../entities/transaction.entity';
 import { HistoryType } from 'src/enums/history-type.enum';
 
 export class TransactionFilterDto extends AdminFilterDto {
