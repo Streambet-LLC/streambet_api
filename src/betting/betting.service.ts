@@ -23,6 +23,7 @@ import {
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 import {
   CurrencyType,
+  CurrencyTypeText,
   TransactionType,
 } from '../wallets/entities/transaction.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
@@ -800,7 +801,7 @@ export class BettingService {
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
-    this.enforceMax(amount);
+    this.enforceMax(amount, currencyType);
     // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -929,10 +930,17 @@ export class BettingService {
    * @throws {BadRequestException} If the bet amount exceeds MAX_AMOUNT_FOR_BETTING.
    *
    */
-  private enforceMax(amount: number) {
-    if (amount > MAX_AMOUNT_FOR_BETTING) {
+  private enforceMax(amount: number, currencyType: CurrencyType) {
+    if (
+      amount > MAX_AMOUNT_FOR_BETTING &&
+      currencyType === CurrencyType.SWEEP_COINS
+    ) {
       throw new BadRequestException(
-        `Bet amount exceeds ${MAX_AMOUNT_FOR_BETTING.toLocaleString('en-US')}`,
+        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_AMOUNT_FOR_BETTING.toLocaleString(
+          'en-US',
+        )}. Your bet amount of ${amount.toLocaleString(
+          'en-US',
+        )} exceeds this limit. Please place a lower bet.`,
       );
     }
   }
@@ -959,7 +967,7 @@ export class BettingService {
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
-    this.enforceMax(newAmount);
+    this.enforceMax(newAmount, newCurrencyType);
 
     // Fetch the bet and verify ownership
     const betDetails = await this.betsRepository.findOne({
