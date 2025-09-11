@@ -23,6 +23,7 @@ import {
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
 import {
   CurrencyType,
+  CurrencyTypeText,
   TransactionType,
 } from '../wallets/entities/transaction.entity';
 import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
@@ -39,6 +40,7 @@ import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { StreamGateway } from 'src/stream/stream.gateway';
 import { BettingGateway } from './betting.gateway';
+import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 
 @Injectable()
 export class BettingService {
@@ -799,7 +801,7 @@ export class BettingService {
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
-
+    this.enforceMax(amount, currencyType);
     // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -921,6 +923,27 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+  /**
+   * Ensures that the provided bet amount does not exceed the allowed maximum.
+   *
+   * @param amount - The bet amount to validate.
+   * @throws {BadRequestException} If the bet amount exceeds MAX_AMOUNT_FOR_BETTING.
+   *
+   */
+  private enforceMax(amount: number, currencyType: CurrencyType) {
+    if (
+      amount > MAX_AMOUNT_FOR_BETTING &&
+      currencyType === CurrencyType.SWEEP_COINS
+    ) {
+      throw new BadRequestException(
+        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_AMOUNT_FOR_BETTING.toLocaleString(
+          'en-US',
+        )}. Your bet amount of ${amount.toLocaleString(
+          'en-US',
+        )} exceeds this limit. Please place a lower bet.`,
+      );
+    }
+  }
 
   /**
    * Edits an existing bet for a user.
@@ -944,6 +967,7 @@ export class BettingService {
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
+    this.enforceMax(newAmount, newCurrencyType);
 
     // Fetch the bet and verify ownership
     const betDetails = await this.betsRepository.findOne({
