@@ -768,4 +768,42 @@ export class PaymentsService {
       throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
     }
   }
+
+  /**
+   * Retrieves a withdraw quote from Coinflow for the given amount and user.
+   *
+   * @param amount - The withdraw amount.
+   * @param userId - The application user ID.
+   * @returns The quote payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing or the upstream request fails.
+   */
+  async registerUserViaDocument(userId: string, formData: FormData) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.post(
+        '/api/withdraw/kyc-doc',
+        formData,
+        {
+          headers: {
+            'x-coinflow-auth-user-id': userId,
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+        },
+      );
+
+      return data;
+    } catch (error) {
+      console.log('REGISTER ERROR', error);
+      throw this.mapCoinflowError(
+        error,
+        'Failed to register user via document',
+      );
+    }
+  }
 }
