@@ -6,9 +6,17 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
 import { PaymentsService } from 'src/payments/payments.service';
+import * as _ from 'lodash-es';
 
+const personaIdClassCoinflowIdTypeMapping = {
+  dl: 'DRIVERS',
+  pp: 'PASSPORT',
+  ppc: 'PASSPORT',
+  rp: 'RESIDENCE_PERMIT',
+  id: 'ID_CARD',
+};
 @Injectable()
 export class KycService {
   /** Coinflow API configuration values */
@@ -79,8 +87,9 @@ export class KycService {
    *
    * @param userId - The application user ID.
    * @param inquiryId - The application user ID.
-   * @returns Returns status: "success" = verification was successful | "retry" = needs to repeat the Persona verification on the client side
+   * @returns Returns status: "success" = verification was successful | "retry" = needs to repeat the Persona verification on the client side | "failed" = verification failed
    */
+
   async registerKyc(userId: string, userEmail: string, inquiryId: string) {
     if (!this.personaApiURL || !this.personaApiKey) {
       throw new BadRequestException(
@@ -94,54 +103,83 @@ export class KycService {
       // Fetch the inquiry from persona
       const { data } = await this.personaClient.get(`/inquiries/${inquiryId}`);
 
-      console.log('%j', data.data.attributes);
-      console.log('%j', data.included);
-
       // Get reference-id as this was set as the user id on the frontend
-      const referencedUserId = data.data.attributes['reference-id'];
+      const referencedUserId = _.get(data, ['data', 'attributes', 'reference-id']);
+      // const referencedUserId = data.data.attributes['reference-id'];
+
+      if (!referencedUserId) {
+        Logger.error("Missing reference ID from persona");
+        throw new InternalServerErrorException('Failed to register kyc');
+      }
 
       if (referencedUserId !== userId) {
         throw new BadRequestException('Invalid inquiry ID');
+      }
+
+      if (!data.included || !_.isArray(data.included)) {
+        Logger.error("Missing included array from persona");
+        throw new InternalServerErrorException('Failed to register kyc');
       }
 
       // Get front photo url
       const documentGovernmentId = data.included.find(
         (item) => item.type === 'document/government-id',
       );
-      const frontPhotoUrl = documentGovernmentId.attributes['front-photo']
-        .url as string;
-      const frontPhotoFileName = documentGovernmentId.attributes['front-photo']
-        .filename as string;
-      const countryCode = data.data.attributes.fields['address-country-code']
-        .value as string;
 
-      console.log(
-        documentGovernmentId,
-        frontPhotoUrl,
-        frontPhotoFileName,
-        countryCode,
-      );
+      if (!documentGovernmentId) {
+        Logger.error("Missing document/government-id from persona");
+        throw new InternalServerErrorException('Failed to register kyc');
+      }
 
-      const response = await axios.get(frontPhotoUrl, {
+      const frontPhotoUrl = _.get(documentGovernmentId, ['attributes', 'front-photo', 'url']);
+      const frontPhotoFileName = _.get(documentGovernmentId, ['attributes', 'front-photo', 'filename']);
+      
+      if (!frontPhotoUrl || !frontPhotoFileName) {
+        Logger.error("Missing front-photo from persona");
+        throw new InternalServerErrorException('Failed to register kyc');
+      }
+
+      const backPhotoUrl = _.get(documentGovernmentId, ['attributes', 'back-photo', 'url']);
+      const backPhotoFileName = _.get(documentGovernmentId, ['attributes', 'back-photo', 'filename']);
+
+      const idClass = _.get(documentGovernmentId, ['attributes', 'id-class']);
+      const idType = personaIdClassCoinflowIdTypeMapping[idClass] || 'ID_CARD';
+
+      const countryCode = _.get(data, ['data', 'attributes', 'fields', 'address-country-code', 'value']);
+
+      if (!countryCode) {
+        Logger.error("Missing country code from persona");
+        throw new InternalServerErrorException('Failed to register kyc');
+      }
+
+      const frontPhotoRes = await axios.get(frontPhotoUrl, {
         responseType: 'arraybuffer',
       });
 
-      console.log(response);
+      let backPhotoRes: AxiosResponse<any, any>;
+
+      if (backPhotoUrl || backPhotoFileName) { 
+        backPhotoRes = await axios.get(backPhotoUrl, {
+          responseType: 'arraybuffer',
+        });
+      }
 
       const formData = new FormData();
       formData.append('email', userEmail);
       formData.append('country', countryCode);
-      formData.append('idType', 'ID_CARD');
-      formData.append('idFront', new Blob([response.data]), frontPhotoFileName);
-      formData.append('idBack', new Blob([response.data]), frontPhotoFileName);
+      formData.append('idType', idType);
+      formData.append('idFront', new Blob([frontPhotoRes.data]), frontPhotoFileName);
+      
+      if (backPhotoUrl || backPhotoFileName) {
+        formData.append('idBack', new Blob([backPhotoRes.data]), backPhotoFileName);
+      }
+
       formData.append('merchantId', this.coinflowMerchantId);
 
       const kycDocResult = await this.paymentsService.registerUserViaDocument(
         userId,
         formData,
       );
-
-      console.log(kycDocResult);
 
       return kycDocResult;
     } catch (error) {
@@ -152,58 +190,5 @@ export class KycService {
       Logger.error(error);
       throw new InternalServerErrorException('Failed to register kyc');
     }
-
-    // const coins = Number(params?.coins);
-    // if (!Number.isInteger(coins) || coins <= 0) {
-    //   throw new BadRequestException('Invalid coins value');
-    // }
-    // if (
-    //   !params?.account ||
-    //   typeof params.account !== 'string' ||
-    //   !params.account.trim()
-    // ) {
-    //   throw new BadRequestException('Missing or invalid payout account token');
-    // }
-    // if (!params?.speed) {
-    //   throw new BadRequestException('Missing payout speed');
-    // }
-
-    // try {
-    //   // Convert coins to USD and validate balance and minimum thresholds
-    //   const { dollars } = await this.walletsService.convertSweepCoinsToDollars(
-    //     userId,
-    //     coins,
-    //   );
-
-    //   const idempotencyKey = randomUUID();
-
-    //   // Call Coinflow delegated payout endpoint (amount in cents)
-    //   const cents = Math.round(Number(dollars) * 100);
-    //   const { data } = await this.coinflowClient.post(
-    //     '/api/merchant/withdraws/payout/delegated',
-    //     {
-    //       amount: { cents },
-    //       speed: params.speed,
-    //       account: params.account,
-    //       userId,
-    //       idempotencyKey,
-    //     },
-    //   );
-
-    //   return {
-    //     amountOutUSD: dollars,
-    //     amountOutCents: cents,
-    //     coins,
-    //     speed: params.speed,
-    //     account: params.account,
-    //     idempotencyKey,
-    //     coinflow: data,
-    //   };
-    // } catch (error) {
-    //   if (error instanceof HttpException) {
-    //     throw error;
-    //   }
-    //   throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
-    // }
   }
 }
