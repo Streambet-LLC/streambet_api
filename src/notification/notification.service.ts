@@ -67,7 +67,7 @@ export class NotificationService {
           params: {
             streamName,
             fullName: receiver.username,
-            amount: amount.toLocaleString('en-US'),
+            amount: Math.floor(amount).toLocaleString('en-US'),
             currencyType: updatedCurrencyType,
             roundName,
             dashboardLink: `${dashboardLink}/betting-history
