@@ -1,11 +1,22 @@
-import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
-import { CurrencyType, TransactionType } from '../wallets/entities/transaction.entity';
 import { CoinPackageService } from '../coin-package/coin-package.service';
-import { BettingGateway } from '../betting/betting.gateway';
 import Stripe from 'stripe';
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { NotificationService } from 'src/notification/notification.service';
+import { WalletGateway } from 'src/wallets/wallets.gateway';
+import { randomUUID } from 'crypto';
+import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class PaymentsService {
@@ -25,7 +36,8 @@ export class PaymentsService {
     private configService: ConfigService,
     private walletsService: WalletsService,
     private coinPackageService: CoinPackageService,
-    private bettingGateway: BettingGateway,
+    private walletGateway: WalletGateway,
+    private notificationService: NotificationService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -73,7 +85,9 @@ export class PaymentsService {
           (isRetryableStatus || isNetworkError)
         ) {
           config.__retryCount += 1;
-          await new Promise((res) => setTimeout(res, this.coinflowRetryDelayMs));
+          await new Promise((res) =>
+            setTimeout(res, this.coinflowRetryDelayMs),
+          );
           return this.coinflowClient.request(config);
         }
         return Promise.reject(error);
@@ -286,7 +300,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow session key');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow session key',
+      );
     }
   }
 
@@ -313,7 +330,10 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw data');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow withdraw data',
+      );
     }
   }
 
@@ -353,7 +373,97 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      throw this.mapCoinflowError(error, 'Failed to fetch Coinflow withdraw quote');
+      throw this.mapCoinflowError(
+        error,
+        'Failed to fetch Coinflow withdraw quote',
+      );
+    }
+  }
+
+  /**
+   * Deletes a Coinflow withdrawer bank account for the given token and user.
+   *
+   * @param token - The Coinflow withdrawer account token to delete.
+   * @param userId - The application user ID.
+   * @returns The deletion result payload returned by Coinflow.
+   * @throws BadRequestException If configuration is missing, the token is invalid, or the upstream request fails.
+   */
+  async deleteCoinflowWithdrawerAccount(token: string, userId: string) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      throw new BadRequestException('Missing or invalid token');
+    }
+
+    try {
+      // Fetch withdrawer details and ensure the token exists under bankAccounts
+      const withdrawer = await this.getCoinflowWithdraw(userId);
+
+      // Find the bankAccounts array somewhere in the withdrawer payload
+      const getBankAccountsArray = (root: any): any[] | undefined => {
+        if (!root || typeof root !== 'object') return undefined;
+        const queue: any[] = [root];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (current && typeof current === 'object') {
+            if (Array.isArray((current as any).bankAccounts)) {
+              return (current as any).bankAccounts as any[];
+            }
+            for (const value of Object.values(current)) {
+              if (value && typeof value === 'object') queue.push(value);
+            }
+          }
+        }
+        return undefined;
+      };
+
+      const bankAccounts = getBankAccountsArray(withdrawer);
+      if (!Array.isArray(bankAccounts) || bankAccounts.length === 0) {
+        throw new NotFoundException('No bank accounts found for withdrawer');
+      }
+
+      const normalizedToken = token.trim();
+      const tokenExists = bankAccounts.some((acc: any) => {
+        if (!acc || typeof acc !== 'object') return false;
+        const candidates = [
+          (acc as any).token,
+          (acc as any).accountToken,
+          (acc as any).bankAccountToken,
+          (acc as any).id,
+        ];
+        return candidates.some(
+          (v) => typeof v === 'string' && v.trim() === normalizedToken,
+        );
+      });
+
+      if (!tokenExists) {
+        throw new NotFoundException(
+          'Bank account token not found for withdrawer',
+        );
+      }
+
+      const { data } = await this.coinflowClient.delete(
+        `/api/withdraw/account/${token}`,
+        {
+          headers: {
+            'x-coinflow-auth-user-id': userId,
+          },
+        },
+      );
+
+      return data;
+    } catch (error) {
+      // Keep previously thrown HttpExceptions (e.g., 400/404) intact.
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw this.mapCoinflowError(
+        error,
+        'Failed to delete Coinflow withdrawer account',
+      );
     }
   }
 
@@ -366,13 +476,16 @@ export class PaymentsService {
       (responseData && typeof (responseData as any).message === 'string'
         ? (responseData as any).message
         : typeof responseData === 'string'
-        ? responseData
-        : axiosError.message) || 'Unknown Coinflow error';
+          ? responseData
+          : axiosError.message) || 'Unknown Coinflow error';
 
-    const message = status
-      ? `${prefix}: [${status}] ${safeDetail}`
-      : `${prefix}: ${safeDetail}`;
+    // If details exist, append them
+    const details =
+      responseData && (responseData as any).details
+        ? `, ${(responseData as any).details}`
+        : '';
 
+    const message = `${prefix}: ${safeDetail}${details}`;
     const httpStatus =
       typeof status === 'number' && status >= 400 && status < 600
         ? status
@@ -407,7 +520,8 @@ export class PaymentsService {
         ) {
           try {
             const obj = JSON.parse(trimmed);
-            if (obj && typeof obj === 'object') parsedInfo = obj as Record<string, unknown>;
+            if (obj && typeof obj === 'object')
+              parsedInfo = obj as Record<string, unknown>;
           } catch {
             // leave parsedInfo empty
           }
@@ -415,7 +529,9 @@ export class PaymentsService {
       } else if (rawWebhookInfo && typeof rawWebhookInfo === 'object') {
         parsedInfo = { ...(rawWebhookInfo as Record<string, unknown>) };
         // Some providers send nested stringified JSON values; parse them defensively
-        for (const [k, v] of Object.entries(rawWebhookInfo as Record<string, unknown>)) {
+        for (const [k, v] of Object.entries(
+          rawWebhookInfo as Record<string, unknown>,
+        )) {
           if (typeof v === 'string') {
             const s = v.trim();
             if (
@@ -453,11 +569,34 @@ export class PaymentsService {
         tryGetFrom(parsedInfo, 'coinPackageId') ||
         (payload?.data?.coinPackageId as string | undefined);
 
+      const webhookEnv: string | undefined =
+        (parsedInfo['env'] as string | undefined) ||
+        (parsedInfo['env'] as string | undefined) ||
+        tryGetFrom(parsedInfo, 'env') ||
+        tryGetFrom(parsedInfo, 'env') ||
+        (payload?.data?.env as string | undefined);
+
       if (!userId) {
         throw new BadRequestException('Missing userId (rawCustomerId)');
       }
       if (!coinPackageId) {
-        throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
+        throw new BadRequestException(
+          'Missing coinPackageId (webhookInfo.coin_package_id)',
+        );
+      }
+
+      const expected = (
+        this.configService.get<string>('coinflow.webhookEnv') || 'dev'
+      )
+        .trim()
+        .toLowerCase();
+      const received = webhookEnv?.trim().toLowerCase();
+      if (!received || received !== expected) {
+        Logger.log(
+          `Ignored Coinflow webhook due to env mismatch (received="${received ?? 'undefined'}", expected="${expected}")`,
+          PaymentsService.name,
+        );
+        return { ignored: true };
       }
 
       const coinPackage = await this.coinPackageService.findById(coinPackageId);
@@ -485,13 +624,13 @@ export class PaymentsService {
             CurrencyType.GOLD_COINS,
             TransactionType.PURCHASE,
             `Purchase of ${coinPackage.name}: ${coinPackage.goldCoinCount} gold coins`,
-            { coinPackageId: coinPackage.id, source: 'coinflow' },
+            { coinPackageId: coinPackage.id, source: 'coinflow', usdAmount: Number(coinPackage.totalAmount) },
             { relatedEntityId, relatedEntityType },
           );
         }
       }
 
-       // Sweep coins
+      // Sweep coins
       if (Number(coinPackage.sweepCoinCount) > 0) {
         const exists = relatedEntityId
           ? await this.walletsService.hasTransactionForRelatedEntity(
@@ -513,11 +652,13 @@ export class PaymentsService {
         }
       }
 
-      Logger.log(`Coinflow settled credited for user ${userId} and package ${coinPackageId}`);
+      Logger.log(
+        `Coinflow settled credited for user ${userId} and package ${coinPackageId}`,
+      );
 
       // Emit socket notification to all of the user's active connections
       const updatedWallet = await this.walletsService.findByUserId(userId);
-      this.bettingGateway.emitPurchaseSettled(userId, {
+      this.walletGateway.emitPurchaseSettled(userId, {
         message: `Purchase successful: ${coinPackage.name}`,
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
@@ -530,12 +671,130 @@ export class PaymentsService {
           goldCoins: Number(coinPackage.goldCoinCount) || 0,
         },
       });
+      // Send email notification to the user
+      await this.notificationService.sendSMTPForCoinPurchaseSuccess(
+        userId,
+        Number(coinPackage.goldCoinCount) || 0,
+        Number(coinPackage.sweepCoinCount) || 0,
+      );
       return { processed: true };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
-      throw new BadRequestException((error as Error)?.message || 'Failed to process Coinflow webhook');
+      throw new BadRequestException(
+        (error as Error)?.message || 'Failed to process Coinflow webhook',
+      );
+    }
+  }
+
+  /**
+   * Initiates a delegated payout (withdrawal) via Coinflow for the authenticated user.
+   *
+   * Flow:
+   * - Validates Coinflow configuration.
+   * - Converts requested sweep coins to USD and validates balance/thresholds.
+   * - Calls Coinflow merchant delegated payout endpoint.
+   */
+  async initiateCoinflowDelegatedPayout(
+    userId: string,
+    params: {
+      coins: number;
+      account: string;
+      speed: CoinflowPayoutSpeed;
+    },
+  ) {
+    if (
+      !this.coinflowApiUrl ||
+      !this.coinflowApiKey ||
+      !this.coinflowDefaultToken ||
+      !this.coinflowMerchantId
+    ) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, COINFLOW_DEFAULT_TOKEN, COINFLOW_MERCHANT_ID, and COINFLOW_BLOCKCHAIN',
+      );
+    }
+
+    const coins = Number(params?.coins);
+    if (!Number.isInteger(coins) || coins <= 0) {
+      throw new BadRequestException('Invalid coins value');
+    }
+    if (
+      !params?.account ||
+      typeof params.account !== 'string' ||
+      !params.account.trim()
+    ) {
+      throw new BadRequestException('Missing or invalid payout account token');
+    }
+    if (!params?.speed) {
+      throw new BadRequestException('Missing payout speed');
+    }
+
+    try {
+      // Convert coins to USD and validate balance and minimum thresholds
+      const { dollars } = await this.walletsService.convertSweepCoinsToDollars(
+        userId,
+        coins,
+      );
+
+      const idempotencyKey = randomUUID();
+
+      // Call Coinflow delegated payout endpoint (amount in cents)
+      const cents = Math.round(Number(dollars) * 100);
+      const { data } = await this.coinflowClient.post(
+        '/api/merchant/withdraws/payout/delegated',
+        {
+          amount: { cents },
+          speed: params.speed,
+          account: params.account,
+          userId,
+          idempotencyKey,
+        },
+      );
+
+      return {
+        amountOutUSD: dollars,
+        amountOutCents: cents,
+        coins,
+        speed: params.speed,
+        account: params.account,
+        idempotencyKey,
+        coinflow: data,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
+    }
+  }
+  
+  async registerUserViaDocument(userId: string, formData: FormData) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.post(
+        '/api/withdraw/kyc-doc',
+        formData,
+        {
+          headers: {
+            'x-coinflow-auth-user-id': userId,
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 120000,
+        },
+      );
+
+      return data;
+    } catch (error) {
+      throw this.mapCoinflowError(
+        error,
+        'Failed to register user via document',
+      );
     }
   }
 }

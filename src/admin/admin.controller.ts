@@ -17,7 +17,7 @@ import { BettingService } from '../betting/betting.service';
 import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { CreateStreamDto } from '../betting/dto/create-stream.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import {
@@ -41,7 +41,6 @@ import {
 import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
-import { StreamStatus } from 'src/stream/entities/stream.entity';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
 import {
@@ -49,6 +48,8 @@ import {
   StreamAnalyticsResponseDto,
 } from './dto/analytics.dto';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
+import { StreamStatus } from 'src/enums/stream.enum';
+import { UserRole } from 'src/enums/user-role.enum';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -386,7 +387,7 @@ export class AdminController {
   async softDeleteUser(
     @Query() softDeleteUserDto: SoftDeleteUserDto,
   ): Promise<User> {
-    return this.adminService.softDeleteUser(softDeleteUserDto.userId);
+    return this.usersService.softDeleteUser(softDeleteUserDto.userId);
   }
 
   @ApiOperation({

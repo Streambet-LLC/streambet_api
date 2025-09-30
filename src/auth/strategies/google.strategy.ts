@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback, Profile } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
@@ -35,7 +35,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const callbackURL = configService.get<string>('auth.google.callbackURL');
 
     // Log Google OAuth config for debugging (mask clientSecret)
-    console.log('Google OAuth config:', {
+    Logger.log('Google OAuth config:', {
       clientID,
       clientSecret,
       callbackURL,
@@ -72,7 +72,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         },
       };
 
-      console.log('Processing Google user:', googleUser.email);
+      Logger.log('Processing Google user:', googleUser.email);
 
       const {
         user: createdUser,
@@ -91,8 +91,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         refreshToken: userRefreshToken,
       };
 
-      console.log('Google OAuth success for user:', createdUser.email);
-      console.log('Response contains tokens:', {
+      Logger.log('Google OAuth success for user:', createdUser.email);
+      Logger.log('Response contains tokens:', {
         hasAccessToken: !!response.accessToken,
         hasRefreshToken: !!response.refreshToken,
       });

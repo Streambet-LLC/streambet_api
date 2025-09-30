@@ -3,12 +3,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
-import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
-import {
-  CurrencyType,
-  CurrencyTypeText,
-} from 'src/wallets/entities/transaction.entity';
+import { User } from 'src/users/entities/user.entity';
+import { QueueService } from 'src/queue/queue.service';
+import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 
 @Injectable()
 export class NotificationService {
@@ -16,7 +14,7 @@ export class NotificationService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
-    private readonly emailsService: EmailsService,
+    private readonly queueService: QueueService,
   ) {}
 
   async addNotificationPermision(userId: string) {
@@ -25,7 +23,7 @@ export class NotificationService {
     if (cachedNotificationSettings) {
       return cachedNotificationSettings;
     } else {
-      const userDetails = await this.usersService.findById(userId);
+      const userDetails = await this.usersService.findUserByUserId(userId);
       const settings = userDetails.notificationPreferences;
       if (settings) {
         const expireTime = this.configService.get<number>('email.ttls.fullDay');
@@ -43,7 +41,7 @@ export class NotificationService {
     roundName: string,
   ) {
     try {
-      const receiver = await this.usersService.findById(userId);
+      const receiver = await this.usersService.findUserByUserId(userId);
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
@@ -76,7 +74,8 @@ export class NotificationService {
 `,
           },
         };
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetWon);
+
+        await this.queueService.addEmailJob(emailData, EmailType.BetWon);
 
         return true;
       }
@@ -90,7 +89,7 @@ export class NotificationService {
     roundName: string,
   ) {
     try {
-      const receiver = await this.usersService.findById(userId);
+      const receiver = await this.usersService.findUserByUserId(userId);
       const receiverEmail = receiver?.email;
       const receiverNotificationPermission =
         await this.addNotificationPermision(userId);
@@ -119,7 +118,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.BetLoss);
+        await this.queueService.addEmailJob(emailData, EmailType.BetLoss);
 
         return true;
       }
@@ -156,7 +155,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.Welcome);
+        await this.queueService.addEmailJob(emailData, EmailType.Welcome);
 
         return true;
       }
@@ -185,10 +184,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
-          emailData,
-          EmailType.PasswordReset,
-        );
+        await this.queueService.addEmailJob(emailData, EmailType.PasswordReset);
 
         return true;
       }
@@ -236,7 +232,7 @@ export class NotificationService {
           },
         };
 
-        await this.emailsService.sendEmailSMTP(
+        await this.queueService.addEmailJob(
           emailData,
           EmailType.BetWonFreeCoin,
         );
@@ -248,4 +244,104 @@ export class NotificationService {
     }
   }
     */
+
+  /**
+   * Sends a coin purchase success email notification to the user via SMTP.
+   * Checks user notification preferences and skips sending to test/demo emails.
+   *
+   * @param userId - The ID of the user who purchased coins
+   * @param goldCoin - The number of gold coins purchased
+   * @param sweepCoin - The number of sweep coins purchased
+   * @returns Promise<boolean | void> - Returns true if email sent or skipped, void otherwise
+   */
+  async sendSMTPForCoinPurchaseSuccess(
+    userId: string,
+    goldCoins: number,
+    sweepCoins: number,
+  ) {
+    try {
+      const receiver = await this.usersService.findUserByUserId(userId);
+      const receiverEmail = receiver?.email;
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+
+        const subject = NOTIFICATION_TEMPLATE.EMAIL_COIN_PURCHASED.TITLE();
+
+        const emailData = {
+          toAddress: [receiverEmail],
+          subject,
+          params: {
+            fullName: receiver.username,
+            goldCoins: goldCoins,
+            sweepCoins: sweepCoins,
+          },
+        };
+
+        await this.queueService.addEmailJob(emailData, EmailType.CoinPurchase);
+
+        return true;
+      }
+    } catch (e) {
+      Logger.error('Unable to send coin purchase success mail', e);
+    }
+  }
+
+  async sendSMTPForAccountVerification(
+    userId: string,
+    redirect: string,
+    token: string,
+    user: User,
+  ) {
+    try {
+      const receiver = await this.usersService.findUserByUserId(userId);
+      const receiverEmail = receiver?.email;
+      const receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
+      if (
+        receiverNotificationPermission['emailNotification'] &&
+        receiverEmail
+      ) {
+        if (receiverEmail.indexOf('@example.com') !== -1) {
+          return true;
+        }
+        const hostUrl = this.configService.get<string>('email.HOST_URL');
+        const profileLink = this.configService.get<string>(
+          'email.APPLICATION_HOST',
+        );
+
+        const host = this.configService.get<string>('email.APPLICATION_HOST');
+        const verifyLink = redirect
+          ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
+          : `${hostUrl}/auth/verify-email?token=${token}`;
+
+        const emailData = {
+          subject: 'Activate Email',
+          toAddress: [user.email],
+          params: {
+            host,
+            profileLink,
+            title: 'Activation Email',
+            verifyLink,
+            code: '',
+            fullName: user.name || user.username,
+          },
+        };
+
+        await this.queueService.addEmailJob(
+          emailData,
+          EmailType.AccountVerification,
+        );
+        return true;
+      }
+    } catch (e) {
+      Logger.error('Unable to send coin purchase success mail', e);
+    }
+  }
 }

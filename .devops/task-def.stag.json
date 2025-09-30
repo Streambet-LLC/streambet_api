@@ -43,7 +43,8 @@
         },
         { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "false" }
+        { "name": "REDIS_TLS", "value": "false" },
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "stag" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },
@@ -122,7 +123,7 @@
         },
         {
           "name": "APP_HOST_URL",
-          "valueFrom": "/streambet/stagv2/APP_HOST_URL"
+          "valueFrom": "/streambet/stag/APP_HOST_URL"
         },
         {
           "name": "REDIS_PASSWORD",
@@ -155,6 +156,14 @@
         {
           "name": "COINFLOW_WEBHOOK_SECRET",
           "valueFrom": "/streambet/stag/COINFLOW_WEBHOOK_SECRET"
+        },
+        {
+          "name": "PERSONA_API_KEY",
+          "valueFrom": "/streambet/stag/PERSONA_API_KEY"
+        },
+        {
+          "name": "PERSONA_API_URL",
+          "valueFrom": "/streambet/stag/PERSONA_API_URL"
         }
       ],
       "mountPoints": [],
