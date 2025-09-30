@@ -6,7 +6,7 @@ import {
   IsDateString,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { StreamStatus } from '../../stream/entities/stream.entity';
+import { StreamStatus } from 'src/enums/stream.enum';
 
 export class UpdateStreamDto {
   @ApiProperty({

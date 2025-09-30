@@ -1,7 +1,13 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
-import { User, UserRole } from './entities/user.entity';
+import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
   NotificationSettingsUpdateDto,
@@ -12,10 +18,14 @@ import {
 import { UserResponseDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import {
+  MIN_WITHDRAWABLE_SWEEP_COINS,
+  SWEEP_COINS_PER_DOLLAR,
+} from 'src/common/constants/currency.constants';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @Injectable()
 export class UsersService {
-  
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
@@ -49,6 +59,8 @@ export class UsersService {
       const { password: _unused, wallet, ...sanitizedUser } = user;
       const result = {
         ...sanitizedUser,
+        minWithdrawableSweepCoins: MIN_WITHDRAWABLE_SWEEP_COINS,
+        sweepCoinsPerDollar: SWEEP_COINS_PER_DOLLAR,
         walletBalanceGoldCoin: Number(user.wallet?.goldCoins ?? 0),
         walletBalanceSweepCoin: Number(user.wallet?.sweepCoins ?? 0),
       };
@@ -81,8 +93,68 @@ export class UsersService {
     });
   }
 
-  async findById(id: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+  /**
+   * Finds a user by their unique userId.
+   *
+   * @param userId - The unique identifier of the user
+   * @returns The found user object if it exists
+   * @throws NotFoundException if the user does not exist
+   * @throws InternalServerErrorException if any unexpected error occurs
+   */
+  async findUserByUserId(userId: string): Promise<User> {
+    try {
+      // Attempt to find the user in the database by ID
+      const user = await this.usersRepository.findOne({
+        where: { id: userId },
+      });
+
+      // If no user is found, throw a NotFoundException
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Return the found user
+      return user;
+    } catch (error) {
+      // If the error is already a NotFoundException, rethrow it
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      // Handle any other unexpected errors gracefully
+      this.logger.log(`FindUserByUserId -${error}`);
+      throw new InternalServerErrorException(
+        `Failed to retrieve user with ID ${userId}`,
+      );
+    }
+  }
+
+  async softDeleteUser(userId: string): Promise<User> {
+    const user = await this.findUserByUserId(userId);
+    const timestamp = Date.now();
+    const suffix = `_del_${timestamp}`;
+    // Preserve domain by appending suffix into the local-part
+    let updatedEmail: string;
+    if (user.email?.includes('@')) {
+      const [local, domain] = user.email.split('@');
+      updatedEmail = `${local}${suffix}@${domain}`;
+    } else {
+      updatedEmail = `${user.email ?? 'user'}${suffix}`;
+    }
+    // Username fallback if nullish
+    const updatedUsername = `${user.username ?? 'user'}${suffix}`;
+
+    // Set deletion fields
+    user.email = updatedEmail;
+    user.username = updatedUsername;
+    user.deletedAt = new Date();
+    // Deactivate and invalidate tokens immediately
+    user.isActive = false;
+    user.refreshToken = null;
+    user.refreshTokenExpiresAt = null;
+
+    // Save the updated user
+    return this.usersRepository.save(user);
   }
 
   async create(userData: Partial<User>): Promise<User> {
@@ -281,8 +353,8 @@ export class UsersService {
   getUsersCount(): Promise<number> {
     return this.usersRepository.count({
       where: {
-        isActive: true,      // Only include users who are active
-        deletedAt: null,     // Exclude users who have been soft-deleted
+        isActive: true, // Only include users who are active
+        deletedAt: null, // Exclude users who have been soft-deleted
         role: UserRole.USER, // Only count users with the USER role
       },
     });

@@ -14,10 +14,23 @@
       ],
       "essential": true,
       "environment": [
+        { "name": "NODE_ENV", "value": "development" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "ENABLE_API_LOGGING", "value": "true" },
+        { "name": "ENABLE_DETAILED_LOGGING", "value": "true" },
         {
           "name": "DB_HOST",
           "value": "db-private.revyrie.co"
         },
+        { "name": "DB_PORT", "value": "5432" },
+        { "name": "JWT_EXPIRES_IN", "value": "1d" },
+        { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
+        { "name": "FILE_DRIVER", "value": "s3" },
+        { "name": "AWS_SMTP_PORT", "value": "465" },
+        { "name": "HOSTED", "value": "false" },
+        { "name": "MAIL_DEFAULT_NAME", "value": "Streambet" },
+        { "name": "MAIL_SECURE", "value": "true" },
+        { "name": "MAIL_REQUIRE_TLS", "value": "true" },
         { "name": "REDIS_HOST", "value": "54.172.250.213" },
         { "name": "REDIS_PORT", "value": "6301" },
         { "name": "REDIS_USERNAME", "value": "default" },
@@ -33,40 +46,19 @@
         },
         { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "false" }
+        { "name": "REDIS_TLS", "value": "false" },
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "dev" }
       ],
       "secrets": [
-        { "name": "NODE_ENV", "valueFrom": "/streambet/dev/NODE_ENV" },
-        { "name": "PORT", "valueFrom": "/streambet/dev/PORT" },
         { "name": "CLIENT_URL", "valueFrom": "/streambet/dev/CLIENT_URL" },
-        {
-          "name": "ENABLE_API_LOGGING",
-          "valueFrom": "/streambet/dev/ENABLE_API_LOGGING"
-        },
-        {
-          "name": "ENABLE_DETAILED_LOGGING",
-          "valueFrom": "/streambet/dev/ENABLE_DETAILED_LOGGING"
-        },
-
-        { "name": "DB_PORT", "valueFrom": "/streambet/dev/DB_PORT" },
         { "name": "DB_USERNAME", "valueFrom": "/streambet/dev/DB_USERNAME" },
         { "name": "DB_PASSWORD", "valueFrom": "/streambet/dev/DB_PASSWORD" },
         { "name": "DB_DATABASE", "valueFrom": "/streambet/dev/DB_DATABASE" },
-
         { "name": "JWT_SECRET", "valueFrom": "/streambet/dev/JWT_SECRET" },
-        {
-          "name": "JWT_EXPIRES_IN",
-          "valueFrom": "/streambet/dev/JWT_EXPIRES_IN"
-        },
         {
           "name": "REFRESH_TOKEN_SECRET",
           "valueFrom": "/streambet/dev/REFRESH_TOKEN_SECRET"
         },
-        {
-          "name": "REFRESH_TOKEN_EXPIRES_IN",
-          "valueFrom": "/streambet/dev/REFRESH_TOKEN_EXPIRES_IN"
-        },
-
         {
           "name": "GOOGLE_CLIENT_ID",
           "valueFrom": "/streambet/dev/GOOGLE_CLIENT_ID"
@@ -79,7 +71,6 @@
           "name": "GOOGLE_CALLBACK_URL",
           "valueFrom": "/streambet/dev/GOOGLE_CALLBACK_URL"
         },
-
         {
           "name": "STRIPE_SECRET_KEY",
           "valueFrom": "/streambet/dev/STRIPE_SECRET_KEY"
@@ -101,34 +92,18 @@
           "valueFrom": "/streambet/dev/AWS_SMTP_HOST"
         },
         {
-          "name": "AWS_SMTP_PORT",
-          "valueFrom": "/streambet/dev/AWS_SMTP_PORT"
-        },
-        {
-          "name": "MAIL_DEFAULT_NAME",
-          "valueFrom": "/streambet/dev/MAIL_DEFAULT_NAME"
-        },
-        {
           "name": "MAIL_DEFAULT_EMAIL",
           "valueFrom": "/streambet/dev/MAIL_DEFAULT_EMAIL"
         },
-        { "name": "MAIL_SECURE", "valueFrom": "/streambet/dev/MAIL_SECURE" },
         {
           "name": "AWS_SMTP_REGION",
           "valueFrom": "/streambet/dev/AWS_SMTP_REGION"
         },
         {
-          "name": "MAIL_REQUIRE_TLS",
-          "valueFrom": "/streambet/dev/MAIL_REQUIRE_TLS"
-        },
-        {
           "name": "AWS_EMAIL_FROM",
           "valueFrom": "/streambet/dev/AWS_EMAIL_FROM"
         },
-        { "name": "HOSTED", "valueFrom": "/streambet/dev/HOSTED" },
         { "name": "APP_HOST_URL", "valueFrom": "/streambet/dev/APP_HOST_URL" },
-
-        { "name": "FILE_DRIVER", "valueFrom": "/streambet/dev/FILE_DRIVER" },
         {
           "name": "ACCESS_KEY_ID",
           "valueFrom": "/streambet/dev/ACCESS_KEY_ID"
@@ -141,14 +116,23 @@
           "name": "AWS_DEFAULT_S3_BUCKET",
           "valueFrom": "/streambet/dev/AWS_DEFAULT_S3_BUCKET"
         },
-        { "name": "AWS_S3_REGION", "valueFrom": "/streambet/dev/AWS_S3_REGION" },
-        { "name": "REDIS_PASSWORD", "valueFrom": "/streambet/dev/REDIS_PASSWORD" },
-        { "name": "NEW_RELIC_LICENSE_KEY", "valueFrom": "/streambet/dev/NEW_RELIC_LICENSE_KEY" },
-         {
-           "name": "ABSTRACT_API_KEY",
-           "valueFrom": "/streambet/dev/ABSTRACT_API_KEY"
-         },
-         {
+        { 
+          "name": "NEW_RELIC_LICENSE_KEY", 
+          "valueFrom": "/streambet/dev/NEW_RELIC_LICENSE_KEY" 
+        },
+        {
+          "name": "AWS_S3_REGION",
+          "valueFrom": "/streambet/dev/AWS_S3_REGION"
+        },
+        {
+          "name": "REDIS_PASSWORD",
+          "valueFrom": "/streambet/dev/REDIS_PASSWORD"
+        },
+        {
+          "name": "ABSTRACT_API_KEY",
+          "valueFrom": "/streambet/dev/ABSTRACT_API_KEY"
+        },
+        {
           "name": "COINFLOW_API_URL",
           "valueFrom": "/streambet/dev/COINFLOW_API_URL"
         },
@@ -171,6 +155,14 @@
         {
           "name": "COINFLOW_WEBHOOK_SECRET",
           "valueFrom": "/streambet/dev/COINFLOW_WEBHOOK_SECRET"
+        },
+        {
+          "name": "PERSONA_API_KEY",
+          "valueFrom":"/streambet/dev/PERSONA_API_KEY"
+        },
+        {
+          "name": "PERSONA_API_URL",
+          "valueFrom": "/streambet/dev/PERSONA_API_URL"
         }
       ],
       "mountPoints": [],

@@ -10,7 +10,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation } from '@nestjs/swagger';
 import { AssetsService } from './assets.service';
-import { AllowedDocs, AllowedImages } from 'src/common/types/media-files.types';
+import { AllowedDocs, AllowedImages } from 'src/enums/media-files.enum';
 import { Express, Request } from 'express';
 
 @Controller('assets')

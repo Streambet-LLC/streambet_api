@@ -5,34 +5,29 @@ import { BettingRound } from './entities/betting-round.entity';
 import { Bet } from './entities/bet.entity';
 import { BettingService } from './betting.service';
 import { BettingController } from './betting.controller';
-import { BettingGateway } from './betting.gateway';
 import { WalletsModule } from '../wallets/wallets.module';
 import { UsersModule } from '../users/users.module';
-import { AuthModule } from '../auth/auth.module';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { StreamModule } from 'src/stream/stream.module';
-import { NotificationService } from 'src/notification/notification.service';
-import { EmailsService } from 'src/emails/email.service';
 import { ChatModule } from 'src/chat/chat.module';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
+import { BettingGateway } from './betting.gateway';
+import { WsModule } from 'src/ws/ws.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([BettingVariable, BettingRound, Bet, Stream]),
-    WalletsModule,
+    forwardRef(() => WalletsModule),
     UsersModule,
-    AuthModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
     ChatModule,
     GeoFencingModule,
+    forwardRef(() => WsModule),
+    NotificationModule,
   ],
   controllers: [BettingController],
-  providers: [
-    BettingService,
-    BettingGateway,
-    NotificationService,
-    EmailsService,
-  ],
+  providers: [BettingService, BettingGateway],
   exports: [BettingService, BettingGateway],
 })
 export class BettingModule {}

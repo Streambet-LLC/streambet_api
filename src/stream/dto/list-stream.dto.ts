@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
-import { StreamStatus } from '../entities/stream.entity';
+import { StreamStatus } from 'src/enums/stream.enum';
 
 export class LiveScheduledStreamListDto extends AdminFilterDto {
   @ApiProperty({
@@ -37,7 +37,7 @@ export class LiveScheduledStreamListDto extends AdminFilterDto {
 export class StreamFilterDto extends LiveScheduledStreamListDto {
   @ApiPropertyOptional({
     enum: StreamStatus,
-    default: 'active',
+    default: StreamStatus.ACTIVE,
     description: `available streamStatus -> live and scheduled`,
     required: false,
   })
@@ -45,4 +45,3 @@ export class StreamFilterDto extends LiveScheduledStreamListDto {
   @IsEnum(StreamStatus)
   streamStatus?: string;
 }
-

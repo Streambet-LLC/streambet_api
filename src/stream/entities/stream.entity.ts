@@ -2,14 +2,7 @@ import { BettingVariable } from '../../betting/entities/betting-variable.entity'
 import { BettingRound } from '../../betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
-
-export enum StreamStatus {
-  SCHEDULED = 'scheduled',
-  LIVE = 'live',
-  ENDED = 'ended',
-  CANCELLED = 'cancelled',
-  DELETED = 'deleted',
-}
+import { StreamStatus } from 'src/enums/stream.enum';
 
 @Entity('streams')
 export class Stream extends BaseEntity {

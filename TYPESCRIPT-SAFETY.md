@@ -11,17 +11,17 @@ When accessing properties on `any` typed objects:
 ```typescript
 // ❌ Unsafe
 function processUser(user: any) {
-  console.log(user.name); // Error: Unsafe member access .name on an `any` value
+  Logger.log(user.name); // Error: Unsafe member access .name on an `any` value
 }
 
 // ✅ Safe
 function processUser(user: any) {
   // Option 1: Type assertion
-  console.log((user as { name: string }).name);
-  
+  Logger.log((user as { name: string }).name);
+
   // Option 2: Type guard
   if (typeof user === 'object' && user !== null && 'name' in user) {
-    console.log(user.name);
+    Logger.log(user.name);
   }
 }
 
@@ -32,7 +32,7 @@ interface User {
 }
 
 function processUser(user: User) {
-  console.log(user.name); // Safe!
+  Logger.log(user.name); // Safe!
 }
 ```
 
@@ -90,8 +90,8 @@ void this.userService.updateUser(userId);
 // ✅ Safe - Option 3: then/catch
 this.userService
   .updateUser(userId)
-  .then(() => console.log('User updated'))
-  .catch(err => console.error(err));
+  .then(() => Logger.log('User updated'))
+  .catch((err) => Logger.error(err));
 ```
 
 ### 5. Async Methods (`@typescript-eslint/require-await`)
@@ -124,7 +124,7 @@ When working with errors:
 try {
   // something
 } catch (error) {
-  console.log(error.message); // Error: Unsafe member access .message
+  Logger.log(error.message); // Error: Unsafe member access .message
 }
 
 // ✅ Safe
@@ -132,9 +132,9 @@ try {
   // something
 } catch (error) {
   if (error instanceof Error) {
-    console.log(error.message);
+    Logger.log(error.message);
   } else {
-    console.log('Unknown error');
+    Logger.log('Unknown error');
   }
 }
 ```
@@ -147,7 +147,7 @@ When working with Socket.io:
 // ❌ Unsafe
 @SubscribeMessage('event')
 handleEvent(client: Socket, data: any) {
-  console.log(client.data.user.id); // Multiple unsafe operations
+  Logger.log(client.data.user.id); // Multiple unsafe operations
 }
 
 // ✅ Safe
@@ -168,7 +168,7 @@ handleEvent(
   @ConnectedSocket() client: AuthenticatedSocket,
   @MessageBody() data: EventData
 ) {
-  console.log(client.data.user.id); // Safe!
+  Logger.log(client.data.user.id); // Safe!
 }
 ```
 
@@ -182,4 +182,4 @@ handleEvent(
 6. **Use proper request/response typing** in controllers
 7. **Add type definitions** to function parameters and return values
 
-By following these patterns, you can significantly reduce TypeScript linting errors and improve code quality. 
+By following these patterns, you can significantly reduce TypeScript linting errors and improve code quality.

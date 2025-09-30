@@ -4,8 +4,8 @@ import { User } from '../../users/entities/user.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BetStatus } from '../../enums/bet-status.enum';
-import { CurrencyType } from '../../wallets/entities/transaction.entity';
 import { BettingRound } from './betting-round.entity';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 @Entity('bets')
 export class Bet extends BaseEntity {

@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { BettingRoundStatus } from 'src/enums/round-status.enum';
 
 export class OptionDto {
   @ApiProperty({
@@ -174,8 +175,12 @@ export class EditBettingVariableDto {
 export class UpdateRoundStatusDto {
   @ApiProperty({
     description: 'The new status for the round',
-    enum: ['created', 'open', 'locked'],
-    example: 'open',
+    enum: [
+      BettingRoundStatus.CREATED,
+      BettingRoundStatus.OPEN,
+      BettingRoundStatus.LOCKED,
+    ],
+    example: BettingRoundStatus.OPEN,
   })
   @IsString()
   @IsNotEmpty()

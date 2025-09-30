@@ -60,7 +60,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         exception.stack,
         'HttpExceptionFilter',
       );
-      this.newRelic.noticeError(exception);
+      this.newRelic?.noticeError?.(exception);
     } else {
       this.logger.warn(
         `${request.method} ${request.url}`,
