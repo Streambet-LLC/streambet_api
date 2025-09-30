@@ -6,8 +6,8 @@ import {
   IsIn,
   IsOptional,
 } from 'class-validator';
-import { CurrencyType } from '../../wallets/entities/transaction.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 export class CurrencyTypeDto {
   @ApiProperty({

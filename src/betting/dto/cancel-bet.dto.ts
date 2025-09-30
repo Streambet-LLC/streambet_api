@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsDefined, IsIn, IsNotEmpty, IsUUID } from 'class-validator';
-import { CurrencyType } from 'src/wallets/entities/transaction.entity';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 export class CancelBetDto {
   @ApiProperty()

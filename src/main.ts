@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import 'newrelic';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -14,9 +15,9 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { getQueueToken } from '@nestjs/bullmq';
-
+import { SocketIoAdapter } from './ws/socket-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -29,22 +30,23 @@ async function bootstrap() {
   // Get ConfigService
   const configService = app.get(ConfigService);
 
-  if (configService.getOrThrow('app.isNewRelicEnable', { infer: true })) {
-    import('newrelic').catch((err) => {
-      Logger.error('Failed to load New Relic:', err);
-    });
-  }
+  // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
+
+  
   const trustProxy = configService.get<string>('geo.trustProxy');
-  if (trustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
+  const enableTrustProxy =
+    trustProxy === 'true' || trustProxy === '1' || trustProxy === 'yes';
+  if (enableTrustProxy) app.set('trust proxy', 1); // This configuration is applicable only when ALB-only access is enforced. In production, our services are deployed on AWS ECS and are accessible exclusively through the Application Load Balancer (ALB), with no direct access to the underlying containers
 
   // Create your queue instance
   const streamLiveQueue = app.get<Queue>(getQueueToken(STREAM_LIVE_QUEUE));
+  const sendEmailQueue = app.get<Queue>(getQueueToken(EMAIL_QUEUE));
 
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
   createBullBoard({
-    queues: [new BullMQAdapter(streamLiveQueue)],
+    queues: [new BullMQAdapter(streamLiveQueue), new BullMQAdapter(sendEmailQueue)],
     serverAdapter,
   });
 

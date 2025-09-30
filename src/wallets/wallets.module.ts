@@ -5,11 +5,17 @@ import { Transaction } from './entities/transaction.entity';
 import { WalletsService } from './wallets.service';
 import { WalletsController } from './wallets.controller';
 import { UsersModule } from '../users/users.module';
+import { WalletGateway } from './wallets.gateway';
+import { WsModule } from 'src/ws/ws.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet, Transaction]), UsersModule],
+  imports: [
+    TypeOrmModule.forFeature([Wallet, Transaction]),
+    UsersModule,
+    WsModule,
+  ],
   controllers: [WalletsController],
-  providers: [WalletsService],
-  exports: [WalletsService],
+  providers: [WalletsService, WalletGateway],
+  exports: [WalletsService, WalletGateway],
 })
 export class WalletsModule {}

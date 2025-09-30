@@ -6,6 +6,6 @@ export interface JwtPayload {
   iat?: number; // issued at
   exp?: number; // expiration time
 }
-export interface AuthenticatedSocketPayload extends JwtPayload{
-  profileImageUrl?:string
+export interface AuthenticatedSocketPayload extends JwtPayload {
+  profileImageUrl?: string;
 }

@@ -2,11 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  forwardRef,
-  Inject,
-  HttpStatus,
   Logger,
   InternalServerErrorException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -22,21 +21,23 @@ import {
   EditOptionDto,
 } from './dto/create-betting-variable.dto';
 import { EditBetDto, PlaceBetDto } from './dto/place-bet.dto';
-import {
-  CurrencyType,
-  TransactionType,
-} from '../wallets/entities/transaction.entity';
-import { Stream, StreamStatus } from 'src/stream/entities/stream.entity';
+import { Stream } from 'src/stream/entities/stream.entity';
 import { PlatformName } from '../enums/platform-name.enum';
 import { BettingRound } from './entities/betting-round.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
-import { BettingGateway } from './betting.gateway';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
-import { StreamList } from 'src/enums/stream-list.enum';
+import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
+import { BetHistoryFilterDto } from './dto/bet-history.dto';
+import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
+import { StreamGateway } from 'src/stream/stream.gateway';
+import { BettingGateway } from './betting.gateway';
+import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
+import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class BettingService {
@@ -53,40 +54,81 @@ export class BettingService {
     private notificationService: NotificationService,
     private usersService: UsersService,
     private dataSource: DataSource,
-    @Inject(forwardRef(() => BettingGateway))
     private readonly bettingGateway: BettingGateway,
+    @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
+    @Inject(forwardRef(() => StreamGateway))
+    private readonly streamGateway: StreamGateway,
   ) {}
 
-  // Utility function to detect platform from URL
+  /**
+   * Detects the streaming platform from a given URL.
+   *
+   * This utility function checks the provided URL against a predefined set of
+   * platform-specific keywords (Kick, YouTube, Twitch, Vimeo). If a match is found,
+   * it returns the corresponding platform name; otherwise, it returns `null`.
+   *
+   * @param url - The URL string to analyze and detect the platform from.
+   *
+   * @returns {PlatformName | null}
+   * - The detected platform as a `PlatformName` enum value if a match is found.
+   * - `null` if the URL does not match any known platform.
+   */
   private detectPlatformFromUrl(url: string): PlatformName | null {
+    // Map each platform to its associated keywords
     const platformKeywords: Record<PlatformName, string[]> = {
       [PlatformName.Kick]: ['kick.com', 'kick'],
       [PlatformName.Youtube]: ['youtube.com', 'youtu.be', 'youtube'],
       [PlatformName.Twitch]: ['twitch.tv', 'twitch.com', 'twitch'],
       [PlatformName.Vimeo]: ['vimeo.com', 'vimeo'],
     };
+
+    // Convert the input URL to lowercase for case-insensitive comparison
     const urlLower = url.toLowerCase();
+
+    // Iterate through each platform and its keywords
     for (const [platform, keywords] of Object.entries(platformKeywords)) {
+      // Check if the URL contains any keyword associated with the current platform
       if (keywords.some((keyword) => urlLower.includes(keyword))) {
-        return platform as PlatformName;
+        return platform as PlatformName; // Return the detected platform
       }
     }
+
+    // Return null if no platform keywords match
     return null;
   }
 
   // Stream Management
+  /**
+   * Creates a new stream entry in the system.
+   *
+   * This function handles stream creation with the following logic:
+   * - Initializes a stream entity from the provided DTO.
+   * - Determines stream status based on the scheduled start time:
+   *   - If the scheduled time is in the past or present → set as `LIVE`.
+   *   - If the scheduled time is in the future → set as `SCHEDULED`.
+   * - Automatically detects the streaming platform from the embedded URL (if provided).
+   * - Saves the stream into the repository.
+   * - If scheduled, registers the stream with the scheduler.
+   * - Emits an event to update the stream list for connected clients.
+   *
+   * @param createStreamDto - DTO containing stream details (e.g., name, scheduledStartTime, embeddedUrl).
+   *
+   * @returns {Promise<Stream>} The newly created stream entity with updated fields.
+   */
   async createStream(createStreamDto: CreateStreamDto): Promise<Stream> {
+    // Create a new stream entity from the DTO
     const stream = this.streamsRepository.create(createStreamDto);
 
+    // Handle scheduled start time: set status accordingly
     if (createStreamDto.scheduledStartTime) {
       const now = new Date();
       const scheduledTime = new Date(createStreamDto.scheduledStartTime);
 
       if (scheduledTime <= now) {
-        stream.status = StreamStatus.LIVE; // If scheduled time is now or in the past
+        stream.status = StreamStatus.LIVE; // If time is now or in the past → live
       } else {
-        stream.status = StreamStatus.SCHEDULED;
+        stream.status = StreamStatus.SCHEDULED; // Future time → scheduled
       }
     }
 
@@ -96,71 +138,156 @@ export class BettingService {
         createStreamDto.embeddedUrl,
       );
       if (detectedPlatform) {
-        stream.platformName = detectedPlatform;
+        stream.platformName = detectedPlatform; // Assign detected platform
       }
     }
 
+    // Save the stream into the database
     const streamResponse = await this.streamsRepository.save(stream);
-    if (stream.status == StreamStatus.SCHEDULED) {
+
+    // If stream is scheduled, register it with the scheduler
+    if (stream.status === StreamStatus.SCHEDULED) {
       this.streamService.scheduleStream(
         streamResponse.id,
         stream.scheduledStartTime,
       );
     }
 
-    // Emit event to update stream list
-    this.bettingGateway.emitStreamListEvent(StreamList.StreamCreated);
+    // Emit event to notify connected clients that a new stream was created
+    this.streamGateway.emitStreamListEvent(StreamList.StreamCreated);
+
     return streamResponse;
   }
 
+  /**
+   * Retrieves all streams with optional filtering of ended streams.
+   *
+   * This function fetches streams from the repository with the following behavior:
+   * - If `includeEnded` is true → fetches all streams (live, scheduled, and ended).
+   * - If `includeEnded` is false → fetches only currently `LIVE` streams.
+   * - Always includes related `bettingVariables`.
+   * - Streams are ordered by `createdAt` in descending order (latest first).
+   *
+   * @param includeEnded - Boolean flag indicating whether to include ended streams.
+   *                       Defaults to `false`, meaning only live streams are returned.
+   *
+   * @returns {Promise<Stream[]>} A list of streams matching the criteria.
+   */
   async findAllStreams(includeEnded: boolean = false): Promise<Stream[]> {
     if (includeEnded) {
+      // Fetch all streams regardless of status
       return this.streamsRepository.find({
         relations: ['bettingVariables'],
-        order: { createdAt: 'DESC' },
+        order: { createdAt: 'DESC' }, // Most recent streams first
       });
     }
 
+    // Fetch only currently live streams
     return this.streamsRepository.find({
       where: { status: StreamStatus.LIVE },
       relations: ['bettingVariables'],
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' }, // Most recent live streams first
     });
   }
 
+  /**
+   * Retrieves a single stream by its unique ID.
+   *
+   * This function looks up a stream in the repository by its ID and includes
+   * related `bettingVariables`. If no stream is found, it throws a
+   * `NotFoundException`.
+   *
+   * @param id - The unique identifier of the stream to retrieve.
+   *
+   * @returns {Promise<Stream>} The stream entity with its related betting variables.
+   *
+   * @throws {NotFoundException} If no stream exists with the given ID.
+   */
   async findStreamById(id: string): Promise<Stream> {
+    // Attempt to find the stream by its ID, including bettingVariables relation
     const stream = await this.streamsRepository.findOne({
       where: { id },
       relations: ['bettingVariables'],
     });
 
+    // If no stream is found, throw a NotFoundException
     if (!stream) {
       throw new NotFoundException(`Stream with ID ${id} not found`);
     }
 
+    // Return the found stream
     return stream;
   }
 
+  /**
+   * Updates the status of a stream by its ID.
+   *
+   * This function:
+   * - Retrieves the stream using its ID.
+   * - Updates the stream's status to the provided value.
+   * - Automatically sets timestamp fields based on the new status:
+   *   - If status is `LIVE` → sets `actualStartTime` to the current date/time.
+   *   - If status is `ENDED` → sets `endTime` to the current date/time.
+   * - Saves and returns the updated stream entity.
+   *
+   * @param id - The unique identifier of the stream to update.
+   * @param status - The new status to apply (`LIVE`, `ENDED`, etc.).
+   *
+   * @returns {Promise<Stream>} The updated stream entity.
+   *
+   * @throws {NotFoundException} If no stream exists with the given ID.
+   */
   async updateStreamStatus(id: string, status: StreamStatus): Promise<Stream> {
+    // Fetch the stream by ID (throws if not found)
     const stream = await this.findStreamById(id);
+
+    // Update the stream's status
     stream.status = status;
 
+    // If stream is going live, set actual start time
     if (status === StreamStatus.LIVE) {
       stream.actualStartTime = new Date();
-    } else if (status === StreamStatus.ENDED) {
+    }
+    // If stream is ending, set end time
+    else if (status === StreamStatus.ENDED) {
       stream.endTime = new Date();
     }
 
+    // Save and return the updated stream entity
     return this.streamsRepository.save(stream);
   }
 
   // Betting Variable Management
+  /**
+   * Creates betting rounds and betting variables for a given stream.
+   *
+   * This function:
+   * - Validates that betting variables cannot be added to `ENDED` streams.
+   * - Iterates over the provided rounds and:
+   *   - Creates a new betting round for the stream with initial status `CREATED`.
+   *   - Creates betting variables (options) within each round.
+   * - Collects and returns structured round data, including betting variables and their metadata.
+   *
+   * @param createBettingVariableDto - DTO containing:
+   *   - `streamId`: The stream to which betting variables should be added.
+   *   - `rounds`: An array of rounds, each containing a `roundName` and a list of betting options.
+   *
+   * @returns {Promise<any>} An object containing:
+   *   - `streamId`: ID of the stream.
+   *   - `rounds`: Array of created rounds with their associated betting variables.
+   *
+   * @throws {BadRequestException} If the stream has already ended.
+   * @throws {NotFoundException} If the stream ID does not exist.
+   */
   async createBettingVariable(
     createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<any> {
     const { streamId, rounds } = createBettingVariableDto;
+
+    // Validate stream existence
     const stream = await this.findStreamById(streamId);
 
+    // Prevent adding betting variables to ended streams
     if (stream.status === StreamStatus.ENDED) {
       throw new BadRequestException(
         'Cannot add betting variables to ended streams',
@@ -169,8 +296,9 @@ export class BettingService {
 
     const allRounds = [];
 
+    // Iterate through each provided round
     for (const roundData of rounds) {
-      // Create betting round
+      // Create and save a new betting round
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
@@ -180,7 +308,7 @@ export class BettingService {
 
       const createdVariables: BettingVariable[] = [];
 
-      // Create betting variables for this round
+      // Create betting variables (options) for this round
       for (const option of roundData.options) {
         const bettingVariable = this.bettingVariablesRepository.create({
           name: option.option,
@@ -192,6 +320,7 @@ export class BettingService {
         createdVariables.push(saved);
       }
 
+      // Push structured round response with betting variables
       allRounds.push({
         roundId: savedRound.id,
         roundName: savedRound.roundName,
@@ -209,45 +338,101 @@ export class BettingService {
       });
     }
 
+    // Return structured response
     return {
       streamId,
       rounds: allRounds,
     };
   }
 
+  /**
+   * Retrieves a betting variable by its unique ID.
+   *
+   * This function:
+   * - Searches the repository for a betting variable with the given ID.
+   * - Includes related entities: `stream`, `bets`, and `round`.
+   * - Throws a `NotFoundException` if the betting variable does not exist.
+   *
+   * @param id - The unique identifier of the betting variable to retrieve.
+   *
+   * @returns {Promise<BettingVariable>} The betting variable entity with its relations.
+   *
+   * @throws {NotFoundException} If no betting variable is found with the given ID.
+   */
   async findBettingVariableById(id: string): Promise<BettingVariable> {
+    // Attempt to fetch the betting variable by ID, including stream, bets, and round relations
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id },
       relations: ['stream', 'bets', 'round'],
     });
 
+    // If not found, throw a NotFoundException
     if (!bettingVariable) {
       throw new NotFoundException(`Betting variable with ID ${id} not found`);
     }
 
+    // Return the betting variable entity with its relations
     return bettingVariable;
   }
 
+  /**
+   * Updates the status of a betting variable by its ID.
+   *
+   * This function:
+   * - Retrieves the betting variable by its ID.
+   * - Updates its status to the provided value.
+   * - Saves and returns the updated betting variable.
+   *
+   * @param id - The unique identifier of the betting variable to update.
+   * @param status - The new status to assign (`ACTIVE`, `INACTIVE`, etc.).
+   *
+   * @returns {Promise<BettingVariable>} The updated betting variable entity.
+   *
+   * @throws {NotFoundException} If no betting variable exists with the given ID.
+   */
   async updateBettingVariableStatus(
     id: string,
     status: BettingVariableStatus,
   ): Promise<BettingVariable> {
+    // Fetch the betting variable by ID (throws NotFoundException if not found)
     const bettingVariable = await this.findBettingVariableById(id);
 
+    // Update the status
     bettingVariable.status = status;
+
+    // Save changes to the database
     const updatedVariable =
       await this.bettingVariablesRepository.save(bettingVariable);
 
+    // Return the updated betting variable
     return updatedVariable;
   }
+
   /**
-   * Returns all rounds for a stream, with their options and winners (if any), separated by currency type.
-   * @param streamId string
+   * Retrieves all betting rounds of a given stream along with their winners.
+   *
+   * This function:
+   * - Fetches all rounds of the stream, including betting variables and their bets (with user info).
+   * - For each round:
+   *   - Lists available options (betting variables).
+   *   - Identifies winning and losing options.
+   *   - Collects unique winning users (separately for Gold Coins and Sweep Coins).
+   *   - Calculates the total winner amount, which is the sum of all bets placed
+   *     on losing options (per currency).
+   * - Returns structured round data including winners, amounts, and options.
+   *
+   * @param streamId - The unique identifier of the stream whose rounds are requested.
+   *
+   * @returns {Promise<StreamRoundsResponseDto>} An object containing:
+   *   - `streamId`: The ID of the stream.
+   *   - `rounds`: Array of round objects, each with winners, winnerAmount, and options.
+   *
+   * @throws {NotFoundException} If the stream does not exist (implicitly via repository call).
    */
   async getStreamRoundsWithWinners(
     streamId: string,
   ): Promise<StreamRoundsResponseDto> {
-    // Get all rounds for the stream, with their betting variables and bets
+    // Get all rounds for the stream, with their betting variables and bets (including users)
     const rounds = await this.bettingRoundsRepository.find({
       where: { streamId },
       relations: [
@@ -255,17 +440,18 @@ export class BettingService {
         'bettingVariables.bets',
         'bettingVariables.bets.user',
       ],
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'ASC' }, // Show rounds in chronological order
     });
 
-    // Compose the response
+    // Initialize response structure
     const result = {
       streamId,
       rounds: [] as any[],
     };
 
+    // Process each round
     for (const round of rounds) {
-      // Get all options for this round
+      // Extract round options (betting variables), sorted by creation time
       const options = round.bettingVariables
         .map((variable) => ({
           id: variable.id,
@@ -281,20 +467,20 @@ export class BettingService {
           option,
         }));
 
-      // Find the winning option(s)
+      // Identify winning and losing options
       const winningOptions = round.bettingVariables.filter(
         (v) => v.is_winning_option,
       );
-
-      // Find the lossing option(s)
-      const lossingOptions = round.bettingVariables.filter(
+      const losingOptions = round.bettingVariables.filter(
         (v) => !v.is_winning_option,
       );
 
+      // Initialize winners and payout amounts
       let winners = { goldCoins: [], sweepCoins: [] };
       let winnerAmount = { goldCoins: null, sweepCoins: null };
+
       if (winningOptions.length > 0) {
-        // For each winning option, get all bets by currency
+        // Collect winning bets for each currency
         const winnerBetsGoldCoins = winningOptions.flatMap((v) =>
           (v.bets || []).filter(
             (bet) =>
@@ -309,14 +495,11 @@ export class BettingService {
               bet.status === BetStatus.Won,
           ),
         );
-        // Remove duplicate users (in case a user bet multiple times)
+
+        // Deduplicate winners by user for Gold Coins
         const winnerUsersMapGoldCoins = new Map();
         for (const bet of winnerBetsGoldCoins) {
-          if (
-            bet.user &&
-            !winnerUsersMapGoldCoins.has(bet.user.id) &&
-            bet.status === BetStatus.Won
-          ) {
+          if (bet.user && !winnerUsersMapGoldCoins.has(bet.user.id)) {
             winnerUsersMapGoldCoins.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
@@ -324,13 +507,11 @@ export class BettingService {
             });
           }
         }
+
+        // Deduplicate winners by user for Sweep Coins
         const winnerUsersMapSweepCoins = new Map();
         for (const bet of winnerBetsSweepCoins) {
-          if (
-            bet.user &&
-            !winnerUsersMapSweepCoins.has(bet.user.id) &&
-            bet.status === BetStatus.Won
-          ) {
+          if (bet.user && !winnerUsersMapSweepCoins.has(bet.user.id)) {
             winnerUsersMapSweepCoins.set(bet.user.id, {
               userId: bet.user.id,
               userName: bet.user.username,
@@ -338,26 +519,33 @@ export class BettingService {
             });
           }
         }
+
+        // Finalize winners
         winners.goldCoins = Array.from(winnerUsersMapGoldCoins.values());
         winners.sweepCoins = Array.from(winnerUsersMapSweepCoins.values());
 
-        // Calculate winnerAmount (Sum of total amount placed in lossing option)
-        const winnerAmountGoldCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
+        // Calculate payout pool: sum of bets on losing options
+        const winnerAmountGoldCoins = losingOptions.reduce(
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsGoldCoinAmount) || 0),
           0,
         );
-        const winnerAmountSweepCoins = lossingOptions.reduce(
-          (sum, bettingVariable) => Number(sum) + (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
+        const winnerAmountSweepCoins = losingOptions.reduce(
+          (sum, bettingVariable) =>
+            Number(sum) +
+            (Number(bettingVariable.totalBetsSweepCoinAmount) || 0),
           0,
         );
-        winnerAmount.goldCoins = winnerAmountGoldCoins
-          ? winnerAmountGoldCoins
-          : null;
-        winnerAmount.sweepCoins = winnerAmountSweepCoins
-          ? winnerAmountSweepCoins
-          : null;
+
+        // Assign amounts if nonzero
+        winnerAmount.goldCoins =
+          winnerAmountGoldCoins > 0 ? winnerAmountGoldCoins : null;
+        winnerAmount.sweepCoins =
+          winnerAmountSweepCoins > 0 ? winnerAmountSweepCoins : null;
       }
 
+      // Push round summary into response
       result.rounds.push({
         roundId: round.id,
         roundName: round.roundName,
@@ -480,7 +668,7 @@ export class BettingService {
     // emit event when user update, create, delete a bet round
     const streamDetails = await this.streamService.findStreamById(streamId);
     try {
-      await this.bettingGateway.emitRoundDetails(streamId, streamDetails);
+      await this.streamGateway.emitRoundDetails(streamId, streamDetails);
     } catch (err) {
       Logger.warn(
         `emitRoundDetails failed for stream ${streamId}: ${err?.message ?? err}`,
@@ -493,111 +681,152 @@ export class BettingService {
     };
   }
 
+  /**
+   * Updates the options (betting variables) for a given betting round.
+   *
+   * Functionality:
+   * - Updates existing options (if `id` is provided).
+   * - Adds new options (if `id` is missing).
+   * - Removes options not present in the request payload.
+   * - Ensures `streamId` is correctly set when adding new options.
+   * - Returns the updated round details with options.
+   *
+   * @param bettingRound - The round to which the options belong
+   * @param options - List of option DTOs (existing and new)
+   * @returns Updated round details with options
+   */
   private async updateRoundOptions(
     bettingRound: BettingRound,
     options: EditOptionDto[],
   ): Promise<any> {
-    {
-      const existingVariables = await this.bettingVariablesRepository.find({
-        where: { roundId: bettingRound.id },
-      });
+    // Fetch all existing variables for this round
+    const existingVariables = await this.bettingVariablesRepository.find({
+      where: { roundId: bettingRound.id },
+    });
 
-      // Separate existing and new options by id
-      const existingOptions = options.filter((opt) => opt.id);
-      const newOptions = options.filter((opt) => !opt.id);
+    // Split request options into "existing" (with id) and "new" (without id)
+    const existingOptions = options.filter((opt) => opt.id);
+    const newOptions = options.filter((opt) => !opt.id);
 
-      // Update existing options
-      for (const option of existingOptions) {
-        const existingVariable = existingVariables.find(
-          (v) => v.id === option.id,
-        );
-        if (existingVariable) {
-          existingVariable.name = option.option;
-          await this.bettingVariablesRepository.save(existingVariable);
-        }
-      }
-
-      // Ensure bettingRound.stream is populated
-      if (!bettingRound.stream) {
-        const roundWithStream = await this.bettingRoundsRepository.findOne({
-          where: { id: bettingRound.id },
-          relations: ['stream'],
-        });
-        bettingRound.stream = roundWithStream?.stream;
-      }
-
-      // Add new options
-      for (const option of newOptions) {
-        const bettingVariable = this.bettingVariablesRepository.create({
-          name: option.option,
-          round: bettingRound,
-          stream: bettingRound.stream,
-          streamId: bettingRound.stream?.id, // Ensure streamId is set
-        });
-        await this.bettingVariablesRepository.save(bettingVariable);
-      }
-
-      // Remove options that are not in the request (by id)
-      const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
-      const variablesToDelete = existingVariables.filter(
-        (v) => v.id && !optionIdsToKeep.includes(v.id),
+    // 🔹 Update existing options
+    for (const option of existingOptions) {
+      const existingVariable = existingVariables.find(
+        (v) => v.id === option.id,
       );
-
-      for (const variable of variablesToDelete) {
-        await this.bettingVariablesRepository.remove(variable);
+      if (existingVariable) {
+        existingVariable.name = option.option;
+        await this.bettingVariablesRepository.save(existingVariable);
       }
-
-      // Get updated variables
-      const updatedVariables = await this.bettingVariablesRepository.find({
-        where: { roundId: bettingRound.id },
-        order: { createdAt: 'ASC' },
-      });
-
-      return {
-        roundId: bettingRound.id,
-        roundName: bettingRound.roundName,
-        status: bettingRound.status,
-        options: updatedVariables.map((variable) => ({
-          id: variable.id,
-          name: variable.name,
-          is_winning_option: variable.is_winning_option,
-          status: variable.status,
-          totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
-          totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
-          betCountSweepCoin: variable.betCountSweepCoin,
-          betCountGoldCoin: variable.betCountGoldCoin,
-        })),
-      };
     }
+
+    // 🔹 Ensure bettingRound has stream relation populated
+    if (!bettingRound.stream) {
+      const roundWithStream = await this.bettingRoundsRepository.findOne({
+        where: { id: bettingRound.id },
+        relations: ['stream'],
+      });
+      bettingRound.stream = roundWithStream?.stream;
+    }
+
+    // 🔹 Add new options (create new betting variables)
+    for (const option of newOptions) {
+      const bettingVariable = this.bettingVariablesRepository.create({
+        name: option.option,
+        round: bettingRound,
+        stream: bettingRound.stream,
+        streamId: bettingRound.stream?.id, // Ensure streamId is linked
+      });
+      await this.bettingVariablesRepository.save(bettingVariable);
+    }
+
+    // 🔹 Remove variables that are not in the new request
+    const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
+    const variablesToDelete = existingVariables.filter(
+      (v) => v.id && !optionIdsToKeep.includes(v.id),
+    );
+
+    for (const variable of variablesToDelete) {
+      await this.bettingVariablesRepository.remove(variable);
+    }
+
+    // 🔹 Fetch the updated list of variables for the round
+    const updatedVariables = await this.bettingVariablesRepository.find({
+      where: { roundId: bettingRound.id },
+      order: { createdAt: 'ASC' },
+    });
+
+    // 🔹 Return updated round details with its options
+    return {
+      roundId: bettingRound.id,
+      roundName: bettingRound.roundName,
+      status: bettingRound.status,
+      options: updatedVariables.map((variable) => ({
+        id: variable.id,
+        name: variable.name,
+        is_winning_option: variable.is_winning_option,
+        status: variable.status,
+        totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
+        totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
+        betCountSweepCoin: variable.betCountSweepCoin,
+        betCountGoldCoin: variable.betCountGoldCoin,
+      })),
+    };
   }
 
   // Betting Operations
+  /**
+   * Places a bet for a user on a given betting variable.
+   *
+   * Workflow:
+   * 1. Validate the betting variable and round/stream status.
+   * 2. Ensure the user does not already have an active bet in the same round.
+   * 3. Deduct the bet amount from the user's wallet inside a transaction.
+   * 4. Create and save the bet.
+   * 5. Update the betting variable’s aggregated bet amounts and counts using a write lock
+   *    to prevent race conditions.
+   * 6. Commit the transaction or roll back on failure.
+   *
+   * @param userId - The ID of the user placing the bet.
+   * @param placeBetDto - Data Transfer Object containing bettingVariableId, amount, and currencyType.
+   * @returns The saved bet along with the round ID where the bet was placed.
+   * @throws NotFoundException - If the betting variable or round is not found.
+   * @throws BadRequestException - If the round/stream is closed, ended, or user already has an active bet.
+   */
   async placeBet(
     userId: string,
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
+    this.enforceMax(amount, currencyType);
+    // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
       relations: ['round', 'round.stream'],
     });
+
+    // Validate betting variable existence
     if (!bettingVariable) {
       throw new NotFoundException(
         `Could not find an active betting variable with the specified ID. Please check the ID and try again.`,
       );
     }
 
+    // Ensure the round is open for betting
     if (bettingVariable?.round?.status !== BettingRoundStatus.OPEN) {
       const message = await this.bettingRoundStatusMessage(
         bettingVariable.round.status,
       );
       throw new BadRequestException(message);
     }
+
+    // Ensure the stream is not ended
     if (bettingVariable?.round?.stream?.status === StreamStatus.ENDED) {
       throw new BadRequestException(
         `This stream is Ended. You can only place bets during live and scheduled streams.`,
       );
     }
+
+    // Ensure the user does not already have an active bet in the same round
     const existingBet = await this.betsRepository
       .createQueryBuilder('bet')
       .where('bet.userId = :userId', { userId })
@@ -612,11 +841,16 @@ export class BettingService {
         'You already have an active bet. Wait for it to resolve before placing a new one.',
       );
     }
+
+    // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
     let roundIdToUpdate: string | null = null;
+
     try {
+      // Deduct bet amount from wallet (transactional)
       await this.walletsService.deductForBet(
         userId,
         amount,
@@ -624,6 +858,8 @@ export class BettingService {
         `Bet ${amount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
         queryRunner.manager,
       );
+
+      // Create new bet entity
       const bet = this.betsRepository.create({
         userId,
         bettingVariableId,
@@ -632,18 +868,24 @@ export class BettingService {
         stream: { id: bettingVariable.streamId },
         roundId: bettingVariable.roundId,
       });
+
+      // Save bet within transaction
       const savedBet = await queryRunner.manager.save(bet);
-      // Re-fetch the betting variable inside the transaction with a write lock to prevent lost updates
+
+      // Re-fetch betting variable with a pessimistic write lock to prevent race conditions
       const lockedBettingVariable = await queryRunner.manager.findOne(
         BettingVariable,
         {
           where: { id: bettingVariableId },
-          lock: { mode: 'pessimistic_write' },
+          lock: { mode: 'pessimistic_write' }, // prevents simultaneous updates
         },
       );
+
       if (!lockedBettingVariable) {
         throw new NotFoundException('Betting variable not found');
       }
+
+      // Update betting variable totals based on currency type
       if (currencyType === CurrencyType.GOLD_COINS) {
         lockedBettingVariable.totalBetsGoldCoinAmount =
           Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
@@ -657,34 +899,89 @@ export class BettingService {
         lockedBettingVariable.betCountSweepCoin =
           Number(lockedBettingVariable.betCountSweepCoin) + 1;
       }
+
+      // Save updated betting variable
       await queryRunner.manager.save(lockedBettingVariable);
+
+      // Capture roundId for response
       roundIdToUpdate = lockedBettingVariable.roundId;
+
+      // Commit transaction
       await queryRunner.commitTransaction();
+
       return { bet: savedBet, roundId: roundIdToUpdate };
     } catch (error) {
+      // Rollback transaction on failure
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
+      // Always release query runner
       await queryRunner.release();
     }
   }
+  /**
+   * Ensures that the provided bet amount does not exceed the allowed maximum.
+   *
+   * @param amount - The bet amount to validate.
+   * @throws {BadRequestException} If the bet amount exceeds MAX_AMOUNT_FOR_BETTING.
+   *
+   */
+  private enforceMax(amount: number, currencyType: CurrencyType) {
+    if (
+      amount > MAX_AMOUNT_FOR_BETTING &&
+      currencyType === CurrencyType.SWEEP_COINS
+    ) {
+      throw new BadRequestException(
+        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_AMOUNT_FOR_BETTING.toLocaleString(
+          'en-US',
+        )}. Your bet amount of ${amount.toLocaleString(
+          'en-US',
+        )} exceeds this limit. Please place a lower bet.`,
+      );
+    }
+  }
+
+  /**
+   * Edits an existing bet for a user.
+   *
+   * Workflow:
+   * 1. Validate the bet (ownership, existence, and active status).
+   * 2. Validate the new betting variable, round, and stream status.
+   * 3. Run inside a DB transaction:
+   *    - Adjust the user’s wallet (refunds/deductions depending on currency/amount changes).
+   *    - Update old and/or new betting variable totals and counts with pessimistic locks
+   *      to prevent race conditions.
+   *    - Save the updated bet with new values.
+   * 4. Commit the transaction and emit a potential amount update event for the round.
+   *
+   * @param userId - The ID of the user editing the bet.
+   * @param editBetDto - Contains betId, newCurrencyType, newAmount, newBettingVariableId.
+   * @returns The updated bet details and the old betting amount for reference.
+   * @throws NotFoundException - If bet or betting variable does not exist.
+   * @throws BadRequestException - If bet/round/stream is in an invalid state or input is invalid.
+   */
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
+    this.enforceMax(newAmount, newCurrencyType);
 
+    // Fetch the bet and verify ownership
     const betDetails = await this.betsRepository.findOne({
-      where: { id: betId, userId }, // Add userId for security
+      where: { id: betId, userId }, // ensure only owner can edit
     });
+    const oldBettingAmount = betDetails?.amount;
 
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
     }
 
+    // Ensure the bet is still active
     if (betDetails.status !== BetStatus.Active) {
       const message = await this.bettingStatusMessage(betDetails.status);
       throw new BadRequestException(message);
     }
 
+    // Fetch new betting variable with round + stream relation
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: newBettingVariableId },
       relations: ['round', 'round.stream'],
@@ -696,6 +993,7 @@ export class BettingService {
       );
     }
 
+    // Ensure the round is still open
     if (bettingVariable.round.status !== BettingRoundStatus.OPEN) {
       const message = await this.bettingRoundStatusMessage(
         bettingVariable.round.status,
@@ -703,24 +1001,28 @@ export class BettingService {
       throw new BadRequestException(message);
     }
 
+    // Ensure stream is not ended
     if (bettingVariable.round.stream.status === StreamStatus.ENDED) {
       throw new BadRequestException(
         `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
 
+    // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     let roundIdToUpdate: string | null = null;
+
     try {
-      // Handle wallet operations for currency/amount changes
+      // --- Wallet Operations ---
       const oldAmount = Number(betDetails.amount);
       const newAmt = Number(newAmount);
       const oldCurrency = betDetails.currency;
       const newCurrency = newCurrencyType;
 
+      // Validate new bet amount and currency type
       if (!Number.isFinite(newAmt) || newAmt <= 0) {
         throw new BadRequestException(
           'New amount must be a positive number greater than 0.',
@@ -731,7 +1033,7 @@ export class BettingService {
       }
 
       if (newCurrency !== oldCurrency) {
-        // Refund full old amount in old currency
+        // Case 1: Currency changed → refund old, deduct new
         if (oldCurrency === CurrencyType.GOLD_COINS) {
           await this.walletsService.addGoldCoins(
             userId,
@@ -748,7 +1050,8 @@ export class BettingService {
             queryRunner.manager,
           );
         }
-        // Deduct full new amount in new currency
+
+        // Deduct new currency
         await this.walletsService.deductForBet(
           userId,
           newAmt,
@@ -757,9 +1060,10 @@ export class BettingService {
           queryRunner.manager,
         );
       } else {
-        // Same currency: only handle the difference
+        // Case 2: Same currency → adjust only the difference
         const amountDiff = newAmt - oldAmount;
         if (amountDiff > 0) {
+          // Deduct extra if new amount is higher
           await this.walletsService.deductForBet(
             userId,
             amountDiff,
@@ -768,6 +1072,7 @@ export class BettingService {
             queryRunner.manager,
           );
         } else if (amountDiff < 0) {
+          // Refund difference if new amount is lower
           const refundAmount = Math.abs(amountDiff);
           if (oldCurrency === CurrencyType.GOLD_COINS) {
             await this.walletsService.addGoldCoins(
@@ -788,7 +1093,8 @@ export class BettingService {
         }
       }
 
-      // Update betting variable statistics with locked rows to avoid lost updates
+      // --- Betting Variable Updates ---
+      // Lock rows to avoid race conditions
       const lockedOldBettingVariable = await queryRunner.manager.findOne(
         BettingVariable,
         {
@@ -810,10 +1116,11 @@ export class BettingService {
       const isSameOption =
         lockedOldBettingVariable.id === lockedNewBettingVariable.id;
 
-      // Adjust totals and counts considering option and currency changes
+      // Update betting variable stats based on scenario
       if (isSameOption) {
+        // Same option
         if (oldCurrency === newCurrency) {
-          // Same option, same currency: adjust totals only
+          // Same currency → adjust totals only
           if (newCurrency === CurrencyType.GOLD_COINS) {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
@@ -829,9 +1136,9 @@ export class BettingService {
                 newAmt,
             );
           }
-          // counts unchanged
+          // counts remain unchanged
         } else {
-          // Same option, different currency: move amount and count across currencies
+          // Same option but currency changed → move amounts and counts across currencies
           if (oldCurrency === CurrencyType.GOLD_COINS) {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
@@ -854,6 +1161,7 @@ export class BettingService {
             );
           }
 
+          // Add to new currency
           if (newCurrency === CurrencyType.GOLD_COINS) {
             lockedNewBettingVariable.totalBetsGoldCoinAmount =
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) + newAmt;
@@ -868,7 +1176,7 @@ export class BettingService {
           }
         }
       } else {
-        // Different option: remove from old variable (old currency) and add to new variable (new currency)
+        // Different option → subtract from old, add to new
         if (oldCurrency === CurrencyType.GOLD_COINS) {
           lockedOldBettingVariable.totalBetsGoldCoinAmount = Math.max(
             0,
@@ -904,20 +1212,23 @@ export class BettingService {
         }
       }
 
-      // Update the bet
+      // --- Update bet entity ---
       betDetails.amount = newAmount;
       betDetails.currency = newCurrencyType;
       betDetails.bettingVariableId = newBettingVariableId;
       betDetails.roundId = bettingVariable.roundId;
 
-      // Save all changes
+      // Save changes
       await queryRunner.manager.save(betDetails);
       await queryRunner.manager.save(lockedOldBettingVariable);
       await queryRunner.manager.save(lockedNewBettingVariable);
 
       roundIdToUpdate = lockedNewBettingVariable.roundId;
+
+      // Commit transaction
       await queryRunner.commitTransaction();
-      // Emit after successful transaction
+
+      // Emit update event for potential amounts (non-blocking)
       if (roundIdToUpdate) {
         try {
           await this.bettingGateway.emitPotentialAmountsUpdate(roundIdToUpdate);
@@ -927,31 +1238,51 @@ export class BettingService {
           );
         }
       }
-      return betDetails;
+
+      return { betDetails, oldBettingAmount };
     } catch (error) {
+      // Rollback transaction on failure
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
+      // Always release query runner
       await queryRunner.release();
     }
   }
 
+  /**
+   * Cancels a user's active bet if the round is still open.
+   *
+   * @param userId - The ID of the user requesting the cancellation
+   * @param cancelBetDto - DTO containing the betId to be cancelled
+   * @returns The cancelled bet entity
+   *
+   * @throws NotFoundException - If the bet does not exist or does not belong to the user
+   * @throws BadRequestException - If the bet is not active or the round is already closed
+   */
   async cancelBet(userId: string, cancelBetDto: CancelBetDto): Promise<Bet> {
     const { betId } = cancelBetDto;
+
+    // Fetch bet with associated stream to validate ownership and existence
     const bet = await this.betsRepository.findOne({
       where: { id: betId, userId },
       relations: ['stream'],
     });
 
+    // If no bet is found, throw an error
     if (!bet) {
       throw new NotFoundException(
         `The bet with ID '${betId}' was not found. It may have been cancelled or removed.`,
       );
     }
+
+    // Ensure the bet is still active (not cancelled, completed, etc.)
     if (bet.status !== BetStatus.Active) {
-      const message = await this.bettingStatusMessage(bet.status);
+      const message = await this.bettingStatusMessage(bet.status); // Fetch user-friendly status message
       throw new BadRequestException(message);
     }
+
+    // Fetch the betting round with the specific betting variable related to the bet
     const bettingRound = await this.bettingRoundsRepository
       .createQueryBuilder('round')
       .leftJoinAndSelect(
@@ -963,61 +1294,112 @@ export class BettingService {
       .where('round.id = :roundId', { roundId: bet.roundId })
       .getOne();
 
+    // If the betting round is not open, the bet cannot be cancelled
     if (bettingRound.status !== BettingRoundStatus.OPEN) {
       throw new BadRequestException('This round is closed for betting.');
     }
+
+    // Pass required data to handler for bet cancellation (refund, status update, etc.)
     const data = { bettingRound, bet };
     return await this.handleCancelBet(userId, data, bet.currency);
   }
 
-  private async bettingRoundStatusMessage(status: string) {
+  /**
+   * Returns a user-friendly message based on the current betting variable status.
+   *
+   * @param status - The status of the betting variable (e.g., CREATED, LOCKED, WINNER, etc.)
+   * @returns A string message describing why the action cannot proceed or the current state.
+   */
+  private async bettingRoundStatusMessage(status: string): Promise<string> {
     let message: string;
+
     switch (status) {
       case BettingVariableStatus.CANCELLED:
+        // If the variable has been cancelled, further processing is not allowed
         message = `This bet round has already been cancelled and cannot be processed again.`;
         break;
+
       case BettingVariableStatus.CREATED:
+        // If the variable is created but not yet open for betting
         message = `This betting round has been created but is not yet open for wagers.`;
         break;
+
       case BettingVariableStatus.LOCKED:
+        // If the variable is locked, no more updates or bets are allowed
         message = `This bet round has already been locked and cannot be processed again.`;
         break;
+
       case BettingVariableStatus.LOSER:
+        // If the result has already been declared as a loser
         message = `The result for this bet has already been announced.`;
         break;
+
       case BettingVariableStatus.WINNER:
+        // If the result has already been declared as a winner
         message = `The result for this bet round has already been announced.`;
         break;
+
       default:
+        // Fallback message for unknown or inactive status
         message = `We cannot proceed with your request because this bet Variable is not currently active.`;
     }
+
     return message;
   }
-  private async bettingStatusMessage(status: string) {
+
+  /**
+   * Returns a user-friendly message based on the current bet status.
+   *
+   * @param status - The current status of the bet (e.g., Cancelled, Pending, Won, Lost)
+   * @returns A string message describing why the action cannot proceed or the current state of the bet
+   */
+  private async bettingStatusMessage(status: string): Promise<string> {
     let message: string;
+
     switch (status) {
       case BetStatus.Cancelled:
+        // Bet has already been cancelled; cannot perform further actions
         message = `This bet has already been cancelled and cannot be processed again.`;
         break;
+
       case BetStatus.Pending:
-        message = `This bet status is pending and cannot be processed`;
+        // Bet is still pending; cannot be processed until resolved
+        message = `This bet status is pending and cannot be processed.`;
         break;
+
       case BetStatus.Lost:
+        // Bet has been resolved as lost; further actions not allowed
         message = `The result for this bet has already been announced.`;
         break;
+
       case BetStatus.Won:
+        // Bet has been resolved as won; further actions not allowed
         message = `The result for this bet has already been announced.`;
         break;
+
       default:
+        // Fallback message for unknown or inactive bet statuses
         message = `We cannot proceed with your request because this bet is not currently active.`;
     }
+
     return message;
   }
+
+  /**
+   * Handles the cancellation of a user's bet, including refunding the amount
+   * and updating betting variable statistics within a transactional scope.
+   *
+   * @param userId - ID of the user cancelling the bet
+   * @param data - Contains the bet and corresponding betting round
+   * @param currencyType - Currency type used for the bet (GOLD_COINS or SWEEP_COINS)
+   * @returns The updated Bet entity with status set to Cancelled
+   */
   private async handleCancelBet(
     userId: string,
     data: any,
     currencyType: CurrencyType,
   ): Promise<Bet> {
+    // Create a database transaction to ensure atomic updates
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1025,7 +1407,7 @@ export class BettingService {
     try {
       const { bettingRound, bet } = data;
 
-      // Lock the betting variable row before mutating totals to avoid races
+      // Lock the betting variable row to prevent race conditions while updating totals
       const bettingVariable = await queryRunner.manager
         .getRepository(BettingVariable)
         .createQueryBuilder('bv')
@@ -1038,8 +1420,9 @@ export class BettingService {
       }
 
       const amount = Number(bet.amount);
-      const refundMessage = `Refund ${Number(bet.amount)} for canceled bet on ${bettingVariable.name} in stream ${bet.stream.name}(${bettingRound.roundName})`;
+      const refundMessage = `Refund ${amount} for canceled bet on ${bettingVariable.name} in stream ${bet.stream.name} (${bettingRound.roundName})`;
 
+      // Refund the user and update betting variable totals depending on currency type
       if (currencyType === CurrencyType.GOLD_COINS) {
         await this.walletsService.addGoldCoins(
           userId,
@@ -1063,48 +1446,61 @@ export class BettingService {
         bettingVariable.betCountSweepCoin -= 1;
       }
 
-      // Update bet status
+      // Mark the bet as cancelled
       bet.status = BetStatus.Cancelled;
 
-      // Save changes within transaction
+      // Save changes within the transaction
       await queryRunner.manager.save(bet);
       await queryRunner.manager.save(bettingVariable);
 
+      // Commit the transaction after successful updates
       await queryRunner.commitTransaction();
       return bet;
     } catch (error) {
+      // Rollback transaction in case of errors
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
+      // Release the query runner
       await queryRunner.release();
     }
   }
 
   // Result Declaration and Payout
+  /**
+   * Declares a winner for a given betting variable (option) in a betting round.
+   * Handles payouts for winning bets, updates losing bets, closes the round,
+   * and emits relevant events and notifications to users.
+   *
+   * @param variableId - ID of the betting variable that won
+   */
   async declareWinner(variableId: string): Promise<void> {
+    // Fetch the betting variable and associated round/stream
     const bettingVariable = await this.findBettingVariableById(variableId);
 
+    // Ensure the round is locked before declaring a winner
     this.validateRoundLocked(bettingVariable);
 
-    // Process in a transaction
+    // Begin a transactional scope to ensure atomic updates
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      // Mark the winning variable and the rest as losers
       await this.markWinnerAndLosers(queryRunner, bettingVariable);
 
+      // Fetch all active bets for this variable
       const allStreamBets = await this.fetchActiveBets(
         queryRunner,
         bettingVariable,
       );
 
-      // Check if there are any active bets
+      // If there are no active bets, close the round and emit events
       if (!allStreamBets || allStreamBets.length === 0) {
-        console.log('No active bets found for this round');
+        Logger.log('No active bets found for this round');
         await this.closeRound(queryRunner, bettingVariable);
         await queryRunner.commitTransaction();
-        // Emit winner declared event even if no bets (optional)
         this.bettingGateway.emitWinnerDeclared(
           bettingVariable.stream.id,
           bettingVariable.id,
@@ -1112,10 +1508,11 @@ export class BettingService {
           [], // No winners
           [], // No losers
         );
-        this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+        this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
         return;
       }
 
+      // Split bets into winning and losing groups by currency type
       const {
         winningBets,
         losingBets,
@@ -1124,6 +1521,8 @@ export class BettingService {
         losingGoldCoinBets,
         losingSweepCoinBets,
       } = this.splitBets(allStreamBets, variableId);
+
+      // Calculate total pots and fees for distribution
       const {
         totalWinningGoldCoinAmount,
         totalLosingGoldCoinAmount,
@@ -1138,7 +1537,7 @@ export class BettingService {
         losingSweepCoinBets,
       );
 
-      // Process winning Gold Coin bets only if there are any
+      // Process winning bets for Gold Coins
       if (
         winningGoldCoinBets.length > 0 &&
         totalWinningGoldCoinAmount > 0 &&
@@ -1153,7 +1552,7 @@ export class BettingService {
         );
       }
 
-      // Process winning sweep coin bets only if there are any
+      // Process winning bets for Sweep Coins
       if (
         winningSweepCoinBets.length > 0 &&
         totalWinningSweepCoinAmount > 0 &&
@@ -1168,6 +1567,8 @@ export class BettingService {
           totalLosingSweepCoinAmount,
         );
       }
+
+      // Process losing bets for Gold and Sweep Coins
       if (
         losingGoldCoinBets.length > 0 &&
         totalLosingGoldCoinAmount > 0 &&
@@ -1182,7 +1583,8 @@ export class BettingService {
       ) {
         await this.processLosingBets(queryRunner, losingSweepCoinBets);
       }
-      // Process void scenario bets
+
+      // Handle void cases (bets where only one side exists)
       if (
         (losingGoldCoinBets.length > 0 && winningGoldCoinBets.length === 0) ||
         (winningGoldCoinBets.length > 0 && losingGoldCoinBets.length === 0)
@@ -1198,14 +1600,12 @@ export class BettingService {
         await this.creditAmountVoidCase(queryRunner, winningSweepCoinBets);
       }
 
+      // Close the betting round
       await this.closeRound(queryRunner, bettingVariable);
 
-      // Fetch winning bets with user info
+      // Fetch winning bets with user info to send notifications
       const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: {
-          bettingVariableId: variableId,
-          status: BetStatus.Won,
-        },
+        where: { bettingVariableId: variableId, status: BetStatus.Won },
         relations: ['user'],
       });
 
@@ -1217,19 +1617,22 @@ export class BettingService {
         roundName: bettingVariable?.round?.roundName,
         email: bet.user?.email,
       }));
-      const lossingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: {
-          roundId: bettingVariable.roundId,
-          status: BetStatus.Lost,
-        },
+
+      // Fetch losing bets with user info
+      const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
+        where: { roundId: bettingVariable.roundId, status: BetStatus.Lost },
         relations: ['user', 'bettingVariable', 'round'],
       });
-      const losers = lossingBetsWithUserInfo.map((bet) => ({
+
+      const losers = losingBetsWithUserInfo.map((bet) => ({
         userId: bet.userId,
         username: bet.user?.username,
       }));
+
+      // Commit the transaction after processing all bets
       await queryRunner.commitTransaction();
 
+      // Emit events for frontend and bot notifications
       this.bettingGateway.emitWinnerDeclared(
         bettingVariable.stream.id,
         bettingVariable.id,
@@ -1244,10 +1647,15 @@ export class BettingService {
             losingSweepCoinBets.length === 0,
         },
       );
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
-
+      // Notify winners
       for (const winner of winners) {
+        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+          winner.userId,
+          winner.username,
+          bettingVariable.name,
+        );
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
           winner.username,
@@ -1262,29 +1670,21 @@ export class BettingService {
           winner.currencyType,
           winner.roundName,
         );
-        //As per client feedback, only one email should be sent to winners (bet_won)
-        /*
-        if (winner.currencyType === CurrencyType.GoldCoin) {
-          await this.notificationService.sendSMTPForWonFreeCoin(
-            winner.userId,
-            winner.email,
-            winner.username,
-            bettingVariable.stream.name,
-            winner.amount,
-            winner.roundName,
-          );
-        }
-          */
       }
 
-      lossingBetsWithUserInfo.map(async (bet) => {
+      // Notify losers
+      losingBetsWithUserInfo.map(async (bet) => {
         if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
+          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            bet.userId,
+            bet.user?.username,
+            bettingVariable.name,
+          );
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
             bet.user?.username,
             bet.round.roundName,
           );
-
           await this.notificationService.sendSMTPForLossBet(
             bet.userId,
             bettingVariable.stream.name,
@@ -1293,25 +1693,36 @@ export class BettingService {
         }
       });
     } catch (error) {
-      // Rollback in case of error
+      // Rollback transaction in case of any errors
       await queryRunner.rollbackTransaction();
       console.error('Error in declareWinner:', error);
       throw error;
     } finally {
-      // Release the query runner
+      // Release query runner
       await queryRunner.release();
     }
   }
+  /**
+   * Handles refunds for bets in a "void" scenario where a betting round
+   * closes without any winners. The bet amount is refunded, bet status
+   * updated, and notifications are emitted to the user.
+   *
+   * @param queryRunner - TypeORM QueryRunner for transactional operations
+   * @param bets - Array of Bet objects to be refunded
+   */
   private async creditAmountVoidCase(queryRunner, bets) {
+    // Check if there are bets to process
     if (!bets || !Array.isArray(bets) || bets.length === 0) {
-      console.log('No bets to refund in void case');
+      Logger.log('No bets to refund in void case');
       return;
     }
 
+    // Loop through each bet to process refund
     for (const bet of bets) {
       try {
+        // Skip invalid bet entries
         if (!bet || !bet.userId || !bet.amount || !bet.currency) {
-          console.log('Invalid bet found in void case refund:', bet);
+          Logger.log('Invalid bet found in void case refund:', bet);
           continue;
         }
 
@@ -1321,6 +1732,7 @@ export class BettingService {
         const transactionType = TransactionType.REFUND;
         const description = `${amount} ${currency} refunded - bet round closed with no winners.`;
 
+        // Update user's wallet balance within the transaction
         await this.walletsService.updateBalance(
           userId,
           amount,
@@ -1332,22 +1744,26 @@ export class BettingService {
           queryRunner.manager,
         );
 
-        // mark bet as refunded and processed
+        // Mark the bet as refunded and processed
         bet.status = BetStatus.Refunded;
         bet.isProcessed = true;
         bet.payoutAmount = 0;
         bet.processedAt = new Date();
+
+        // Save updated bet within the transaction
         await queryRunner.manager.save(bet);
 
-        const userObj = await this.usersService.findById(userId);
+        // Fetch user information for notification
+        const userObj = await this.usersService.findUserByUserId(userId);
+
+        // Emit bot message to notify the user about the void round
         await this.bettingGateway.emitBotMessageVoidRound(
           userId,
           userObj.username,
           bet?.round?.roundName,
         );
-
-        // Update bet status within transaction
       } catch (error) {
+        // Log and rethrow any error to rollback transaction
         console.error(
           `Error processing void case refund for bet ${bet?.id}:`,
           error,
@@ -1357,22 +1773,35 @@ export class BettingService {
     }
   }
 
+  /**
+   * Validates that a betting round is locked and ready for declaring a winner.
+   * Throws exceptions if the betting variable or its associated round is invalid
+   * or if the round status is not suitable for winner declaration.
+   *
+   * @param bettingVariable - The betting variable to validate
+   * @throws BadRequestException if validation fails
+   */
   private validateRoundLocked(bettingVariable: BettingVariable) {
+    // Ensure a betting variable is provided
     if (!bettingVariable) {
       throw new BadRequestException('Betting variable is required');
     }
 
+    // Ensure the betting variable is associated with a round
     if (!bettingVariable.round) {
       throw new BadRequestException(
         'Betting variable must have an associated round',
       );
     }
 
+    // Check if the round is already closed
     if (bettingVariable.round.status === BettingRoundStatus.CLOSED) {
       throw new BadRequestException(
         'This round is already closed. Winner has already been declared for this round.',
       );
     }
+
+    // Ensure the round is locked before declaring a winner
     if (bettingVariable.round.status !== BettingRoundStatus.LOCKED) {
       throw new BadRequestException(
         'Betting round must be locked before declaring a winner',
@@ -1380,47 +1809,63 @@ export class BettingService {
     }
   }
 
+  /**
+   * Marks the provided betting variable as the winner and updates
+   * all other variables in the same round as losers.
+   *
+   * @param queryRunner - TypeORM query runner for transactional operations
+   * @param bettingVariable - The betting variable to mark as winner
+   */
   private async markWinnerAndLosers(
     queryRunner,
     bettingVariable: BettingVariable,
   ) {
-    // Mark this variable as winner
+    // Mark the current variable as the winning option
     bettingVariable.status = BettingVariableStatus.WINNER;
     bettingVariable.is_winning_option = true;
     await queryRunner.manager.save(bettingVariable);
 
-    // Mark all other variables for this stream as losers
+    // Mark all other variables in the same round as losers
     await queryRunner.manager.update(
       BettingVariable,
       {
-        round: { id: bettingVariable.round.id },
-        id: Not(bettingVariable.id),
+        round: { id: bettingVariable.round.id }, // Filter by same round
+        id: Not(bettingVariable.id), // Exclude the winning variable
       },
-      { status: BettingVariableStatus.LOSER },
+      { status: BettingVariableStatus.LOSER }, // Set status to LOSER
     );
   }
 
+  /**
+   * Fetches all active bets for a given betting variable within its stream and round.
+   *
+   * @param queryRunner - TypeORM query runner for transactional operations
+   * @param bettingVariable - The betting variable whose active bets should be fetched
+   * @returns Array of active Bet entities, filtered for validity
+   */
   private async fetchActiveBets(queryRunner, bettingVariable: BettingVariable) {
     try {
+      // Ensure the provided betting variable has necessary references
       if (
         !bettingVariable ||
         !bettingVariable.stream ||
         !bettingVariable.roundId
       ) {
-        console.log('Invalid bettingVariable provided to fetchActiveBets');
+        Logger.log('Invalid bettingVariable provided to fetchActiveBets');
         return [];
       }
 
+      // Fetch bets that are active, belong to the same round, and are in the same stream
       const bets = await queryRunner.manager.find(Bet, {
         where: {
-          bettingVariable: { stream: { id: bettingVariable.stream.id } },
-          roundId: bettingVariable.roundId,
-          status: BetStatus.Active,
+          bettingVariable: { stream: { id: bettingVariable.stream.id } }, // Stream filter
+          roundId: bettingVariable.roundId, // Round filter
+          status: BetStatus.Active, // Only active bets
         },
-        relations: ['bettingVariable', 'round'],
+        relations: ['bettingVariable', 'round'], // Include related entities
       });
 
-      // Validate and filter out any invalid bets
+      // Filter out any invalid or incomplete bets
       return bets.filter(
         (bet) =>
           bet &&
@@ -1432,15 +1877,24 @@ export class BettingService {
           bet.round,
       );
     } catch (error) {
+      // Log error and return empty array if something goes wrong
       console.error('Error fetching active bets:', error);
       return [];
     }
   }
 
+  /**
+   * Splits all bets for a round into winning and losing categories,
+   * further separating them by currency type (Gold Coins or Sweep Coins).
+   *
+   * @param allStreamBets - Array of all active bets for the stream and round
+   * @param variableId - ID of the winning betting variable
+   * @returns Object containing arrays of winning and losing bets, separated by currency type
+   */
   private splitBets(allStreamBets, variableId) {
-    // Validate inputs
+    // Validate the input bets array
     if (!allStreamBets || !Array.isArray(allStreamBets)) {
-      console.log('Invalid allStreamBets input:', allStreamBets);
+      Logger.log('Invalid allStreamBets input:', allStreamBets);
       return {
         winningBets: [],
         losingBets: [],
@@ -1451,8 +1905,9 @@ export class BettingService {
       };
     }
 
+    // Validate the winning variable ID
     if (!variableId) {
-      console.log('Invalid variableId input:', variableId);
+      Logger.log('Invalid variableId input:', variableId);
       return {
         winningBets: [],
         losingBets: [],
@@ -1463,18 +1918,23 @@ export class BettingService {
       };
     }
 
+    // Separate winning and losing bets based on the winning variable
     const winningBets = allStreamBets.filter(
       (bet) => bet && bet.bettingVariableId === variableId,
     );
     const losingBets = allStreamBets.filter(
       (bet) => bet && bet.bettingVariableId !== variableId,
     );
+
+    // Further split winning bets by currency type
     const winningGoldCoinBets = winningBets.filter(
       (bet) => bet && bet.currency === CurrencyType.GOLD_COINS,
     );
     const winningSweepCoinBets = winningBets.filter(
       (bet) => bet && bet.currency === CurrencyType.SWEEP_COINS,
     );
+
+    // Further split losing bets by currency type
     const losingGoldCoinBets = losingBets.filter(
       (bet) => bet && bet.currency === CurrencyType.GOLD_COINS,
     );
@@ -1482,6 +1942,7 @@ export class BettingService {
       (bet) => bet && bet.currency === CurrencyType.SWEEP_COINS,
     );
 
+    // Return all categorized bets
     return {
       winningBets,
       losingBets,
@@ -1492,13 +1953,23 @@ export class BettingService {
     };
   }
 
+  /**
+   * Calculates the total amounts for winning and losing bets by currency type,
+   * and computes the platform fee and distributable pot for Sweep Coins.
+   *
+   * @param winningGoldCoinBets - Array of winning bets in Gold Coins
+   * @param losingGoldCoinBets - Array of losing bets in Gold Coins
+   * @param winningSweepCoinBets - Array of winning bets in Sweep Coins
+   * @param losingSweepCoinBets - Array of losing bets in Sweep Coins
+   * @returns Object containing totals for each category and Sweep Coin pot calculations
+   */
   private calculatePots(
     winningGoldCoinBets,
     losingGoldCoinBets,
     winningSweepCoinBets,
     losingSweepCoinBets,
   ) {
-    // Validate inputs and provide defaults
+    // Ensure inputs are arrays to prevent runtime errors
     const safeWinningGoldCoinBets = Array.isArray(winningGoldCoinBets)
       ? winningGoldCoinBets
       : [];
@@ -1512,6 +1983,7 @@ export class BettingService {
       ? losingSweepCoinBets
       : [];
 
+    // Sum amounts for winning and losing Gold Coin bets
     const totalWinningGoldCoinAmount = safeWinningGoldCoinBets.reduce(
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
@@ -1520,6 +1992,8 @@ export class BettingService {
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
+
+    // Sum amounts for winning and losing Sweep Coin bets
     const totalWinningSweepCoinAmount = safeWinningSweepCoinBets.reduce(
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
@@ -1528,6 +2002,8 @@ export class BettingService {
       (sum, bet) => Number(sum) + Number(bet?.amount || 0),
       0,
     );
+
+    // Calculate platform fee (15%) for Sweep Coins and distributable pot
     const sweepCoinPlatformFee = Math.floor(totalLosingSweepCoinAmount * 0.15);
     const distributableSweepCoinPot =
       totalLosingSweepCoinAmount - sweepCoinPlatformFee;
@@ -1542,6 +2018,17 @@ export class BettingService {
     };
   }
 
+  /**
+   * Processes all winning Gold Coin bets for a specific betting variable.
+   * Calculates the payout proportionally based on the user's bet relative to the total bets
+   * on the winning option and credits the winnings to the user's wallet.
+   *
+   * @param queryRunner - TypeORM QueryRunner to handle transaction
+   * @param winningGoldCoinBets - Array of winning bets in Gold Coins
+   * @param totalWinningGoldCoinAmount - Total Gold Coin amount wagered on the winning option
+   * @param totalLosingGoldCoinAmount - Total Gold Coin amount wagered on losing options
+   * @param bettingVariable - The winning betting variable
+   */
   private async processWinningGoldCoinBets(
     queryRunner,
     winningGoldCoinBets,
@@ -1549,37 +2036,42 @@ export class BettingService {
     totalLosingGoldCoinAmount,
     bettingVariable,
   ) {
-    // Validate inputs to prevent division by zero
+    // Validate inputs to prevent division by zero or processing empty arrays
     if (
       !winningGoldCoinBets ||
       winningGoldCoinBets.length === 0 ||
       totalWinningGoldCoinAmount <= 0
     ) {
-      console.log(
+      Logger.log(
         'No winning Gold Coin bets to process or invalid total amount',
       );
       return;
     }
 
+    // Iterate through each winning bet and calculate individual payout
     for (const bet of winningGoldCoinBets) {
       try {
         const totalBetForWinningOption =
-          bet.bettingVariable?.totalBetsGoldCoinAmount;
-        //bet amount placed by user
-        const betAmount = bet.amount;
+          bet.bettingVariable?.totalBetsGoldCoinAmount; // Total Gold Coin amount placed on this winning option
+        const betAmount = bet.amount; // Amount placed by this user
 
-        // payout calculation, Multiply by the total Gold Coin pool (winning + losing side)
-
+        // Calculate proportional payout:
+        // (user's bet / total bets on winning option) * total Gold Coin pool (winning + losing side)
         const payout = Math.floor(
           (betAmount / totalBetForWinningOption) *
             Number(totalWinningGoldCoinAmount + totalLosingGoldCoinAmount),
         );
 
+        // Update bet status and payout details
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
         bet.isProcessed = true;
+
+        // Save updated bet in the transaction
         await queryRunner.manager.save(bet);
+
+        // Credit the calculated winnings to the user's wallet
         await this.walletsService.creditWinnings(
           bet.userId,
           payout,
@@ -1592,11 +2084,23 @@ export class BettingService {
           `Error processing winning Gold Coin bet ${bet.id}:`,
           error,
         );
-        throw error;
+        throw error; // Rollback will be handled by the caller
       }
     }
   }
 
+  /**
+   * Processes all winning Sweep Coin bets for a specific betting variable.
+   * Calculates the payout proportionally based on the user's bet relative to the total bets
+   * on the winning option and credits the winnings to the user's wallet after deducting a platform fee.
+   *
+   * @param queryRunner - TypeORM QueryRunner to handle transaction
+   * @param winningSweepCoinBets - Array of winning bets in Sweep Coins
+   * @param totalWinningSweepCoinAmount - Total Sweep Coin amount wagered on the winning option
+   * @param distributableSweepCoinPot - Total Sweep Coin amount available to distribute after fees
+   * @param bettingVariable - The winning betting variable
+   * @param totalLosingSweepCoinAmount - Total Sweep Coin amount wagered on losing options
+   */
   private async processWinningSweepCoinBets(
     queryRunner,
     winningSweepCoinBets,
@@ -1605,39 +2109,47 @@ export class BettingService {
     bettingVariable,
     totalLosingSweepCoinAmount,
   ) {
-    // Validate inputs to prevent division by zero
+    // Validate inputs to prevent division by zero or processing empty arrays
     if (
       !winningSweepCoinBets ||
       winningSweepCoinBets.length === 0 ||
       totalWinningSweepCoinAmount <= 0
     ) {
-      console.log(
-        'No winning Sweep coin bets to process or invalid total amount',
+      Logger.log(
+        'No winning Sweep Coin bets to process or invalid total amount',
       );
       return;
     }
 
+    // Iterate through each winning bet and calculate individual payout
     for (const bet of winningSweepCoinBets) {
       try {
         const totalBetForWinningOption =
-          bet.bettingVariable?.totalBetsSweepCoinAmount;
-        //bet amount placed by user
-        const betAmount = bet.amount;
-        //reduce 15% - platform fee from total Sweep coin pot amount
+          bet.bettingVariable?.totalBetsSweepCoinAmount; // Total Sweep Coin amount placed on this winning option
+        const betAmount = bet.amount; // Amount placed by this user
+
+        // Calculate total pot after deducting 15% platform fee
         const potAmountAfterPlatformFee =
           Number(totalWinningSweepCoinAmount + totalLosingSweepCoinAmount) *
           0.85;
-        //calculation
+
+        // Calculate proportional payout
         let payout =
           (betAmount / totalBetForWinningOption) * potAmountAfterPlatformFee;
-        // reduce Sweep coin, upto 3 decimal place
+
+        // Round to 3 decimal places for Sweep Coins
         payout = Number(payout.toFixed(3));
 
+        // Update bet status and payout details
         bet.status = BetStatus.Won;
         bet.payoutAmount = payout;
         bet.processedAt = new Date();
         bet.isProcessed = true;
+
+        // Save updated bet in the transaction
         await queryRunner.manager.save(bet);
+
+        // Credit the calculated winnings to the user's wallet
         await this.walletsService.creditWinnings(
           bet.userId,
           payout,
@@ -1647,32 +2159,46 @@ export class BettingService {
         );
       } catch (error) {
         console.error(
-          `Error processing winning sweep coin bet ${bet.id}:`,
+          `Error processing winning Sweep Coin bet ${bet.id}:`,
           error,
         );
-        throw error;
+        throw error; // Rollback will be handled by the caller
       }
     }
   }
 
+  /**
+   * Processes all losing bets for a specific betting variable.
+   * Marks each bet as lost, sets payout to 0, and logs the transaction in the user's wallet.
+   *
+   * @param queryRunner - TypeORM QueryRunner to handle the database transaction
+   * @param losingBets - Array of bets that did not win
+   */
   private async processLosingBets(queryRunner, losingBets) {
+    // Validate input to prevent errors
     if (!losingBets || !Array.isArray(losingBets) || losingBets.length === 0) {
-      console.log('No losing bets to process');
+      Logger.log('No losing bets to process');
       return;
     }
 
+    // Iterate through each losing bet
     for (const bet of losingBets) {
       try {
         if (!bet || !bet.id) {
-          console.log('Invalid bet found in losingBets:', bet);
-          continue;
+          Logger.log('Invalid bet found in losingBets:', bet);
+          continue; // Skip invalid bets
         }
 
+        // Mark bet as lost and update status fields
         bet.status = BetStatus.Lost;
-        bet.payoutAmount = 0;
-        bet.processedAt = new Date();
+        bet.payoutAmount = 0; // No winnings
+        bet.processedAt = new Date(); // Timestamp of processing
         bet.isProcessed = true;
+
+        // Save updated bet in the transaction
         await queryRunner.manager.save(bet);
+
+        // Record the lost bet transaction in the user's wallet
         await this.walletsService.createTransactionData(
           bet.userId,
           TransactionType.BET_LOST,
@@ -1683,40 +2209,75 @@ export class BettingService {
         );
       } catch (error) {
         console.error(`Error processing losing bet ${bet?.id}:`, error);
-        throw error;
+        throw error; // Transaction rollback will be handled by the caller
       }
     }
   }
 
+  /**
+   * Closes a betting round associated with a betting variable.
+   * Marks the round status as CLOSED and saves it in the database using the provided queryRunner.
+   *
+   * @param queryRunner - TypeORM QueryRunner to handle the database transaction
+   * @param bettingVariable - The betting variable whose round needs to be closed
+   */
   private async closeRound(queryRunner, bettingVariable: BettingVariable) {
+    // Retrieve the round from the betting variable if available
     let round = bettingVariable.round;
+
+    // If round is not attached to the variable, fetch it from the repository
     if (!round) {
       round = await this.bettingRoundsRepository.findOne({
         where: { id: bettingVariable.roundId },
       });
     }
+
+    // If round exists, update its status to CLOSED
     if (round) {
       round.status = BettingRoundStatus.CLOSED;
+      // Save the updated round within the current transaction
       await queryRunner.manager.save(round);
     }
   }
 
   // Utility Methods
+  /**
+   * Locks a betting variable to prevent further bets from being placed.
+   * Typically called before declaring a winner for the associated round.
+   *
+   * @param variableId - The ID of the betting variable to lock
+   * @returns The updated BettingVariable entity with status set to LOCKED
+   */
   async lockBetting(variableId: string): Promise<BettingVariable> {
+    // Update the status of the betting variable to LOCKED
+    // Delegates the actual update to a helper method `updateBettingVariableStatus`
     return this.updateBettingVariableStatus(
       variableId,
       BettingVariableStatus.LOCKED,
     );
   }
 
+  /**
+   * Fetches all bets for a specific user, optionally filtering only active bets.
+   *
+   * @param userId - The ID of the user whose bets are being fetched
+   * @param active - Optional flag to fetch only active bets (default: false)
+   * @returns A promise that resolves to an array of Bet entities
+   */
   async getUserBets(userId: string, active: boolean = false): Promise<Bet[]> {
+    // Initialize the base where clause with the userId
     const whereClause: Record<string, unknown> = { userId };
-    console.log('debug');
 
+    Logger.log('Fetching user bets...'); // Debug log
+
+    // If the active flag is true, add a status filter for active bets
     if (active) {
       whereClause.status = BetStatus.Active;
     }
 
+    // Fetch bets from the repository
+    // Include relations for bettingVariable and its associated stream
+    // Order the results by creation date descending (most recent first)
     return this.betsRepository.find({
       where: whereClause,
       relations: ['bettingVariable', 'bettingVariable.stream'],
@@ -1724,19 +2285,36 @@ export class BettingService {
     });
   }
 
+  /**
+   * Fetches all betting variables (options) along with their bets for a specific stream.
+   *
+   * @param streamId - The ID of the stream whose betting variables and bets are being fetched
+   * @returns A promise that resolves to an array of BettingVariable entities with their associated bets
+   */
   async getStreamBets(streamId: string): Promise<BettingVariable[]> {
+    // Fetch betting variables for the given stream ID
+    // Include all associated bets for each betting variable
     return this.bettingVariablesRepository.find({
       where: { stream: { id: streamId } },
-      relations: ['bets'],
+      relations: ['bets'], // Eager load all bets associated with each betting variable
     });
   }
 
+  /**
+   * Retrieves a bet by its ID along with its related entities.
+   *
+   * @param betId - The unique identifier of the bet to fetch
+   * @returns A promise that resolves to the Bet entity, including its betting variable, round, and stream
+   * @throws NotFoundException if the bet with the given ID does not exist
+   */
   async getBetById(betId: string): Promise<Bet> {
+    // Fetch the bet by ID, including relations: betting variable, its round, and the stream
     const bet = await this.betsRepository.findOne({
       where: { id: betId },
       relations: ['bettingVariable', 'bettingVariable.round', 'stream'],
     });
 
+    // Throw an error if the bet is not found
     if (!bet) {
       throw new NotFoundException(`Bet with ID ${betId} not found`);
     }
@@ -1744,15 +2322,23 @@ export class BettingService {
     return bet;
   }
 
+  /**
+   * Finds the potential winning amount for a user's active bet in a given round.
+   *
+   * @param userId - The ID of the user
+   * @param roundId - The ID of the betting round
+   * @returns An object containing bet details and potential winnings, or null if no active bet exists
+   * @throws NotFoundException if any error occurs while fetching bet or round data
+   */
   async findPotentialAmount(userId: string, roundId: string) {
     try {
+      // Fetch the betting round along with its betting variables
       const bettingRound = await this.bettingRoundsRepository.findOne({
-        where: {
-          id: roundId,
-        },
+        where: { id: roundId },
         relations: ['bettingVariables'],
       });
 
+      // Fetch the user's active bet in this round with variable details
       const bets = await this.betsRepository
         .createQueryBuilder('bet')
         .leftJoin('bet.bettingVariable', 'bettingVariable')
@@ -1773,12 +2359,17 @@ export class BettingService {
           'bettingVariable.bet_count_sweep_coin AS betCountSweepCoin',
         ])
         .getRawOne();
+
+      // Return null if no active bet is found
       if (!bets || bets.betstatus !== BetStatus.Active) {
         return null;
       }
 
+      // Calculate potential winnings for Gold Coins and Sweep Coins
       const { potentialSweepCoinAmt, potentialGoldCoinAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
+
+      // Return structured response
       return {
         betId: bets.betid,
         status: bettingRound.status,
@@ -1789,17 +2380,23 @@ export class BettingService {
         currencyType: bets.betcurrency,
       };
     } catch (e) {
-      console.error(e.message);
+      console.error('Error fetching potential amount:', e.message);
       throw new NotFoundException(e.message);
     }
   }
 
+  /**
+   * Calculates potential winning amounts for all active bets in a given betting round.
+   *
+   * @param roundId - The ID of the betting round
+   * @returns An array of objects containing user bet details and potential winnings
+   * @throws NotFoundException if the betting round does not exist or an error occurs
+   */
   async findPotentialAmountsForAllUsers(roundId: string) {
     try {
+      // Fetch the betting round along with its betting variables
       const bettingRound = await this.bettingRoundsRepository.findOne({
-        where: {
-          id: roundId,
-        },
+        where: { id: roundId },
         relations: ['bettingVariables'],
       });
 
@@ -1807,7 +2404,7 @@ export class BettingService {
         throw new NotFoundException(`Round with ID ${roundId} not found`);
       }
 
-      // Get all active bets for this round
+      // Fetch all active bets for this round along with user and variable details
       const allBets = await this.betsRepository
         .createQueryBuilder('bet')
         .leftJoin('bet.bettingVariable', 'bettingVariable')
@@ -1833,9 +2430,11 @@ export class BettingService {
 
       const potentialAmounts = [];
 
+      // Iterate through each active bet to calculate potential winnings
       for (const bet of allBets) {
         if (bet.betstatus === BetStatus.Active) {
           try {
+            // Calculate potential winnings for Gold Coins and Sweep Coins
             const { potentialSweepCoinAmt, potentialGoldCoinAmt, betAmount } =
               this.potentialAmountCal(bettingRound, bet);
 
@@ -1856,7 +2455,7 @@ export class BettingService {
               `Error calculating potential amount for user ${bet.userid}:`,
               e.message,
             );
-            // Continue with other users even if one fails
+            // Continue processing other bets even if one fails
           }
         }
       }
@@ -1882,7 +2481,6 @@ export class BettingService {
    *
    *
    */
-
   private potentialAmountCal(bettingRound, bets: any) {
     try {
       let goldCoinBetAmtForLoginUser = 0;
@@ -1958,10 +2556,26 @@ export class BettingService {
     }
   }
 
+  /**
+   * Updates the status of a betting round while enforcing allowed transitions.
+   *
+   * Allowed transitions:
+   *   - 'created' -> 'open'
+   *   - 'open' -> 'locked'
+   *
+   * Emits relevant websocket events to notify users of status changes.
+   *
+   * @param roundId - ID of the betting round
+   * @param newStatus - New status to set ('created' | 'open' | 'locked')
+   * @returns The updated BettingRound entity
+   * @throws NotFoundException if the round does not exist or cannot be locked due to insufficient bets
+   * @throws BadRequestException if the status transition is invalid
+   */
   async updateRoundStatus(
     roundId: string,
     newStatus: 'created' | 'open' | 'locked',
   ): Promise<BettingRound> {
+    // Fetch the round by ID
     const round = await this.bettingRoundsRepository.findOne({
       where: { id: roundId },
     });
@@ -1969,19 +2583,24 @@ export class BettingService {
       throw new NotFoundException(`Round with ID ${roundId} not found`);
     }
 
-    // Only allow: created -> open -> locked
     const current = round.status;
     let savedRound;
+
+    // Only allow valid transitions: created -> open -> locked
     if (
       (current === 'created' && newStatus === 'open') ||
       (current === 'open' && newStatus === 'locked')
     ) {
+      // Lock the round
       if (newStatus === BettingRoundStatus.LOCKED) {
+        // Fetch round with stream info
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
         });
+
         if (roundWithStream && roundWithStream.streamId) {
+          // Ensure there are at least 2 active bets before locking
           const similarBets = await this.betsRepository.find({
             where: {
               round: { id: roundId },
@@ -1989,24 +2608,28 @@ export class BettingService {
             },
             relations: ['round'],
           });
-          // This is to prevent locking a round with no competition
+
           if (similarBets.length <= 1) {
-            let message =
+            const message =
               similarBets.length === 1
                 ? `Cannot lock the bet — only one user has placed a bet`
                 : `Cannot lock the bet — no user has placed a bet`;
             throw new NotFoundException(message);
           }
 
+          // Update status and save
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
+
+          // Emit websocket events for the stream
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
-            'locked',
+            BettingRoundStatus.LOCKED,
             true,
           );
 
+          // Notify individual users whose bets are in this round
           const bets = await this.betsRepository.find({
             where: { round: { id: roundId }, status: BetStatus.Active },
             relations: ['user'],
@@ -2022,18 +2645,22 @@ export class BettingService {
         }
       }
 
+      // Open the round
       if (newStatus === BettingRoundStatus.OPEN) {
         round.status = newStatus as any;
         savedRound = await this.bettingRoundsRepository.save(round);
+
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
           relations: ['stream'],
         });
+
         if (roundWithStream && roundWithStream.streamId) {
+          // Emit websocket events for the stream
           this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
-            'open',
+            BettingRoundStatus.OPEN,
           );
           this.bettingGateway.emitOpenBetRound(
             round.roundName,
@@ -2042,7 +2669,9 @@ export class BettingService {
         }
       }
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+      // Update stream list for frontend
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+
       return savedRound;
     } else {
       throw new BadRequestException(
@@ -2051,14 +2680,36 @@ export class BettingService {
     }
   }
 
+  /**
+   * Cancels a betting round and refunds all active bets.
+   *
+   * Steps:
+   *   1. Fetch the round along with its betting variables and associated bets.
+   *   2. Set the round status to CANCELLED.
+   *   3. Loop through each betting variable:
+   *       - Set its status to CANCELLED.
+   *       - Loop through each bet:
+   *           - Skip non-active bets.
+   *           - Refund the amount to the user based on currency type.
+   *           - Update variable totals accordingly.
+   *           - Update bet status to Cancelled.
+   *           - Emit bot messages notifying users of refund.
+   *   4. Commit the transaction.
+   *   5. Emit betting status and stream list events to update front-end.
+   *
+   * @param roundId - ID of the betting round to cancel
+   * @returns Object containing refunded bets
+   * @throws NotFoundException if the betting round does not exist
+   */
   async cancelRoundAndRefund(
     roundId: string,
   ): Promise<{ refundedBets: Bet[] }> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
     try {
-      // Fetch the round with variables and bets
+      // Fetch the round with its variables and associated bets
       const round = await this.bettingRoundsRepository.findOne({
         where: { id: roundId },
         relations: ['bettingVariables', 'bettingVariables.bets'],
@@ -2066,18 +2717,28 @@ export class BettingService {
       if (!round) {
         throw new NotFoundException('Betting round not found');
       }
+
       // Set round status to CANCELLED
       round.status = BettingRoundStatus.CANCELLED;
       await queryRunner.manager.save(round);
+
       const refundedBets: Bet[] = [];
+
       // Refund all bets in all variables
       for (const variable of round.bettingVariables) {
         // Set variable status to CANCELLED
         variable.status = BettingVariableStatus.CANCELLED;
+
         for (const bet of variable.bets) {
-          const { username } = await this.usersService.findById(bet.userId);
+          // Skip bets that are not active
           if (bet.status !== BetStatus.Active) continue;
-          // Refund to user
+
+          // Fetch username for notifications
+          const { username } = await this.usersService.findUserByUserId(
+            bet.userId,
+          );
+
+          // Refund user based on currency type and update totals
           if (bet.currency === CurrencyType.GOLD_COINS) {
             await this.walletsService.addGoldCoins(
               bet.userId,
@@ -2096,10 +2757,13 @@ export class BettingService {
             variable.totalBetsSweepCoinAmount -= Number(bet.amount);
             variable.betCountSweepCoin -= 1;
           }
+
+          // Mark bet as cancelled
           bet.status = BetStatus.Cancelled;
           refundedBets.push(bet);
           await queryRunner.manager.save(bet);
 
+          // Emit bot message notifying user of refund
           await this.bettingGateway.emitBotMessageForCancelBetByAdmin(
             bet.userId,
             username,
@@ -2109,21 +2773,29 @@ export class BettingService {
             round.roundName,
           );
         }
+
+        // Save updated betting variable totals and status
         await queryRunner.manager.save(variable);
       }
+
+      // Commit the transaction
       await queryRunner.commitTransaction();
+
+      // Emit round-level events if stream exists
       if (round.streamId) {
         await this.bettingGateway.emitBettingStatus(
           round.streamId,
           roundId,
-          'canceled',
+          BettingRoundStatus.CANCELLED,
         );
       }
 
-      this.bettingGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+      // Update stream list for frontend
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
       return { refundedBets };
     } catch (error) {
+      // Rollback transaction on error
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
@@ -2131,23 +2803,41 @@ export class BettingService {
     }
   }
 
+  /**
+   * Calculates total bets and total bet counts for a given betting round.
+   *
+   * @param roundId - ID of the round for which totals are calculated
+   * @returns Object containing:
+   *   - totalBetsGoldCoinAmount: total Gold Coins bet in this round
+   *   - totalBetsSweepCoinAmount: total Sweep Coins bet in this round
+   *   - totalGoldCoinBet: total number of Gold Coin bets
+   *   - totalSweepCoinBet: total number of Sweep Coin bets
+   */
   async getRoundTotals(roundId: string) {
+    // Fetch all betting variables associated with this round
     const bettingVariables = await this.bettingVariablesRepository.find({
       where: { roundId },
     });
 
+    // Sum up total Gold Coins bet across all variables
     const totalBetsGoldCoinAmount = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.totalBetsGoldCoinAmount || 0),
       0,
     );
+
+    // Sum up total Sweep Coins bet across all variables
     const totalBetsSweepCoinAmount = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.totalBetsSweepCoinAmount || 0),
       0,
     );
+
+    // Sum total number of Gold Coin bets
     const totalGoldCoinBet = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
       0,
     );
+
+    // Sum total number of Sweep Coin bets
     const totalSweepCoinBet = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
       0,
@@ -2160,7 +2850,13 @@ export class BettingService {
     };
   }
 
+  /**
+   * Returns the total number of active bets in the system.
+   *
+   * @returns Promise<number> - count of bets with status 'Active'
+   */
   getActiveBetsCount(): Promise<number> {
+    // Count all bets where status is Active
     return this.betsRepository.count({
       where: {
         status: BetStatus.Active,
@@ -2313,6 +3009,98 @@ export class BettingService {
       );
       throw new InternalServerErrorException(
         'Could not retrieve bet statistics. Please try again later.',
+      );
+    }
+  }
+
+  /**
+   * Retrieves a user's betting history with optional search, sorting, and pagination.
+   *
+   * - Search: `filter.q` matches stream name (case-insensitive)
+   * - Sort: `sort` applies on bet created date (createdAt / created_at)
+   * - Pagination: `range` as [offset, limit]; disable via `pagination=false`
+   */
+  async getUserBettingHistory(
+    userId: string,
+    betHistoryFilterDto: BetHistoryFilterDto,
+  ): Promise<{ data: any[]; total: number }> {
+    try {
+      const sort: Sort = betHistoryFilterDto?.sort
+        ? (JSON.parse(betHistoryFilterDto.sort) as Sort)
+        : (['createdAt', 'DESC'] as unknown as Sort);
+      const range: Range = betHistoryFilterDto?.range
+        ? (JSON.parse(betHistoryFilterDto.range) as Range)
+        : [0, 24];
+      const { pagination = true } = betHistoryFilterDto || {};
+      const filter: FilterDto = betHistoryFilterDto?.filter
+        ? (JSON.parse(betHistoryFilterDto.filter) as FilterDto)
+        : undefined;
+
+      // Base query joining stream, round, and betting variable
+      const qb = this.betsRepository
+        .createQueryBuilder('b')
+        .leftJoin('b.stream', 's')
+        .leftJoin('b.round', 'r')
+        .leftJoin('b.bettingVariable', 'bv')
+        .where('b.userId = :userId', { userId });
+
+      if (filter?.q) {
+        qb.andWhere('(LOWER(s.name) ILIKE LOWER(:q))', { q: `%${filter.q}%` });
+      }
+
+      // Ordering by bet creation date
+      if (sort) {
+        const [sortColumn, sortOrder] = sort;
+        const column = sortColumn === 'created_at' ? 'created_at' : 'createdAt';
+        qb.orderBy(
+          `b.${column}`,
+          String(sortOrder).toUpperCase() === 'ASC' ? 'ASC' : 'DESC',
+        );
+      }
+
+      // Select requested fields in required schema
+      qb.select('b.createdAt', 'date')
+        .addSelect('s.name', 'streamName')
+        .addSelect('r.roundName', 'roundName')
+        .addSelect('bv.name', 'optionName')
+        .addSelect('b.currency', 'coinType')
+        .addSelect('b.amount', 'amountPlaced')
+        .addSelect(
+          `CASE WHEN b.status = :won THEN b.payoutAmount ELSE 0 END`,
+          'amountWon',
+        )
+        .addSelect(
+          `CASE WHEN b.status = :lost THEN b.amount ELSE 0 END`,
+          'amountLost',
+        )
+        .addSelect('b.status', 'status')
+        .setParameters({ won: BetStatus.Won, lost: BetStatus.Lost });
+
+      // Count query for pagination total
+      const countQB = this.betsRepository
+        .createQueryBuilder('b')
+        .leftJoin('b.stream', 's')
+        .where('b.userId = :userId', { userId });
+
+      if (filter?.q) {
+        countQB.andWhere('(LOWER(s.name) ILIKE LOWER(:q))', {
+          q: `%${filter.q}%`,
+        });
+      }
+
+      const total = await countQB.getCount();
+
+      if (pagination && range) {
+        const [offset, limit] = range;
+        qb.offset(offset).limit(limit);
+      }
+
+      const data = await qb.getRawMany();
+      return { data, total };
+    } catch (e) {
+      Logger.error('Unable to retrieve betting history', e);
+      throw new InternalServerErrorException(
+        'Unable to retrieve betting history at the moment. Please try again later',
       );
     }
   }

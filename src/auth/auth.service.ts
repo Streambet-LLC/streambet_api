@@ -14,15 +14,14 @@ import { LoginDto } from './dto/login.dto';
 import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
-import { EmailsService } from 'src/emails/email.service';
-import { EmailType } from 'src/enums/email-type.enum';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
 import { userVerificationDto } from './dto/verify-password.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { UserRole } from 'src/enums/user-role.enum';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -36,7 +35,6 @@ interface GoogleProfile {
 
 @Injectable()
 export class AuthService {
-
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -44,7 +42,6 @@ export class AuthService {
     private walletsService: WalletsService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private emailsService: EmailsService,
     private notificationService: NotificationService,
   ) {}
 
@@ -249,7 +246,26 @@ export class AuthService {
       return null;
     }
   }
+  verifyAccessToken(token: string): JwtPayload | null {
+    try {
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.configService.get('auth.jwtSecret'),
+      });
 
+      if (
+        !payload.sub ||
+        !payload.username ||
+        !payload.email ||
+        !payload.role
+      ) {
+        return null;
+      }
+      return payload;
+    } catch (_: unknown) {
+      // Token verification failed
+      return null;
+    }
+  }
   /**
    * Logs out a user by invalidating their refresh token.
    * @param userId - The user ID.
@@ -336,7 +352,9 @@ export class AuthService {
 
     if (!user) {
       // Create new user for Google auth
-      const username = `${name.givenName}${Math.floor(Math.random() * 10000)}`;
+      const baseUsername = name.givenName || email.split('@')[0];
+      const username = await this.generateUsernameSuggestion(baseUsername);
+
       user = await this.usersService.create({
         username,
         email,
@@ -402,12 +420,7 @@ export class AuthService {
     user: User,
     redirect: string | undefined,
   ) {
-    if (user.email.indexOf('@example.com') !== -1) {
-      return true;
-    }
     try {
-      //const token = this.generateJwtTokenForEmailValidation(user);
-
       const token = this.jwtService.sign(
         { sub: user.id },
         {
@@ -415,34 +428,18 @@ export class AuthService {
           expiresIn: '1d',
         },
       );
-      const hostUrl = this.configService.get<string>('email.HOST_URL');
-      const profileLink = this.configService.get<string>(
-        'email.APPLICATION_HOST',
-      );
 
-      const host = this.configService.get<string>('email.APPLICATION_HOST');
-      const verifyLink = redirect
-        ? `${hostUrl}/auth/verify-email?token=${token}&redirect=${redirect}`
-        : `${hostUrl}/auth/verify-email?token=${token}`;
-
-      const emailData = {
-        subject: 'Activate Email',
-        toAddress: [user.email],
-        params: {
-          host,
-          profileLink,
-          title: 'Activation Email',
-          verifyLink,
-          code: '',
-          fullName: user.name || user.username,
-        },
-      };
-      return await this.emailsService.sendEmailSMTP(
-        emailData,
-        EmailType.AccountVerification,
+      return await this.notificationService.sendSMTPForAccountVerification(
+        user.id,
+        redirect,
+        token,
+        user,
       );
     } catch (e) {
-      this.logger.error('Error in AuthService.sendAccountVerificationEmail:', e);
+      this.logger.error(
+        'Error in AuthService.sendAccountVerificationEmail:',
+        e,
+      );
     }
   }
 
@@ -456,7 +453,7 @@ export class AuthService {
       });
 
       // Get user
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findUserByUserId(payload.sub);
 
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
@@ -541,7 +538,7 @@ export class AuthService {
       });
 
       // Get user
-      const user = await this.usersService.findById(payload.sub);
+      const user = await this.usersService.findUserByUserId(payload.sub);
       if (!user) {
         throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
       }

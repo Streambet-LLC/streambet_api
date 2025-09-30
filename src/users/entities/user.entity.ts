@@ -2,15 +2,11 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Wallet } from '../../wallets/entities/wallet.entity';
-
-export enum UserRole {
-  USER = 'user',
-  ADMIN = 'admin',
-}
+import { UserRole } from 'src/enums/user-role.enum';
 
 export class NotificationPreference {
-    emailNotification: boolean;
-    inAppNotification: boolean;
+  emailNotification: boolean;
+  inAppNotification: boolean;
 }
 
 @Entity('users')
