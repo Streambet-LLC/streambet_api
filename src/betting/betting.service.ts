@@ -555,7 +555,6 @@ export class BettingService {
         options,
       });
     }
-
     return result;
   }
 
@@ -1110,7 +1109,6 @@ export class BettingService {
           lock: { mode: 'pessimistic_write' },
         },
       );
-
       if (!lockedOldBettingVariable || !lockedNewBettingVariable) {
         throw new NotFoundException('Betting variable not found');
       }
@@ -2471,7 +2469,6 @@ export class BettingService {
       throw new NotFoundException(e.message);
     }
   }
-
   /**
    * Calculates the potential winning amount for a user’s bet in a betting round.
    *
@@ -2845,7 +2842,6 @@ export class BettingService {
       (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
       0,
     );
-
     return {
       totalBetsGoldCoinAmount,
       totalBetsSweepCoinAmount,

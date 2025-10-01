@@ -41,7 +41,6 @@ export class AdminService {
       TransactionType.ADMIN_CREDIT,
     );
     //emit an event to the user, notify about the coin updation
-
     return updateResult;
   }
 }

@@ -332,7 +332,6 @@ export class BettingGateway {
   ) {
     try {
       const user = client.data.user;
-
       const cancelBetDto: CancelBetDto = {
         betId: data.betId,
         currencyType: data.currencyType,

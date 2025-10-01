@@ -34,7 +34,6 @@ export class QueueService {
   ) {
     try {
       const delay = scheduledTime.getTime() - Date.now();
-
       if (delay < 0) {
         throw new Error('Scheduled time must be in the future');
       }
