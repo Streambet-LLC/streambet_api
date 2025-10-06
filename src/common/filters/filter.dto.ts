@@ -32,6 +32,10 @@ export class FilterDto {
   @IsOptional()
   status: number;
 
+  @ApiProperty({ description: 'Filter by stream status', required: false })
+  @IsOptional()
+  streamStatus: string;
+
   @ApiProperty({ description: 'Filter By ids', required: false })
   @IsArray()
   @IsOptional()

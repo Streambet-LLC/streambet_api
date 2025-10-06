@@ -221,11 +221,13 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const range: Range = streamFilterDto.range
         ? (JSON.parse(streamFilterDto.range) as Range)
         : [0, 10];
-      const { pagination = true, streamStatus } = streamFilterDto;
+      const { pagination = true } = streamFilterDto;
+      const { streamStatus } = filter;
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.bettingRounds', 'r');
+
       if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
@@ -233,18 +235,17 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       }
 
       if (streamStatus) {
-        streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
-      }
-      streamQB.andWhere(`s.status != :streamStatus`, {
-        streamStatus: StreamStatus.DELETED,
-      });
+        streamQB.andWhere(`s.status = :streamStatus`, {
+          streamStatus,
+        });
+      } else {
+        streamQB.andWhere(`s.status != :streamStatus`, {
+          streamStatus: StreamStatus.DELETED,
+        });
 
-      if (sort) {
-        const [sortColumn, sortOrder] = sort;
-        streamQB.orderBy(
-          `s.${sortColumn}`,
-          sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
-        );
+        streamQB.andWhere(`s.status != :streamStatus`, {
+          streamStatus: StreamStatus.ENDED,
+        });
       }
 
       streamQB
@@ -285,6 +286,18 @@ END
       AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
   )`,
           'userBetCount',
+        )
+        .addOrderBy(
+          `CASE s.status
+              WHEN 'live' THEN 1
+              WHEN 'scheduled' THEN 2
+              WHEN 'active' THEN 3
+              WHEN 'ended' THEN 4
+              WHEN 'cancelled' THEN 5
+              WHEN 'deleted' THEN 6
+              ELSE 7
+          END`,
+          'ASC',
         )
 
         .groupBy('s.id');
