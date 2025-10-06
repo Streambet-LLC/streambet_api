@@ -293,7 +293,7 @@ export class PaymentsController {
   async kycUs(
     @Request() req: RequestWithUser,
     @Body() body: CoinflowWithdrawKycUsDto,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.paymentsService.registerUserKycUs(req.user.id, body);
 
