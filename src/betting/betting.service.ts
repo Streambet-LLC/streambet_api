@@ -2253,10 +2253,30 @@ export class BettingService {
   async lockBetting(variableId: string): Promise<BettingVariable> {
     // Update the status of the betting variable to LOCKED
     // Delegates the actual update to a helper method `updateBettingVariableStatus`
-    return this.updateBettingVariableStatus(
+    const updatedVariable = await this.updateBettingVariableStatus(
       variableId,
       BettingVariableStatus.LOCKED,
     );
+
+    // Fetch the betting variable with relations to get stream and round info
+    const bettingVariable = await this.findBettingVariableById(variableId);
+    
+    // Emit socket events to notify frontend of the status change
+    if (bettingVariable.stream && bettingVariable.roundId) {
+      // Emit betting locked event to the specific stream
+      this.bettingGateway.emitBettingStatus(
+        bettingVariable.stream.id,
+        bettingVariable.roundId,
+        BettingRoundStatus.LOCKED,
+      );
+
+      // Emit stream list update event to all clients in 'streambet' room
+      this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
+    } else {
+      Logger.warn(`[lockBetting] Missing stream or roundId - cannot emit events`);
+    }
+
+    return updatedVariable;
   }
 
   /**
@@ -2623,9 +2643,9 @@ export class BettingService {
           // Update status and save
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
-
+          
           // Emit websocket events for the stream
-          this.bettingGateway.emitBettingStatus(
+          await this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
             BettingRoundStatus.LOCKED,
@@ -2660,12 +2680,12 @@ export class BettingService {
 
         if (roundWithStream && roundWithStream.streamId) {
           // Emit websocket events for the stream
-          this.bettingGateway.emitBettingStatus(
+          await this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
             roundId,
             BettingRoundStatus.OPEN,
           );
-          this.bettingGateway.emitOpenBetRound(
+          await this.bettingGateway.emitOpenBetRound(
             round.roundName,
             roundWithStream.stream.name,
           );
