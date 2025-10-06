@@ -17,6 +17,9 @@ import { randomUUID } from 'crypto';
 import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import { CoinflowWithdrawKycDto, CoinflowWithdrawKycUsDto } from './dto/coinflow-withdraw.dto';
+import { Response } from 'express';
+import { get } from 'lodash-es';
 
 @Injectable()
 export class PaymentsService {
@@ -311,10 +314,11 @@ export class PaymentsService {
    * Retrieves the Coinflow withdraw payload for the given user.
    *
    * @param userId - The application user ID.
+   * @param redirectLink - Redirect Link for additional verification.
    * @returns The withdraw payload returned by Coinflow.
    * @throws BadRequestException If configuration is missing or the upstream request fails.
    */
-  async getCoinflowWithdraw(userId: string) {
+  async getCoinflowWithdraw(userId: string, redirectLink?: string) {
     if (!this.coinflowApiUrl || !this.coinflowApiKey) {
       throw new BadRequestException(
         'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
@@ -323,6 +327,9 @@ export class PaymentsService {
 
     try {
       const { data } = await this.coinflowClient.get('/api/withdraw', {
+        params: {
+          redirectLink
+        },
         headers: {
           'x-coinflow-auth-user-id': userId,
         },
@@ -330,6 +337,13 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
+      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+        return {
+          status: 451,
+          data: { verificationLink: get(error, "response.data.verificationLink") },
+        };
+      }
+
       throw this.mapCoinflowError(
         error,
         'Failed to fetch Coinflow withdraw data',
@@ -768,32 +782,91 @@ export class PaymentsService {
       throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
     }
   }
-  
-  async registerUserViaDocument(userId: string, formData: FormData) {
-    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+
+  async registerUserKyc(userId: string, params: CoinflowWithdrawKycDto) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey || !this.coinflowMerchantId) {
       throw new BadRequestException(
-        'Coinflow configuration missing. Please set COINFLOW_API_URL and COINFLOW_API_KEY',
+        'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, and COINFLOW_MERCHANT_ID',
       );
     }
 
     try {
       const { data } = await this.coinflowClient.post(
-        '/api/withdraw/kyc-doc',
-        formData,
+        '/api/withdraw/kyc',
+        {
+          merchantId: this.coinflowMerchantId,
+          redirectLink: params.redirectLink,
+          email: params.email,
+          country: params.country,
+        },
         {
           headers: {
             'x-coinflow-auth-user-id': userId,
-            'Content-Type': 'multipart/form-data',
           },
-          timeout: 120000,
         },
       );
 
       return data;
     } catch (error) {
+      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+        return {
+          status: 451,
+          data: { verificationLink: get(error, "response.data.verificationLink") },
+        };
+      }
+
       throw this.mapCoinflowError(
         error,
-        'Failed to register user via document',
+        'Failed to register user as withdrawer',
+      );
+    }
+  }
+
+  async registerUserKycUs(userId: string, params: CoinflowWithdrawKycUsDto) {
+    if (!this.coinflowApiUrl || !this.coinflowApiKey) {
+      throw new BadRequestException(
+        'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, and COINFLOW_MERCHANT_ID',
+      );
+    }
+
+    try {
+      const { data } = await this.coinflowClient.post(
+        '/api/withdraw/kyc',
+        {
+          merchantId: this.coinflowMerchantId,
+          redirectLink: params.redirectLink,
+          info: {
+            email: params.email,
+            firstName: params.firstName,
+            surName: params.lastName,
+            physicalAddress: params.address,
+            city: params.city,
+            state: params.state,
+            zip: params.zip,
+            country: params.country,
+            dob: params.dob,
+            ssn: params.ssn,
+          }
+        },
+        {
+          headers: {
+            'x-coinflow-auth-user-id': userId,
+          },
+        },
+      );
+
+      return data;
+    } catch (error) {
+      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+        return {
+          status: 451,
+          data: { verificationLink: get(error, "response.data.verificationLink") },
+        };
+      }
+      
+      throw this.mapCoinflowError(
+        error,
+        'Failed to register user as withdrawer',
       );
     }
   }
