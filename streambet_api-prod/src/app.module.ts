@@ -24,7 +24,7 @@ import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
 import { QueueBoardModule } from './queue/queue-board.module';
-import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import { STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
@@ -38,9 +38,6 @@ import { envValidationSchema } from './config/redis.validation';
 import coinflowConfig from './config/coinflow.config';
 
 import { CoinPackageModule } from './coin-package/coin-package.module';
-import { WsModule } from './ws/ws.module';
-import { KycModule } from './kyc/kyc.module';
-import personaConfig from './config/persona.config';
 
 @Module({
   imports: [
@@ -63,7 +60,6 @@ import personaConfig from './config/persona.config';
         redisConfig,
         geoFencingConfig,
         coinflowConfig,
-        personaConfig,
       ] as ConfigFactory[],
       envFilePath: ['./.env'],
     }),
@@ -100,7 +96,6 @@ import personaConfig from './config/persona.config';
         ],
       }),
     }),
-    WsModule,
     AuthModule,
     AssetsModule,
     UsersModule,
@@ -112,14 +107,13 @@ import personaConfig from './config/persona.config';
     StreamModule,
     NotificationModule,
     QueueBoardModule.register({
-      queues: [STREAM_LIVE_QUEUE, EMAIL_QUEUE],
+      queues: [STREAM_LIVE_QUEUE],
     }),
     ChatModule,
     QueueModule,
     GeoFencingModule,
     RedisModule,
     CoinPackageModule,
-    KycModule,
   ],
   controllers: [AppController],
   providers: [

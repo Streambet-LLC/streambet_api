@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { Stream } from './entities/stream.entity';
+import { Stream, StreamStatus } from './entities/stream.entity';
 import {
   LiveScheduledStreamListDto,
   StreamFilterDto,
@@ -22,17 +22,17 @@ import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { BettingGateway } from 'src/betting/betting.gateway';
+import { Queue } from 'bullmq';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
+import { CurrencyType } from 'src/wallets/entities/transaction.entity';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
-import { StreamList, StreamStatus } from 'src/enums/stream.enum';
+import { StreamList } from 'src/enums/stream-list.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
-import { BettingGateway } from 'src/betting/betting.gateway';
-import { StreamGateway } from './stream.gateway';
-import { CurrencyType } from 'src/enums/currency.enum';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -45,8 +45,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingService))
     private bettingService: BettingService,
-    @Inject(forwardRef(() => StreamGateway))
-    private streamGateway: StreamGateway,
+    @Inject(forwardRef(() => BettingGateway))
+    private bettingGateway: BettingGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
   ) {}
@@ -221,8 +221,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const range: Range = streamFilterDto.range
         ? (JSON.parse(streamFilterDto.range) as Range)
         : [0, 10];
-      const { pagination = true } = streamFilterDto;
-      const { streamStatus } = filter;
+      const { pagination = true, streamStatus } = streamFilterDto;
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
@@ -234,17 +233,18 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       }
 
       if (streamStatus) {
-        streamQB.andWhere(`s.status = :streamStatus`, {
-          streamStatus,
-        });
-      } else {
-        streamQB.andWhere(`s.status != :streamStatus`, {
-          streamStatus: StreamStatus.DELETED,
-        });
+        streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
+      }
+      streamQB.andWhere(`s.status != :streamStatus`, {
+        streamStatus: StreamStatus.DELETED,
+      });
 
-        streamQB.andWhere(`s.status != :streamStatus`, {
-          streamStatus: StreamStatus.ENDED,
-        });
+      if (sort) {
+        const [sortColumn, sortOrder] = sort;
+        streamQB.orderBy(
+          `s.${sortColumn}`,
+          sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+        );
       }
 
       streamQB
@@ -285,18 +285,6 @@ END
       AND bet.status NOT IN ('${BetStatus.Refunded}', '${BetStatus.Cancelled}', '${BetStatus.Pending}')
   )`,
           'userBetCount',
-        )
-        .addOrderBy(
-          `CASE s.status
-              WHEN 'live' THEN 1
-              WHEN 'scheduled' THEN 2
-              WHEN 'active' THEN 3
-              WHEN 'ended' THEN 4
-              WHEN 'cancelled' THEN 5
-              WHEN 'deleted' THEN 6
-              ELSE 7
-          END`,
-          'ASC',
         )
 
         .groupBy('s.id');
@@ -596,7 +584,7 @@ END
       if (!stream) {
         throw new NotFoundException(`Stream with ID ${id} not found`);
       }
-      const prevStatus = stream.status;
+
       // Update only the provided fields
       if (updateStreamDto.name !== undefined) {
         stream.name = updateStreamDto.name;
@@ -648,19 +636,10 @@ END
         }
       }
 
-      if (
-        prevStatus !== StreamStatus.ENDED &&
-        streamResponse.status === StreamStatus.ENDED
-      ) {
-        this.streamGateway.emitStreamListEvent(StreamList.StreamEnded);
+      if (updateStreamDto.status === StreamStatus.ENDED && !stream.endTime) {
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamEnded);
       } else {
-        this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
-      }
-      if (
-        prevStatus === StreamStatus.SCHEDULED &&
-        streamResponse.status === StreamStatus.LIVE
-      ) {
-        this.streamGateway.emitScheduledStreamUpdatedToLive(streamResponse.id);
+        this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated);
       }
 
       return streamResponse;
@@ -711,7 +690,7 @@ END
     const savedStream = await this.streamsRepository.save(stream);
 
     // Emit stream end socket event
-    this.streamGateway.emitStreamEnd(streamId);
+    this.bettingGateway.emitStreamEnd(streamId);
 
     return savedStream;
   }
@@ -809,42 +788,20 @@ END
       }
 
       // Update status based on scheduled start time
-      const prevStatus = stream.status;
       const currentTime = new Date();
-      let changed = false;
-
       if (stream.status === StreamStatus.SCHEDULED) {
-        if (
-          stream.scheduledStartTime &&
-          stream.scheduledStartTime <= currentTime
-        ) {
+        if (stream.scheduledStartTime <= currentTime) {
           stream.status = StreamStatus.LIVE;
           stream.actualStartTime = currentTime;
-          changed = true;
         }
       } else if (stream.status === StreamStatus.LIVE) {
         return stream;
       }
-
-      if (!changed) return stream;
-
-      await this.streamsRepository.update(
-        { id: stream.id },
-        { status: stream.status, actualStartTime: stream.actualStartTime },
-      );
-      const streamUpdated = await this.streamsRepository.findOne({
-        where: { id: stream.id },
-        select: ['id', 'status'],
-      });
-      this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
-
-      if (
-        prevStatus === StreamStatus.SCHEDULED &&
-        streamUpdated.status === StreamStatus.LIVE
-      ) {
-        this.streamGateway.emitScheduledStreamUpdatedToLive(streamUpdated.id);
-      }
-      return streamUpdated;
+      
+      const streamUpdated = await this.streamsRepository.save(stream);
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamUpdated)
+      this.bettingGateway.emitScheduledStreamUpdatedToLive(stream.id)
+      return streamUpdated
     } catch (error) {
       Logger.error(`Failed to update stream status for ${streamId}`, error);
       throw error;
@@ -1028,7 +985,7 @@ END
       }
 
       // Emit stream list event to update the UI
-      this.streamGateway.emitStreamListEvent(StreamList.StreamDeleted);
+      this.bettingGateway.emitStreamListEvent(StreamList.StreamDeleted);
 
       return streamId;
     } catch (error) {
