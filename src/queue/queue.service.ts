@@ -2,13 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import {
+  COINFLOW_WEBHOOK_QUEUE,
   EMAIL_QUEUE,
   MAKE_LIVE_JOB,
+  QUEUE_COINFLOW_WEBHOOK,
   SEND_EMAIL_JOB,
   STREAM_LIVE_QUEUE,
 } from 'src/common/constants/queue.constants';
 import { EmailPayloadDto } from 'src/emails/dto/email.dto';
 import { EmailType } from 'src/enums/email-type.enum';
+import { WebhookDto } from 'src/webhook/dto/webhook.dto';
 
 export interface QueueJobOptions {
   delay?: number;
@@ -25,6 +28,7 @@ export class QueueService {
   constructor(
     @InjectQueue(STREAM_LIVE_QUEUE) private streamLiveQueue: Queue,
     @InjectQueue(EMAIL_QUEUE) private mailQueue: Queue,
+    @InjectQueue(COINFLOW_WEBHOOK_QUEUE) private coinflowWebhookQueue: Queue,
   ) {}
 
   async addStreamLiveJob(
@@ -73,6 +77,19 @@ export class QueueService {
     }
   }
 
+  async addCoinflowWebhookJob(webhook: WebhookDto) {
+    try {
+      const webhookData = JSON.stringify(webhook);
+      const job = await this.coinflowWebhookQueue.add(QUEUE_COINFLOW_WEBHOOK, webhookData);
+
+      this.logger.log(`Added coinflow webhook job: ${job.id}`);
+      return job;
+    } catch (error) {
+      this.logger.error(`Failed to add coinflow webhook job`, error.stack);
+      throw error;
+    }
+  }
+
   async getJobStatus(queueName: string, jobId: string) {
     try {
       const queue = this.getQueueByName(queueName);
@@ -106,6 +123,8 @@ export class QueueService {
         return this.streamLiveQueue;
       case EMAIL_QUEUE:
         return this.mailQueue;
+      case COINFLOW_WEBHOOK_QUEUE:
+        return this.coinflowWebhookQueue;
       default:
         throw new Error(`Unknown queue: ${queueName}`);
     }

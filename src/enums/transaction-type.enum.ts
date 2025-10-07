@@ -1,6 +1,9 @@
 export enum TransactionType {
   DEPOSIT = 'Deposit',
   WITHDRAWAL = 'Withdrawal',
+  WITHDRAWAL_PENDING = 'Withdrawal Pending',
+  WITHDRAWAL_SUCCESS = 'Withdrawal Success',
+  WITHDRAWAL_FAILED = 'Withdrawal Failed',
   BET_PLACEMENT = 'Bet placement',
   BET_WON = 'Bet winnings',
   BET_LOST = 'Bet loss',

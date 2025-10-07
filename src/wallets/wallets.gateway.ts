@@ -36,6 +36,46 @@ export class WalletGateway {
     );
   }
 
+  /**
+   * Emit purchase settled event to all active sockets of a specific user.
+   * @param userId - ID of the user
+   * @param payload - Data including message
+   */
+  emitWithdrawSuccess(
+    userId: string,
+    payload: {
+      message: string;
+      sweepCoins: number;
+    },
+  ): void {
+    emitToUser(
+      this.gatewayManager,
+      userId,
+      SocketEventName.WithdrawSuccess,
+      payload,
+    );
+  }
+
+  /**
+   * Emit purchase settled event to all active sockets of a specific user.
+   * @param userId - ID of the user
+   * @param payload - Data including message, updated wallet balance
+   */
+  emitWithdrawFailed(
+    userId: string,
+    payload: {
+      message: string;
+      sweepCoins: number;
+    },
+  ): void {
+    emitToUser(
+      this.gatewayManager,
+      userId,
+      SocketEventName.WithdrawFailed,
+      payload,
+    );
+  }
+
   async emitAdminAddedGoldCoin(userId: string): Promise<void> {
     emitToUser(this.gatewayManager, userId, SocketEventName.RefetchEvent, {});
   }

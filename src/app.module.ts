@@ -40,6 +40,7 @@ import coinflowConfig from './config/coinflow.config';
 import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
 import personaConfig from './config/persona.config';
+import { WebhookModule } from './webhook/webhook.module';
 
 @Module({
   imports: [
@@ -118,6 +119,7 @@ import personaConfig from './config/persona.config';
     GeoFencingModule,
     RedisModule,
     CoinPackageModule,
+    WebhookModule
   ],
   controllers: [AppController],
   providers: [

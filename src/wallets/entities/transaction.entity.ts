@@ -46,8 +46,8 @@ export class Transaction extends BaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
-
-  @Column({ type: 'uuid', nullable: true })
+  
+  @Column({ type: 'varchar', length: 500, nullable: true })
   relatedEntityId: string;
 
   @Column({ nullable: true })

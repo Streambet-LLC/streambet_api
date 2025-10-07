@@ -7,3 +7,5 @@ export const MAKE_LIVE_JOB = 'make-live';
 export const EMAIL_QUEUE = `${prefix}EMAIL`;
 export const SEND_EMAIL_JOB = 'send-mail';
 
+export const COINFLOW_WEBHOOK_QUEUE = `${prefix}COINFLOW_WEBHOOK`;
+export const QUEUE_COINFLOW_WEBHOOK = 'queue-coinflow-webhook';

@@ -383,21 +383,22 @@ export class WalletsService {
   }
 
   /**
-   * hasTransactionForRelatedEntity - Checks if a purchase transaction exists for a related entity.
+   * hasTransactionForRelatedEntity - Checks if a transaction exists for a related entity.
    *
    * - Filters by relatedEntityId (required).
    * - Optionally filters by relatedEntityType and currencyType.
-   * - Always checks for TransactionType.PURCHASE.
    * - Uses provided EntityManager if available, otherwise default repository.
    * - Returns true if at least one matching transaction exists, otherwise false.
    *
    * @param relatedEntityId - ID of the related entity
+   * @param transactionType - Transaction type filter
    * @param relatedEntityType - Optional type of related entity
    * @param currencyType - Optional currency type filter
    * @param manager - Optional EntityManager for transactional queries
    */
   async hasTransactionForRelatedEntity(
     relatedEntityId: string,
+    transactionType: TransactionType,
     relatedEntityType?: string,
     currencyType?: CurrencyType,
     manager?: EntityManager,
@@ -405,7 +406,7 @@ export class WalletsService {
     const where: any = { relatedEntityId };
     if (relatedEntityType) where.relatedEntityType = relatedEntityType;
     if (currencyType) where.currencyType = currencyType;
-    where.type = TransactionType.PURCHASE;
+    where.type = transactionType;
     if (manager) {
       const count = await manager.getRepository(Transaction).count({ where });
       return count > 0;
@@ -461,6 +462,9 @@ export class WalletsService {
             TransactionType.ADMIN_CREDIT,
             TransactionType.DEPOSIT,
             TransactionType.WITHDRAWAL,
+            TransactionType.WITHDRAWAL_PENDING,
+            TransactionType.WITHDRAWAL_FAILED,
+            TransactionType.WITHDRAWAL_SUCCESS,
             TransactionType.PURCHASE,
             TransactionType.INITIAL_CREDIT,
             TransactionType.BONUS,
