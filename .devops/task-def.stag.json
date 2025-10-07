@@ -156,6 +156,14 @@
         {
           "name": "COINFLOW_WEBHOOK_SECRET",
           "valueFrom": "/streambet/stag/COINFLOW_WEBHOOK_SECRET"
+        },
+        {
+          "name": "PERSONA_API_KEY",
+          "valueFrom": "/streambet/stag/PERSONA_API_KEY"
+        },
+        {
+          "name": "PERSONA_API_URL",
+          "valueFrom": "/streambet/stag/PERSONA_API_URL"
         }
       ],
       "mountPoints": [],

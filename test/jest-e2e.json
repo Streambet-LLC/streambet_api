@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> e955cf4c034c7381d143306850c89c127ed18d6f
 {
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
@@ -8,6 +11,7 @@
     "^.+\\.(t|j)s$": "ts-jest"
   }
 }
+<<<<<<< HEAD
 =======
 {
   "moduleFileExtensions": ["js", "json", "ts"],
@@ -19,3 +23,5 @@
   }
 }
 >>>>>>> 45d55f8c625e96dc51ae8c8f27a6156054a38c01
+=======
+>>>>>>> e955cf4c034c7381d143306850c89c127ed18d6f

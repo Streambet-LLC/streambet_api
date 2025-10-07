@@ -1,0 +1,10 @@
+.idea
+node_modules
+dist
+DevOps
+*.log
+package-lock.json
+!production.json
+backups/*
+e2e-common/*
+docs/*
