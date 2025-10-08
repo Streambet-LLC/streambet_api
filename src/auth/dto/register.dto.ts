@@ -121,6 +121,15 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   redirect?: string;
+
+  @ApiProperty({
+    description: 'Promo code for user registration',
+    example: 'WELCOME2025',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }
 
 export class UserRegistrationResponseDto {
