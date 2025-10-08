@@ -241,12 +241,20 @@ export class PaymentsController {
   async initiateCoinflowWithdraw(
     @Request() req: RequestWithUser,
     @Body() body: CoinflowWithdrawDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
+    const result = await this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
       coins: body.coins,
       account: body.account,
       speed: body.speed,
     });
+
+    if (result.status === 451) {
+      res.status(451);
+      return result.data;
+    }
+
+    return result;
   }
 
   /** Registers non-US user in Coinflow as a withdrawer for payout. */

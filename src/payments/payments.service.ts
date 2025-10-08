@@ -843,8 +843,11 @@ export class PaymentsService {
         coinflow: data,
       };
     } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
+      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+        return {
+          status: 451,
+          data: { verificationLink: get(error, "response.data.verificationLink") },
+        };
       }
       throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
     }
