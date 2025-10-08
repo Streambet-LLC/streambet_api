@@ -230,16 +230,6 @@ export class PaymentsController {
     );
   }
 
-  /** Webhook receiver for Coinflow checkout events. */
-  @Post('coinflow/webhook')
-  @UseGuards(CoinflowWebhookGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  async handleCoinflowWebhook(@Body() payload: CoinflowWebhookDto) {
-    Logger.log(`Coinflow webhook received`, PaymentsController.name);
-    return this.paymentsService.handleCoinflowWebhookEvent(payload);
-  }
-
   /** Initiates a delegated payout (withdrawal) to the authenticated user's account via Coinflow. */
   @ApiOperation({ summary: 'Initiate Coinflow delegated payout (withdrawal)' })
   @ApiResponse({ status: 201, description: 'Withdrawal initiated' })
@@ -251,12 +241,20 @@ export class PaymentsController {
   async initiateCoinflowWithdraw(
     @Request() req: RequestWithUser,
     @Body() body: CoinflowWithdrawDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
+    const result = await this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
       coins: body.coins,
       account: body.account,
       speed: body.speed,
     });
+
+    if (result.status === 451) {
+      res.status(451);
+      return result.data;
+    }
+
+    return result;
   }
 
   /** Registers non-US user in Coinflow as a withdrawer for payout. */

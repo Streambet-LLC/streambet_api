@@ -29,6 +29,8 @@ export enum SocketEventName {
   BetCancelledByAdmin = 'betCancelledByAdmin',
   PurchaseSettled = 'purchaseSettled',
   StreamListUpdated = 'streamListUpdated',
+  WithdrawSuccess = 'withdrawSuccess',
+  WithdrawFailed = 'withdrawFailed',
 }
 
 export enum ChatType {

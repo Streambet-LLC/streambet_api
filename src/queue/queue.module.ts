@@ -4,16 +4,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QueueService } from './queue.service';
 import { StreamModule } from 'src/stream/stream.module';
 import {
+  COINFLOW_WEBHOOK_QUEUE,
   EMAIL_QUEUE,
   STREAM_LIVE_QUEUE,
 } from 'src/common/constants/queue.constants';
 import { StreamLiveProcessor } from './processor/stream-live.processor';
 import { EmailProcessor } from './processor/email.processor';
 import { EmailsModule } from 'src/emails/email.module';
+import { CoinflowWebhookProcessor } from './processor/coinflow-webhook.processor';
+import { PaymentsModule } from 'src/payments/payments.module';
 
 @Module({
   imports: [
     forwardRef(() => StreamModule),
+    forwardRef(() => PaymentsModule),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -56,10 +60,21 @@ import { EmailsModule } from 'src/emails/email.module';
           ),
         }),
       },
+      {
+        name: COINFLOW_WEBHOOK_QUEUE,
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService) => ({
+          name: COINFLOW_WEBHOOK_QUEUE,
+          defaultJobOptions: configService.get(
+            'queue.queues.coinflowWebhookQueue.defaultJobOptions',
+          ),
+        }),
+      },
     ),
     EmailsModule,
   ],
-  providers: [StreamLiveProcessor, QueueService, EmailProcessor],
+  providers: [StreamLiveProcessor, QueueService, EmailProcessor, CoinflowWebhookProcessor],
   exports: [QueueService],
 })
 export class QueueModule {}
