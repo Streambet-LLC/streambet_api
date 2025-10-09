@@ -222,10 +222,7 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const lockedBetting = await this.bettingService.updateBettingVariableStatus(
-      id,
-      BettingVariableStatus.LOCKED,
-    );
+    const lockedBetting = await this.bettingService.lockBetting(id);
     return {
       message: 'Betting locked successfully',
       status: HttpStatus.OK,
