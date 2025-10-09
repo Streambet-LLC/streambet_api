@@ -147,7 +147,7 @@ export class PaymentsService {
             currency: 'usd',
             product_data: {
               name: selectedPackage.name,
-              description: `${selectedPackage.sweepCoins} Sweep Coins`,
+              description: `${selectedPackage.sweepCoins} Stream Coins`,
             },
             unit_amount: selectedPackage.price * 100, // in cents
           },
@@ -200,7 +200,7 @@ export class PaymentsService {
         await this.walletsService.addSweepCoins(
           userId,
           sweepCoins,
-          `Purchase of ${packageName} sweep coin package`,
+          `Purchase of ${packageName} Stream Coin package`,
           'purchase',
         );
       }
@@ -268,7 +268,7 @@ export class PaymentsService {
         await this.walletsService.addSweepCoins(
           userId,
           sweepCoins,
-          `Auto-reload purchase of ${sweepCoins} sweep coins`,
+          `Auto-reload purchase of ${sweepCoins} Stream Coins`,
           'purchase',
         );
         return { success: true, sweepCoins };
@@ -620,7 +620,7 @@ export class PaymentsService {
               Number(coinPackage.sweepCoinCount),
               CurrencyType.SWEEP_COINS,
               TransactionType.BONUS,
-              `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} bonus sweep coins`,
+              `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} bonus Stream Coins`,
               { coinPackageId: coinPackage.id, source: 'coinflow' },
               { relatedEntityId, relatedEntityType },
             );
@@ -715,7 +715,7 @@ export class PaymentsService {
         eventType === "Withdraw Success" ? 0 : initialTransaction.metadata.sweepCoins,
         CurrencyType.SWEEP_COINS,
         eventType === "Withdraw Success" ? TransactionType.WITHDRAWAL_SUCCESS : TransactionType.WITHDRAWAL_FAILED,
-        `Withdrawal of ${initialTransaction.metadata.sweepCoins} Sweep Coins to $${initialTransaction.metadata.usdAmount} ${
+        `Withdrawal of ${initialTransaction.metadata.sweepCoins} Stream Coins to $${initialTransaction.metadata.usdAmount} ${
           eventType === "Withdraw Success" ? "was successful" : "failed"
         }`,
         initialTransaction.metadata,
@@ -725,18 +725,18 @@ export class PaymentsService {
       // Emit socket notification to all of the user's active connections
       if (eventType === "Withdraw Success") {
         this.walletGateway.emitWithdrawSuccess(initialTransaction.userId, {
-          message: `Withdraw Success: ${initialTransaction.metadata.sweepCoins} Sweep Coins`,
+          message: `Withdraw Success: ${initialTransaction.metadata.sweepCoins} Stream Coins`,
           sweepCoins: initialTransaction.metadata.sweepCoins,
         });
       } else if (eventType === "Withdraw Failure") {
         this.walletGateway.emitWithdrawFailed(initialTransaction.userId, {
-          message: `Withdraw Failed: ${initialTransaction.metadata.sweepCoins} Sweep Coins`,
+          message: `Withdraw Failed: ${initialTransaction.metadata.sweepCoins} Stream Coins`,
           sweepCoins: initialTransaction.metadata.sweepCoins,
         });
       }
       
       Logger.log(
-        `Coinflow ${eventType} for user ${initialTransaction.userId} with ${initialTransaction.metadata.sweepCoins} Sweep Coins to $${initialTransaction.metadata.usdAmount}`,
+        `Coinflow ${eventType} for user ${initialTransaction.userId} with ${initialTransaction.metadata.sweepCoins} Stream Coins to $${initialTransaction.metadata.usdAmount}`,
       );
 
       // Send email notification to the user
@@ -825,7 +825,7 @@ export class PaymentsService {
         -params.coins,
         CurrencyType.SWEEP_COINS,
         TransactionType.WITHDRAWAL_PENDING,
-        `Withdrawal of ${params.coins} Sweep Coins to $${dollars} initiated`,
+        `Withdrawal of ${params.coins} Stream Coins to $${dollars} initiated`,
         { sweepCoins: params.coins, source: 'coinflow', usdAmount: dollars },
         { relatedEntityId: data.signature, relatedEntityType: 'coinflow' },
       );

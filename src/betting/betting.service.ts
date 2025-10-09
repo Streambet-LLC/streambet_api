@@ -2116,7 +2116,7 @@ export class BettingService {
       totalWinningSweepCoinAmount <= 0
     ) {
       Logger.log(
-        'No winning Sweep Coin bets to process or invalid total amount',
+        'No winning Stream Coin bets to process or invalid total amount',
       );
       return;
     }
@@ -2159,7 +2159,7 @@ export class BettingService {
         );
       } catch (error) {
         console.error(
-          `Error processing winning Sweep Coin bet ${bet.id}:`,
+          `Error processing winning Stream Coin bet ${bet.id}:`,
           error,
         );
         throw error; // Rollback will be handled by the caller

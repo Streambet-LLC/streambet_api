@@ -123,7 +123,7 @@ export class PaymentsService {
             currency: 'usd',
             product_data: {
               name: selectedPackage.name,
-              description: `${selectedPackage.sweepCoins} Sweep Coins`,
+              description: `${selectedPackage.sweepCoins} Stream Coins`,
             },
             unit_amount: selectedPackage.price * 100, // in cents
           },
@@ -176,7 +176,7 @@ export class PaymentsService {
         await this.walletsService.addSweepCoins(
           userId,
           sweepCoins,
-          `Purchase of ${packageName} sweep coin package`,
+          `Purchase of ${packageName} Stream Coin package`,
           'purchase',
         );
       }
@@ -244,7 +244,7 @@ export class PaymentsService {
         await this.walletsService.addSweepCoins(
           userId,
           sweepCoins,
-          `Auto-reload purchase of ${sweepCoins} sweep coins`,
+          `Auto-reload purchase of ${sweepCoins} Stream Coins`,
           'purchase',
         );
         return { success: true, sweepCoins };
@@ -506,7 +506,7 @@ export class PaymentsService {
             Number(coinPackage.sweepCoinCount),
             CurrencyType.SWEEP_COINS,
             TransactionType.BONUS,
-            `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} bonus sweep coins`,
+            `Purchase of ${coinPackage.name}: ${coinPackage.sweepCoinCount} bonus Stream Coins`,
             { coinPackageId: coinPackage.id, source: 'coinflow' },
             { relatedEntityId, relatedEntityType },
           );

@@ -19,7 +19,7 @@ export class CoinPackageDto {
   @ApiProperty({ example: null, nullable: true })
   description: string | null;
 
-  @ApiProperty({ example: '1000.00', description: 'Sweep coin count as a string' })
+  @ApiProperty({ example: '1000.00', description: 'Stream Coin count as a string' })
   sweepCoinCount: string;
 
   @ApiProperty({ example: '1000', description: 'Gold coin count as a string' })

@@ -21,7 +21,7 @@ import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
 export class CoinflowWithdrawDto {
   @ApiProperty({
     description:
-      'Number of sweep coins to withdraw. Must meet the minimum withdrawable threshold and be <= available balance.',
+      'Number of Stream Coins to withdraw. Must meet the minimum withdrawable threshold and be <= available balance.',
     example: 200,
     type: Number,
   })
