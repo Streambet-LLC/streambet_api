@@ -1612,7 +1612,7 @@ export class BettingService {
       totalWinningSweepCoinAmount <= 0
     ) {
       console.log(
-        'No winning Sweep coin bets to process or invalid total amount',
+        'No winning Stream Coin bets to process or invalid total amount',
       );
       return;
     }
@@ -1647,7 +1647,7 @@ export class BettingService {
         );
       } catch (error) {
         console.error(
-          `Error processing winning sweep coin bet ${bet.id}:`,
+          `Error processing winning Stream Coin bet ${bet.id}:`,
           error,
         );
         throw error;
