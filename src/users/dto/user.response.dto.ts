@@ -68,6 +68,9 @@ export class UserResponseDto {
   @ApiProperty({ example: null, nullable: true })
   lastKnownIp: string | null;
 
+  @ApiProperty({ example: 'WELCOME2025', nullable: true })
+  promoCode: string | null;
+
   @ApiProperty({ example: null, nullable: true })
   isSuspended: string | null;
 

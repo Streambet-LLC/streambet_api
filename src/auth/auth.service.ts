@@ -79,6 +79,7 @@ export class AuthService {
         lastKnownIp,
         dob,
         redirect,
+        promoCode,
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
@@ -130,6 +131,7 @@ export class AuthService {
         role: UserRole.USER,
         lastKnownIp,
         dateOfBirth: dob,
+        promoCode,
       });
 
       // Create wallet for the user

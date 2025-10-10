@@ -126,6 +126,9 @@ export class User extends BaseEntity {
   @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
   dateOfBirth: Date;
 
+  @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
+  promoCode: string;
+
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;
 }
