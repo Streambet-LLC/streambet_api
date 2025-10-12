@@ -18,7 +18,7 @@ import { User } from '../users/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { JsonWebTokenError } from 'jsonwebtoken';
+import { JsonWebTokenError, StringValue } from 'jsonwebtoken';
 import { userVerificationDto } from './dto/verify-password.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { UserRole } from 'src/enums/user-role.enum';
@@ -198,11 +198,11 @@ export class AuthService {
       // Generate tokens
       let accessToken: string;
       if (remember_me === true) {
-        accessToken = this.generateToken(user, '30d');
+        accessToken = this.generateToken(user, '30d' as StringValue);
       } else {
         const defaultExpiry =
           this.configService.get<string>('auth.jwtExpiresIn');
-        accessToken = this.generateToken(user, defaultExpiry);
+        accessToken = this.generateToken(user, defaultExpiry as StringValue);
       }
       const refreshToken = await this.generateRefreshToken(user);
 
@@ -284,7 +284,7 @@ export class AuthService {
     }
   }
 
-  generateToken(user: User, expiresIn?: string): string {
+  generateToken(user: User, expiresIn?: StringValue): string {
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
@@ -316,7 +316,7 @@ export class AuthService {
     // Generate JWT refresh token
     const refreshToken = this.jwtService.sign(payload, {
       secret: refreshTokenSecret,
-      expiresIn: refreshTokenExpiresIn,
+      expiresIn: refreshTokenExpiresIn as StringValue,
     });
 
     // Calculate expiration date for database storage
@@ -427,7 +427,7 @@ export class AuthService {
         { sub: user.id },
         {
           secret: this.configService.get('auth.jwtSecret'),
-          expiresIn: '1d',
+          expiresIn: '1d' as StringValue,
         },
       );
 
@@ -505,7 +505,7 @@ export class AuthService {
       { sub: user.id },
       {
         secret: this.configService.get('auth.jwtSecret'),
-        expiresIn: '1h',
+        expiresIn: '1h' as StringValue,
       },
     );
 

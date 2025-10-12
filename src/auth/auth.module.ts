@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import type { StringValue } from 'jsonwebtoken';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -21,7 +22,9 @@ import { NotificationModule } from 'src/notification/notification.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('auth.jwtSecret'),
         signOptions: {
-          expiresIn: configService.get<string>('auth.jwtExpiresIn'),
+          expiresIn:
+            (configService.get<string>('auth.jwtExpiresIn') as StringValue) ??
+            undefined,
         },
       }),
     }),
