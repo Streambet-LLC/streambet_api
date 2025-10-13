@@ -67,7 +67,7 @@ export class AdminController {
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
     private readonly streamService: StreamService,
-  ) {}
+  ) { }
 
   // Helper method to check if user is admin
   private ensureAdmin(user: User) {
@@ -372,6 +372,22 @@ export class AdminController {
       message: 'Successfully Listed',
       data,
       total,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Get all creators',
+    description: 'API to list all possible creators',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('creators')
+  async getAllCreators(@Request() req: RequestWithUser) {
+    this.ensureAdmin(req.user);
+    const { data } = await this.usersService.findAllCreators();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
     };
   }
 

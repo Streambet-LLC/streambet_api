@@ -86,6 +86,12 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean', default: false, name: 'is_google_account' })
   isGoogleAccount: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_creator' })
+  isCreator: boolean;
+
+  @Column({ type: 'decimal', default: 0, name: 'revShare' })
+  revShare: boolean;
+
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
