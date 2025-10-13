@@ -9,4 +9,4 @@ RUN npm install -g pm2
 RUN npm install
 RUN npm run build
 
-CMD ["pm2-docker", "npm run start:prod"]
+CMD ["pm2-docker", "npm run migration:run", "npm run start:prod"]
