@@ -86,6 +86,12 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean', default: false, name: 'is_google_account' })
   isGoogleAccount: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_creator' })
+  isCreator: boolean;
+
+  @Column({ type: 'decimal', default: 0, name: 'revShare' })
+  revShare: boolean;
+
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
@@ -125,6 +131,9 @@ export class User extends BaseEntity {
 
   @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
   dateOfBirth: Date;
+
+  @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
+  promoCode: string;
 
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;

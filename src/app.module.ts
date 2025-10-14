@@ -39,7 +39,6 @@ import coinflowConfig from './config/coinflow.config';
 
 import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
-import { KycModule } from './kyc/kyc.module';
 import personaConfig from './config/persona.config';
 import { WebhookModule } from './webhook/webhook.module';
 
