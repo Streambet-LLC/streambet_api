@@ -69,7 +69,7 @@
         },
         "sweepCoins": {
           "type": ["string", "number"],
-          "description": "sweep coin purchased"
+          "description": "Stream Coin purchased"
         }
       }
     }
