@@ -187,7 +187,7 @@ export class WalletsService {
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient sweep coins');
+          throw new BadRequestException('Insufficient Stream Coins');
         }
         wallet.sweepCoins = Number(newBalance);
       }
@@ -257,7 +257,7 @@ export class WalletsService {
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient sweep coins');
+          throw new BadRequestException('Insufficient Stream Coins');
         }
         wallet.sweepCoins = Number(newBalance);
       }

@@ -280,7 +280,7 @@ export class WalletsService {
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient sweep coins');
+          throw new BadRequestException('Insufficient Stream Coins');
         }
         wallet.sweepCoins = Number(newBalance);
       }
@@ -350,7 +350,7 @@ export class WalletsService {
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient sweep coins');
+          throw new BadRequestException('Insufficient Stream Coins');
         }
         wallet.sweepCoins = Number(newBalance);
       }
@@ -695,7 +695,7 @@ export class WalletsService {
     const wallet = await this.findByUserId(userId);
     const available = Number(wallet.sweepCoins ?? 0);
     if (requestedCoins > available) {
-      throw new BadRequestException('Insufficient sweep coins');
+      throw new BadRequestException('Insufficient Stream Coins');
     }
 
     // Convert using fixed rate and enforce minimum withdrawable in coins
@@ -706,7 +706,7 @@ export class WalletsService {
 
     if (requestedCoins < minCoins) {
       throw new BadRequestException(
-        `Minimum withdrawable sweep coins is ${minCoins}`,
+        `Minimum withdrawable Stream Coins is ${minCoins}`,
       );
     }
     return { dollars };

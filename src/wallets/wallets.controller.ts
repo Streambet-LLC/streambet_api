@@ -101,11 +101,11 @@ export class WalletsController {
    * amount meets the minimum withdrawable threshold (in sweep coins).
    * Returns the computed dollar amount.
    */
-  @ApiOperation({ summary: 'Convert sweep coins to USD' })
+  @ApiOperation({ summary: 'Convert Stream Coins to USD' })
   @ApiResponse({ status: 200, description: 'Conversion successful' })
   @ApiResponse({
     status: 400,
-    description: 'Insufficient sweep coins or bad input',
+    description: 'Insufficient Stream Coins or bad input',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()

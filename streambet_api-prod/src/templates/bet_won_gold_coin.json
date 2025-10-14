@@ -81,7 +81,7 @@
         },
         "convertedSweepCoin": {
           "type": ["string", "number"],
-          "description": "converted amount of Gold Coin to sweep coin"
+          "description": "converted amount of Gold Coin to Stream Coin"
         },
         "blogPostLink": {
           "type": ["string", "number"],

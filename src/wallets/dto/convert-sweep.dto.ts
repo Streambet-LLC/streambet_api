@@ -8,7 +8,7 @@ import { IsNumber, Min } from 'class-validator';
  */
 export class ConvertSweepQueryDto {
   @ApiProperty({
-    description: 'Sweep coin amount to convert to USD',
+    description: 'Stream Coin amount to convert to USD',
     example: 40,
   })
   @Transform(({ value }: TransformFnParams) => (value !== undefined ? parseFloat(value as any) : undefined))
