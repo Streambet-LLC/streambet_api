@@ -32,7 +32,7 @@ export class UsersService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {}
+  ) { }
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find({
@@ -298,6 +298,19 @@ export class UsersService {
       : 'User deactivated successfully';
 
     return { result: !!affected, message };
+  }
+
+  async findAllCreators(): Promise<{ data: User[] }> {
+    const test = await this.usersRepository.find({
+      where: {
+        isCreator: true,
+      },
+      select: {
+        id: true,
+        username: true,
+      },
+    });
+    return { data: test };
   }
 
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
