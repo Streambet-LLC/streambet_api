@@ -71,4 +71,10 @@ export class UpdateStreamDto {
   @IsDateString()
   @IsOptional()
   scheduledStartTime?: string;
+
+  @ApiProperty({
+    description: 'UUID of Creator',
+  })
+  @IsOptional()
+  creatorId?: string;
 }
