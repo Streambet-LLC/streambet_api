@@ -33,6 +33,7 @@ import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { BettingGateway } from 'src/betting/betting.gateway';
 import { StreamGateway } from './stream.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -49,7 +50,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private streamGateway: StreamGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
-  ) {}
+  ) { }
   async onModuleDestroy() {
     await this.flushViewerCounts('moduleDestroy');
   }
@@ -158,7 +159,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       actualStartTime,
       endTime,
       viewerCount,
-
+      creatorId,
       bettingRounds = [],
     } = streamData;
 
@@ -176,6 +177,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       actualStartTime,
       endTime,
       viewerCount,
+      creatorId,
       bettingRoundStatus,
       ...(betStat || {}),
       rounds: (bettingRounds ?? [])
@@ -252,6 +254,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .addSelect('s.name', 'streamName')
         .addSelect('s.status', 'streamStatus')
         .addSelect('s.viewerCount', 'viewerCount')
+        .addSelect('creator.username', 'creator')
         .addSelect(
           `CASE
   WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
@@ -286,6 +289,7 @@ END
   )`,
           'userBetCount',
         )
+        .leftJoin(User, 'creator', 's.creatorId = creator.id')
         .addOrderBy(
           `CASE s.status
               WHEN 'live' THEN 1
@@ -299,7 +303,7 @@ END
           'ASC',
         )
 
-        .groupBy('s.id');
+        .groupBy('s.id, creator.id');
 
       const total = await streamQB.getCount();
       if (pagination && range) {
@@ -424,6 +428,7 @@ END
         description: stream.description, // typo in field kept as in entity
         viewerCount: stream.viewerCount,
         roundDetails: rounds || [],
+        creatorId: stream.creatorId,
       };
 
       return streamDetails;

@@ -69,4 +69,10 @@ export class CreateStreamDto {
   @IsDateString()
   @IsOptional()
   endTime?: string;
+
+  @ApiProperty({
+    description: 'UUID of Creator',
+  })
+  @IsOptional()
+  creatorId?: string;
 }
