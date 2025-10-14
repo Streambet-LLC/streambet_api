@@ -61,7 +61,7 @@ export class OptionDto {
   @IsOptional()
   is_winning_option?: boolean;
 
-  @ApiProperty({ description: 'Total sweep coin bet amount', example: '0' })
+  @ApiProperty({ description: 'Total Stream Coin bet amount', example: '0' })
   @IsNumberString()
   totalBetsSweepCoinAmount: string;
 
@@ -69,7 +69,7 @@ export class OptionDto {
   @IsNumberString()
   totalBetsGoldCoinAmount: string;
 
-  @ApiProperty({ description: 'Number of sweep coin bets placed', example: 0 })
+  @ApiProperty({ description: 'Number of Stream Coin bets placed', example: 0 })
   @IsInt()
   @Min(0)
   betCountSweepCoin: number;
