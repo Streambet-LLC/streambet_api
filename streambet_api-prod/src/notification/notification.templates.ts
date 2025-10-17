@@ -95,11 +95,11 @@ export const NOTIFICATION_TEMPLATE = {
   },
   PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} Picks ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption}`,
+      `${data.username} Picks ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
   EDIT_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} updated Pick to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption}`,
+      `${data.username} updated Pick to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
   CANCEL_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
