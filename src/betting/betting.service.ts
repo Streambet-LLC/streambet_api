@@ -1619,7 +1619,6 @@ export class BettingService {
       }));
 
       // Fetch losing bets with user info from OTHER betting variables only
-      // This ensures winners don't receive loser notifications
       const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
         where: { 
           roundId: bettingVariable.roundId, 
@@ -1679,10 +1678,8 @@ export class BettingService {
       });
 
       // Notify winners with their specific win message
-      // Using allSettled to ensure all notifications are attempted even if some fail
       const winnerNotificationResults = await Promise.allSettled(
         winners.map(async (winner) => {
-          // Use allSettled for each winner so bot message and email failures are independent
           const notificationResults = await Promise.allSettled([
             this.bettingGateway.emitBotMessageToWinner(
               winner.userId,
@@ -1727,11 +1724,9 @@ export class BettingService {
       });
 
       // Notify losers with their specific loss message
-      // Using allSettled to ensure all notifications are attempted even if some fail
       if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
         const loserNotificationResults = await Promise.allSettled(
           losingBetsWithUserInfo.map(async (bet) => {
-            // Use allSettled for each user so bot message and email failures are independent
             const notificationResults = await Promise.allSettled([
               this.bettingGateway.emitBotMessageToLoser(
                 bet.userId,
@@ -1781,6 +1776,7 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+  
   /**
    * Handles refunds for bets in a "void" scenario where a betting round
    * closes without any winners. The bet amount is refunded, bet status
