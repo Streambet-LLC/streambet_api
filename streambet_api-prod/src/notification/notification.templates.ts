@@ -56,13 +56,13 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_OPEN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Hurry, betting is now open! Bets are being accepted for ${data.roundName} of ${data.streamName}. Place yours now before time runs out!`,
-    TITLE: () => `Betting Phase Change - Betting Open`,
+      `Hurry, Picks are now open! Picks are being accepted for ${data.roundName} of ${data.streamName}. Place yours now before time runs out!`,
+    TITLE: () => `Pick Phase Change - Picks Open`,
   },
   BET_LOCKED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Time's up! Betting has been locked for ${data.roundName}. Good luck people!`,
-    TITLE: () => `Betting Phase Change - Betting Locked`,
+      `Time's up! Picks have been locked for ${data.roundName}. Good luck people!`,
+    TITLE: () => `Pick Phase Change - Picks Locked`,
   },
   BET_ROUND_VOID: {
     MESSAGE: (data: BetNotificationData) =>
@@ -95,14 +95,14 @@ export const NOTIFICATION_TEMPLATE = {
   },
   PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} bet ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+      `${data.username} Picks ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption}`,
   },
   EDIT_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} updated bet to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+      `${data.username} updated Pick to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} on ${data.bettingOption}`,
   },
   CANCEL_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} cancel bet on ${data.bettingOption}`,
+      `${data.username} canceled Pick on ${data.bettingOption}`,
   },
 };
