@@ -1618,9 +1618,14 @@ export class BettingService {
         email: bet.user?.email,
       }));
 
-      // Fetch losing bets with user info
+      // Fetch losing bets with user info from OTHER betting variables only
+      // This ensures winners don't receive loser notifications
       const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: { roundId: bettingVariable.roundId, status: BetStatus.Lost },
+        where: { 
+          roundId: bettingVariable.roundId, 
+          status: BetStatus.Lost,
+          bettingVariableId: Not(variableId) // Only bets on non-winning options
+        },
         relations: ['user', 'bettingVariable', 'round'],
       });
 
@@ -1649,49 +1654,123 @@ export class BettingService {
       );
       this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
-      // Notify winners
-      for (const winner of winners) {
-        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
-          winner.userId,
-          winner.username,
-          bettingVariable.name,
-        );
-        await this.bettingGateway.emitBotMessageToWinner(
-          winner.userId,
-          winner.username,
-          winner.roundName,
-          winner.amount,
-          winner.currencyType,
-        );
-        await this.notificationService.sendSMTPForWonBet(
-          winner.userId,
-          bettingVariable.stream.name,
-          winner.amount,
-          winner.currencyType,
-          winner.roundName,
-        );
-      }
-
-      // Notify losers
-      losingBetsWithUserInfo.map(async (bet) => {
-        if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
-          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
-            bet.userId,
-            bet.user?.username,
+      // Send "Winner Declared" message to all participants (winners + losers) in parallel
+      // Using allSettled to ensure all notifications are attempted even if some fail
+      const allParticipants = [...winners, ...losers];
+      const winnerDeclarationResults = await Promise.allSettled(
+        allParticipants.map((participant) =>
+          this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            participant.userId,
+            participant.username,
             bettingVariable.name,
-          );
-          await this.bettingGateway.emitBotMessageToLoser(
-            bet.userId,
-            bet.user?.username,
-            bet.round.roundName,
-          );
-          await this.notificationService.sendSMTPForLossBet(
-            bet.userId,
-            bettingVariable.stream.name,
-            bet.round.roundName,
+          ),
+        ),
+      );
+
+      // Log any failed "Winner Declared" notifications
+      winnerDeclarationResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const participant = allParticipants[index];
+          Logger.error(
+            `Failed to send "Winner Declared" notification to user ${participant.userId} (${participant.username})`,
+            result.reason,
           );
         }
       });
+
+      // Notify winners with their specific win message
+      // Using allSettled to ensure all notifications are attempted even if some fail
+      const winnerNotificationResults = await Promise.allSettled(
+        winners.map(async (winner) => {
+          // Use allSettled for each winner so bot message and email failures are independent
+          const notificationResults = await Promise.allSettled([
+            this.bettingGateway.emitBotMessageToWinner(
+              winner.userId,
+              winner.username,
+              winner.roundName,
+              winner.amount,
+              winner.currencyType,
+            ),
+            this.notificationService.sendSMTPForWonBet(
+              winner.userId,
+              bettingVariable.stream.name,
+              winner.amount,
+              winner.currencyType,
+              winner.roundName,
+            ),
+          ]);
+
+          // Log any individual notification failures for this winner
+          notificationResults.forEach((result, notifIndex) => {
+            if (result.status === 'rejected') {
+              const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+              Logger.error(
+                `Failed to send ${notifType} to winner ${winner.userId} (${winner.username})`,
+                result.reason,
+              );
+            }
+          });
+
+          return winner; // Return winner for outer error logging
+        }),
+      );
+
+      // Log any failed winner notification batches (outer failures)
+      winnerNotificationResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const winner = winners[index];
+          Logger.error(
+            `Failed to send winner notification batch to user ${winner.userId} (${winner.username})`,
+            result.reason,
+          );
+        }
+      });
+
+      // Notify losers with their specific loss message
+      // Using allSettled to ensure all notifications are attempted even if some fail
+      if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
+        const loserNotificationResults = await Promise.allSettled(
+          losingBetsWithUserInfo.map(async (bet) => {
+            // Use allSettled for each user so bot message and email failures are independent
+            const notificationResults = await Promise.allSettled([
+              this.bettingGateway.emitBotMessageToLoser(
+                bet.userId,
+                bet.user?.username,
+                bet.round.roundName,
+              ),
+              this.notificationService.sendSMTPForLossBet(
+                bet.userId,
+                bettingVariable.stream.name,
+                bet.round.roundName,
+              ),
+            ]);
+
+            // Log any individual notification failures for this user
+            notificationResults.forEach((result, notifIndex) => {
+              if (result.status === 'rejected') {
+                const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+                Logger.error(
+                  `Failed to send ${notifType} to loser ${bet.userId} (${bet.user?.username})`,
+                  result.reason,
+                );
+              }
+            });
+
+            return bet; // Return bet for outer error logging
+          }),
+        );
+
+        // Log any failed loser notification batches (outer failures)
+        loserNotificationResults.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const bet = losingBetsWithUserInfo[index];
+            Logger.error(
+              `Failed to send loser notification batch to user ${bet.userId} (${bet.user?.username})`,
+              result.reason,
+            );
+          }
+        });
+      }
     } catch (error) {
       // Rollback transaction in case of any errors
       await queryRunner.rollbackTransaction();
