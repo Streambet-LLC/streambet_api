@@ -195,7 +195,7 @@ export class BettingGateway {
         const chatMessage: ChatMessage = {
           type: ChatType.System,
           username: ChatType.StreambetBot,
-          message: `${user.username} Picks ${bet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} placed a Pick of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         void emitToStream(

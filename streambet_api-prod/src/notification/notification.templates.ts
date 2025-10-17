@@ -95,7 +95,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} Picks ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+      `${data.username} placed a Pick of ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
   EDIT_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
