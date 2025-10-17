@@ -22,7 +22,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your Pick on ${data.roundName} been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been returned to your wallet`,
+      `Your Pick on ${data.roundName} has been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}${data.amount !== 1 ? `s` : ''} have been returned to your wallet`,
     TITLE: () => `Pick Cancelled`,
   },
 
