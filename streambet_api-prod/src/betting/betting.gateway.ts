@@ -431,7 +431,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} placed a Pick of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
@@ -536,7 +536,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} cancelled their Pick of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
@@ -667,7 +667,7 @@ export class BettingGateway
         const chatMessage: ChatMessage = {
           type: 'system',
           username: 'StreambetBot',
-          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} edited their Pick to ${editedBet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         this.server
@@ -823,17 +823,17 @@ export class BettingGateway
     switch (status) {
       case 'open':
         event = 'betOpened';
-        message = 'Betting is now open! Bets can be placed.';
+        message = 'Picks are now open! Picks can be placed.';
         payload = { roundId, open: true };
         break;
       case 'locked':
         event = 'bettingLocked';
-        message = 'Betting is now locked! No more bets can be placed.';
+        message = 'Picks are now locked! No more Picks can be placed.';
         payload = { roundId, lockedStatus };
         break;
       case 'canceled':
         event = 'betCancelledByAdmin';
-        message = 'Betting is canceled!';
+        message = 'Picks are canceled!';
         payload = { roundId, cancelled: true, message };
         break;
       default:
