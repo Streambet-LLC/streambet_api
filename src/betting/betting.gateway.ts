@@ -49,23 +49,24 @@ export class BettingGateway {
     private readonly chatGateway: ChatGateway,
   ) {}
 
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.JoinStreamBet)
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
-    const userId = client.data.user.sub;
-    const username = client.data.user.username;
+    const userId = client.data?.user?.sub;
+    const username = client.data?.user?.username || 'Guest';
+    
     client.join(STREAMBET); // join common betting room
 
-    // Check if user already has a set of socket IDs
-    if (!this.appGateway.userSocketMap.has(userId)) {
-      this.appGateway.userSocketMap.set(userId, new Set());
+    // Add authenticated users to the socket map
+    if (userId) {
+      if (!this.appGateway.userSocketMap.has(userId)) {
+        this.appGateway.userSocketMap.set(userId, new Set());
+      }
+      // Add this socket ID to the set
+      this.appGateway.userSocketMap.get(userId)!.add(client.id);
     }
 
-    // Add this socket ID to the set
-    this.appGateway.userSocketMap.get(userId)!.add(client.id);
-
     // Notify all users in 'streambet' room
-    void emitToStreamBet(this.gatewayManager, SocketEventName.JoinedStreamBet, {
+    await emitToStreamBet(this.gatewayManager, SocketEventName.JoinedStreamBet, {
       username,
     });
 
@@ -194,7 +195,7 @@ export class BettingGateway {
         const chatMessage: ChatMessage = {
           type: ChatType.System,
           username: ChatType.StreambetBot,
-          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} placed a Pick of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         void emitToStream(
@@ -550,7 +551,7 @@ export class BettingGateway {
         const chatMessage: ChatMessage = {
           type: ChatType.System,
           username: ChatType.StreambetBot,
-          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} edited their Pick to ${editedBet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         void emitToStream(
@@ -652,17 +653,17 @@ export class BettingGateway {
     switch (status) {
       case BettingRoundStatus.OPEN:
         event = SocketEventName.BetOpened;
-        message = 'Betting is now open! Bets can be placed.';
+        message = 'Picks are now open! Picks can be placed.';
         payload = { roundId, open: true };
         break;
       case BettingRoundStatus.LOCKED:
         event = SocketEventName.BettingLocked;
-        message = 'Betting is now locked! No more bets can be placed.';
+        message = 'Picks are now locked! No more picks can be placed.';
         payload = { roundId, lockedStatus };
         break;
       case BettingRoundStatus.CANCELLED:
         event = SocketEventName.BetCancelledByAdmin;
-        message = 'Betting is canceled!';
+        message = 'Picks are canceled!';
         payload = { roundId, cancelled: true, message };
         break;
       default:
@@ -675,13 +676,18 @@ export class BettingGateway {
       message,
       timestamp: new Date(),
     };
-    void emitToStream(this.gatewayManager, streamId, event, payload);
-    void emitToStream(
+    
+    // Emit to specific stream room
+    await emitToStream(this.gatewayManager, streamId, event, payload);
+    await emitToStream(
       this.gatewayManager,
       streamId,
       SocketEventName.ChatMessage,
       chatMessage,
     );
+    
+    // Emit to global streambet room (for home page stream cards)
+    await emitToStreamBet(this.gatewayManager, event, payload);
   }
   async emitOpenBetRound(roundName: string, streamName: string) {
     // Fetch all sockets currently connected to the 'streambet' room
