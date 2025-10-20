@@ -609,7 +609,7 @@ export class BettingService {
 
     if (existingBet) {
       throw new BadRequestException(
-        'You already have an active bet. Wait for it to resolve before placing a new one.',
+        'You already have an active Pick. Wait for it to resolve before placing a new one.',
       );
     }
     const queryRunner = this.dataSource.createQueryRunner();
@@ -964,7 +964,7 @@ export class BettingService {
       .getOne();
 
     if (bettingRound.status !== BettingRoundStatus.OPEN) {
-      throw new BadRequestException('This round is closed for betting.');
+      throw new BadRequestException('This round is closed for Picks.');
     }
     const data = { bettingRound, bet };
     return await this.handleCancelBet(userId, data, bet.currency);

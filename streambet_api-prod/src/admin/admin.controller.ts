@@ -173,10 +173,10 @@ export class AdminController {
   }
 
   // Betting Variable Management
-  @ApiOperation({ summary: 'Create betting options' })
+  @ApiOperation({ summary: 'Create Pick options' })
   @SwaggerApiResponse({
     status: 201,
-    description: 'Betting variable created successfully',
+    description: 'Pick variable created successfully',
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({
@@ -194,17 +194,17 @@ export class AdminController {
       createBettingVariableDto,
     );
     return {
-      message: 'Betting variable created successfully',
+      message: 'Pick variable created successfully',
       status: HttpStatus.CREATED,
       data: grouped,
     };
   }
 
-  @ApiOperation({ summary: 'Lock betting' })
-  @ApiParam({ name: 'id', description: 'Betting variable ID' })
+  @ApiOperation({ summary: 'Lock Picks' })
+  @ApiParam({ name: 'id', description: 'Pick variable ID' })
   @SwaggerApiResponse({
     status: 200,
-    description: 'Betting locked successfully',
+    description: 'Picks locked successfully',
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({
@@ -213,7 +213,7 @@ export class AdminController {
   })
   @SwaggerApiResponse({
     status: 404,
-    description: 'Betting variable not found',
+    description: 'Pick variable not found',
   })
   @Patch('betting-variables/:id/lock')
   async lockBetting(
@@ -226,14 +226,14 @@ export class AdminController {
       BettingVariableStatus.LOCKED,
     );
     return {
-      message: 'Betting locked successfully',
+      message: 'Picks locked successfully',
       status: HttpStatus.OK,
       data: lockedBetting,
     };
   }
 
   @ApiOperation({ summary: 'Declare a winner' })
-  @ApiParam({ name: 'id', description: 'Betting variable ID' })
+  @ApiParam({ name: 'id', description: 'Pick variable ID' })
   @SwaggerApiResponse({
     status: 200,
     description: 'Winner declared and payouts processed successfully',
@@ -245,7 +245,7 @@ export class AdminController {
   })
   @SwaggerApiResponse({
     status: 404,
-    description: 'Betting variable not found',
+    description: 'Pick variable not found',
   })
   @Post('betting-variables/:id/declare-winner')
   async declareWinner(
@@ -261,10 +261,10 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: 'Edit betting options for multiple rounds' })
+  @ApiOperation({ summary: 'Edit Picks options for multiple rounds' })
   @SwaggerApiResponse({
     status: 200,
-    description: 'Betting variables updated successfully',
+    description: 'Picks variables updated successfully',
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({
@@ -283,7 +283,7 @@ export class AdminController {
     );
 
     return {
-      message: 'Betting variables updated successfully',
+      message: 'Picks variables updated successfully',
       status: HttpStatus.OK,
       data: grouped,
     };
