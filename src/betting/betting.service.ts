@@ -2620,23 +2620,6 @@ export class BettingService {
         });
 
         if (roundWithStream && roundWithStream.streamId) {
-          // Ensure there are at least 2 active bets before locking
-          const similarBets = await this.betsRepository.find({
-            where: {
-              round: { id: roundId },
-              status: BetStatus.Active,
-            },
-            relations: ['round'],
-          });
-
-          if (similarBets.length <= 1) {
-            const message =
-              similarBets.length === 1
-                ? `Cannot lock the bet — only one user has placed a bet`
-                : `Cannot lock the bet — no user has placed a bet`;
-            throw new NotFoundException(message);
-          }
-
           // Update status and save
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
