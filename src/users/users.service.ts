@@ -218,6 +218,9 @@ export class UsersService {
           );
         }
       }
+      if (!existingUserObj?.isCreator) {
+        delete profileUpdateDto.socials;
+      }
       await this.usersRepository.update({ id }, profileUpdateDto);
       return this.findOne(id);
     } catch (e) {

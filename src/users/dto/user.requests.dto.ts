@@ -96,6 +96,12 @@ export class ProfileUpdateDto {
   @IsString()
   profileImageUrl?: string;
 
+  @ApiProperty({
+    description: 'Socials of the user',
+  })
+  @IsOptional()
+  socials?: { [social: string]: string };
+
   @Exclude()
   @IsOptional()
   password?: string;

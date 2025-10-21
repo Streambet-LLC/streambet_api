@@ -86,6 +86,11 @@ export class UserResponseDto {
   @ApiProperty({ example: '2025-06-13T10:50:04.593Z' })
   lastLogin: Date;
 
+  @ApiProperty({
+    description: 'Socials of the user',
+  })
+  socials: { [social: string]: string } | null;
+
   @ApiProperty({ example: true })
   tosAccepted: boolean;
 
