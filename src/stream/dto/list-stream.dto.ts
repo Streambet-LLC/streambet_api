@@ -22,6 +22,16 @@ export class LiveScheduledStreamListDto extends AdminFilterDto {
 
   @ApiPropertyOptional({
     type: String,
+    default: '',
+    description:
+      'If you want to get streams from a certain username',
+  })
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @ApiPropertyOptional({
+    type: String,
     default: true,
     description:
       'Pass with parameter false if you want the results without pagination',

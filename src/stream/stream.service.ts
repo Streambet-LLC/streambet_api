@@ -80,11 +80,19 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         ? (JSON.parse(streamFilterDto.range) as Range)
         : [0, 24];
 
-      const { pagination = true, streamStatus } = streamFilterDto;
+      const { pagination = true, streamStatus, username } = streamFilterDto;
 
       const streamQB = this.streamsRepository
-        .createQueryBuilder('s')
-        .leftJoinAndSelect(
+        .createQueryBuilder('s');
+
+      
+      if (username) {
+        streamQB.innerJoinAndSelect('users', 'users', 's."creatorId"=users."id"')
+          .andWhere('users."username" = :username')
+          .setParameter('username', username)
+      };
+
+      streamQB.leftJoinAndSelect(
           's.bettingRounds',
           'br',
           'br.status IN (:...roundStatuses)',
@@ -122,11 +130,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         const [offset, limit] = range;
         streamQB.offset(offset).limit(limit);
       }
-      const countQB = this.streamsRepository.createQueryBuilder('s');
-      if (streamStatus) {
-        countQB.andWhere(`s.status = :streamStatus`, { streamStatus });
-      }
-      const total = await countQB.getCount();
+
+      const total = await streamQB.getCount();
       const data = await streamQB.getRawMany();
 
       return { data, total };
@@ -343,6 +348,7 @@ END
       // Query the stream with relations: bettingRounds -> bettingVariables -> bets -> user
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
+        .leftJoinAndSelect('stream.creator', 'users')
         .leftJoinAndSelect('stream.bettingRounds', 'br')
         .leftJoinAndSelect('br.bettingVariables', 'bv')
         .leftJoinAndSelect('bv.bets', 'b')
@@ -429,6 +435,7 @@ END
         viewerCount: stream.viewerCount,
         roundDetails: rounds || [],
         creatorId: stream.creatorId,
+        creatorUsername: stream.creator?.username,
       };
 
       return streamDetails;
@@ -1153,6 +1160,13 @@ END
         scheduled: StreamStatus.SCHEDULED,
         live: StreamStatus.LIVE,
       });
+
+      if (liveScheduledStreamListDto.username) {
+        streamQB.innerJoinAndSelect('users', 'users', 's."creatorId"=users."id"')
+          .andWhere('users."username" = :username')
+          .setParameter('username', liveScheduledStreamListDto.username)
+      };
+
       /** Custom ordering:
        *  - LIVE streams first (createdAt DESC)
        *  - SCHEDULED streams next (scheduledStartTime ASC)

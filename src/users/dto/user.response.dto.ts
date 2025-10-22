@@ -80,6 +80,9 @@ export class UserResponseDto {
   @ApiProperty({ example: false })
   isGoogleAccount: boolean;
 
+  @ApiProperty({ example: false })
+  isCreator: boolean;
+
   @ApiProperty({ example: UserRole.USER, enum: UserRole })
   role: UserRole;
 
