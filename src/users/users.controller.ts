@@ -6,6 +6,7 @@ import {
   UseGuards,
   Request,
   HttpStatus,
+  Param,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
@@ -92,6 +93,37 @@ export class UsersController {
     return {
       data,
       message: 'User profile updated successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  /**
+   * Updates the profile of the currently logged-in user.
+   * @param req - The request object containing user information.
+   * @param username - The username of the user.
+   * @returns The user profile details.
+   */
+  @ApiOperation({
+    summary: 'Gets user profile',
+    description:
+      'This endpoint gets the profile of the provided username',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile fetched successful',
+    type: User,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @Get('profile/:username')
+  async getUserProfile(
+    @Param('username') username: string,
+  ) {
+    const data = await this.usersService.getUserProfile(username);
+
+    return {
+      data,
+      message: 'Profile fetched successfully',
       statusCode: HttpStatus.OK,
     };
   }

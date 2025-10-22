@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Not, Or, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
@@ -218,10 +218,44 @@ export class UsersService {
           );
         }
       }
+      if (!existingUserObj?.isCreator) {
+        delete profileUpdateDto.socials;
+      }
       await this.usersRepository.update({ id }, profileUpdateDto);
       return this.findOne(id);
     } catch (e) {
       this.logger.error(`Error updating profile for user with ID ${id}:`, e);
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
+  async getUserProfile(
+    username: string,
+  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'accountCreationDate' | 'profileImageUrl' | 'isCreator' | 'socials'>> {
+    try {
+      const user = await this.usersRepository.findOne({
+        where: { 
+          username, 
+          isActive: true, 
+          isBanned: Or(Not(true), IsNull()),
+          isSuspended: Or(Not(true), IsNull()),
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      
+      return {
+        id: user.id,
+        username: user.username,
+        accountCreationDate: user.accountCreationDate,
+        profileImageUrl: user.profileImageUrl,
+        isCreator: user.isCreator,
+        socials: user.socials,
+      };
+    } catch (e) {
+      this.logger.error(`Error fetching profile for user with username ${username}:`, e);
       throw new NotFoundException((e as Error).message);
     }
   }

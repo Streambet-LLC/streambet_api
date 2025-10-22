@@ -70,6 +70,12 @@ export class StreamDetailsDto {
 
   @ApiProperty({ type: [RoundDetailsDto] })
   roundDetails: RoundDetailsDto[];
+
+  @ApiProperty({ example: 'XXX-XXX-XXX' })
+  creatorId: string;
+
+  @ApiProperty({ example: 'streambet' })
+  creatorUsername: string;
 }
 
 export class StreamResponseDto {

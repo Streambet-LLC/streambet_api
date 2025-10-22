@@ -132,6 +132,13 @@ export class User extends BaseEntity {
   @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
   dateOfBirth: Date;
 
+  @Column({
+    nullable: true,
+    type: 'jsonb',
+    name: 'socials',
+  })
+  socials: { [social: string]: string };
+
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
   promoCode: string;
 

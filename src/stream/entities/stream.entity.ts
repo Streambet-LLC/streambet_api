@@ -42,7 +42,7 @@ export class Stream extends BaseEntity {
   viewerCount: number;
 
   @Column({ type: 'uuid', nullable: true })
-  creatorId: Date;
+  creatorId: string;
 
   @OneToMany(() => BettingVariable, (variable) => variable.stream)
   bettingVariables: BettingVariable[];
