@@ -83,13 +83,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const { pagination = true, streamStatus, username } = streamFilterDto;
 
       const streamQB = this.streamsRepository
-        .createQueryBuilder('s');
-
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.creator', 'creator')
       
       if (username) {
-        streamQB.innerJoinAndSelect('users', 'users', 's."creatorId"=users."id"')
-          .andWhere('users."username" = :username')
-          .setParameter('username', username)
+          streamQB.andWhere('creator.username = :username')
+          .setParameter('username', username);
       };
 
       streamQB.leftJoinAndSelect(
@@ -106,6 +105,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .addSelect('s.thumbnailUrl', 'thumbnailURL')
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
         .addSelect('s.endTime', 'endTime')
+        .addSelect('creator.username', 'creatorUsername')
         .addSelect(
           'COALESCE(SUM(bv.totalBetsGoldCoinAmount), 0)',
           'totalBetsGoldCoinAmount',
@@ -114,7 +114,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           'COALESCE(SUM(bv.totalBetsSweepCoinAmount), 0)',
           'totalBetsSweepCoinAmount',
         )
-        .groupBy('s.id');
+        .groupBy('s.id, creator.username');
 
       if (streamStatus) {
         streamQB.andWhere(`s.status = :streamStatus`, { streamStatus });
@@ -1154,16 +1154,17 @@ END
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
+        .leftJoinAndSelect('s.creator', 'creator')
         .leftJoinAndSelect('s.bettingRounds', 'r')
-        .leftJoinAndSelect('r.bettingVariables', 'bv');
-      streamQB.andWhere(`s.status = :scheduled or s.status = :live`, {
-        scheduled: StreamStatus.SCHEDULED,
-        live: StreamStatus.LIVE,
-      });
+        .leftJoinAndSelect('r.bettingVariables', 'bv')
+        .andWhere(`s.status = :scheduled or s.status = :live`, {
+          scheduled: StreamStatus.SCHEDULED,
+          live: StreamStatus.LIVE,
+        })
+
 
       if (liveScheduledStreamListDto.username) {
-        streamQB.innerJoinAndSelect('users', 'users', 's."creatorId"=users."id"')
-          .andWhere('users."username" = :username')
+        streamQB.andWhere('creator.username = :username')
           .setParameter('username', liveScheduledStreamListDto.username)
       };
 
@@ -1208,6 +1209,7 @@ END
         .addSelect('s.status', 'streamStatus')
         .addSelect('s.thumbnailUrl', 'thumbnailUrl')
         .addSelect('s.scheduledStartTime', 'scheduledStartTime')
+        .addSelect('creator.username', 'creatorUsername')
         .addSelect(
           'COALESCE(SUM(bv.total_bets_gold_coin_amount), 0)',
           'totalBetsGoldCoinAmount',
@@ -1249,7 +1251,7 @@ END
       )`,
           'userBetCount',
         )
-        .groupBy('s.id');
+        .groupBy('s.id, creator.username');
 
       /**  Total count */
       const total = await streamQB.getCount();
@@ -1261,6 +1263,7 @@ END
       }
 
       const data = await streamQB.getRawMany();
+
       return { data, total };
     } catch (e) {
       Logger.error('Unable to retrieve stream details', e);
