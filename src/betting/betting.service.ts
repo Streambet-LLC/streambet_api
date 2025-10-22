@@ -38,6 +38,8 @@ import { BettingGateway } from './betting.gateway';
 import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import _, { round } from 'lodash';
+import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 
 @Injectable()
 export class BettingService {
@@ -53,13 +55,14 @@ export class BettingService {
     private walletsService: WalletsService,
     private notificationService: NotificationService,
     private usersService: UsersService,
+    private platformPayoutService: PlatformPayoutService,
     private dataSource: DataSource,
     private readonly bettingGateway: BettingGateway,
     @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
     @Inject(forwardRef(() => StreamGateway))
     private readonly streamGateway: StreamGateway,
-  ) {}
+  ) { }
 
   /**
    * Detects the streaming platform from a given URL.
@@ -476,8 +479,8 @@ export class BettingService {
       );
 
       // Initialize winners and payout amounts
-      let winners = { goldCoins: [], sweepCoins: [] };
-      let winnerAmount = { goldCoins: null, sweepCoins: null };
+      const winners = { goldCoins: [], sweepCoins: [] };
+      const winnerAmount = { goldCoins: null, sweepCoins: null };
 
       if (winningOptions.length > 0) {
         // Collect winning bets for each currency
@@ -740,7 +743,7 @@ export class BettingService {
     }
 
     // 🔹 Remove variables that are not in the new request
-    const optionIdsToKeep = existingOptions.map((opt) => opt.id as string);
+    const optionIdsToKeep = existingOptions.map((opt) => opt.id);
     const variablesToDelete = existingVariables.filter(
       (v) => v.id && !optionIdsToKeep.includes(v.id),
     );
@@ -1125,15 +1128,15 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-                oldAmount +
-                newAmt,
+              oldAmount +
+              newAmt,
             );
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-                oldAmount +
-                newAmt,
+              oldAmount +
+              newAmt,
             );
           }
           // counts remain unchanged
@@ -1143,7 +1146,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-                oldAmount,
+              oldAmount,
             );
             lockedNewBettingVariable.betCountGoldCoin = Math.max(
               0,
@@ -1153,7 +1156,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-                oldAmount,
+              oldAmount,
             );
             lockedNewBettingVariable.betCountSweepCoin = Math.max(
               0,
@@ -1181,7 +1184,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsGoldCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsGoldCoinAmount) -
-              oldAmount,
+            oldAmount,
           );
           lockedOldBettingVariable.betCountGoldCoin = Math.max(
             0,
@@ -1191,7 +1194,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsSweepCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsSweepCoinAmount) -
-              oldAmount,
+            oldAmount,
           );
           lockedOldBettingVariable.betCountSweepCoin = Math.max(
             0,
@@ -1476,10 +1479,11 @@ export class BettingService {
    */
   async declareWinner(variableId: string): Promise<void> {
     // Fetch the betting variable and associated round/stream
-    const bettingVariable = await this.findBettingVariableById(variableId);
+    const winningBettingVariable =
+      await this.findBettingVariableById(variableId);
 
     // Ensure the round is locked before declaring a winner
-    this.validateRoundLocked(bettingVariable);
+    this.validateRoundLocked(winningBettingVariable);
 
     // Begin a transactional scope to ensure atomic updates
     const queryRunner = this.dataSource.createQueryRunner();
@@ -1487,24 +1491,23 @@ export class BettingService {
     await queryRunner.startTransaction();
 
     try {
-      // Mark the winning variable and the rest as losers
-      await this.markWinnerAndLosers(queryRunner, bettingVariable);
+      await this.markWinnerAndLosers(queryRunner, winningBettingVariable);
 
       // Fetch all active bets for this variable
       const allStreamBets = await this.fetchActiveBets(
         queryRunner,
-        bettingVariable,
+        winningBettingVariable,
       );
 
       // If there are no active bets, close the round and emit events
       if (!allStreamBets || allStreamBets.length === 0) {
         Logger.log('No active bets found for this round');
-        await this.closeRound(queryRunner, bettingVariable);
+        await this.closeRound(queryRunner, winningBettingVariable);
         await queryRunner.commitTransaction();
         this.bettingGateway.emitWinnerDeclared(
-          bettingVariable.stream.id,
-          bettingVariable.id,
-          bettingVariable.name,
+          winningBettingVariable.stream.id,
+          winningBettingVariable.id,
+          winningBettingVariable.name,
           [], // No winners
           [], // No losers
         );
@@ -1548,7 +1551,7 @@ export class BettingService {
           winningGoldCoinBets,
           totalWinningGoldCoinAmount,
           totalLosingGoldCoinAmount,
-          bettingVariable,
+          winningBettingVariable,
         );
       }
 
@@ -1563,7 +1566,7 @@ export class BettingService {
           winningSweepCoinBets,
           totalWinningSweepCoinAmount,
           distributableSweepCoinPot,
-          bettingVariable,
+          winningBettingVariable,
           totalLosingSweepCoinAmount,
         );
       }
@@ -1592,16 +1595,23 @@ export class BettingService {
         await this.creditAmountVoidCase(queryRunner, losingGoldCoinBets);
         await this.creditAmountVoidCase(queryRunner, winningGoldCoinBets);
       }
+
       if (
         (losingSweepCoinBets.length > 0 && winningSweepCoinBets.length === 0) ||
         (winningSweepCoinBets.length > 0 && losingSweepCoinBets.length === 0)
       ) {
         await this.creditAmountVoidCase(queryRunner, losingSweepCoinBets);
         await this.creditAmountVoidCase(queryRunner, winningSweepCoinBets);
+      } else {
+        await this.platformPayoutService.recordPayout(
+          queryRunner,
+          winningBettingVariable.round,
+          winningBettingVariable,
+        );
       }
 
       // Close the betting round
-      await this.closeRound(queryRunner, bettingVariable);
+      await this.closeRound(queryRunner, winningBettingVariable);
 
       // Fetch winning bets with user info to send notifications
       const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
@@ -1614,13 +1624,16 @@ export class BettingService {
         username: bet.user?.username,
         amount: bet?.payoutAmount,
         currencyType: bet?.currency,
-        roundName: bettingVariable?.round?.roundName,
+        roundName: winningBettingVariable?.round?.roundName,
         email: bet.user?.email,
       }));
 
       // Fetch losing bets with user info
       const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
-        where: { roundId: bettingVariable.roundId, status: BetStatus.Lost },
+        where: {
+          roundId: winningBettingVariable.roundId,
+          status: BetStatus.Lost,
+        },
         relations: ['user', 'bettingVariable', 'round'],
       });
 
@@ -1634,9 +1647,9 @@ export class BettingService {
 
       // Emit events for frontend and bot notifications
       this.bettingGateway.emitWinnerDeclared(
-        bettingVariable.stream.id,
-        bettingVariable.id,
-        bettingVariable.name,
+        winningBettingVariable.stream.id,
+        winningBettingVariable.id,
+        winningBettingVariable.name,
         winners,
         losers,
         {
@@ -1654,7 +1667,7 @@ export class BettingService {
         await this.bettingGateway.emitBotMessageForWinnerDeclaration(
           winner.userId,
           winner.username,
-          bettingVariable.name,
+          winningBettingVariable.name,
         );
         await this.bettingGateway.emitBotMessageToWinner(
           winner.userId,
@@ -1665,7 +1678,7 @@ export class BettingService {
         );
         await this.notificationService.sendSMTPForWonBet(
           winner.userId,
-          bettingVariable.stream.name,
+          winningBettingVariable.stream.name,
           winner.amount,
           winner.currencyType,
           winner.roundName,
@@ -1678,7 +1691,7 @@ export class BettingService {
           await this.bettingGateway.emitBotMessageForWinnerDeclaration(
             bet.userId,
             bet.user?.username,
-            bettingVariable.name,
+            winningBettingVariable.name,
           );
           await this.bettingGateway.emitBotMessageToLoser(
             bet.userId,
@@ -1687,7 +1700,7 @@ export class BettingService {
           );
           await this.notificationService.sendSMTPForLossBet(
             bet.userId,
-            bettingVariable.stream.name,
+            winningBettingVariable.stream.name,
             bet.round.roundName,
           );
         }
@@ -2059,7 +2072,7 @@ export class BettingService {
         // (user's bet / total bets on winning option) * total Gold Coin pool (winning + losing side)
         const payout = Math.floor(
           (betAmount / totalBetForWinningOption) *
-            Number(totalWinningGoldCoinAmount + totalLosingGoldCoinAmount),
+          Number(totalWinningGoldCoinAmount + totalLosingGoldCoinAmount),
         );
 
         // Update bet status and payout details
@@ -2121,24 +2134,14 @@ export class BettingService {
       return;
     }
 
+    const potPerWinner =
+      distributableSweepCoinPot / winningSweepCoinBets.length;
+
     // Iterate through each winning bet and calculate individual payout
     for (const bet of winningSweepCoinBets) {
       try {
-        const totalBetForWinningOption =
-          bet.bettingVariable?.totalBetsSweepCoinAmount; // Total Sweep Coin amount placed on this winning option
-        const betAmount = bet.amount; // Amount placed by this user
-
-        // Calculate total pot after deducting 15% platform fee
-        const potAmountAfterPlatformFee =
-          Number(totalWinningSweepCoinAmount + totalLosingSweepCoinAmount) *
-          0.85;
-
-        // Calculate proportional payout
-        let payout =
-          (betAmount / totalBetForWinningOption) * potAmountAfterPlatformFee;
-
         // Round to 3 decimal places for Sweep Coins
-        payout = Number(payout.toFixed(3));
+        const payout = Number(potPerWinner.toFixed(3)) + Number(bet.amount);
 
         // Update bet status and payout details
         bet.status = BetStatus.Won;
@@ -2258,7 +2261,7 @@ export class BettingService {
 
     // Fetch the betting variable with relations to get stream and round info
     const bettingVariable = await this.findBettingVariableById(variableId);
-    
+
     // Emit socket events to notify frontend of the status change
     if (bettingVariable.stream && bettingVariable.roundId) {
       // Emit betting locked event to the specific stream
@@ -2271,7 +2274,9 @@ export class BettingService {
       // Emit stream list update event to all clients in 'streambet' room
       this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
     } else {
-      Logger.warn(`[lockBetting] Missing stream or roundId - cannot emit events`);
+      Logger.warn(
+        `[lockBetting] Missing stream or roundId - cannot emit events`,
+      );
     }
 
     return updatedVariable;
@@ -2511,6 +2516,7 @@ export class BettingService {
       if (bets.betcurrency === CurrencyType.GOLD_COINS) {
         goldCoinBetAmtForLoginUser = betAmount || 0;
       }
+
       if (bets.betcurrency === CurrencyType.SWEEP_COINS) {
         sweepCoinBetAmtForLoginUser = betAmount || 0;
       }
@@ -2521,47 +2527,73 @@ export class BettingService {
         (v) => v.id === bets.variableid || v.id === bets.variableId,
       );
 
+      const opposingOptions = bettingVariables.filter(
+        (item) => item.id !== userOption.id,
+      );
+
       const userOptionTotalGoldCoinAmount = Number(
         userOption?.totalBetsGoldCoinAmount || 0,
       );
       const userOptionTotalSweepCoinAmt = Number(
         userOption?.totalBetsSweepCoinAmount || 0,
       );
-
       const userOptionGoldCoinCount = Number(userOption?.betCountGoldCoin || 0);
       const userOptionSweepCoinCount = Number(
         userOption?.betCountSweepCoin || 0,
       );
-      // Calculate sum of all bets on other options
-      const totalGoldCoinAmount = bettingVariables.reduce(
+
+      const opposingGoldCoinAmount = opposingOptions.reduce(
         (sum, v) => sum + Number(v.totalBetsGoldCoinAmount || 0),
         0,
       );
-      const totalPotSweepCoinAmount = bettingVariables.reduce(
+
+      const opposingPotSweepCoinAmount = opposingOptions.reduce(
         (sum, v) => sum + Number(v.totalBetsSweepCoinAmount || 0),
         0,
       );
 
+      const opposingPotSweepCoinAmountAfterPlatformFee =
+        opposingPotSweepCoinAmount * 0.85;
+
+      const goldPotPerBettor =
+        userOptionGoldCoinCount > 0
+          ? round(opposingGoldCoinAmount / userOptionGoldCoinCount, 2)
+          : 0;
+      const sweepPotPerBettor =
+        userOptionSweepCoinCount > 0
+          ? round(
+            opposingPotSweepCoinAmountAfterPlatformFee /
+            userOptionSweepCoinCount,
+            2,
+          )
+          : 0;
+
+      console.log({
+        opposingGoldCoinAmount,
+        userOptionGoldCoinCount,
+        goldPotPerBettor,
+        userOptionSweepCoinCount,
+        opposingPotSweepCoinAmount,
+        sweepPotPerBettor,
+      });
+
       // --- MAIN LOGIC: always calculate from scratch ---
       let potentialGoldCoinAmt = goldCoinBetAmtForLoginUser;
+
       if (
         bets.betcurrency === CurrencyType.GOLD_COINS &&
         userOptionGoldCoinCount > 0
       ) {
-        potentialGoldCoinAmt =
-          (goldCoinBetAmtForLoginUser / userOptionTotalGoldCoinAmount) *
-          totalGoldCoinAmount;
+        potentialGoldCoinAmt += goldPotPerBettor;
       }
+
       let potentialSweepCoinAmt = sweepCoinBetAmtForLoginUser;
+
       if (
         bets.betcurrency === CurrencyType.SWEEP_COINS &&
         userOptionSweepCoinCount > 0
       ) {
-        // Apply platform fee (15%)
-        const potAmountAfterPlatformFee = totalPotSweepCoinAmount * 0.85;
-        potentialSweepCoinAmt =
-          (sweepCoinBetAmtForLoginUser / userOptionTotalSweepCoinAmt) *
-          potAmountAfterPlatformFee;
+        potentialSweepCoinAmt += sweepPotPerBettor;
       }
       // --- END MAIN LOGIC ---
 
@@ -2640,7 +2672,7 @@ export class BettingService {
           // Update status and save
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
-          
+
           // Emit websocket events for the stream
           await this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,

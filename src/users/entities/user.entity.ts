@@ -90,7 +90,7 @@ export class User extends BaseEntity {
   isCreator: boolean;
 
   @Column({ type: 'decimal', default: 0, name: 'revShare' })
-  revShare: boolean;
+  revShare: number;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;

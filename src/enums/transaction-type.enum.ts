@@ -13,4 +13,5 @@ export enum TransactionType {
   ADMIN_CREDIT = 'Admin credit',
   ADMIN_DEBITED = 'Admin debited',
   BONUS = 'Bonus coins',
+  CREATOR_PAYOUT = 'Creator Payout',
 }
