@@ -195,7 +195,7 @@ export class BettingGateway {
         const chatMessage: ChatMessage = {
           type: ChatType.System,
           username: ChatType.StreambetBot,
-          message: `${user.username} placed a bet of ${bet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} placed a Pick of ${bet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         void emitToStream(
@@ -551,7 +551,7 @@ export class BettingGateway {
         const chatMessage: ChatMessage = {
           type: ChatType.System,
           username: ChatType.StreambetBot,
-          message: `${user.username} edited their bet to ${editedBet.amount} on ${bettingVariable.name}!`,
+          message: `${user.username} edited their Pick to ${editedBet.amount} on ${bettingVariable.name}!`,
           timestamp: new Date(),
         };
         void emitToStream(
@@ -653,17 +653,17 @@ export class BettingGateway {
     switch (status) {
       case BettingRoundStatus.OPEN:
         event = SocketEventName.BetOpened;
-        message = 'Betting is now open! Bets can be placed.';
+        message = 'Picks are now open! Picks can be placed.';
         payload = { roundId, open: true };
         break;
       case BettingRoundStatus.LOCKED:
         event = SocketEventName.BettingLocked;
-        message = 'Betting is now locked! No more bets can be placed.';
+        message = 'Picks are now locked! No more picks can be placed.';
         payload = { roundId, lockedStatus };
         break;
       case BettingRoundStatus.CANCELLED:
         event = SocketEventName.BetCancelledByAdmin;
-        message = 'Betting is canceled!';
+        message = 'Picks are canceled!';
         payload = { roundId, cancelled: true, message };
         break;
       default:
