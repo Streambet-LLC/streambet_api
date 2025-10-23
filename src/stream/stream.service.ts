@@ -83,12 +83,13 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const { pagination = true, streamStatus, username } = streamFilterDto;
 
       const streamQB = this.streamsRepository
-        .createQueryBuilder('s')
-        .leftJoinAndSelect('s.creator', 'creator')
+        .createQueryBuilder('s');
       
       if (username) {
-          streamQB.andWhere('creator.username = :username')
+        streamQB.innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
           .setParameter('username', username);
+      } else {
+        streamQB.leftJoinAndSelect('s.creator', 'creator');
       };
 
       streamQB.leftJoinAndSelect(
@@ -1154,19 +1155,21 @@ END
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
-        .leftJoinAndSelect('s.creator', 'creator')
         .leftJoinAndSelect('s.bettingRounds', 'r')
         .leftJoinAndSelect('r.bettingVariables', 'bv')
         .andWhere(`s.status = :scheduled or s.status = :live`, {
           scheduled: StreamStatus.SCHEDULED,
           live: StreamStatus.LIVE,
-        })
+        });
 
 
       if (liveScheduledStreamListDto.username) {
-        streamQB.andWhere('creator.username = :username')
-          .setParameter('username', liveScheduledStreamListDto.username)
-      };
+        streamQB
+          .innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
+          .setParameter('username', liveScheduledStreamListDto.username);
+      } else {
+        streamQB.leftJoinAndSelect('s.creator', 'creator');
+      }
 
       /** Custom ordering:
        *  - LIVE streams first (createdAt DESC)
