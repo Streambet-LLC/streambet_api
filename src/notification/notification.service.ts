@@ -7,6 +7,28 @@ import { EmailType } from 'src/enums/email-type.enum';
 import { User } from 'src/users/entities/user.entity';
 import { QueueService } from 'src/queue/queue.service';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
+import { RedisService } from 'src/redis/redis.service';
+
+/**
+ * Interface for a single betting round result
+ */
+interface BettingRound {
+  roundName: string;
+  status: 'won' | 'lost';
+  amount?: number;
+  currencyType?: string;
+  timestamp: Date;
+}
+
+/**
+ * Interface for betting summary stored in Redis
+ */
+interface BettingSummary {
+  streamId: string;
+  streamName: string;
+  userId: string;
+  rounds: BettingRound[];
+}
 
 @Injectable()
 export class NotificationService {
@@ -15,6 +37,7 @@ export class NotificationService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly queueService: QueueService,
+    private readonly redisService: RedisService,
   ) {}
 
   async addNotificationPermision(userId: string) {
@@ -31,6 +54,182 @@ export class NotificationService {
       }
       return settings;
     }
+  }
+
+  // Redis helpers for betting summary emails
+  private readonly BETTING_SUMMARY_PREFIX = 'betting_summary';
+  private readonly BETTING_PARTICIPANTS_PREFIX = 'betting_participants';
+  private readonly BETTING_SUMMARY_TTL_DAYS = 7;
+
+  private formatCurrencyType(currencyType: string): string {
+    return currencyType === CurrencyType.GOLD_COINS
+      ? CurrencyTypeText.GOLD_COINS_TEXT
+      : CurrencyTypeText.SWEEP_COINS_TEXT;
+  }
+
+  private getBettingSummaryTTL(): number {
+    return this.configService.get<number>('email.ttls.fullDay') * this.BETTING_SUMMARY_TTL_DAYS;
+  }
+
+  async addStreamParticipants(streamId: string, userIds: string[]): Promise<void> {
+    try {
+      const redis = this.redisService.getClient();
+      const cacheKey = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
+      
+      if (userIds.length > 0) {
+        await redis.sadd(cacheKey, ...userIds);
+        await redis.expire(cacheKey, this.getBettingSummaryTTL());
+      }
+    } catch (e) {
+      Logger.error('Failed to add stream participants to Redis', e);
+    }
+  }
+
+  async getStreamParticipants(streamId: string): Promise<string[]> {
+    try {
+      const redis = this.redisService.getClient();
+      const cacheKey = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
+      return (await redis.smembers(cacheKey)) || [];
+    } catch (e) {
+      Logger.error('Failed to get stream participants from Redis', e);
+      return [];
+    }
+  }
+
+  private async clearStreamParticipants(streamId: string): Promise<void> {
+    try {
+      const redis = this.redisService.getClient();
+      await redis.del(`${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`);
+    } catch (e) {
+      Logger.error('Failed to clear stream participants from Redis', e);
+    }
+  }
+
+  // Stores betting results (win/loss) in Redis using atomic operations
+  async addBettingResult(
+    streamId: string,
+    streamName: string,
+    userId: string,
+    roundName: string,
+    status: 'won' | 'lost',
+    amount?: number,
+    currencyType?: string,
+  ): Promise<void> {
+    try {
+      // Validate required fields for wins
+      if (status === 'won') {
+        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+          Logger.error(`Invalid amount for win result: ${amount}`);
+          return;
+        }
+        if (!currencyType || typeof currencyType !== 'string' || currencyType.trim() === '') {
+          Logger.error(`Invalid currencyType for win result: ${currencyType}`);
+          return;
+        }
+      }
+
+      const redis = this.redisService.getClient();
+      const cacheKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
+      const metadataKey = `${cacheKey}:metadata`;
+      const ttl = this.getBettingSummaryTTL();
+
+      // Atomically store metadata with TTL in single operation (SET NX EX)
+      await redis.set(metadataKey, JSON.stringify({ streamId, streamName, userId }), 'EX', ttl, 'NX');
+
+      // Build round data
+      const roundData: BettingRound = {
+        roundName,
+        status,
+        ...(status === 'won' && { amount, currencyType }),
+        timestamp: new Date(),
+      };
+      
+      // Atomically append round result using RPUSH
+      await redis.rpush(cacheKey, JSON.stringify(roundData));
+      
+      // Extend TTL on each bet to keep data fresh as long as activity continues
+      // This ensures the summary remains available throughout an active stream
+      await redis.expire(cacheKey, ttl);
+    } catch (e) {
+      Logger.error(`Failed to add ${status} result to Redis`, e);
+    }
+  }
+
+  // Convenience wrappers for backward compatibility
+  async addWinResult(streamId: string, streamName: string, userId: string, roundName: string, amount: number, currencyType: string): Promise<void> {
+    return this.addBettingResult(streamId, streamName, userId, roundName, 'won', amount, currencyType);
+  }
+
+  async addLossResult(streamId: string, streamName: string, userId: string, roundName: string): Promise<void> {
+    return this.addBettingResult(streamId, streamName, userId, roundName, 'lost');
+  }
+
+  // Sends betting summary emails when stream ends. Redis data expires via TTL (7 days).
+  async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
+    Logger.log(`Sending betting summary emails for stream ${streamId} to ${userIds.length} users`);
+    
+    const results = await Promise.allSettled(
+      userIds.map(userId => this.sendUserBettingSummary(streamId, userId))
+    );
+    
+    await this.clearStreamParticipants(streamId);
+    
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) {
+      Logger.warn(`${failed}/${userIds.length} summary emails failed for stream ${streamId}`);
+    }
+    Logger.log(`Completed betting summary emails for stream ${streamId}`);
+  }
+
+  private async sendUserBettingSummary(streamId: string, userId: string): Promise<void> {
+    const redis = this.redisService.getClient();
+    const cacheKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
+    const metadataKey = `${cacheKey}:metadata`;
+
+    const [metadataStr, roundsData] = await Promise.all([
+      redis.get(metadataKey),
+      redis.lrange(cacheKey, 0, -1),
+    ]);
+
+    if (!metadataStr || !roundsData?.length) {
+      Logger.log(`No betting data for user ${userId} in stream ${streamId}`);
+      return;
+    }
+
+    const summary: BettingSummary = {
+      ...JSON.parse(metadataStr),
+      rounds: roundsData.map(str => JSON.parse(str)),
+    };
+
+    const receiver = await this.usersService.findUserByUserId(userId);
+    const permission = await this.addNotificationPermision(userId);
+    
+    if (!receiver?.email || !permission?.['emailNotification'] || receiver.email.toLowerCase().endsWith('@example.com')) {
+      Logger.log(`Skipping user ${userId}: invalid email or notifications disabled`);
+      return;
+    }
+
+    const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
+    const formattedRounds = summary.rounds.map(r => ({
+      ...r,
+      currencyType: r.currencyType ? this.formatCurrencyType(r.currencyType) : undefined,
+    }));
+
+    await this.queueService.addEmailJob(
+      {
+        toAddress: [receiver.email],
+        subject: NOTIFICATION_TEMPLATE.EMAIL_BETTING_SUMMARY.TITLE({ streamName: summary.streamName }),
+        params: {
+          streamName: summary.streamName,
+          fullName: receiver.username,
+          rounds: formattedRounds,
+          dashboardLink: `${dashboardLink}/betting-history`,
+        },
+      },
+      EmailType.BettingStreamSummary,
+    );
+
+    Logger.log(`Betting summary email queued for user ${userId}`);
   }
 
   async sendSMTPForWonBet(

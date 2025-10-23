@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Betting Summary for <%= params.streamName %></title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    </style>
+</head>
+
+<%
+// Template constants for centralized styling
+const COLORS = {
+    black: '#000000',
+    boxBg: '#181818',
+    border: '#2C2C2C',
+    white: '#FFFFFF',
+    buttonBg: '#BDFF00',
+    buttonText: '#000',
+    successGreen: '#00FF00',
+    errorRed: '#FF0000'
+};
+
+const SPACING = {
+    none: '0',
+    small: '10px',
+    medium: '20px',
+    large: '30px',
+    xlarge: '40px',
+    xxlarge: '60px'
+};
+
+const FONTS = {
+    family: "'Inter',sans-serif",
+    sizeSmall: '14px',
+    sizeMedium: '15px',
+    sizeBase: '16px',
+    sizeLarge: '18px',
+    sizeXlarge: '20px',
+    sizeHeading: '28px'
+};
+
+const SIZES = {
+    logoWidth: '280px',
+    maxWidth: '700px',
+    fullWidth: '100%',
+    buttonMaxWidth: '300px',
+    borderRadius: '16px',
+    borderRadiusSmall: '8px'
+};
+%>
+
+<body style="margin:<%= SPACING.none %>;padding:<%= SPACING.none %>;background-color:<%= COLORS.black %>;font-family:<%= FONTS.family %>;color:<%= COLORS.white %>;">
+    <table width="<%= SIZES.fullWidth %>" cellpadding="0" cellspacing="0" border="0"
+        style="background-color:<%= COLORS.black %>;margin:<%= SPACING.none %>;padding:<%= SPACING.none %>;width:<%= SIZES.fullWidth %>;">
+        <tr>
+            <td>
+                <div class="container" style="max-width:<%= SIZES.fullWidth %>;margin:<%= SPACING.none %> auto;padding:<%= SPACING.xlarge %> <%= SPACING.medium %>;">
+                    <!-- Logo -->
+                    <table width="<%= SIZES.fullWidth %>" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:<%= SPACING.xxlarge %>;">
+                        <tr>
+                            <td align="center">
+                                <img src="https://streambets3dev.s3.us-east-1.amazonaws.com/logo/streambetlogo.png"
+                                    alt="Streambet Logo" width="280" style="display:block;width:<%= SIZES.logoWidth %>;height:auto;" />
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Box -->
+                    <div class="box"
+                        style="background-color:<%= COLORS.boxBg %>;border-radius:<%= SIZES.borderRadius %>;border:1px solid <%= COLORS.border %>;padding:<%= SPACING.xlarge %>;max-width:<%= SIZES.maxWidth %>;width:<%= SIZES.fullWidth %>;box-sizing:border-box;margin:<%= SPACING.none %> auto;">
+                        <div class="box-content" style="max-width:<%= SIZES.maxWidth %>;margin:<%= SPACING.none %> auto;color:<%= COLORS.white %>;">
+                            <h1 style="font-size:<%= FONTS.sizeHeading %>;font-weight:700;margin-bottom:<%= SPACING.medium %>;color:<%= COLORS.white %>;text-align:center;font-family:<%= FONTS.family %>;">
+                                Betting Summary for <%= params.streamName %>
+                            </h1>
+
+                            <p
+                                style="font-size:<%= FONTS.sizeLarge %>;line-height:1.6;margin-bottom:<%= SPACING.small %>;opacity:0.7;font-family:<%= FONTS.family %>;text-transform:capitalize;color:<%= COLORS.white %>;">
+                                Hi <%= params.fullName %>,</p>
+                            
+                            <p
+                                style="font-size:<%= FONTS.sizeLarge %>;line-height:1.6;margin-bottom:<%= SPACING.large %>;opacity:0.7;font-family:<%= FONTS.family %>;color:<%= COLORS.white %>;">
+                                Here's a summary of all your betting rounds from the stream:
+                            </p>
+
+                            <!-- Rounds List -->
+                            <div style="margin:<%= SPACING.large %> <%= SPACING.none %>;">
+                                <% params.rounds.forEach(function(round) { %>
+                                    <div style="background-color:<%= COLORS.black %>;border-radius:<%= SIZES.borderRadiusSmall %>;padding:<%= SPACING.medium %>;margin-bottom:<%= SPACING.medium %>;border-left:4px solid <%= round.status === 'won' ? COLORS.successGreen : COLORS.errorRed %>;">
+                                        <p style="font-size:<%= FONTS.sizeBase %>;font-weight:600;margin-bottom:<%= SPACING.small %>;color:<%= COLORS.white %>;font-family:<%= FONTS.family %>;">
+                                            <%= round.roundName %>
+                                        </p>
+                                        <% if (round.status === 'won') { %>
+                                            <% 
+                                                // Safely format amount with fallback
+                                                var amount = round.amount != null && !isNaN(Number(round.amount)) 
+                                                    ? Math.floor(Number(round.amount)).toLocaleString('en-US') 
+                                                    : '0';
+                                                var currency = round.currencyType || '';
+                                            %>
+                                            <p style="font-size:<%= FONTS.sizeBase %>;font-weight:500;margin:<%= SPACING.none %>;color:<%= COLORS.successGreen %>;font-family:<%= FONTS.family %>;">
+                                                Won <%= amount %><%= currency ? ' ' + currency : '' %> &#9989;
+                                            </p>
+                                        <% } else { %>
+                                            <p style="font-size:<%= FONTS.sizeBase %>;font-weight:500;margin:<%= SPACING.none %>;color:<%= COLORS.errorRed %>;font-family:<%= FONTS.family %>;">
+                                                Lost &#10060;
+                                            </p>
+                                        <% } %>
+                                    </div>
+                                <% }); %>
+                            </div>
+
+                            <a href="<%= params.dashboardLink %>" class="btn"
+                                style="padding:<%= SPACING.small %> <%= SPACING.medium %>;font-size:<%= FONTS.sizeMedium %>;background-color:<%= COLORS.buttonBg %>;color:<%= COLORS.buttonText %>;font-weight:600;text-decoration:none;border-radius:<%= SIZES.borderRadiusSmall %>;max-width:<%= SIZES.buttonMaxWidth %>;margin:auto;margin-top:<%= SPACING.xlarge %> !important;margin-bottom:<%= SPACING.xlarge %> !important;display:block;text-align:center;font-family:<%= FONTS.family %>;">
+                                View Full Pick History
+                            </a>
+
+                            <p
+                                style="margin-top:<%= SPACING.medium %>;font-size:<%= FONTS.sizeLarge %>;line-height:1.6;margin-bottom:<%= SPACING.large %>;opacity:0.7;font-family:<%= FONTS.family %>;color:<%= COLORS.white %>;">
+                                Cheers,<br /><b style="font-size:<%= FONTS.sizeXlarge %>;">The Streambet Team</b>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="footer"
+                        style="margin-top:<%= SPACING.xxlarge %>;font-size:<%= FONTS.sizeSmall %>;text-align:center;color:<%= COLORS.white %>;font-family:<%= FONTS.family %>;">
+                        © Streambet <%= new Date().getFullYear() %>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

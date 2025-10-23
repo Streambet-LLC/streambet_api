@@ -90,6 +90,10 @@ export const NOTIFICATION_TEMPLATE = {
     TITLE: (data: BetNotificationData) =>
       `🎉 You won a Pick on ${data.streamName}, but could you have done better?`,
   },
+  EMAIL_BETTING_SUMMARY: {
+    TITLE: (data: BetNotificationData) =>
+      `Your ${data.streamName} results are in!`,
+  },
   PLACE_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
       `${data.username} Picks ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
