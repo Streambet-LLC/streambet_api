@@ -105,9 +105,9 @@ export class EmailsService {
         const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST');
         const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT');
         
-        this.logger.log(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
+        this.logger.debug(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
         
-        transporter = await nodemailer.createTransport({
+        transporter = nodemailer.createTransport({
           host: mailhogHost,
           port: mailhogPort,
           secure: false,
@@ -124,7 +124,7 @@ export class EmailsService {
         );
         const region = this.configService.get<string>('email.SMTP_REGION');
         
-        this.logger.log('Production Mode: Using AWS SES');
+        this.logger.debug('Production Mode: Using AWS SES');
 
         transporter = await nodemailer.createTransport(
           sesTransport({
