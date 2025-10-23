@@ -2017,7 +2017,7 @@ export class BettingService {
     );
 
     // Calculate platform fee (15%) for Sweep Coins and distributable pot
-    const sweepCoinPlatformFee = Math.floor(totalLosingSweepCoinAmount * 0.15);
+    const sweepCoinPlatformFee = round(totalLosingSweepCoinAmount * 0.15, 2);
     const distributableSweepCoinPot =
       totalLosingSweepCoinAmount - sweepCoinPlatformFee;
 
@@ -2136,6 +2136,8 @@ export class BettingService {
 
     const potPerWinner =
       distributableSweepCoinPot / winningSweepCoinBets.length;
+
+    console.log(distributableSweepCoinPot, potPerWinner);
 
     // Iterate through each winning bet and calculate individual payout
     for (const bet of winningSweepCoinBets) {
