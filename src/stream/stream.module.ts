@@ -10,6 +10,7 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { StreamGateway } from './stream.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { RedisModule } from 'src/redis/redis.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { RedisModule } from 'src/redis/redis.module';
     GeoFencingModule,
     forwardRef(() => WsModule),
     RedisModule,
+    NotificationModule,
   ],
   controllers: [StreamController],
   providers: [StreamService, StreamGateway],

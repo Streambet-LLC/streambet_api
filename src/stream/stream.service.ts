@@ -34,6 +34,7 @@ import { BettingGateway } from 'src/betting/betting.gateway';
 import { StreamGateway } from './stream.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { User } from 'src/users/entities/user.entity';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -50,6 +51,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private streamGateway: StreamGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
+    private notificationService: NotificationService,
   ) { }
   async onModuleDestroy() {
     await this.flushViewerCounts('moduleDestroy');
@@ -725,6 +727,24 @@ END
 
     // Emit stream end socket event
     this.streamGateway.emitStreamEnd(streamId);
+
+    // Send betting summary emails when stream ends (non-blocking)
+    this.notificationService
+      .getStreamParticipants(streamId)
+      .then((userIds) => {
+        if (userIds.length > 0) {
+          return this.notificationService.sendStreamBettingSummaryEmails(
+            streamId,
+            userIds,
+          );
+        }
+      })
+      .catch((error) => {
+        Logger.error(
+          `Failed to send betting summary emails for stream ${streamId}`,
+          error,
+        );
+      });
 
     return savedStream;
   }

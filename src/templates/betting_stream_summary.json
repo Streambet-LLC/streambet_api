@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["streamName", "fullName", "rounds", "dashboardLink"],
+  "properties": {
+    "streamName": {
+      "type": "string",
+      "description": "The name of the betting stream"
+    },
+    "fullName": {
+      "type": "string",
+      "description": "The user's full name or username"
+    },
+    "rounds": {
+      "type": "array",
+      "description": "Array of betting rounds with results",
+      "items": {
+        "type": "object",
+        "required": ["roundName", "status"],
+        "properties": {
+          "roundName": {
+            "type": "string",
+            "description": "The name of the betting round"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["won", "lost"],
+            "description": "Whether the user won or lost this round"
+          },
+          "amount": {
+            "type": "number",
+            "description": "The amount won (optional, only for wins)"
+          },
+          "currencyType": {
+            "type": "string",
+            "description": "The currency type (optional, only for wins)"
+          }
+        }
+      }
+    },
+    "dashboardLink": {
+      "type": "string",
+      "description": "Link to the user's betting history dashboard"
+    }
+  }
+}

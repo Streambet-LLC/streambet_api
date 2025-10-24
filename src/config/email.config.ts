@@ -57,5 +57,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/coin_purchase.ejs',
       schemaPath: './src/templates/coin_purchase.json',
     },
+    betting_stream_summary: {
+      templatePath: './src/templates/betting_stream_summary.ejs',
+      schemaPath: './src/templates/betting_stream_summary.json',
+    },
   },
 }));
