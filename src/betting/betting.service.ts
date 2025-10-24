@@ -247,7 +247,7 @@ export class BettingService {
     // If stream is going live, set actual start time
     if (status === StreamStatus.LIVE) {
       stream.actualStartTime = new Date();
-    } 
+    }
     // If stream is ending, set end time
     else if (status === StreamStatus.ENDED) {
       stream.endTime = new Date();
