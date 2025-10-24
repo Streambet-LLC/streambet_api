@@ -244,13 +244,15 @@ export class BettingService {
     // Update the stream's status
     stream.status = status;
 
-    // Set timestamps based on status
+    // If stream is going live, set actual start time
     if (status === StreamStatus.LIVE) {
       stream.actualStartTime = new Date();
-    } else if (status === StreamStatus.ENDED) {
+    } 
+    // If stream is ending, set end time
+    else if (status === StreamStatus.ENDED) {
       stream.endTime = new Date();
     }
-
+    // Save and return the updated stream entity
     return this.streamsRepository.save(stream);
   }
 
