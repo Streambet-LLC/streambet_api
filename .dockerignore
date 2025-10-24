@@ -1,9 +1,9 @@
 .idea
 node_modules
+npm-debug.log
 dist
 DevOps
 *.log
-package-lock.json
 !production.json
 backups/*
 e2e-common/*

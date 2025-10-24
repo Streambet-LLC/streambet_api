@@ -384,21 +384,36 @@ export class NotificationService {
   ): Promise<void> {
     if (!userIds.length) return;
 
-    const redis = this.redisService.getClient();
-    const key = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
-    await redis.sadd(key, ...userIds);
-    await redis.expire(key, this.getBettingSummaryTTL());
+    try {
+      const redis = this.redisService.getClient();
+      const key = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
+      await redis.sadd(key, ...userIds);
+      await redis.expire(key, this.getBettingSummaryTTL());
+    } catch (error) {
+      Logger.error(`Failed to add stream participants for stream ${streamId}`, error);
+      throw error;
+    }
   }
 
   async getStreamParticipants(streamId: string): Promise<string[]> {
-    const redis = this.redisService.getClient();
-    const key = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
-    return redis.smembers(key);
+    try {
+      const redis = this.redisService.getClient();
+      const key = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
+      return redis.smembers(key);
+    } catch (error) {
+      Logger.error(`Failed to get stream participants for stream ${streamId}`, error);
+      throw error;
+    }
   }
 
   private async clearStreamParticipants(streamId: string): Promise<void> {
-    const redis = this.redisService.getClient();
-    await redis.del(`${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`);
+    try {
+      const redis = this.redisService.getClient();
+      await redis.del(`${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`);
+    } catch (error) {
+      Logger.error(`Failed to clear stream participants for stream ${streamId}`, error);
+      // Don't rethrow - this is cleanup operation
+    }
   }
 
   async addBettingResult(
@@ -423,25 +438,34 @@ export class NotificationService {
       }
     }
 
-    const redis = this.redisService.getClient();
-    const ttl = this.getBettingSummaryTTL();
-    const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
-    const roundsKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
+    try {
+      const redis = this.redisService.getClient();
+      const ttl = this.getBettingSummaryTTL();
+      const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
+      const roundsKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
 
-    // Store metadata
-    await redis.set(metadataKey, JSON.stringify({ streamId, streamName, userId }), 'EX', ttl, 'NX');
+      // Store metadata
+      await redis.set(metadataKey, JSON.stringify({ streamId, streamName, userId }), 'EX', ttl, 'NX');
 
-    // Store round data
-    const round: BettingRound = {
-      roundName,
-      status,
-      timestamp: new Date(),
-      ...(status === 'won' && { amount: Number(amount), currencyType }),
-    };
+      // Store round data
+      const round: BettingRound = {
+        roundName,
+        status,
+        timestamp: new Date(),
+        amount: Number(amount),
+        currencyType,
+      };
 
-    await redis.rpush(roundsKey, JSON.stringify(round));
-    await redis.expire(roundsKey, ttl);
-    await redis.expire(metadataKey, ttl);
+      await redis.rpush(roundsKey, JSON.stringify(round));
+      await redis.expire(roundsKey, ttl);
+      await redis.expire(metadataKey, ttl);
+    } catch (error) {
+      Logger.error(
+        `Failed to add betting result for user ${userId} in stream ${streamId} (status: ${status})`,
+        error,
+      );
+      throw error;
+    }
   }
 
   async addWinResult(
@@ -460,8 +484,10 @@ export class NotificationService {
     streamName: string,
     userId: string,
     roundName: string,
+    amount: number,
+    currencyType: string,
   ): Promise<void> {
-    return this.addBettingResult(streamId, streamName, userId, roundName, 'lost');
+    return this.addBettingResult(streamId, streamName, userId, roundName, 'lost', amount, currencyType);
   }
 
   async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
@@ -483,8 +509,23 @@ export class NotificationService {
 
     if (!metadataStr || !roundsStr?.length) return;
 
-    const metadata = JSON.parse(metadataStr);
-    const rounds: BettingRound[] = roundsStr.map((r) => JSON.parse(r));
+    // Parse Redis data with error handling for corrupted data
+    let metadata: BettingSummary;
+    let rounds: BettingRound[];
+    try {
+      metadata = JSON.parse(metadataStr);
+      rounds = roundsStr.map((r) => JSON.parse(r));
+    } catch (error) {
+      Logger.error(
+        `Corrupted betting data found for user ${userId} in stream ${streamId} - cleaning up`,
+        error,
+      );
+      // Clean up corrupted data
+      await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]).catch((delError) =>
+        Logger.error(`Failed to delete corrupted data for user ${userId} in stream ${streamId}`, delError),
+      );
+      return;
+    }
 
     const receiver = await this.usersService.findUserByUserId(userId);
     if (!receiver?.email || receiver.email.includes('@example.com')) return;
@@ -500,26 +541,33 @@ export class NotificationService {
     const formattedRounds = rounds.map((round) => ({
       roundName: round.roundName,
       status: round.status,
-      ...(round.status === 'won' && {
-        amount: round.amount,
-        currencyType: this.formatCurrencyType(round.currencyType || ''),
-      }),
+      amount: round.amount,
+      currencyType: this.formatCurrencyType(round.currencyType || ''),
     }));
 
-    await this.queueService.addEmailJob(
-      {
-        toAddress: [receiver.email],
-        subject,
-        params: {
-          streamName: metadata.streamName,
-          fullName: receiver.username,
-          rounds: formattedRounds,
-          dashboardLink: `${dashboardLink}/betting-history`,
+    try {
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [receiver.email],
+          subject,
+          params: {
+            streamName: metadata.streamName,
+            fullName: receiver.username,
+            rounds: formattedRounds,
+            dashboardLink: `${dashboardLink}/betting-history`,
+          },
         },
-      },
-      EmailType.BettingStreamSummary,
-    );
+        EmailType.BettingStreamSummary,
+      );
 
-    await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]);
+      // Only delete Redis keys after successful email queuing
+      await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]);
+    } catch (error) {
+      Logger.error(
+        `Failed to queue betting summary email for user ${userId} in stream ${streamId} - data preserved for retry`,
+        error,
+      );
+      throw error;
+    }
   }
 }

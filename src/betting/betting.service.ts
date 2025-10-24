@@ -1717,6 +1717,8 @@ export class BettingService {
                 bettingVariable.stream.name,
                 bet.userId,
                 bet.round.roundName,
+                bet.amount,
+                bet.currency,
               ),
             ]).catch((error) =>
               Logger.error(`Failed to notify loser ${bet.userId}`, error),

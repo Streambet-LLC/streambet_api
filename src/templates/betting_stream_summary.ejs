@@ -38,26 +38,37 @@
 
                             <!-- Rounds Section -->
                             <% params.rounds.forEach(function(round) { %>
-                                <div style="background-color:#2C2C2C;border-radius:8px;padding:20px;margin-bottom:16px;border-left:4px solid <%= round.status === 'won' ? '#00FF00' : '#FF0000' %>;">
-                                    <div style="margin-bottom:8px;">
-                                        <span style="font-size:20px;margin-right:12px;"><%= round.status === 'won' ? '✅' : '❌' %></span>
-                                        <span style="font-size:16px;font-weight:600;color:#FFFFFF;"><%= round.roundName %></span>
-                                    </div>
+                                <div style="background-color:#2C2C2C;border-radius:8px;padding:20px;margin-bottom:16px;border-left:4px solid <%= round.status === 'won' ? '#BDFF00' : '#FF0000' %>;">
+                                    <p style="font-size:16px;font-weight:600;color:#FFFFFF;margin:0 0 8px 0;font-family:'Inter',sans-serif;">
+                                        <%= round.roundName %>
+                                    </p>
+                                    <%
+                                        var amount = Number(round.amount);
+                                        var isValidAmount = round.amount != null && Number.isFinite(amount) && amount > 0;
+                                    %>
                                     <% if (round.status === 'won') { %>
-                                        <div style="font-size:18px;font-weight:700;color:#00FF00;margin-top:8px;">
-                                            +<%= Math.floor(Number(round.amount)).toLocaleString('en-US') %> <%= round.currencyType %>
-                                        </div>
+                                        <p style="font-size:18px;font-weight:700;margin:0;font-family:'Inter',sans-serif;">
+                                            <% if (isValidAmount) { %>
+                                                <span style="color:#BDFF00;">Won:</span> <span style="color:#FFFFFF;">+<%= Math.floor(amount).toLocaleString('en-US') %> <%= round.currencyType || '' %></span>
+                                            <% } else { %>
+                                                <span style="color:#BDFF00;">Won:</span> <span style="color:#FFFFFF;">+N/A</span>
+                                            <% } %>
+                                        </p>
                                     <% } else { %>
-                                        <div style="font-size:16px;color:#FF0000;opacity:0.8;margin-top:8px;">
-                                            Better luck next time!
-                                        </div>
+                                        <p style="font-size:18px;font-weight:700;margin:0;font-family:'Inter',sans-serif;">
+                                            <% if (isValidAmount) { %>
+                                                <span style="color:#FF0000;">Lost:</span> <span style="color:#FFFFFF;">-<%= Math.floor(amount).toLocaleString('en-US') %> <%= round.currencyType || '' %></span>
+                                            <% } else { %>
+                                                <span style="color:#FF0000;">Lost:</span> <span style="color:#FFFFFF;">-N/A</span>
+                                            <% } %>
+                                        </p>
                                     <% } %>
                                 </div>
                             <% }); %>
 
                             <a href="<%= params.dashboardLink %>" class="btn"
                                 style="padding:14px 24px;font-size: 15px;background-color:#BDFF00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:40px !important;margin-bottom:40px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">
-                                View Full Pick History
+                                Go to Pick History
                             </a>
 
                             <p
@@ -69,7 +80,7 @@
                     <!-- Footer -->
                     <div class="footer"
                         style="margin-top:60px;font-size:14px;text-align:center;color:#FFFFFF;font-family:'Inter',sans-serif;">
-                        © Streambet <%= new Date().getFullYear() %>
+                        © Streambet 2025
                     </div>
                 </div>
             </td>
