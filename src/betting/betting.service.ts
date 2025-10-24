@@ -252,6 +252,7 @@ export class BettingService {
     else if (status === StreamStatus.ENDED) {
       stream.endTime = new Date();
     }
+    
     // Save and return the updated stream entity
     return this.streamsRepository.save(stream);
   }
