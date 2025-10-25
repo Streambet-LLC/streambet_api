@@ -103,17 +103,17 @@ export class GeoFencingSocketGuard implements CanActivate {
       return false;
     }
 
-    // --- VPN/Proxy block check ---
-    const blockVPN = this.config.get<string>('geo.blockVPN');
-    const isBlockVPN = blockVPN === 'true'; // Convert string to boolean
-    if (isBlockVPN && Boolean(loc?.isVpn)) {
-      this.logger.warn(`Socket blocked by VPN/proxy ip=${ip}`);
-      client.emit('error', {
-        message: 'Access from VPN/proxy is restricted',
-        isForcedLogout: true,
-      });
-      return false;
-    }
+    // // --- VPN/Proxy block check ---
+    // const blockVPN = this.config.get<string>('geo.blockVPN');
+    // const isBlockVPN = blockVPN === 'true'; // Convert string to boolean
+    // if (isBlockVPN && Boolean(loc?.isVpn)) {
+    //   this.logger.warn(`Socket blocked by VPN/proxy ip=${ip}`);
+    //   client.emit('error', {
+    //     message: 'Access from VPN/proxy is restricted',
+    //     isForcedLogout: true,
+    //   });
+    //   return false;
+    // }
 
     // --- Access allowed ---
     return true;

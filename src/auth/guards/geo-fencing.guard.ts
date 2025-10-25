@@ -61,16 +61,16 @@ export class GeoFencingGuard implements CanActivate {
       });
     }
 
-    // --- Check for VPN/proxy if blocking is enabled ---
-    const blockVPN = this.configService.get<string>('geo.blockVPN');
-    const isBlockVPN = blockVPN === 'true'; // convert string to boolean
-    if (isBlockVPN && Boolean(loc?.isVpn)) {
-      Logger.warn(`Blocked VPN/proxy ip=${ip}`);
-      throw new ForbiddenException({
-        message: 'Access from VPN/proxy is restricted',
-        isForcedLogout: true,
-      });
-    }
+    // // --- Check for VPN/proxy if blocking is enabled ---
+    // const blockVPN = this.configService.get<string>('geo.blockVPN');
+    // const isBlockVPN = blockVPN === 'true'; // convert string to boolean
+    // if (isBlockVPN && Boolean(loc?.isVpn)) {
+    //   Logger.warn(`Blocked VPN/proxy ip=${ip}`);
+    //   throw new ForbiddenException({
+    //     message: 'Access from VPN/proxy is restricted',
+    //     isForcedLogout: true,
+    //   });
+    // }
 
     // All checks passed, allow request
     return true;
