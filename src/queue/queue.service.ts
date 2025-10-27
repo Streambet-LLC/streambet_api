@@ -8,10 +8,17 @@ import {
   QUEUE_COINFLOW_WEBHOOK,
   SEND_EMAIL_JOB,
   STREAM_LIVE_QUEUE,
+  BET_RESULTS_QUEUE,
+  TRACK_BET_RESULT_JOB,
+  SEND_STREAM_SUMMARY_JOB,
 } from 'src/common/constants/queue.constants';
 import { EmailPayloadDto } from 'src/emails/dto/email.dto';
 import { EmailType } from 'src/enums/email-type.enum';
 import { WebhookDto } from 'src/webhook/dto/webhook.dto';
+import {
+  BetResultJobData,
+  StreamSummaryJobData,
+} from './dto/bet-result-job.dto';
 
 export interface QueueJobOptions {
   delay?: number;
@@ -29,6 +36,7 @@ export class QueueService {
     @InjectQueue(STREAM_LIVE_QUEUE) private streamLiveQueue: Queue,
     @InjectQueue(EMAIL_QUEUE) private mailQueue: Queue,
     @InjectQueue(COINFLOW_WEBHOOK_QUEUE) private coinflowWebhookQueue: Queue,
+    @InjectQueue(BET_RESULTS_QUEUE) private betResultsQueue: Queue,
   ) {}
 
   async addStreamLiveJob(
@@ -90,6 +98,36 @@ export class QueueService {
     }
   }
 
+  async addBetResultJob(data: BetResultJobData) {
+    try {
+      const job = await this.betResultsQueue.add(TRACK_BET_RESULT_JOB, data, {
+        removeOnComplete: false, // Keep until stream ends
+      });
+      this.logger.log(
+        `Added bet result job: ${job.id} for stream ${data.streamId}`,
+      );
+      return job;
+    } catch (error) {
+      this.logger.error(`Failed to add bet result job`, error.stack);
+      throw error;
+    }
+  }
+
+  async addStreamSummaryJob(data: StreamSummaryJobData) {
+    try {
+      const job = await this.betResultsQueue.add(SEND_STREAM_SUMMARY_JOB, data);
+      this.logger.log(`Added stream summary job for stream ${data.streamId}`);
+      return job;
+    } catch (error) {
+      this.logger.error(`Failed to add stream summary job`, error.stack);
+      throw error;
+    }
+  }
+
+  async getBetResultsQueue(): Promise<Queue> {
+    return this.betResultsQueue;
+  }
+
   async getJobStatus(queueName: string, jobId: string) {
     try {
       const queue = this.getQueueByName(queueName);
@@ -125,6 +163,8 @@ export class QueueService {
         return this.mailQueue;
       case COINFLOW_WEBHOOK_QUEUE:
         return this.coinflowWebhookQueue;
+      case BET_RESULTS_QUEUE:
+        return this.betResultsQueue;
       default:
         throw new Error(`Unknown queue: ${queueName}`);
     }

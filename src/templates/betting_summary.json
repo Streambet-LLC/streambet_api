@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["toAddress", "subject", "params"],
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "subject": { "type": "string" },
+    "params": {
+      "type": "object",
+      "required": ["fullName", "streamName", "rounds", "dashboardLink"],
+      "properties": {
+        "fullName": { "type": "string" },
+        "streamName": { "type": "string" },
+        "rounds": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "roundName": { "type": "string" },
+              "won": { "type": "boolean" },
+              "amount": { "type": "number" },
+              "currency": { "type": "string" }
+            }
+          }
+        },
+        "dashboardLink": { "type": "string" }
+      }
+    }
+  }
+}

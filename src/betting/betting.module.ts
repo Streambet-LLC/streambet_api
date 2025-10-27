@@ -14,6 +14,7 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { BettingGateway } from './betting.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { NotificationModule } from 'src/notification/notification.module';
+import { QueueModule } from 'src/queue/queue.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { NotificationModule } from 'src/notification/notification.module';
     GeoFencingModule,
     forwardRef(() => WsModule),
     NotificationModule,
+    QueueModule,
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway],

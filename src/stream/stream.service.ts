@@ -726,6 +726,20 @@ END
     // Emit stream end socket event
     this.streamGateway.emitStreamEnd(streamId);
 
+    // Trigger betting summary emails (fire and forget)
+    this.queueService
+      .addStreamSummaryJob({
+        streamId: savedStream.id,
+        streamName: savedStream.name,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Failed to queue stream summary for ${streamId}`,
+          err,
+        );
+        // Don't throw - email failure shouldn't block stream ending
+      });
+
     return savedStream;
   }
   /**

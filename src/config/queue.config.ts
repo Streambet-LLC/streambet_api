@@ -1,5 +1,8 @@
 import { registerAs } from '@nestjs/config';
-import { EMAIL_QUEUE } from 'src/common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  BET_RESULTS_QUEUE,
+} from 'src/common/constants/queue.constants';
 
 export const queueConfig = registerAs('queue', () => ({
   redis: {
@@ -23,6 +26,18 @@ export const queueConfig = registerAs('queue', () => ({
     },
     email: {
       name: EMAIL_QUEUE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    },
+    betResults: {
+      name: BET_RESULTS_QUEUE,
       defaultJobOptions: {
         attempts: 3,
         backoff: {

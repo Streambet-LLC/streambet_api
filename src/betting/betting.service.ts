@@ -254,35 +254,7 @@ export class BettingService {
     }
 
     // Save and return the updated stream entity
-    const savedStream = await this.streamsRepository.save(stream);
-
-    // Trigger summary emails after stream is saved (non-blocking)
-    // This ensures stream status is persisted immediately without Redis blocking
-    if (status === StreamStatus.ENDED) {
-      this.notificationService
-        .getStreamParticipants(id)
-        .then((userIds) => {
-          if (userIds.length > 0) {
-            Logger.log(
-              `Stream ${id} ended. Sending summary emails to ${userIds.length} participants.`,
-            );
-            return this.notificationService.sendStreamBettingSummaryEmails(
-              id,
-              userIds,
-            );
-          } else {
-            Logger.log(`Stream ${id} ended with no participants to notify.`);
-          }
-        })
-        .catch((error) => {
-          Logger.error(
-            `Failed to trigger betting summary emails for stream ${id}`,
-            error,
-          );
-        });
-    }
-
-    return savedStream;
+    return this.streamsRepository.save(stream);
   }
 
   // Betting Variable Management
@@ -1716,14 +1688,12 @@ export class BettingService {
               winner.amount,
               winner.currencyType,
             ),
-            // Store win result in Redis instead of sending email immediately
-            this.notificationService.addWinResult(
-              bettingVariable.stream.id,
-              bettingVariable.stream.name,
+            this.notificationService.sendSMTPForWonBet(
               winner.userId,
-              winner.roundName,
+              bettingVariable.stream.name,
               winner.amount,
               winner.currencyType,
+              winner.roundName,
             ),
           ]);
 
@@ -1763,11 +1733,9 @@ export class BettingService {
                 bet.user?.username,
                 bet.round.roundName,
               ),
-              // Store loss result in Redis instead of sending email immediately
-              this.notificationService.addLossResult(
-                bettingVariable.stream.id,
-                bettingVariable.stream.name,
+              this.notificationService.sendSMTPForLossBet(
                 bet.userId,
+                bettingVariable.stream.name,
                 bet.round.roundName,
               ),
             ]);
@@ -1797,27 +1765,6 @@ export class BettingService {
             );
           }
         });
-      }
-
-      // Track all participants in this round for stream summary email
-      const roundUserIds = new Set([
-        ...winners.map((w) => w.userId),
-        ...losingBetsWithUserInfo.map((b) => b.userId),
-      ]);
-
-      if (roundUserIds.size > 0) {
-        // Add these users to the stream's participant set in Redis
-        await this.notificationService
-          .addStreamParticipants(
-            bettingVariable.stream.id,
-            Array.from(roundUserIds),
-          )
-          .catch((error) => {
-            Logger.error(
-              `Failed to track participants for stream ${bettingVariable.stream.id}`,
-              error,
-            );
-          });
       }
     } catch (error) {
       // Rollback transaction in case of any errors

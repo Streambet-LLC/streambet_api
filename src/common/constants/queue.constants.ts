@@ -9,3 +9,7 @@ export const SEND_EMAIL_JOB = 'send-mail';
 
 export const COINFLOW_WEBHOOK_QUEUE = `${prefix}COINFLOW_WEBHOOK`;
 export const QUEUE_COINFLOW_WEBHOOK = 'queue-coinflow-webhook';
+
+export const BET_RESULTS_QUEUE = `${prefix}BET_RESULTS`;
+export const TRACK_BET_RESULT_JOB = 'track-bet-result';
+export const SEND_STREAM_SUMMARY_JOB = 'send-stream-summary';

@@ -226,7 +226,7 @@ export class NotificationService {
           dashboardLink: `${dashboardLink}/betting-history`,
         },
       },
-      EmailType.BettingStreamSummary,
+      EmailType.BettingSummary,
     );
 
     Logger.log(`Betting summary email queued for user ${userId}`);

@@ -7,17 +7,21 @@ import {
   COINFLOW_WEBHOOK_QUEUE,
   EMAIL_QUEUE,
   STREAM_LIVE_QUEUE,
+  BET_RESULTS_QUEUE,
 } from 'src/common/constants/queue.constants';
 import { StreamLiveProcessor } from './processor/stream-live.processor';
 import { EmailProcessor } from './processor/email.processor';
 import { EmailsModule } from 'src/emails/email.module';
 import { CoinflowWebhookProcessor } from './processor/coinflow-webhook.processor';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { BetResultsProcessor } from './processor/bet-results.processor';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
     forwardRef(() => StreamModule),
     forwardRef(() => PaymentsModule),
+    UsersModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -71,10 +75,27 @@ import { PaymentsModule } from 'src/payments/payments.module';
           ),
         }),
       },
+      {
+        name: BET_RESULTS_QUEUE,
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService) => ({
+          name: BET_RESULTS_QUEUE,
+          defaultJobOptions: configService.get(
+            'queue.queues.betResults.defaultJobOptions',
+          ),
+        }),
+      },
     ),
     EmailsModule,
   ],
-  providers: [StreamLiveProcessor, QueueService, EmailProcessor, CoinflowWebhookProcessor],
+  providers: [
+    StreamLiveProcessor,
+    QueueService,
+    EmailProcessor,
+    CoinflowWebhookProcessor,
+    BetResultsProcessor,
+  ],
   exports: [QueueService],
 })
 export class QueueModule {}
