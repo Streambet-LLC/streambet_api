@@ -214,12 +214,12 @@ export class NotificationService {
     for (let i = 0; i < roundsData.length; i++) {
       try {
         const parsedRound = JSON.parse(roundsData[i]);
-        // Transform the stored format to match BettingRound interface
+        // Use stored format directly (already transformed)
         const round: BettingRound = {
           roundName: parsedRound.roundName,
-          status: parsedRound.won ? 'won' : 'lost',
+          status: parsedRound.status,
           amount: parsedRound.amount,
-          currencyType: parsedRound.currency === CurrencyType.GOLD_COINS ? 'Gold Coins' : 'Sweep Coins',
+          currencyType: parsedRound.currencyType,
           timestamp: typeof parsedRound.timestamp === 'string' 
             ? new Date(parsedRound.timestamp) 
             : parsedRound.timestamp,
@@ -257,7 +257,7 @@ export class NotificationService {
     const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
     const formattedRounds = summary.rounds.map(r => ({
       ...r,
-      currencyType: r.currencyType ? this.formatCurrencyType(r.currencyType) : undefined,
+      currencyType: r.currencyType, // Already formatted from storage
     }));
 
     await this.queueService.addEmailJob(
