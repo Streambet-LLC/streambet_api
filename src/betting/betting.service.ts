@@ -38,6 +38,7 @@ import { BettingGateway } from './betting.gateway';
 import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import { QueueService } from 'src/queue/queue.service';
 
 @Injectable()
 export class BettingService {
@@ -55,6 +56,7 @@ export class BettingService {
     private usersService: UsersService,
     private dataSource: DataSource,
     private readonly bettingGateway: BettingGateway,
+    private readonly queueService: QueueService,
     @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
     @Inject(forwardRef(() => StreamGateway))
@@ -1680,44 +1682,48 @@ export class BettingService {
       // Notify winners with their specific win message
       const winnerNotificationResults = await Promise.allSettled(
         winners.map(async (winner) => {
-          const notificationResults = await Promise.allSettled([
-            this.bettingGateway.emitBotMessageToWinner(
+          // Send bot message only (email will be in summary)
+          try {
+            await this.bettingGateway.emitBotMessageToWinner(
               winner.userId,
               winner.username,
               winner.roundName,
               winner.amount,
               winner.currencyType,
-            ),
-            this.notificationService.sendSMTPForWonBet(
-              winner.userId,
-              bettingVariable.stream.name,
-              winner.amount,
-              winner.currencyType,
-              winner.roundName,
-            ),
-          ]);
+            );
+          } catch (error) {
+            Logger.error(
+              `Failed to send bot message to winner ${winner.userId} (${winner.username})`,
+              error,
+            );
+          }
 
-          // Log any individual notification failures for this winner
-          notificationResults.forEach((result, notifIndex) => {
-            if (result.status === 'rejected') {
-              const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
-              Logger.error(
-                `Failed to send ${notifType} to winner ${winner.userId} (${winner.username})`,
-                result.reason,
-              );
-            }
-          });
-
-          return winner; // Return winner for outer error logging
+          return winner;
         }),
       );
 
-      // Log any failed winner notification batches (outer failures)
-      winnerNotificationResults.forEach((result, index) => {
+      // Track winner results in queue for summary email
+      const winnerTrackingResults = await Promise.allSettled(
+        winners.map((winner) =>
+          this.queueService.addBetResultJob({
+            userId: winner.userId,
+            streamId: bettingVariable.stream.id,
+            streamName: bettingVariable.stream.name,
+            roundName: winner.roundName,
+            won: true,
+            amount: winner.amount,
+            currency: winner.currencyType,
+            timestamp: new Date().toISOString(),
+          }),
+        ),
+      );
+
+      // Log any tracking failures
+      winnerTrackingResults.forEach((result, index) => {
         if (result.status === 'rejected') {
           const winner = winners[index];
           Logger.error(
-            `Failed to send winner notification batch to user ${winner.userId} (${winner.username})`,
+            `Failed to track bet result for winner ${winner.userId}`,
             result.reason,
           );
         }
@@ -1727,40 +1733,46 @@ export class BettingService {
       if (winningSweepCoinBets.length > 0 || winningGoldCoinBets.length > 0) {
         const loserNotificationResults = await Promise.allSettled(
           losingBetsWithUserInfo.map(async (bet) => {
-            const notificationResults = await Promise.allSettled([
-              this.bettingGateway.emitBotMessageToLoser(
+            // Send bot message only (email will be in summary)
+            try {
+              await this.bettingGateway.emitBotMessageToLoser(
                 bet.userId,
                 bet.user?.username,
                 bet.round.roundName,
-              ),
-              this.notificationService.sendSMTPForLossBet(
-                bet.userId,
-                bettingVariable.stream.name,
-                bet.round.roundName,
-              ),
-            ]);
+              );
+            } catch (error) {
+              Logger.error(
+                `Failed to send bot message to loser ${bet.userId} (${bet.user?.username})`,
+                error,
+              );
+            }
 
-            // Log any individual notification failures for this user
-            notificationResults.forEach((result, notifIndex) => {
-              if (result.status === 'rejected') {
-                const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
-                Logger.error(
-                  `Failed to send ${notifType} to loser ${bet.userId} (${bet.user?.username})`,
-                  result.reason,
-                );
-              }
-            });
-
-            return bet; // Return bet for outer error logging
+            return bet;
           }),
         );
 
-        // Log any failed loser notification batches (outer failures)
-        loserNotificationResults.forEach((result, index) => {
+        // Track loser results in queue for summary email
+        const loserTrackingResults = await Promise.allSettled(
+          losingBetsWithUserInfo.map((bet) =>
+            this.queueService.addBetResultJob({
+              userId: bet.userId,
+              streamId: bettingVariable.stream.id,
+              streamName: bettingVariable.stream.name,
+              roundName: bet.round.roundName,
+              won: false,
+              amount: bet.amount,
+              currency: bet.currency,
+              timestamp: new Date().toISOString(),
+            }),
+          ),
+        );
+
+        // Log any tracking failures
+        loserTrackingResults.forEach((result, index) => {
           if (result.status === 'rejected') {
             const bet = losingBetsWithUserInfo[index];
             Logger.error(
-              `Failed to send loser notification batch to user ${bet.userId} (${bet.user?.username})`,
+              `Failed to track bet result for loser ${bet.userId}`,
               result.reason,
             );
           }

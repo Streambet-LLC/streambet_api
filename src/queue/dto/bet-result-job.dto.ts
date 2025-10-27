@@ -8,7 +8,7 @@ export interface BetResultJobData {
   won: boolean;
   amount: number;
   currency: CurrencyType;
-  timestamp: Date;
+  timestamp: string; // ISO string for JSON serialization
 }
 
 export interface StreamSummaryJobData {

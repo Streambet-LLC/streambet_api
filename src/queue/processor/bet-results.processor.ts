@@ -156,10 +156,10 @@ export class BetResultsProcessor extends WorkerHost {
           streamName: summary.streamName,
           rounds: summary.rounds.map((r) => ({
             roundName: r.roundName,
-            won: r.won,
+            status: r.won ? 'won' : 'lost',
             amount: r.amount,
-            currency:
-              r.currency === CurrencyType.GOLD_COINS ? 'gold' : 'sweep',
+            currencyType:
+              r.currency === CurrencyType.GOLD_COINS ? 'Gold Coins' : 'Sweep Coins',
           })),
           dashboardLink: `${dashboardLink}/betting-history`,
         },
