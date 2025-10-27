@@ -13,3 +13,6 @@ export const QUEUE_COINFLOW_WEBHOOK = 'queue-coinflow-webhook';
 export const BET_RESULTS_QUEUE = `${prefix}BET_RESULTS`;
 export const TRACK_BET_RESULT_JOB = 'track-bet-result';
 export const SEND_STREAM_SUMMARY_JOB = 'send-stream-summary';
+
+// Redis key pattern for tracking bet result job IDs by stream
+export const STREAM_BET_JOBS_KEY = (streamId: string) => `stream_bet_jobs:${streamId}`;

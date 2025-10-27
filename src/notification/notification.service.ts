@@ -17,7 +17,7 @@ interface BettingRound {
   status: 'won' | 'lost';
   amount?: number;
   currencyType?: string;
-  timestamp: Date;
+  timestamp: string | Date; // Date object in memory, ISO string when serialized to/from Redis
 }
 
 /**
@@ -147,9 +147,10 @@ export class NotificationService {
       // Atomically append round result using RPUSH
       await redis.rpush(cacheKey, JSON.stringify(roundData));
       
-      // Extend TTL on each bet to keep data fresh as long as activity continues
+      // Extend rounds list and metadata TTL on each bet to keep data fresh as long as activity continues
       // This ensures the summary remains available throughout an active stream
       await redis.expire(cacheKey, ttl);
+      await redis.expire(metadataKey, ttl);
     } catch (e) {
       Logger.error(`Failed to add ${status} result to Redis`, e);
     }
@@ -196,9 +197,53 @@ export class NotificationService {
       return;
     }
 
+    // Parse metadata with error handling
+    let metadata: { streamName: string; timestamp: string };
+    try {
+      metadata = JSON.parse(metadataStr);
+    } catch (error) {
+      Logger.error(
+        `Failed to parse metadata for userId=${userId}, streamId=${streamId}, key=${metadataKey}`,
+        error instanceof Error ? error.message : String(error),
+      );
+      return;
+    }
+
+    // Parse rounds data with error handling for each entry
+    const rounds: BettingRound[] = [];
+    for (let i = 0; i < roundsData.length; i++) {
+      try {
+        const parsedRound = JSON.parse(roundsData[i]);
+        // Transform the stored format to match BettingRound interface
+        const round: BettingRound = {
+          roundName: parsedRound.roundName,
+          status: parsedRound.won ? 'won' : 'lost',
+          amount: parsedRound.amount,
+          currencyType: parsedRound.currency === CurrencyType.GOLD_COINS ? 'Gold Coins' : 'Sweep Coins',
+          timestamp: typeof parsedRound.timestamp === 'string' 
+            ? new Date(parsedRound.timestamp) 
+            : parsedRound.timestamp,
+        };
+        rounds.push(round);
+      } catch (error) {
+        Logger.error(
+          `Failed to parse round at index ${i} for cacheKey=${cacheKey}`,
+          error instanceof Error ? error.message : String(error),
+        );
+        // Skip corrupted entry and continue with valid ones
+      }
+    }
+
+    if (rounds.length === 0) {
+      Logger.log(`No valid rounds found for user ${userId} in stream ${streamId} after parsing`);
+      return;
+    }
+
     const summary: BettingSummary = {
-      ...JSON.parse(metadataStr),
-      rounds: roundsData.map(str => JSON.parse(str)),
+      streamId,
+      userId,
+      ...metadata,
+      rounds,
     };
 
     const receiver = await this.usersService.findUserByUserId(userId);

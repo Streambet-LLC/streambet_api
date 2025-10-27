@@ -16,12 +16,14 @@ import { CoinflowWebhookProcessor } from './processor/coinflow-webhook.processor
 import { PaymentsModule } from 'src/payments/payments.module';
 import { BetResultsProcessor } from './processor/bet-results.processor';
 import { UsersModule } from 'src/users/users.module';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
     forwardRef(() => StreamModule),
     forwardRef(() => PaymentsModule),
     UsersModule,
+    RedisModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

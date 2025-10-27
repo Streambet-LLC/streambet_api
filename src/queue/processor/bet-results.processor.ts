@@ -5,6 +5,7 @@ import {
   BET_RESULTS_QUEUE,
   TRACK_BET_RESULT_JOB,
   SEND_STREAM_SUMMARY_JOB,
+  STREAM_BET_JOBS_KEY,
 } from 'src/common/constants/queue.constants';
 import { QueueService } from '../queue.service';
 import { UsersService } from 'src/users/users.service';
@@ -16,6 +17,7 @@ import {
   UserBetSummary,
 } from '../dto/bet-result-job.dto';
 import { CurrencyType } from 'src/enums/currency.enum';
+import { RedisService } from 'src/redis/redis.service';
 
 @Injectable()
 @Processor(BET_RESULTS_QUEUE)
@@ -26,6 +28,7 @@ export class BetResultsProcessor extends WorkerHost {
     private readonly queueService: QueueService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {
     super();
   }
@@ -52,35 +55,62 @@ export class BetResultsProcessor extends WorkerHost {
     this.logger.log(`Processing betting summary for stream: ${streamId}`);
 
     try {
-      // 1. Get all bet result jobs for this stream
-      const queue = await this.queueService.getBetResultsQueue();
-      const allJobs = await queue.getJobs(['completed', 'waiting']);
-      const streamBetJobs = allJobs.filter(
-        (j) =>
-          j.name === TRACK_BET_RESULT_JOB && j.data.streamId === streamId,
-      );
+      // Get job IDs from Redis Set
+      const redis = this.redisService.getClient();
+      const streamJobsKey = STREAM_BET_JOBS_KEY(streamId);
+      const jobIds = await redis.smembers(streamJobsKey);
 
       this.logger.log(
-        `Found ${streamBetJobs.length} bet results for stream ${streamId}`,
+        `Found ${jobIds.length} tracked bet job IDs for stream ${streamId}`,
       );
 
-      if (streamBetJobs.length === 0) {
+      if (jobIds.length === 0) {
         this.logger.log(
           `No bet results found for stream ${streamId}, skipping email send`,
         );
         return;
       }
 
-      // 2. Aggregate by user
+      // Retrieve jobs from queue using tracked IDs
+      const queue = await this.queueService.getBetResultsQueue();
+      const jobPromises = jobIds.map((id) => queue.getJob(id));
+      const jobs = await Promise.all(jobPromises);
+
+      // Filter out null jobs (already removed) and ensure correct type
+      const streamBetJobs = jobs.filter(
+        (retrievedBetJob): retrievedBetJob is Job<BetResultJobData> =>
+          retrievedBetJob !== null &&
+          retrievedBetJob !== undefined &&
+          retrievedBetJob.name === TRACK_BET_RESULT_JOB &&
+          retrievedBetJob.data.streamId === streamId,
+      );
+
+      this.logger.log(
+        `Retrieved ${streamBetJobs.length} valid bet result jobs for stream ${streamId}`,
+      );
+
+      if (streamBetJobs.length === 0) {
+        this.logger.warn(
+          `All tracked jobs for stream ${streamId} were already removed or invalid`,
+        );
+        // Clean up the Redis set since jobs are gone
+        await redis.del(streamJobsKey);
+        return;
+      }
+
+      // Aggregate by user
       const userSummaries = this.aggregateByUser(streamBetJobs, streamName);
 
-      // 3. Queue email for each user
+      // Queue email for each user
       for (const summary of userSummaries.values()) {
         await this.queueUserSummaryEmail(summary);
       }
 
-      // 4. Clean up bet result jobs for this stream
-      await Promise.all(streamBetJobs.map((j) => j.remove()));
+      // Clean up bet result jobs for this stream
+      await Promise.all(streamBetJobs.map((retrievedBetJob) => retrievedBetJob.remove()));
+
+      // Clean up the Redis set
+      await redis.del(streamJobsKey);
 
       this.logger.log(
         `Successfully processed ${userSummaries.size} user summaries for stream ${streamId}`,

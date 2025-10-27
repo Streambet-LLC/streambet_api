@@ -39,6 +39,8 @@ import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants'
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
 import { QueueService } from 'src/queue/queue.service';
+import { RedisService } from 'src/redis/redis.service';
+import { STREAM_BET_JOBS_KEY } from 'src/common/constants/queue.constants';
 
 @Injectable()
 export class BettingService {
@@ -57,6 +59,7 @@ export class BettingService {
     private dataSource: DataSource,
     private readonly bettingGateway: BettingGateway,
     private readonly queueService: QueueService,
+    private readonly redisService: RedisService,
     @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
     @Inject(forwardRef(() => StreamGateway))
@@ -1703,9 +1706,13 @@ export class BettingService {
       );
 
       // Track winner results in queue for summary email
+      const redis = this.redisService.getClient();
+      const streamJobsKey = STREAM_BET_JOBS_KEY(bettingVariable.stream.id);
+      const ttl = 7 * 24 * 60 * 60; // 7 days in seconds
+
       const winnerTrackingResults = await Promise.allSettled(
-        winners.map((winner) =>
-          this.queueService.addBetResultJob({
+        winners.map(async (winner) => {
+          const job = await this.queueService.addBetResultJob({
             userId: winner.userId,
             streamId: bettingVariable.stream.id,
             streamName: bettingVariable.stream.name,
@@ -1714,8 +1721,14 @@ export class BettingService {
             amount: winner.amount,
             currency: winner.currencyType,
             timestamp: new Date().toISOString(),
-          }),
-        ),
+          });
+
+          // Store job ID in Redis set for this stream
+          await redis.sadd(streamJobsKey, job.id);
+          await redis.expire(streamJobsKey, ttl);
+
+          return job;
+        }),
       );
 
       // Log any tracking failures
@@ -1753,8 +1766,8 @@ export class BettingService {
 
         // Track loser results in queue for summary email
         const loserTrackingResults = await Promise.allSettled(
-          losingBetsWithUserInfo.map((bet) =>
-            this.queueService.addBetResultJob({
+          losingBetsWithUserInfo.map(async (bet) => {
+            const job = await this.queueService.addBetResultJob({
               userId: bet.userId,
               streamId: bettingVariable.stream.id,
               streamName: bettingVariable.stream.name,
@@ -1763,8 +1776,14 @@ export class BettingService {
               amount: bet.amount,
               currency: bet.currency,
               timestamp: new Date().toISOString(),
-            }),
-          ),
+            });
+
+            // Store job ID in Redis set for this stream
+            await redis.sadd(streamJobsKey, job.id);
+            await redis.expire(streamJobsKey, ttl);
+
+            return job;
+          }),
         );
 
         // Log any tracking failures

@@ -18,11 +18,12 @@
           "type": "array",
           "items": {
             "type": "object",
+            "required": ["roundName", "status", "amount", "currencyType"],
             "properties": {
               "roundName": { "type": "string" },
-              "won": { "type": "boolean" },
+              "status": { "type": "string" },
               "amount": { "type": "number" },
-              "currency": { "type": "string" }
+              "currencyType": { "type": "string" }
             }
           }
         },

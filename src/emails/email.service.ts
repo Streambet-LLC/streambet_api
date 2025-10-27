@@ -16,11 +16,15 @@ export class EmailsService {
 
   constructor(private configService: ConfigService) {
     const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
-    const nodeEnv = process.env.NODE_ENV;
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
     
     if (useMailHog) {
+      const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'mailhog';
+      const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT') || 1025;
+      const mailhogWebPort = 8025; 
+      
       this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
-      this.logger.log(`All emails will be captured by MailHog at http://localhost:8025`);
+      this.logger.log(`All emails will be captured by MailHog at http://${mailhogHost}:${mailhogWebPort}`);
     } else {
       this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
       this.logger.log(`Emails will be sent via AWS SES`);
@@ -112,9 +116,6 @@ export class EmailsService {
           port: mailhogPort,
           secure: false,
           ignoreTLS: true,
-          tls: {
-            rejectUnauthorized: false,
-          },
         });
       } else {
         // Production/Staging Mode: Use AWS SES
@@ -126,7 +127,7 @@ export class EmailsService {
         
         this.logger.debug('Production Mode: Using AWS SES');
 
-        transporter = await nodemailer.createTransport(
+        transporter = nodemailer.createTransport(
           sesTransport({
             accessKeyId,
             secretAccessKey,

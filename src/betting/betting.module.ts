@@ -15,6 +15,7 @@ import { BettingGateway } from './betting.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { QueueModule } from 'src/queue/queue.module';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { QueueModule } from 'src/queue/queue.module';
     forwardRef(() => WsModule),
     NotificationModule,
     QueueModule,
+    RedisModule,
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway],
