@@ -46,6 +46,11 @@ export class BetResultsProcessor extends WorkerHost {
       await this.processSummary(job);
       return;
     }
+
+    // Warn about unrecognized job types to catch misconfigurations
+    this.logger.warn(
+      `Unrecognized job type '${job.name}' (ID: ${job.id}) in ${BET_RESULTS_QUEUE}. Data: ${JSON.stringify(job.data)}`,
+    );
   }
 
   private async processSummary(
@@ -175,8 +180,19 @@ export class BetResultsProcessor extends WorkerHost {
         return;
       }
 
-      const dashboardLink =
-        this.configService.get<string>('email.HOST_URL') || '';
+      const dashboardHost = this.configService.get<string>('email.HOST_URL');
+
+      // Validate dashboard host config immediately to avoid sending emails with broken links
+      if (!dashboardHost || typeof dashboardHost !== 'string' || dashboardHost.trim() === '') {
+        this.logger.error(
+          `Missing or invalid config 'email.HOST_URL' while queuing summary email for user ${summary.userId} and stream ${summary.streamId}. Aborting email send. Please set the 'email.HOST_URL' configuration.`,
+        );
+        return; // Skip sending email to avoid broken dashboard links
+      }
+
+      // Normalize host (remove trailing slash) and build the dashboard link
+      const normalizedHost = dashboardHost.replace(/\/$/, '');
+      const dashboardLink = `${normalizedHost}/betting-history`;
 
       const emailData = {
         toAddress: [user.email],
@@ -188,8 +204,7 @@ export class BetResultsProcessor extends WorkerHost {
             roundName: r.roundName,
             status: r.won ? 'won' : 'lost',
             amount: r.amount,
-            currencyType:
-              r.currency === CurrencyType.GOLD_COINS ? 'Gold Coins' : 'Sweep Coins',
+            currencyType: this.getCurrencyLabel(r.currency),
           })),
           dashboardLink: `${dashboardLink}/betting-history`,
         },
@@ -203,6 +218,22 @@ export class BetResultsProcessor extends WorkerHost {
         error.stack,
       );
       // Don't throw - continue processing other users
+    }
+  }
+
+  private getCurrencyLabel(currency: CurrencyType): string {
+    switch (currency) {
+      case CurrencyType.GOLD_COINS:
+        return 'Gold Coins';
+      case CurrencyType.SWEEP_COINS:
+        return 'Sweep Coins';
+      case CurrencyType.STREAM_COINS:
+        return 'Stream Coins';
+      case CurrencyType.FREE_TOKENS:
+        return 'Free Tokens';
+      default:
+        this.logger.warn(`Unknown currency type: ${currency}`);
+        return 'Unknown';
     }
   }
 }
