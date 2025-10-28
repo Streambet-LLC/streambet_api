@@ -1479,11 +1479,10 @@ export class BettingService {
    */
   async declareWinner(variableId: string): Promise<void> {
     // Fetch the betting variable and associated round/stream
-    const winningBettingVariable =
-      await this.findBettingVariableById(variableId);
+    const bettingVariable = await this.findBettingVariableById(variableId);
 
     // Ensure the round is locked before declaring a winner
-    this.validateRoundLocked(winningBettingVariable);
+    this.validateRoundLocked(bettingVariable);
 
     // Begin a transactional scope to ensure atomic updates
     const queryRunner = this.dataSource.createQueryRunner();
@@ -1491,23 +1490,23 @@ export class BettingService {
     await queryRunner.startTransaction();
 
     try {
-      await this.markWinnerAndLosers(queryRunner, winningBettingVariable);
+      await this.markWinnerAndLosers(queryRunner, bettingVariable);
 
       // Fetch all active bets for this variable
       const allStreamBets = await this.fetchActiveBets(
         queryRunner,
-        winningBettingVariable,
+        bettingVariable,
       );
 
       // If there are no active bets, close the round and emit events
       if (!allStreamBets || allStreamBets.length === 0) {
         Logger.log('No active bets found for this round');
-        await this.closeRound(queryRunner, winningBettingVariable);
+        await this.closeRound(queryRunner, bettingVariable);
         await queryRunner.commitTransaction();
         this.bettingGateway.emitWinnerDeclared(
-          winningBettingVariable.stream.id,
-          winningBettingVariable.id,
-          winningBettingVariable.name,
+          bettingVariable.stream.id,
+          bettingVariable.id,
+          bettingVariable.name,
           [], // No winners
           [], // No losers
         );
@@ -1516,8 +1515,8 @@ export class BettingService {
       }
 
       const roundCalculation = await this.calculateRoundPayouts(
-        winningBettingVariable.id,
-        winningBettingVariable.round.id,
+        bettingVariable.id,
+        bettingVariable.round.id,
       );
 
       const refundAllGoldWinners = roundCalculation.gold.totalLosingBetCount == 0;
@@ -1543,7 +1542,7 @@ export class BettingService {
 
         const isSweep = betData.currency === "sweep_coins";
 
-        if (item.bettingVariableId === winningBettingVariable.id) {
+        if (item.bettingVariableId === bettingVariable.id) {
           betData.status = BetStatus.Won;
           isWon = true;
         }
@@ -1574,17 +1573,17 @@ export class BettingService {
       await this.processClosingBets(
         queryRunner,
         processedBets,
-        winningBettingVariable.round.roundName,
+        bettingVariable.round.roundName,
       );
 
       await this.platformPayoutService.recordPayout(
         queryRunner,
-        roundCalculation.sweep.round[winningBettingVariable.id].totalPlatformSplit,
-        winningBettingVariable,
+        roundCalculation.sweep.round[bettingVariable.id].totalPlatformSplit,
+        bettingVariable,
       );
 
       // Close the betting round
-      await this.closeRound(queryRunner, winningBettingVariable);
+      await this.closeRound(queryRunner, bettingVariable);
 
       // Fetch winning bets with user info to send notifications
       const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
@@ -1597,15 +1596,16 @@ export class BettingService {
         username: bet.user?.username,
         amount: bet?.payoutAmount,
         currencyType: bet?.currency,
-        roundName: winningBettingVariable?.round?.roundName,
+        roundName: bettingVariable?.round?.roundName,
         email: bet.user?.email,
       }));
 
-      // Fetch losing bets with user info
+      // Fetch losing bets with user info from OTHER betting variables only
       const losingBetsWithUserInfo = await queryRunner.manager.find(Bet, {
         where: {
-          roundId: winningBettingVariable.roundId,
+          roundId: bettingVariable.roundId,
           status: BetStatus.Lost,
+          bettingVariableId: Not(variableId) // Only bets on non-winning options
         },
         relations: ['user', 'bettingVariable', 'round'],
       });
@@ -1620,9 +1620,9 @@ export class BettingService {
 
       // Emit events for frontend and bot notifications
       this.bettingGateway.emitWinnerDeclared(
-        winningBettingVariable.stream.id,
-        winningBettingVariable.id,
-        winningBettingVariable.name,
+        bettingVariable.stream.id,
+        bettingVariable.id,
+        bettingVariable.name,
         winners,
         losers,
         {
@@ -1634,49 +1634,119 @@ export class BettingService {
       );
       this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
 
-      // Notify winners
-      for (const winner of winners) {
-        await this.bettingGateway.emitBotMessageForWinnerDeclaration(
-          winner.userId,
-          winner.username,
-          winningBettingVariable.name,
-        );
-        await this.bettingGateway.emitBotMessageToWinner(
-          winner.userId,
-          winner.username,
-          winner.roundName,
-          winner.amount,
-          winner.currencyType,
-        );
-        await this.notificationService.sendSMTPForWonBet(
-          winner.userId,
-          winningBettingVariable.stream.name,
-          winner.amount,
-          winner.currencyType,
-          winner.roundName,
-        );
-      }
+      // Send "Winner Declared" message to all participants (winners + losers) in parallel
+      // Using allSettled to ensure all notifications are attempted even if some fail
+      const allParticipants = [...winners, ...losers];
+      const winnerDeclarationResults = await Promise.allSettled(
+        allParticipants.map((participant) =>
+          this.bettingGateway.emitBotMessageForWinnerDeclaration(
+            participant.userId,
+            participant.username,
+            bettingVariable.name,
+          ),
+        ),
+      );
 
-      // Notify losers
-      losingBetsWithUserInfo.map(async (bet) => {
-        if (roundCalculation.gold.totalWinningBetCount > 0 || roundCalculation.sweep.totalWinningBetCount > 0) {
-          await this.bettingGateway.emitBotMessageForWinnerDeclaration(
-            bet.userId,
-            bet.user?.username,
-            winningBettingVariable.name,
-          );
-          await this.bettingGateway.emitBotMessageToLoser(
-            bet.userId,
-            bet.user?.username,
-            bet.round.roundName,
-          );
-          await this.notificationService.sendSMTPForLossBet(
-            bet.userId,
-            winningBettingVariable.stream.name,
-            bet.round.roundName,
+      // Log any failed "Winner Declared" notifications
+      winnerDeclarationResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const participant = allParticipants[index];
+          Logger.error(
+            `Failed to send "Winner Declared" notification to user ${participant.userId} (${participant.username})`,
+            result.reason,
           );
         }
       });
+
+      // Notify winners with their specific win message
+      const winnerNotificationResults = await Promise.allSettled(
+        winners.map(async (winner) => {
+          const notificationResults = await Promise.allSettled([
+            this.bettingGateway.emitBotMessageToWinner(
+              winner.userId,
+              winner.username,
+              winner.roundName,
+              winner.amount,
+              winner.currencyType,
+            ),
+            this.notificationService.sendSMTPForWonBet(
+              winner.userId,
+              bettingVariable.stream.name,
+              winner.amount,
+              winner.currencyType,
+              winner.roundName,
+            ),
+          ]);
+
+          // Log any individual notification failures for this winner
+          notificationResults.forEach((result, notifIndex) => {
+            if (result.status === 'rejected') {
+              const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+              Logger.error(
+                `Failed to send ${notifType} to winner ${winner.userId} (${winner.username})`,
+                result.reason,
+              );
+            }
+          });
+
+          return winner; // Return winner for outer error logging
+        }),
+      );
+
+      // Log any failed winner notification batches (outer failures)
+      winnerNotificationResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          const winner = winners[index];
+          Logger.error(
+            `Failed to send winner notification batch to user ${winner.userId} (${winner.username})`,
+            result.reason,
+          );
+        }
+      });
+
+      // Notify losers with their specific loss message
+      if (roundCalculation.gold.totalWinningBetCount > 0 || roundCalculation.sweep.totalWinningBetCount > 0) {
+        const loserNotificationResults = await Promise.allSettled(
+          losingBetsWithUserInfo.map(async (bet) => {
+            const notificationResults = await Promise.allSettled([
+              this.bettingGateway.emitBotMessageToLoser(
+                bet.userId,
+                bet.user?.username,
+                bet.round.roundName,
+              ),
+              this.notificationService.sendSMTPForLossBet(
+                bet.userId,
+                bettingVariable.stream.name,
+                bet.round.roundName,
+              ),
+            ]);
+
+            // Log any individual notification failures for this user
+            notificationResults.forEach((result, notifIndex) => {
+              if (result.status === 'rejected') {
+                const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+                Logger.error(
+                  `Failed to send ${notifType} to loser ${bet.userId} (${bet.user?.username})`,
+                  result.reason,
+                );
+              }
+            });
+
+            return bet; // Return bet for outer error logging
+          }),
+        );
+
+        // Log any failed loser notification batches (outer failures)
+        loserNotificationResults.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const bet = losingBetsWithUserInfo[index];
+            Logger.error(
+              `Failed to send loser notification batch to user ${bet.userId} (${bet.user?.username})`,
+              result.reason,
+            );
+          }
+        });
+      }
     } catch (error) {
       // Rollback transaction in case of any errors
       await queryRunner.rollbackTransaction();
@@ -2409,23 +2479,6 @@ export class BettingService {
         });
 
         if (roundWithStream && roundWithStream.streamId) {
-          // Ensure there are at least 2 active bets before locking
-          const similarBets = await this.betsRepository.find({
-            where: {
-              round: { id: roundId },
-              status: BetStatus.Active,
-            },
-            relations: ['round'],
-          });
-
-          if (similarBets.length <= 1) {
-            const message =
-              similarBets.length === 1
-                ? `Cannot lock the bet — only one user has placed a bet`
-                : `Cannot lock the bet — no user has placed a bet`;
-            throw new NotFoundException(message);
-          }
-
           // Update status and save
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);

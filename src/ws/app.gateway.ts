@@ -29,11 +29,11 @@ export class AppGateway
 {
   @WebSocketServer() server: Server;
 
-  // userId → Set<socketId> (tracks all active sockets for a user)
+  // username → Set<socketId> (tracks all active sockets for a user by username)
   userSocketMap = new Map<string, Set<string>>();
 
-  // socketId → userId (reverse lookup for disconnects)
-  private socketIdToUserId = new Map<string, string>();
+  // socketId → username (reverse lookup for userSocketMap cleanup)
+  private socketIdToUsername = new Map<string, string>();
 
   constructor(
     private readonly manager: GatewayManager,
@@ -100,6 +100,17 @@ export class AppGateway
 
       // Delegate tracking to central manager
       this.manager.registerConnection(client, userId);
+
+      // ALSO populate the userSocketMap for username-based lookups
+      const username = userData.username;
+      if (username) {
+        if (!this.userSocketMap.has(username)) {
+          this.userSocketMap.set(username, new Set());
+        }
+        this.userSocketMap.get(username)!.add(client.id);
+        // Store reverse mapping for cleanup
+        this.socketIdToUsername.set(client.id, username);
+      }
 
       Logger.log(
         `Client connected: ${client.id}, user: ${userData.username ?? 'unknown'}`,
@@ -181,19 +192,18 @@ export class AppGateway
    * Ensures memory cleanup on disconnect.
    */
   private cleanupSocket(client: Socket) {
-    // Find userId mapped to this socket
-    const userId = this.socketIdToUserId.get(client.id);
-    if (!userId) return;
-
-    // Remove socket from user’s active set
-    const sockets = this.userSocketMap.get(userId);
-    sockets?.delete(client.id);
-
-    // If no sockets remain for this user → remove user entry
-    if (sockets?.size === 0) {
-      this.userSocketMap.delete(userId);
+    // Cleanup username-based mapping
+    const username = this.socketIdToUsername.get(client.id);
+    if (username) {
+      const sockets = this.userSocketMap.get(username);
+      sockets?.delete(client.id);
+      if (sockets?.size === 0) {
+        this.userSocketMap.delete(username);
+      }
+      this.socketIdToUsername.delete(client.id);
     }
-    // Remove reverse mapping
+
+    // Remove from central manager
     this.manager.removeConnection(client);
   }
 }

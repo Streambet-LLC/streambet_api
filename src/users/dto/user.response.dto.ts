@@ -80,11 +80,19 @@ export class UserResponseDto {
   @ApiProperty({ example: false })
   isGoogleAccount: boolean;
 
+  @ApiProperty({ example: false })
+  isCreator: boolean;
+
   @ApiProperty({ example: UserRole.USER, enum: UserRole })
   role: UserRole;
 
   @ApiProperty({ example: '2025-06-13T10:50:04.593Z' })
   lastLogin: Date;
+
+  @ApiProperty({
+    description: 'Socials of the user',
+  })
+  socials: { [social: string]: string } | null;
 
   @ApiProperty({ example: true })
   tosAccepted: boolean;

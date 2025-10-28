@@ -35,6 +35,7 @@ type SocketWithGeo = Socket & { geo?: any };
  * @returns client IP string or null if not found
  */
 function getClientIp(client: Socket): string | null {
+  // prefer X-Forwarded-For (first ip), then X-Real-IP, then handshake/transport address
   const xff = client.handshake?.headers?.['x-forwarded-for'];
   if (Array.isArray(xff) && xff.length > 0) {
     return xff[0].split(',')[0].trim();
@@ -102,18 +103,17 @@ export class GeoFencingSocketGuard implements CanActivate {
       });
       return false;
     }
-
-    // --- VPN/Proxy block check ---
-    const blockVPN = this.config.get<string>('geo.blockVPN');
-    const isBlockVPN = blockVPN === 'true'; // Convert string to boolean
-    if (isBlockVPN && Boolean(loc?.isVpn)) {
-      this.logger.warn(`Socket blocked by VPN/proxy ip=${ip}`);
-      client.emit('error', {
-        message: 'Access from VPN/proxy is restricted',
-        isForcedLogout: true,
-      });
-      return false;
-    }
+    // // --- VPN/Proxy block check ---
+    // const blockVPN = this.config.get<string>('geo.blockVPN');
+    // const isBlockVPN = blockVPN === 'true'; // Convert string to boolean
+    // if (isBlockVPN && Boolean(loc?.isVpn)) {
+    //   this.logger.warn(`Socket blocked by VPN/proxy ip=${ip}`);
+    //   client.emit('error', {
+    //     message: 'Access from VPN/proxy is restricted',
+    //     isForcedLogout: true,
+    //   });
+    //   return false;
+    // }
 
     // --- Access allowed ---
     return true;
