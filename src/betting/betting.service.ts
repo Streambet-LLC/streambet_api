@@ -1725,11 +1725,19 @@ export class BettingService {
 
           // Store job ID in Redis set for this stream
           await redis.sadd(streamJobsKey, job.id);
-          await redis.expire(streamJobsKey, ttl);
 
           return job;
         }),
       );
+
+      // Collect successfully created job IDs and refresh TTL once
+      const successfulWinnerJobIds = winnerTrackingResults
+        .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+        .map((result) => result.value.id);
+
+      if (successfulWinnerJobIds.length > 0) {
+        await redis.expire(streamJobsKey, ttl);
+      }
 
       // Log any tracking failures
       winnerTrackingResults.forEach((result, index) => {
@@ -1780,11 +1788,19 @@ export class BettingService {
 
             // Store job ID in Redis set for this stream
             await redis.sadd(streamJobsKey, job.id);
-            await redis.expire(streamJobsKey, ttl);
 
             return job;
           }),
         );
+
+        // Collect successfully created job IDs and refresh TTL once
+        const successfulJobIds = loserTrackingResults
+          .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+          .map((result) => result.value.id);
+
+        if (successfulJobIds.length > 0) {
+          await redis.expire(streamJobsKey, ttl);
+        }
 
         // Log any tracking failures
         loserTrackingResults.forEach((result, index) => {

@@ -13,19 +13,40 @@ import { EmailPayloadDto } from './dto/email.dto';
 @Injectable()
 export class EmailsService {
   private readonly logger = new Logger(EmailsService.name);
+  private readonly transporter: any; // Reusable email transporter
 
   constructor(private configService: ConfigService) {
     const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
     const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
     
+    // Create transporter once during service initialization
     if (useMailHog) {
       const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'mailhog';
       const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT') || 1025;
-      const mailhogWebPort = 8025; 
+      const mailhogWebPort = 8025;
+      
+      this.transporter = nodemailer.createTransport({
+        host: mailhogHost,
+        port: mailhogPort,
+        secure: false,
+        ignoreTLS: true,
+      });
       
       this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
       this.logger.log(`All emails will be captured by MailHog at http://${mailhogHost}:${mailhogWebPort}`);
     } else {
+      const accessKeyId = this.configService.get<string>('email.SMTP_USER');
+      const secretAccessKey = this.configService.get<string>('email.SMTP_PASSWORD');
+      const region = this.configService.get<string>('email.SMTP_REGION');
+      
+      this.transporter = nodemailer.createTransport(
+        sesTransport({
+          accessKeyId,
+          secretAccessKey,
+          region,
+        }),
+      );
+      
       this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
       this.logger.log(`Emails will be sent via AWS SES`);
     }
@@ -102,41 +123,9 @@ export class EmailsService {
   async sendEmailFn(email, emailHTML) {
     try {
       const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
-      let transporter, send;
-
-      if (useMailHog) {
-        // Development Mode: Use MailHog
-        const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST');
-        const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT');
-        
-        this.logger.debug(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
-        
-        transporter = nodemailer.createTransport({
-          host: mailhogHost,
-          port: mailhogPort,
-          secure: false,
-          ignoreTLS: true,
-        });
-      } else {
-        // Production/Staging Mode: Use AWS SES
-        const accessKeyId = this.configService.get<string>('email.SMTP_USER');
-        const secretAccessKey = this.configService.get<string>(
-          'email.SMTP_PASSWORD',
-        );
-        const region = this.configService.get<string>('email.SMTP_REGION');
-        
-        this.logger.debug('Production Mode: Using AWS SES');
-
-        transporter = nodemailer.createTransport(
-          sesTransport({
-            accessKeyId,
-            secretAccessKey,
-            region,
-          }),
-        );
-      }
-
-      send = await transporter.sendMail({
+      
+      // Use the singleton transporter created in constructor
+      const send = await this.transporter.sendMail({
         from: {
           name: this.configService.getOrThrow('email.defaultName', {
             infer: true,

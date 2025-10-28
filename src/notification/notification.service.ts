@@ -198,7 +198,7 @@ export class NotificationService {
     }
 
     // Parse metadata with error handling
-    let metadata: { streamName: string; timestamp: string };
+    let metadata: { streamId: string; streamName: string; userId: string };
     try {
       metadata = JSON.parse(metadataStr);
     } catch (error) {
@@ -239,10 +239,12 @@ export class NotificationService {
       return;
     }
 
+    const { streamName } = metadata;
+
     const summary: BettingSummary = {
       streamId,
       userId,
-      ...metadata,
+      streamName,
       rounds,
     };
 
