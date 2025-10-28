@@ -12,7 +12,12 @@ export const SWEEP_COINS_PER_DOLLAR = 1;
 export const MIN_WITHDRAWABLE_SWEEP_COINS = 1;
 
 /**
- * The maximum allowed amount a user can place for a single bet.
+ * The maximum allowed amount a user can place for a single bet with sweep coins.
  * This is used as an upper limit to prevent oversized wagers.
  */
-export const MAX_AMOUNT_FOR_BETTING = 50;
+export const MAX_AMOUNT_FOR_BETTING = 100;
+
+/**
+ * The maximum allowed amount a user can place for a single bet with gold coins.
+ */
+export const MAX_GOLD_COINS_FOR_BETTING = 1000;
