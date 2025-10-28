@@ -30,7 +30,7 @@ import {
 } from '@nestjs/swagger';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CancelBetDto } from './dto/cancel-bet.dto';
-import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
+// import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import {
   BetHistoryFilterDto,
   BetHistoryResponseDto,
@@ -75,7 +75,7 @@ export class BettingController {
     description: 'List of streams retrieved successfully',
     type: [Stream],
   })
-  @UseGuards(GeoFencingGuard) // Guard to restrict access based on region or VPN usage
+  // @UseGuards(GeoFencingGuard) // Guard to restrict access based on region or VPN usage
   @Get('streams') // HTTP GET endpoint at /streams
   async findAllStreams(
     // Query param: includeEnded (defaults to false)
@@ -119,7 +119,7 @@ export class BettingController {
     type: Stream,
   })
   @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
-  @UseGuards(GeoFencingGuard) // Restricts access based on geo-fencing/VPN rules
+  // @UseGuards(GeoFencingGuard) // Restricts access based on geo-fencing/VPN rules
   @Get('streams/:id') // HTTP GET endpoint at /streams/:id
   async findStreamById(@Param('id') id: string): Promise<ApiResponse> {
     // Call the bettingService to fetch the stream by its ID
@@ -159,7 +159,7 @@ export class BettingController {
     type: [BettingVariable],
   })
   @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
-  @UseGuards(GeoFencingGuard) // Restricts access based on geo-fencing/VPN rules
+  // @UseGuards(GeoFencingGuard) // Restricts access based on geo-fencing/VPN rules
   @Get('streams/:id/betting-variables') // GET endpoint to fetch betting options for a specific stream
   async getStreamBets(@Param('id') id: string): Promise<ApiResponse> {
     // Call bettingService to fetch betting variables for the given stream ID
@@ -205,7 +205,7 @@ export class BettingController {
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @SwaggerApiResponse({ status: 403, description: 'Insufficient funds' })
   @ApiBearerAuth() // Requires JWT token in Authorization header
-  @UseGuards(JwtAuthGuard, GeoFencingGuard) // Authentication + Geo restrictions
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard) // Authentication + Geo restrictions
   @Post('place-bet') // POST endpoint at /place-bet
   async placeBet(
     @Request() req: RequestWithUser, // User info from JWT
@@ -251,7 +251,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 404, description: 'Bet not found' })
   @ApiBearerAuth() // Requires Bearer token authentication
-  @UseGuards(JwtAuthGuard, GeoFencingGuard) // Applies JWT and GeoFencing guards
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard) // Applies JWT and GeoFencing guards
   @Delete('bets/cancel')
   async cancelBet(
     @Request() req: RequestWithUser, // Extracts authenticated user from JWT
@@ -295,7 +295,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth() // Requires Bearer token authentication
-  @UseGuards(JwtAuthGuard, GeoFencingGuard) // Secured with JWT and geofencing
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard) // Secured with JWT and geofencing
   @Get('user-bets')
   async getUserBets(
     @Request() req: RequestWithUser, // Extracts authenticated user from request
@@ -334,7 +334,7 @@ export class BettingController {
    */
   @ApiOperation({ summary: 'Get Potential winning amount for a round' })
   @ApiBearerAuth() // Requires JWT Bearer token
-  @UseGuards(JwtAuthGuard, GeoFencingGuard) // Authentication + Geofencing
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard) // Authentication + Geofencing
   @Get('potentialAmount/:roundId')
   async findPotentialAmount(
     @Param('roundId') roundId: string, // Round ID from URL
@@ -454,7 +454,7 @@ export class BettingController {
     description: 'Insufficient funds',
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, GeoFencingGuard)
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard)
   @Patch('edit-bet')
   async editBet(
     @Request() req: RequestWithUser,

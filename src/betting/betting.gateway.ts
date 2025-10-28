@@ -5,7 +5,7 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
+// import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
 import { WsJwtGuard } from 'src/auth/guards/ws-jwt.guard';
 import {
   emitToClient,
@@ -73,7 +73,7 @@ export class BettingGateway {
     this.logger.log(`User ${username} joined room streambet`);
   }
 
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.LeaveStreamBet)
   async handleLeaveStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const username = client.data.user.username;
@@ -84,7 +84,7 @@ export class BettingGateway {
     // Notify the client or log for reference
     return { event: SocketEventName.LeaveStreamBet, data: { username } };
   }
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.PlaceBet)
   async handlePlaceBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -325,7 +325,8 @@ export class BettingGateway {
       );
     }
   }
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.CancelBet)
   async handleCancelBet(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -432,7 +433,8 @@ export class BettingGateway {
       });
     }
   }
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.EditBet)
   async handleEditBet(
     @ConnectedSocket() client: AuthenticatedSocket,

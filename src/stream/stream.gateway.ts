@@ -8,7 +8,7 @@ import {
 import { GatewayManager } from 'src/ws/gateway.manager';
 import { STREAM } from 'src/common/constants/ws.constants';
 import { AuthenticatedSocket } from 'src/interface/socket.interface';
-import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
+// import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
 import { WsJwtGuard } from 'src/auth/guards/ws-jwt.guard';
 import { emitToStream, emitToStreamBet } from 'src/common/common';
 import { ChatType, SocketEventName } from 'src/enums/socket.enum';
@@ -250,7 +250,9 @@ export class StreamGateway {
   /**
    * Handles a user leaving a stream.
    */
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+}
+
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.LeaveStream)
   async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,

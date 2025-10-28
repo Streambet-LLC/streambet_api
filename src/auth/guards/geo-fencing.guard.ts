@@ -68,9 +68,9 @@ export class GeoFencingGuard implements CanActivate {
     //   Logger.warn(`Blocked VPN/proxy ip=${ip}`);
     //   throw new ForbiddenException({
     //     message: 'Access from VPN/proxy is restricted',
-        isForcedLogout: true,
-      });
-    }
+    //     isForcedLogout: true,
+    //   });
+    // }
 
     // All checks passed, allow request
     return true;
