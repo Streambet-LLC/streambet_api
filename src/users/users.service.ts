@@ -21,7 +21,7 @@ import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   MIN_WITHDRAWABLE_SWEEP_COINS,
   SWEEP_COINS_PER_DOLLAR,
-  MAX_AMOUNT_FOR_BETTING,
+  MAX_SWEEP_COINS_FOR_BETTING,
   MAX_GOLD_COINS_FOR_BETTING,
 } from 'src/common/constants/currency.constants';
 import { UserRole } from 'src/enums/user-role.enum';
@@ -63,7 +63,7 @@ export class UsersService {
         ...sanitizedUser,
         minWithdrawableSweepCoins: MIN_WITHDRAWABLE_SWEEP_COINS,
         sweepCoinsPerDollar: SWEEP_COINS_PER_DOLLAR,
-        maxSweepCoinsBet: MAX_AMOUNT_FOR_BETTING,
+        maxSweepCoinsBet: MAX_SWEEP_COINS_FOR_BETTING,
         maxGoldCoinsBet: MAX_GOLD_COINS_FOR_BETTING,
         walletBalanceGoldCoin: Number(user.wallet?.goldCoins ?? 0),
         walletBalanceSweepCoin: Number(user.wallet?.sweepCoins ?? 0),

@@ -36,7 +36,7 @@ import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { StreamGateway } from 'src/stream/stream.gateway';
 import { BettingGateway } from './betting.gateway';
 import {
-  MAX_AMOUNT_FOR_BETTING,
+  MAX_SWEEP_COINS_FOR_BETTING,
   MAX_GOLD_COINS_FOR_BETTING,
 } from 'src/common/constants/currency.constants';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
@@ -933,11 +933,11 @@ export class BettingService {
   private enforceMax(amount: number, currencyType: CurrencyType) {
     // Validate sweep coins
     if (
-      amount > MAX_AMOUNT_FOR_BETTING &&
+      amount > MAX_SWEEP_COINS_FOR_BETTING &&
       currencyType === CurrencyType.SWEEP_COINS
     ) {
       throw new BadRequestException(
-        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_AMOUNT_FOR_BETTING.toLocaleString(
+        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_SWEEP_COINS_FOR_BETTING.toLocaleString(
           'en-US',
         )}. Your bet amount of ${amount.toLocaleString(
           'en-US',
