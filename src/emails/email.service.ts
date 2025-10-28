@@ -14,6 +14,8 @@ import { EmailPayloadDto } from './dto/email.dto';
 export class EmailsService {
   private readonly logger = new Logger(EmailsService.name);
   private readonly transporter: any; // Reusable email transporter
+  private readonly mailhogHost?: string;
+  private readonly mailhogWebPort?: number;
 
   constructor(private configService: ConfigService) {
     const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
@@ -23,7 +25,11 @@ export class EmailsService {
     if (useMailHog) {
       const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'mailhog';
       const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT') || 1025;
-      const mailhogWebPort = 8025;
+      const mailhogWebPort = this.configService.get<number>('email.MAILHOG_WEB_PORT') || 8025;
+      
+      // Store for logging purposes
+      this.mailhogHost = mailhogHost;
+      this.mailhogWebPort = mailhogWebPort;
       
       this.transporter = nodemailer.createTransport({
         host: mailhogHost,
@@ -143,7 +149,9 @@ export class EmailsService {
 
       if (send) {
         if (useMailHog) {
-          this.logger.log(`Email sent to MailHog - View at http://localhost:8025`);
+          const host = this.mailhogHost || 'localhost';
+          const webPort = this.mailhogWebPort || 8025;
+          this.logger.log(`Email sent to MailHog - View at http://${host}:${webPort}`);
         } else {
           this.logger.log('Email sent successfully via AWS SES');
         }

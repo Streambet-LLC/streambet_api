@@ -7,6 +7,7 @@ export default registerAs('email', () => ({
   // MailHog Configuration (Development)
   MAILHOG_HOST: process.env.MAILHOG_HOST || 'mailhog',
   MAILHOG_PORT: parseInt(process.env.MAILHOG_PORT || '1025', 10),
+  MAILHOG_WEB_PORT: parseInt(process.env.MAILHOG_WEB_PORT || '8025', 10),
   
   // AWS SES Configuration (Production/Staging)
   SMTP_USER: process.env.AWS_SMTP_USER,

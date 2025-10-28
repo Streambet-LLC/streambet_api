@@ -15,4 +15,4 @@ export const TRACK_BET_RESULT_JOB = 'track-bet-result';
 export const SEND_STREAM_SUMMARY_JOB = 'send-stream-summary';
 
 // Redis key pattern for tracking bet result job IDs by stream
-export const STREAM_BET_JOBS_KEY = (streamId: string) => `stream_bet_jobs:${streamId}`;
+export const STREAM_BET_JOBS_KEY = (streamId: string) => `${prefix}stream_bet_jobs:${streamId}`;
