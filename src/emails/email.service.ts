@@ -99,11 +99,13 @@ export class EmailsService {
     try {
       const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
       let transporter, send;
+      let mailhogHost: string;
+      let mailhogPort: number;
 
       if (useMailHog) {
         // Development Mode: Use MailHog
-        const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST');
-        const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT');
+        mailhogHost = this.configService.get<string>('email.MAILHOG_HOST');
+        mailhogPort = this.configService.get<number>('email.MAILHOG_PORT');
         
         this.logger.debug(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
         
@@ -153,7 +155,7 @@ export class EmailsService {
 
       if (send) {
         if (useMailHog) {
-          this.logger.log(`Email sent to MailHog - View at http://localhost:8025`);
+          this.logger.log(`Email sent to MailHog - View at http://${mailhogHost}:${mailhogPort}`);
         } else {
           this.logger.log('Email sent successfully via AWS SES');
         }

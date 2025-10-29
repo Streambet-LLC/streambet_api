@@ -30,11 +30,11 @@
           },
           "amount": {
             "type": "number",
-            "description": "The amount won (optional, only for wins)"
+            "description": "The amount associated with the round (optional, present for wins and losses where applicable)"
           },
           "currencyType": {
             "type": "string",
-            "description": "The currency type (optional, only for wins)"
+            "description": "The currency type for the amount (optional, present for wins and losses where applicable)"
           }
         }
       }

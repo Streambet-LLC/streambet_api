@@ -425,15 +425,22 @@ export class NotificationService {
     amount?: number,
     currencyType?: string,
   ): Promise<void> {
-    // Validate win results
-    if (status === 'won') {
-      const numAmount = Number(amount);
-      if (!amount || isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0) {
-        Logger.warn(`Invalid win amount for user ${userId}: ${amount}`);
+    // Validate both win and loss results to prevent storing invalid data
+    if (status === 'won' || status === 'lost') {
+      // Check that amount is present before converting to Number
+      if (amount === undefined || amount === null) {
+        Logger.warn(`Missing amount for user ${userId} with status ${status}`);
         return;
       }
+
+      const numAmount = Number(amount);
+      if (isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0) {
+        Logger.warn(`Invalid amount for user ${userId} with status ${status}: ${amount}`);
+        return;
+      }
+
       if (!currencyType?.trim()) {
-        Logger.warn(`Missing currencyType for user ${userId}`);
+        Logger.warn(`Missing currencyType for user ${userId} with status ${status}`);
         return;
       }
     }
