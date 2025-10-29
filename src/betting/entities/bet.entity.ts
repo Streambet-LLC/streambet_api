@@ -51,6 +51,15 @@ export class Bet extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 3, nullable: true })
   payoutAmount: number;
 
+  @Column({
+    name: 'refund_amount',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  refundAmount: number;
+
   @Column({ type: 'timestamp', nullable: true })
   processedAt: Date;
 
