@@ -35,11 +35,11 @@ export class PlatformPayoutService {
       where: { id: winningOption.streamId },
     });
 
-    const creatorAssigned = await this.userRepository.findOne({
-      where: {
-        id: stream.creatorId ?? '',
-      },
-    });
+    const creatorAssigned = stream.creatorId
+      ? await this.userRepository.findOne({
+          where: { id: stream.creatorId },
+        })
+      : null;
 
     let platformPayout = payoutAmount;
     let creatorPayout = 0;
