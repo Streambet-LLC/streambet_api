@@ -1,11 +1,12 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
   "type": "object",
   "required": ["streamName", "fullName", "rounds", "dashboardLink"],
   "properties": {
     "streamName": {
       "type": "string",
-      "description": "The name of the betting stream"
+      "description": "The name of the stream"
     },
     "fullName": {
       "type": "string",
@@ -13,14 +14,14 @@
     },
     "rounds": {
       "type": "array",
-      "description": "Array of betting rounds with results",
+      "description": "Array of Pick rounds with results",
       "items": {
         "type": "object",
         "required": ["roundName", "status"],
         "properties": {
           "roundName": {
             "type": "string",
-            "description": "The name of the betting round"
+            "description": "The name of the Pick round"
           },
           "status": {
             "type": "string",
@@ -40,7 +41,7 @@
     },
     "dashboardLink": {
       "type": "string",
-      "description": "Link to the user's betting history dashboard"
+      "description": "Link to the user's Pick history dashboard"
     }
   }
 }

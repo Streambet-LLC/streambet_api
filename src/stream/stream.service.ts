@@ -741,7 +741,7 @@ END
       })
       .catch((error) => {
         Logger.error(
-          `Failed to send betting summary emails for stream ${streamId}`,
+          `Failed to send Pick summary emails for stream ${streamId}`,
           error,
         );
       });

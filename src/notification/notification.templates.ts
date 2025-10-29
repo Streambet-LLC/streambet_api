@@ -106,6 +106,6 @@ export const NOTIFICATION_TEMPLATE = {
     TITLE: () => `Gold Coins Added to Your Account`,
   },
   EMAIL_BETTING_SUMMARY: {
-    TITLE: ({ streamName }) => `Your Betting Summary for ${streamName}`,
+    TITLE: ({ streamName }) => `Your Pick Summary for ${streamName}`,
   },
 };

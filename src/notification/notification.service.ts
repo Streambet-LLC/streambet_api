@@ -461,7 +461,7 @@ export class NotificationService {
       await redis.expire(metadataKey, ttl);
     } catch (error) {
       Logger.error(
-        `Failed to add betting result for user ${userId} in stream ${streamId} (status: ${status})`,
+        `Failed to add Pick result for user ${userId} in stream ${streamId} (status: ${status})`,
         error,
       );
       throw error;
@@ -517,7 +517,7 @@ export class NotificationService {
       rounds = roundsStr.map((r) => JSON.parse(r));
     } catch (error) {
       Logger.error(
-        `Corrupted betting data found for user ${userId} in stream ${streamId} - cleaning up`,
+        `Corrupted Pick data found for user ${userId} in stream ${streamId} - cleaning up`,
         error,
       );
       // Clean up corrupted data
@@ -564,7 +564,7 @@ export class NotificationService {
       await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]);
     } catch (error) {
       Logger.error(
-        `Failed to queue betting summary email for user ${userId} in stream ${streamId} - data preserved for retry`,
+        `Failed to queue Pick summary email for user ${userId} in stream ${streamId} - data preserved for retry`,
         error,
       );
       throw error;
