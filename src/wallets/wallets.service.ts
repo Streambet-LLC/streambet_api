@@ -31,7 +31,7 @@ export class WalletsService {
     private transactionsRepository: Repository<Transaction>,
     private dataSource: DataSource,
     private walletGateway: WalletGateway,
-  ) {}
+  ) { }
 
   /**
    * Create a wallet for a user with initial balance.
@@ -205,6 +205,25 @@ export class WalletsService {
       amount,
       currencyType,
       TransactionType.BET_WON,
+      description,
+      undefined,
+      undefined,
+      manager,
+    );
+  }
+
+  async creditPayout(
+    userId: string,
+    amount: number,
+    currencyType: CurrencyType,
+    description: string,
+    manager?: EntityManager,
+  ): Promise<Wallet> {
+    return this.updateBalance(
+      userId,
+      amount,
+      currencyType,
+      TransactionType.CREATOR_PAYOUT,
       description,
       undefined,
       undefined,
