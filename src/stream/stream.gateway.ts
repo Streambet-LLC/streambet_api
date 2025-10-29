@@ -247,22 +247,19 @@ export class StreamGateway {
     }
   }
 
-  /**
-   * Handles a user leaving a stream.
-   */
-}
-
-  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage(SocketEventName.LeaveStream)
   async handleLeaveStream(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() streamId: string,
   ) {
     try {
+      const userId = client.data.user.sub;
       const roomName = `${STREAM}${streamId}`;
       client.leave(roomName);
 
-      this.removeViewer(streamId, client.data.user.sub);
+      await this.redisViewerService.removeConnection(streamId, userId);
+      this.removeViewer(streamId, userId);
 
       if (client.data?.meta?.streamId === streamId) {
         delete client.data.meta;
@@ -277,6 +274,7 @@ export class StreamGateway {
       );
     }
   }
+
   /**
    * Emits a stream list update event to all clients in the 'streambet' room.
    *
@@ -288,7 +286,7 @@ export class StreamGateway {
    * 3. Logs the emission for debugging purposes.
    * 4. Catches and logs any errors during the emit process.
    */
-  emitStreamListEvent(event: StreamList) {
+  public emitStreamListEvent(event: StreamList) {
     try {
       // Prepare the payload with the updated stream list
       const payload = { event };
