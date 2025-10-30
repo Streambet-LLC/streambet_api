@@ -29,6 +29,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
@@ -54,6 +55,7 @@ export class BettingService {
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
     private notificationService: NotificationService,
+    private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
     private platformPayoutService: PlatformPayoutService,
     private dataSource: DataSource,
@@ -1669,7 +1671,7 @@ export class BettingService {
               winner.amount,
               winner.currencyType,
             ),
-            this.notificationService.addWinResult(
+            this.bettingSummaryService.addWinResult(
               bettingVariable.stream.id,
               bettingVariable.stream.name,
               winner.userId,
@@ -1715,7 +1717,7 @@ export class BettingService {
                 bet.user?.username,
                 bet.round.roundName,
               ),
-              this.notificationService.addLossResult(
+              this.bettingSummaryService.addLossResult(
                 bettingVariable.stream.id,
                 bettingVariable.stream.name,
                 bet.userId,
@@ -1759,7 +1761,7 @@ export class BettingService {
       ];
 
       if (participants.length > 0) {
-        await this.notificationService
+        await this.bettingSummaryService
           .addStreamParticipants(bettingVariable.stream.id, participants)
           .catch((error) =>
             Logger.error(

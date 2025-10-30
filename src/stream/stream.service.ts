@@ -26,6 +26,7 @@ import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
@@ -51,6 +52,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private streamGateway: StreamGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
+    private bettingSummaryService: BettingSummaryService,
     private notificationService: NotificationService,
   ) { }
   async onModuleDestroy() {
@@ -729,7 +731,7 @@ END
     this.streamGateway.emitStreamEnd(streamId);
 
     // Send betting summary emails when stream ends (non-blocking)
-    this.notificationService
+    this.bettingSummaryService
       .getStreamParticipants(streamId)
       .then((userIds) => {
         if (userIds.length > 0) {

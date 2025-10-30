@@ -5,6 +5,7 @@ import { BettingRound } from './entities/betting-round.entity';
 import { Bet } from './entities/bet.entity';
 import { BettingService } from './betting.service';
 import { BettingController } from './betting.controller';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 import { WalletsModule } from '../wallets/wallets.module';
 import { UsersModule } from '../users/users.module';
 import { Stream } from 'src/stream/entities/stream.entity';
@@ -29,7 +30,7 @@ import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module
     PlatformPayoutModule,
   ],
   controllers: [BettingController],
-  providers: [BettingService, BettingGateway],
-  exports: [BettingService, BettingGateway],
+  providers: [BettingService, BettingGateway, BettingSummaryService],
+  exports: [BettingService, BettingGateway, BettingSummaryService],
 })
 export class BettingModule { }
