@@ -730,7 +730,7 @@ END
     // Emit stream end socket event
     this.streamGateway.emitStreamEnd(streamId);
 
-    // Send betting summary emails when stream ends (non-blocking)
+    // Send aggregated betting summary emails to all participants (non-blocking)
     this.bettingSummaryService
       .getStreamParticipants(streamId)
       .then((userIds) => {

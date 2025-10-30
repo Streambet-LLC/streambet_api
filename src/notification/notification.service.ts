@@ -1,5 +1,5 @@
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from 'src/users/users.service';
 import { NOTIFICATION_TEMPLATE } from './notification.templates';
@@ -16,7 +16,6 @@ export class NotificationService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly queueService: QueueService,
-    @Inject(forwardRef(() => BettingSummaryService))
     private readonly bettingSummaryService: BettingSummaryService,
   ) {}
 
@@ -254,6 +253,15 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Sends betting summary emails to all participants when a stream ends.
+   * Aggregates all bet results from Redis and sends a single summary email per user.
+   * Cleans up participant tracking after all email attempts complete.
+   *
+   * @param streamId - The ID of the stream that ended
+   * @param userIds - Array of user IDs who participated in betting on this stream
+   * @returns Promise<void> - Resolves when all emails have been attempted and cleanup is complete
+   */
   async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
     await Promise.allSettled(
       userIds.map((userId) => this.sendUserBettingSummary(streamId, userId)),
@@ -261,6 +269,17 @@ export class NotificationService {
     await this.bettingSummaryService.clearStreamParticipants(streamId);
   }
 
+  /**
+   * Sends a betting summary email for a single user.
+   * Retrieves aggregated bet results from Redis and queues the summary email.
+   * Only deletes Redis data after successful email queuing to preserve data for retry on failure.
+   * Checks user notification preferences and skips sending to test/demo emails.
+   *
+   * @param streamId - The ID of the stream
+   * @param userId - The user ID to send summary to
+   * @returns Promise<void> - Resolves when email is queued or skipped
+   * @throws Error if email queuing fails (preserves Redis data for retry)
+   */
   private async sendUserBettingSummary(streamId: string, userId: string): Promise<void> {
     const summary = await this.bettingSummaryService.getBettingSummary(streamId, userId);
     if (!summary) return;
@@ -298,7 +317,6 @@ export class NotificationService {
         `Failed to queue Pick summary email for user ${userId} in stream ${streamId} - data preserved for retry`,
         error,
       );
-      throw error;
     }
   }
 }

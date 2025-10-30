@@ -1660,7 +1660,7 @@ export class BettingService {
         }
       });
 
-      // Notify winners and store results in Redis
+      // Notify winners via bot and store results in Redis for summary email
       const winnerNotificationResults = await Promise.allSettled(
         winners.map(async (winner) => {
           const notificationResults = await Promise.allSettled([
@@ -1682,7 +1682,7 @@ export class BettingService {
             ),
           ]);
 
-          // Log any individual notification failures for this winner
+          // Log any individual failures (bot notification or Redis storage)
           notificationResults.forEach((result, notifIndex) => {
             if (result.status === 'rejected') {
               const notifType = notifIndex === 0 ? 'bot message' : 'Redis storage';
@@ -1708,7 +1708,7 @@ export class BettingService {
         }
       });
 
-      // Notify losers and store results in Redis
+      // Notify losers via bot and store results in Redis for summary email
       if (roundCalculation.gold.totalWinningBetCount > 0 || roundCalculation.sweep.totalWinningBetCount > 0) {
         const loserNotificationResults = await Promise.allSettled(
           losingBetsWithUserInfo.map(async (bet) => {
@@ -1756,7 +1756,7 @@ export class BettingService {
         });
       }
 
-      // Track all participants
+      // Track all participants for this stream to send summary emails when stream ends
       const participants = [
         ...winners.map((w) => w.userId),
         ...losingBetsWithUserInfo.map((b) => b.userId),

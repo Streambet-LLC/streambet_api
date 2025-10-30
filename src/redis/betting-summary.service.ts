@@ -17,6 +17,17 @@ export interface BettingSummary {
   rounds: BettingRound[];
 }
 
+/**
+ * Service for managing betting result summaries stored in Redis.
+ * 
+ * Architecture:
+ * - Individual bet results (wins/losses) are stored in Redis during round calculations
+ * - Data is aggregated per user per stream
+ * - When a stream ends, summary emails are sent and Redis data is cleaned up
+ * - TTL of 7 days ensures data doesn't persist indefinitely if email sending fails
+ * 
+ * This replaces the previous approach of sending individual emails for each bet result.
+ */
 @Injectable()
 export class BettingSummaryService {
   private readonly logger = new Logger(BettingSummaryService.name);
@@ -30,6 +41,11 @@ export class BettingSummaryService {
     return this.BETTING_SUMMARY_TTL_DAYS * 24 * 60 * 60;
   }
 
+  /**
+   * Adds user IDs to the set of stream participants tracked in Redis.
+   * @param streamId - The stream ID
+   * @param userIds - Array of user IDs who participated in betting
+   */
   async addStreamParticipants(
     streamId: string,
     userIds: string[],
@@ -47,6 +63,11 @@ export class BettingSummaryService {
     }
   }
 
+  /**
+   * Retrieves all user IDs who participated in betting for a stream.
+   * @param streamId - The stream ID
+   * @returns Array of user IDs
+   */
   async getStreamParticipants(streamId: string): Promise<string[]> {
     try {
       const redis = this.redisService.getClient();
@@ -58,6 +79,11 @@ export class BettingSummaryService {
     }
   }
 
+  /**
+   * Clears the participant tracking for a stream (cleanup operation).
+   * Does not throw errors as this is a non-critical cleanup operation.
+   * @param streamId - The stream ID
+   */
   async clearStreamParticipants(streamId: string): Promise<void> {
     try {
       const redis = this.redisService.getClient();
@@ -68,6 +94,17 @@ export class BettingSummaryService {
     }
   }
 
+  /**
+   * Stores a betting result (win or loss) in Redis for later summary email generation.
+   * Validates amount and currency type before storing. Invalid data is logged and skipped.
+   * @param streamId - The stream ID
+   * @param streamName - The stream name
+   * @param userId - The user ID
+   * @param roundName - The betting round name
+   * @param status - Result status ('won' or 'lost')
+   * @param amount - The bet amount
+   * @param currencyType - The currency type
+   */
   async addBettingResult(
     streamId: string,
     streamName: string,
@@ -127,6 +164,13 @@ export class BettingSummaryService {
     }
   }
 
+  /**
+   * Retrieves and formats the betting summary for a user in a stream.
+   * Handles corrupted data by cleaning it up and returning null.
+   * @param streamId - The stream ID
+   * @param userId - The user ID
+   * @returns Betting summary with formatted currency types, or null if no data exists
+   */
   async getBettingSummary(streamId: string, userId: string): Promise<BettingSummary | null> {
     const redis = this.redisService.getClient();
     const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
@@ -179,6 +223,12 @@ export class BettingSummaryService {
     }
   }
 
+  /**
+   * Deletes the betting summary data for a user in a stream.
+   * Called after successfully queuing the summary email.
+   * @param streamId - The stream ID
+   * @param userId - The user ID
+   */
   async deleteBettingSummary(streamId: string, userId: string): Promise<void> {
     const redis = this.redisService.getClient();
     const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
