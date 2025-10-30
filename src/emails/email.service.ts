@@ -105,8 +105,8 @@ export class EmailsService {
 
       if (useMailHog) {
         // Development Mode: Use MailHog
-        mailhogHost = this.configService.get<string>('email.MAILHOG_HOST');
-        mailhogPort = this.configService.get<number>('email.MAILHOG_PORT');
+        mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') ?? 'localhost';
+        mailhogPort = Number(this.configService.get<number>('email.MAILHOG_PORT') ?? 8025);
         
         this.logger.debug(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
         
@@ -161,7 +161,7 @@ export class EmailsService {
           this.logger.log('Email sent successfully via AWS SES');
         }
         return {
-          message: 'Email sent successfully ',
+          message: 'Email sent successfully',
           statusCode: HttpStatus.OK,
         };
       }
