@@ -26,7 +26,7 @@ import {
 } from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
-import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
+// import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
 
 // Define the request type with user property
@@ -70,7 +70,7 @@ Pass "pagination=false" to retrieve all matching streams without pagination. \
 Returns essential fields (id, name, status, viewerCount) along with derived values such as bettingRoundStatus and userBetCount.',
   })
   @ApiOkResponse({ type: LiveScheduledStreamListDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get()
   async getScheduledAndLiveStreams(
     @Query() liveScheduledStreamListDto: LiveScheduledStreamListDto,
@@ -105,7 +105,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
   @ApiOkResponse({ type: StreamFilterDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('home')
   async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
     const { total, data } =
@@ -157,7 +157,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     description: 'Stream details retrieved successfully.',
     type: StreamResponseDto,
   })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('/:id')
   async findStreamById(@Param('id') id: string): Promise<StreamResponseDto> {
     const stream = await this.streamService.findStreamById(id);
@@ -173,7 +173,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     status: 200,
     description: 'Stream details retrieved successfully',
   })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('bet-round/:streamId')
   async findBetRoundDetailsByStreamId(
     @Param('streamId') streamId: string,
