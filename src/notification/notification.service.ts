@@ -254,8 +254,6 @@ export class NotificationService {
     }
   }
 
-  // ==================== Betting Summary Email Methods ====================
-
   async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
     await Promise.allSettled(
       userIds.map((userId) => this.sendUserBettingSummary(streamId, userId)),

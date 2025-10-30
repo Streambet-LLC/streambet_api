@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
-import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
+import { formatCurrencyType } from 'src/common/utils/currency-utils';
 
 export interface BettingRound {
   roundName: string;
   status: 'won' | 'lost';
-  amount?: number;
-  currencyType?: string;
+  amount: number;
+  currencyType: string;
   timestamp: Date;
 }
 
@@ -25,12 +25,6 @@ export class BettingSummaryService {
   private readonly BETTING_SUMMARY_TTL_DAYS = 7;
 
   constructor(private readonly redisService: RedisService) {}
-
-  private formatCurrencyType(currencyType: string): string {
-    return currencyType === CurrencyType.GOLD_COINS
-      ? CurrencyTypeText.GOLD_COINS_TEXT
-      : CurrencyTypeText.SWEEP_COINS_TEXT;
-  }
 
   private getBettingSummaryTTL(): number {
     return this.BETTING_SUMMARY_TTL_DAYS * 24 * 60 * 60;
@@ -80,8 +74,8 @@ export class BettingSummaryService {
     userId: string,
     roundName: string,
     status: 'won' | 'lost',
-    amount?: number,
-    currencyType?: string,
+    amount: number,
+    currencyType: string,
   ): Promise<void> {
     // Validate both win and loss results to prevent storing invalid data
     if (status === 'won' || status === 'lost') {
@@ -133,28 +127,6 @@ export class BettingSummaryService {
     }
   }
 
-  async addWinResult(
-    streamId: string,
-    streamName: string,
-    userId: string,
-    roundName: string,
-    amount: number,
-    currencyType: string,
-  ): Promise<void> {
-    return this.addBettingResult(streamId, streamName, userId, roundName, 'won', amount, currencyType);
-  }
-
-  async addLossResult(
-    streamId: string,
-    streamName: string,
-    userId: string,
-    roundName: string,
-    amount: number,
-    currencyType: string,
-  ): Promise<void> {
-    return this.addBettingResult(streamId, streamName, userId, roundName, 'lost', amount, currencyType);
-  }
-
   async getBettingSummary(streamId: string, userId: string): Promise<BettingSummary | null> {
     const redis = this.redisService.getClient();
     const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
@@ -173,10 +145,22 @@ export class BettingSummaryService {
       const rounds = roundsStr.map((r) => JSON.parse(r));
       
       // Format currency types for display
-      const formattedRounds = rounds.map((round) => ({
-        ...round,
-        currencyType: this.formatCurrencyType(round.currencyType || ''),
-      }));
+      const formattedRounds = rounds.map((round, index) => {
+        // Format and validate currency type - handles missing, empty, and invalid enum values
+        const formattedCurrency = formatCurrencyType(round.currencyType || '');
+        
+        if (formattedCurrency === 'UNKNOWN_CURRENCY') {
+          this.logger.warn(
+            `Invalid or missing currencyType in Pick round: "${round.currencyType}" for user ${userId} in stream ${streamId} ` +
+            `(round index: ${index}, roundName: ${round.roundName || 'UNKNOWN'}, status: ${round.status || 'UNKNOWN'})`,
+          );
+        }
+        
+        return {
+          ...round,
+          currencyType: formattedCurrency,
+        };
+      });
 
       return {
         ...metadata,

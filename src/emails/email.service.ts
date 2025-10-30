@@ -19,11 +19,12 @@ export class EmailsService {
     const nodeEnv = process.env.NODE_ENV;
     
     if (useMailHog) {
-      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
-      this.logger.log(`All emails will be captured by MailHog at http://localhost:8025`);
+      const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'localhost';
+      const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT') || 8025;
+      const mailhogUrl = `http://${mailhogHost}:${mailhogPort}`;
+      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode - All emails will be captured by MailHog at ${mailhogUrl}`);
     } else {
-      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode`);
-      this.logger.log(`Emails will be sent via AWS SES`);
+      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode - Emails will be sent via AWS SES`);
     }
   }
   /**
@@ -128,7 +129,7 @@ export class EmailsService {
         
         this.logger.debug('Production Mode: Using AWS SES');
 
-        transporter = await nodemailer.createTransport(
+        transporter = nodemailer.createTransport(
           sesTransport({
             accessKeyId,
             secretAccessKey,
@@ -160,7 +161,7 @@ export class EmailsService {
           this.logger.log('Email sent successfully via AWS SES');
         }
         return {
-          message: 'Email send successfully ',
+          message: 'Email sent successfully ',
           statusCode: HttpStatus.OK,
         };
       }

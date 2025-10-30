@@ -1671,11 +1671,12 @@ export class BettingService {
               winner.amount,
               winner.currencyType,
             ),
-            this.bettingSummaryService.addWinResult(
+            this.bettingSummaryService.addBettingResult(
               bettingVariable.stream.id,
               bettingVariable.stream.name,
               winner.userId,
               winner.roundName,
+              'won',
               winner.amount,
               winner.currencyType,
             ),
@@ -1717,11 +1718,12 @@ export class BettingService {
                 bet.user?.username,
                 bet.round.roundName,
               ),
-              this.bettingSummaryService.addLossResult(
+              this.bettingSummaryService.addBettingResult(
                 bettingVariable.stream.id,
                 bettingVariable.stream.name,
                 bet.userId,
                 bet.round.roundName,
+                'lost',
                 bet.amount,
                 bet.currency,
               ),
