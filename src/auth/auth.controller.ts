@@ -35,7 +35,7 @@ import {
 } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { userVerificationDto } from './dto/verify-password.dto';
-import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
+// import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -80,7 +80,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: RegisterDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     const data = await this.authService.register(registerDto);
@@ -119,7 +119,7 @@ export class AuthController {
     type: UserRegistrationResponseDto,
   })
   @ApiBody({ type: LoginDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const data = await this.authService.login(loginDto);
@@ -139,7 +139,7 @@ export class AuthController {
     status: 201,
     description: 'Location is not restricted',
   })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('location-check')
   async locationRestriction() {
     return {
@@ -161,7 +161,7 @@ export class AuthController {
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiBearerAuth()
-  @UseGuards(RefreshTokenGuard, GeoFencingGuard)
+  @UseGuards(RefreshTokenGuard) // , GeoFencingGuard)
   @Post('refresh')
   async refreshToken(@Request() req: RequestWithUser) {
     // User is already validated by RefreshTokenGuard
@@ -216,7 +216,7 @@ export class AuthController {
     description: 'Unauthorized - Invalid or expired token',
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, GeoFencingGuard)
+  @UseGuards(JwtAuthGuard) // , GeoFencingGuard)
   @Get('me')
   getProfile(@Request() req: RequestWithUser) {
     // The user is automatically injected into the request by the JwtAuthGuard
@@ -235,7 +235,7 @@ export class AuthController {
     description: 'Redirects to Google authentication page',
   })
   @Get('google')
-  @UseGuards(AuthGuard('google'), GeoFencingGuard)
+  @UseGuards(AuthGuard('google')) // , GeoFencingGuard)
   async googleAuth(): Promise<void> {
     // This route triggers Google OAuth2 flow
     // The actual implementation is handled by Passport
@@ -249,7 +249,7 @@ export class AuthController {
     description: 'Redirects to frontend with authentication tokens',
   })
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'), GeoFencingGuard)
+  @UseGuards(AuthGuard('google')) // , GeoFencingGuard)
   async googleAuthRedirect(
     @Request() req: { user: GoogleAuthResponse },
     @Res() res: Response,
