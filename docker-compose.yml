@@ -6,7 +6,7 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USERNAME=postgres
