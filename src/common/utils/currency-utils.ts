@@ -5,7 +5,7 @@ import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
  * Validates against the CurrencyType enum and returns a sentinel value for invalid types.
  * 
  * @param currencyType - The currency type enum value (e.g., 'gold_coins', 'sweep_coins')
- * @returns The formatted currency text ('Gold Coins', 'Stream Coins') or 'UNKNOWN_CURRENCY' for invalid values
+ * @returns The formatted currency text ('Gold Coins', 'Sweep Coins') or 'UNKNOWN_CURRENCY' for invalid values
  * 
  * @example
  * formatCurrencyType('gold_coins') // returns 'Gold Coins'
