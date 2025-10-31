@@ -29,6 +29,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 import { StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
@@ -54,6 +55,7 @@ export class BettingService {
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
     private notificationService: NotificationService,
+    private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
     private platformPayoutService: PlatformPayoutService,
     private dataSource: DataSource,
@@ -1658,7 +1660,7 @@ export class BettingService {
         }
       });
 
-      // Notify winners with their specific win message
+      // Notify winners via bot and store results in Redis for summary email
       const winnerNotificationResults = await Promise.allSettled(
         winners.map(async (winner) => {
           const notificationResults = await Promise.allSettled([
@@ -1669,19 +1671,21 @@ export class BettingService {
               winner.amount,
               winner.currencyType,
             ),
-            this.notificationService.sendSMTPForWonBet(
-              winner.userId,
+            this.bettingSummaryService.addBettingResult(
+              bettingVariable.stream.id,
               bettingVariable.stream.name,
+              winner.userId,
+              winner.roundName,
+              'won',
               winner.amount,
               winner.currencyType,
-              winner.roundName,
             ),
           ]);
 
-          // Log any individual notification failures for this winner
+          // Log any individual failures (bot notification or Redis storage)
           notificationResults.forEach((result, notifIndex) => {
             if (result.status === 'rejected') {
-              const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+              const notifType = notifIndex === 0 ? 'bot message' : 'Redis storage';
               Logger.error(
                 `Failed to send ${notifType} to winner ${winner.userId} (${winner.username})`,
                 result.reason,
@@ -1704,7 +1708,7 @@ export class BettingService {
         }
       });
 
-      // Notify losers with their specific loss message
+      // Notify losers via bot and store results in Redis for summary email
       if (roundCalculation.gold.totalWinningBetCount > 0 || roundCalculation.sweep.totalWinningBetCount > 0) {
         const loserNotificationResults = await Promise.allSettled(
           losingBetsWithUserInfo.map(async (bet) => {
@@ -1714,17 +1718,21 @@ export class BettingService {
                 bet.user?.username,
                 bet.round.roundName,
               ),
-              this.notificationService.sendSMTPForLossBet(
-                bet.userId,
+              this.bettingSummaryService.addBettingResult(
+                bettingVariable.stream.id,
                 bettingVariable.stream.name,
+                bet.userId,
                 bet.round.roundName,
+                'lost',
+                bet.amount,
+                bet.currency,
               ),
             ]);
 
             // Log any individual notification failures for this user
             notificationResults.forEach((result, notifIndex) => {
               if (result.status === 'rejected') {
-                const notifType = notifIndex === 0 ? 'bot message' : 'SMTP email';
+                const notifType = notifIndex === 0 ? 'bot message' : 'Redis storage';
                 Logger.error(
                   `Failed to send ${notifType} to loser ${bet.userId} (${bet.user?.username})`,
                   result.reason,
@@ -1746,6 +1754,23 @@ export class BettingService {
             );
           }
         });
+      }
+
+      // Track all participants for this stream to send summary emails when stream ends
+      const participants = [
+        ...winners.map((w) => w.userId),
+        ...losingBetsWithUserInfo.map((b) => b.userId),
+      ];
+
+      if (participants.length > 0) {
+        await this.bettingSummaryService
+          .addStreamParticipants(bettingVariable.stream.id, participants)
+          .catch((error) =>
+            Logger.error(
+              `Failed to track participants for stream ${bettingVariable.stream.id}`,
+              error,
+            ),
+          );
       }
     } catch (error) {
       // Rollback transaction in case of any errors

@@ -7,6 +7,7 @@ import { EmailType } from 'src/enums/email-type.enum';
 import { User } from 'src/users/entities/user.entity';
 import { QueueService } from 'src/queue/queue.service';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 
 @Injectable()
 export class NotificationService {
@@ -15,6 +16,7 @@ export class NotificationService {
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
     private readonly queueService: QueueService,
+    private readonly bettingSummaryService: BettingSummaryService,
   ) {}
 
   async addNotificationPermision(userId: string) {
@@ -30,100 +32,6 @@ export class NotificationService {
         await this.cacheManager.set(cacheKey, settings, expireTime);
       }
       return settings;
-    }
-  }
-
-  async sendSMTPForWonBet(
-    userId: string,
-    streamName: string,
-    amount: number,
-    currencyType: string,
-    roundName: string,
-  ) {
-    try {
-      const receiver = await this.usersService.findUserByUserId(userId);
-      const receiverEmail = receiver?.email;
-      const receiverNotificationPermission =
-        await this.addNotificationPermision(userId);
-      const dashboardLink =
-        this.configService.get<string[]>('email.HOST_URL') || '';
-      if (
-        receiverNotificationPermission['emailNotification'] &&
-        receiverEmail
-      ) {
-        if (receiverEmail.indexOf('@example.com') !== -1) {
-          return true;
-        }
-        const subject = NOTIFICATION_TEMPLATE.EMAIL_BET_WON.TITLE({
-          streamName,
-        });
-        let updatedCurrencyType =
-          currencyType === CurrencyType.GOLD_COINS
-            ? CurrencyTypeText.GOLD_COINS_TEXT
-            : CurrencyTypeText.SWEEP_COINS_TEXT;
-        const emailData = {
-          toAddress: [receiverEmail],
-          subject,
-          params: {
-            streamName,
-            fullName: receiver.username,
-            amount: Math.floor(amount).toLocaleString('en-US'),
-            currencyType: updatedCurrencyType,
-            roundName,
-            dashboardLink: `${dashboardLink}/betting-history
-`,
-          },
-        };
-
-        await this.queueService.addEmailJob(emailData, EmailType.BetWon);
-
-        return true;
-      }
-    } catch (e) {
-      Logger.error('unable to send email', e);
-    }
-  }
-  async sendSMTPForLossBet(
-    userId: string,
-    streamName: string,
-    roundName: string,
-  ) {
-    try {
-      const receiver = await this.usersService.findUserByUserId(userId);
-      const receiverEmail = receiver?.email;
-      const receiverNotificationPermission =
-        await this.addNotificationPermision(userId);
-      if (
-        receiverNotificationPermission['emailNotification'] &&
-        receiverEmail
-      ) {
-        if (receiverEmail.indexOf('@example.com') !== -1) {
-          return true;
-        }
-        const dashboardLink =
-          this.configService.get<string[]>('email.HOST_URL') || '';
-        const subject = NOTIFICATION_TEMPLATE.EMAIL_BET_LOSS.TITLE({
-          streamName,
-        });
-
-        const emailData = {
-          toAddress: [receiverEmail],
-          subject,
-          params: {
-            streamName,
-            fullName: receiver.username,
-            roundName,
-            dashboardLink: `${dashboardLink}/betting-history
-`,
-          },
-        };
-
-        await this.queueService.addEmailJob(emailData, EmailType.BetLoss);
-
-        return true;
-      }
-    } catch (e) {
-      Logger.error('unable to send email', e);
     }
   }
 
@@ -342,6 +250,85 @@ export class NotificationService {
       }
     } catch (e) {
       Logger.error('Unable to send coin purchase success mail', e);
+    }
+  }
+
+  /**
+   * Sends betting summary emails to all participants when a stream ends.
+   * Aggregates all bet results from Redis and sends a single summary email per user.
+   * Cleans up participant tracking after all email attempts complete.
+   *
+   * @param streamId - The ID of the stream that ended
+   * @param userIds - Array of user IDs who participated in betting on this stream
+   * @returns Promise<void> - Resolves when all emails have been attempted and cleanup is complete
+   */
+  async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
+    await Promise.allSettled(
+      userIds.map((userId) => this.sendUserBettingSummary(streamId, userId)),
+    );
+    await this.bettingSummaryService.clearStreamParticipants(streamId);
+  }
+
+  /**
+   * Sends a betting summary email for a single user.
+   * Retrieves aggregated bet results from Redis and queues the summary email.
+   * Only deletes Redis data after successful email queuing to preserve data for retry on failure.
+   * Checks user notification preferences and skips sending to test/demo emails.
+   *
+   * @param streamId - The ID of the stream
+   * @param userId - The user ID to send summary to
+   * @returns Promise<void> - Resolves when email is queued or skipped
+   * @throws Error if email queuing fails (preserves Redis data for retry)
+   */
+  private async sendUserBettingSummary(streamId: string, userId: string): Promise<void> {
+    let summary;
+    let receiver;
+    let receiverNotificationPermission;
+
+    try {
+      summary = await this.bettingSummaryService.getBettingSummary(streamId, userId);
+      if (!summary) return;
+
+      receiver = await this.usersService.findUserByUserId(userId);
+      if (!receiver?.email || receiver.email.includes('@example.com')) return;
+
+      receiverNotificationPermission = await this.addNotificationPermision(userId);
+      if (!receiverNotificationPermission?.['emailNotification']) return;
+    } catch (error) {
+      Logger.error(
+        `Failed to fetch data for Pick summary email - streamId: ${streamId}, userId: ${userId}`,
+        error,
+      );
+      throw error;
+    }
+
+    const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
+    const subject = NOTIFICATION_TEMPLATE.EMAIL_BETTING_SUMMARY.TITLE({
+      streamName: summary.streamName,
+    });
+
+    try {
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [receiver.email],
+          subject,
+          params: {
+            streamName: summary.streamName,
+            fullName: receiver.username,
+            rounds: summary.rounds,
+            dashboardLink: `${dashboardLink}/betting-history`,
+          },
+        },
+        EmailType.BettingStreamSummary,
+      );
+
+      // Only delete Redis keys after successful email queuing
+      await this.bettingSummaryService.deleteBettingSummary(streamId, userId);
+    } catch (error) {
+      Logger.error(
+        `Failed to queue Pick summary email for user ${userId} in stream ${streamId} - data preserved for retry`,
+        error,
+      );
     }
   }
 }
