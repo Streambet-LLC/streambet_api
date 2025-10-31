@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
 import { formatCurrencyType } from 'src/common/utils/currency-utils';
+import { CurrencyTypeText } from 'src/enums/currency.enum';
 
 export interface BettingRound {
   roundName: string;
@@ -193,7 +194,7 @@ export class BettingSummaryService {
         // Format and validate currency type - handles missing, empty, and invalid enum values
         const formattedCurrency = formatCurrencyType(round.currencyType || '');
         
-        if (formattedCurrency === 'UNKNOWN_CURRENCY') {
+        if (formattedCurrency === CurrencyTypeText.UNKNOWN_CURRENCY) {
           this.logger.warn(
             `Invalid or missing currencyType in Pick round: "${round.currencyType}" for user ${userId} in stream ${streamId} ` +
             `(round index: ${index}, roundName: ${round.roundName || 'UNKNOWN'}, status: ${round.status || 'UNKNOWN'})`,
