@@ -9,7 +9,7 @@ import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
  * 
  * @example
  * formatCurrencyType('gold_coins') // returns 'Gold Coins'
- * formatCurrencyType('sweep_coins') // returns 'Stream Coins'
+ * formatCurrencyType('sweep_coins') // returns 'Sweep Coins'
  * formatCurrencyType('invalid') // returns 'UNKNOWN_CURRENCY'
  */
 export function formatCurrencyType(currencyType: string): string {

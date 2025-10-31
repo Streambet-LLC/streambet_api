@@ -9,8 +9,8 @@ services:
       - NODE_ENV=${NODE_ENV}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_DATABASE=streambet
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=1d
@@ -49,8 +49,8 @@ services:
     ports:
       - '5432:5432'
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
       - POSTGRES_DB=streambet
     volumes:
       - postgres-data:/var/lib/postgresql/data
