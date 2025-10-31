@@ -388,15 +388,18 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
+        // Use streamId directly from the betting variable to ensure correct room targeting
+        const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
+
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
           betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
+            streamId,
           );
         }
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.BettingUpdate,
           {
             roundId: roundIdEmit,
@@ -409,7 +412,7 @@ export class BettingGateway {
         );
 
         await this.sendPersonalizedPotentialAmounts(
-          bettingVariable.stream.id,
+          streamId,
           roundIdEmit,
         );
 
@@ -422,7 +425,7 @@ export class BettingGateway {
         };
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.ChatMessage,
           chatMessage,
         );
@@ -525,15 +528,18 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
+        // Use streamId directly from the betting variable to ensure correct room targeting
+        const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
+
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
           betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
+            streamId,
           );
         }
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.BettingUpdate,
           {
             roundId: roundIdEmit,
@@ -546,7 +552,7 @@ export class BettingGateway {
         );
 
         await this.sendPersonalizedPotentialAmounts(
-          bettingVariable.stream.id,
+          streamId,
           roundIdEmit,
         );
 
@@ -558,7 +564,7 @@ export class BettingGateway {
         };
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.ChatMessage,
           chatMessage,
         );
