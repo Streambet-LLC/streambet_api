@@ -281,14 +281,26 @@ export class NotificationService {
    * @throws Error if email queuing fails (preserves Redis data for retry)
    */
   private async sendUserBettingSummary(streamId: string, userId: string): Promise<void> {
-    const summary = await this.bettingSummaryService.getBettingSummary(streamId, userId);
-    if (!summary) return;
+    let summary;
+    let receiver;
+    let receiverNotificationPermission;
 
-    const receiver = await this.usersService.findUserByUserId(userId);
-    if (!receiver?.email || receiver.email.includes('@example.com')) return;
+    try {
+      summary = await this.bettingSummaryService.getBettingSummary(streamId, userId);
+      if (!summary) return;
 
-    const receiverNotificationPermission = await this.addNotificationPermision(userId);
-    if (!receiverNotificationPermission?.['emailNotification']) return;
+      receiver = await this.usersService.findUserByUserId(userId);
+      if (!receiver?.email || receiver.email.includes('@example.com')) return;
+
+      receiverNotificationPermission = await this.addNotificationPermision(userId);
+      if (!receiverNotificationPermission?.['emailNotification']) return;
+    } catch (error) {
+      Logger.error(
+        `Failed to fetch data for Pick summary email - streamId: ${streamId}, userId: ${userId}`,
+        error,
+      );
+      throw error;
+    }
 
     const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
     const subject = NOTIFICATION_TEMPLATE.EMAIL_BETTING_SUMMARY.TITLE({

@@ -7,7 +7,7 @@ export interface BettingRound {
   status: 'won' | 'lost';
   amount: number;
   currencyType: string;
-  timestamp: Date;
+  timestamp: Date | string;
 }
 
 export interface BettingSummary {
