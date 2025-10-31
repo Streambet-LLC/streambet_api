@@ -28,7 +28,7 @@ export const NOTIFICATION_TEMPLATE = {
 
   BET_WON_GOLD_COIN: {
     MESSAGE: (data: BetNotificationData) =>
-      `Big winner! ${data.amount.toLocaleString('en-US')} ${CurrencyTypeText.GOLD_COINS_TEXT} have been added to your wallet. Now imagine if those were Sweepcoins…`,
+      `Big winner! ${data.amount.toLocaleString('en-US')} ${CurrencyTypeText.GOLD_COINS_TEXT} have been added to your wallet. Now imagine if those were Stream Coins…`,
     TITLE: () => `Win - ${CurrencyTypeText.GOLD_COINS_TEXT}`,
   },
   BET_WON_SWEEP_COIN: {
