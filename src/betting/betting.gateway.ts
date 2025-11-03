@@ -446,7 +446,7 @@ export class BettingGateway {
       const user = client.data.user;
 
       // Edit bet in service
-      const { betDetails: editedBet, oldBettingAmount } =
+      const { betDetails: editedBet, oldBettingAmount, oldBettingOption } =
         await this.bettingService.editBet(user.sub, editBetDto);
 
       const [updatedWallet, bettingVariable] = await Promise.all([
@@ -555,19 +555,25 @@ export class BettingGateway {
           roundIdEmit,
         );
 
-        // System chat notification for bet edit
-        const systemMessage =
-          NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
-            username: user.username,
-            originalAmount: Number(oldBettingAmount),
-            amount: editedBet.amount,
-            bettingOption: bettingVariable.name,
-          });
-        await this.chatGateway.chatNotification(
-          user,
-          streamId,
-          systemMessage,
-        );
+        // System chat notification for bet edit - only send if something actually changed
+        const amountChanged = Number(oldBettingAmount) !== editedBet.amount;
+        const optionChanged = oldBettingOption !== bettingVariable.name;
+        
+        if (amountChanged || optionChanged) {
+          const systemMessage =
+            NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
+              username: user.username,
+              originalAmount: Number(oldBettingAmount),
+              originalOption: oldBettingOption,
+              amount: editedBet.amount,
+              bettingOption: bettingVariable.name,
+            });
+          await this.chatGateway.chatNotification(
+            user,
+            streamId,
+            systemMessage,
+          );
+        }
       }
     } catch (error) {
       emitToClient(client, SocketEventName.Error, {

@@ -973,6 +973,7 @@ export class BettingService {
       where: { id: betId, userId }, // ensure only owner can edit
     });
     const oldBettingAmount = betDetails?.amount;
+    const oldBettingVariableId = betDetails?.bettingVariableId;
 
     if (!betDetails) {
       throw new NotFoundException(`Unable to find the selected bet.`);
@@ -983,6 +984,12 @@ export class BettingService {
       const message = await this.bettingStatusMessage(betDetails.status);
       throw new BadRequestException(message);
     }
+
+    // Fetch old betting variable name
+    const oldBettingVariable = await this.bettingVariablesRepository.findOne({
+      where: { id: oldBettingVariableId },
+      select: ['name'],
+    });
 
     // Fetch new betting variable with round + stream relation
     const bettingVariable = await this.bettingVariablesRepository.findOne({
@@ -1242,7 +1249,11 @@ export class BettingService {
         }
       }
 
-      return { betDetails, oldBettingAmount };
+      return { 
+        betDetails, 
+        oldBettingAmount, 
+        oldBettingOption: oldBettingVariable?.name 
+      };
     } catch (error) {
       // Rollback transaction on failure
       await queryRunner.rollbackTransaction();
