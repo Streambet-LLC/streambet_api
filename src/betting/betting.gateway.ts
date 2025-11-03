@@ -416,18 +416,17 @@ export class BettingGateway {
           roundIdEmit,
         );
 
-        // System chat message
-        const chatMessage: ChatMessage = {
-          type: ChatType.System,
-          username: ChatType.StreambetBot,
-          message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
-          timestamp: new Date(),
-        };
-        void emitToStream(
-          this.gatewayManager,
+        // System chat notification for bet cancellation
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.CANCEL_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatGateway.chatNotification(
+          user,
           streamId,
-          SocketEventName.ChatMessage,
-          chatMessage,
+          systemMessage,
         );
       }
     } catch (error) {
@@ -556,17 +555,18 @@ export class BettingGateway {
           roundIdEmit,
         );
 
-        const chatMessage: ChatMessage = {
-          type: ChatType.System,
-          username: ChatType.StreambetBot,
-          message: `${user.username} edited their Pick to ${editedBet.amount} on ${bettingVariable.name}!`,
-          timestamp: new Date(),
-        };
-        void emitToStream(
-          this.gatewayManager,
+        // System chat notification for bet edit
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            originalAmount: Number(oldBettingAmount),
+            amount: editedBet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatGateway.chatNotification(
+          user,
           streamId,
-          SocketEventName.ChatMessage,
-          chatMessage,
+          systemMessage,
         );
       }
     } catch (error) {
