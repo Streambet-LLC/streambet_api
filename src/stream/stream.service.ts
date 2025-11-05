@@ -211,6 +211,15 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
         });
 
+        const options = variables.map((v) => {
+          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+          return {
+            option: v.bv_name,
+            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+          }
+        });
+
         const itemData = {
           streamId: item.s_id,
           thumbnail: item.s_thumbnailUrl ?? "",
@@ -218,14 +227,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
-          options: variables.map((v) => {
-            const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
-            return {
-              option: v.bv_name,
-              percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
-            }
-          }),
+          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
@@ -1444,6 +1446,15 @@ END
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
         });
 
+        const options = variables.map((v) => {
+          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+          return {
+            option: v.bv_name,
+            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+          }
+        });
+
         const itemData = {
           streamId: item.s_id,
           thumbnail: item.s_thumbnailUrl ?? "",
@@ -1451,14 +1462,7 @@ END
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
-          options: variables.map((v) => {
-            const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
-            return {
-              option: v.bv_name,
-              percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
-            }
-          }),
+          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
