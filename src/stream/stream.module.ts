@@ -10,10 +10,12 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { StreamGateway } from './stream.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { RedisModule } from 'src/redis/redis.module';
+import { BettingRound } from 'src/betting/entities/betting-round.entity';
+import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Stream]),
+    TypeOrmModule.forFeature([Stream, BettingRound, BettingVariable]),
     forwardRef(() => WalletsModule),
     forwardRef(() => BettingModule),
     forwardRef(() => QueueModule),
@@ -25,4 +27,4 @@ import { RedisModule } from 'src/redis/redis.module';
   providers: [StreamService, StreamGateway],
   exports: [StreamService, StreamGateway],
 })
-export class StreamModule {}
+export class StreamModule { }

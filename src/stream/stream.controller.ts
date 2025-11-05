@@ -28,6 +28,7 @@ import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
 // import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
+import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -37,7 +38,7 @@ interface RequestWithUser extends Request {
 @ApiTags('stream')
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) {}
+  constructor(private readonly streamService: StreamService) { }
   /**
  * Retrieves a paginated list of live and scheduled streams for the home page view.
    * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
@@ -85,6 +86,26 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       total,
     };
   }
+
+  @ApiOperation({
+    summary: 'List live bets for homepage',
+  })
+  @ApiOkResponse({ type: HomepageBetListDto })
+  // @UseGuards(GeoFencingGuard)
+  @Get('displayed-bets')
+  async getDisplayedBets(
+    @Query() homepageBetListDto: HomepageBetListDto,
+  ) {
+    const { data } = await this.streamService.getDisplayBets(
+      homepageBetListDto,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -126,6 +147,20 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   async topLiveStreams() {
     const { data } =
       await this.streamService.getTopLivestreams();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Lists Promoted Bets',
+  })
+  // @UseGuards(GeoFencingGuard)
+  @Get('promoted-bets')
+  async promotedBets() {
+    const { data } = await this.streamService.getTopPromotedBets();
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
