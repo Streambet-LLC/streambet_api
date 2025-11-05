@@ -11,7 +11,7 @@ export class Wallet extends BaseEntity {
   @Column({ type: 'uuid' })
   userId: string;
 
-  @Column({ type: 'bigint', default: 1000, name: 'gold_coins' })
+  @Column({ type: 'decimal', default: 1000, name: 'gold_coins' })
   goldCoins: number;
 
   @Column({
