@@ -26,7 +26,7 @@ import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
-import { StreamList, StreamStatus } from 'src/enums/stream.enum';
+import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
@@ -84,7 +84,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s');
-      
+
       if (username) {
         streamQB.innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
           .setParameter('username', username);
@@ -93,13 +93,13 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       };
 
       streamQB.leftJoinAndSelect(
-          's.bettingRounds',
-          'br',
-          'br.status IN (:...roundStatuses)',
-          {
-            roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
-          },
-        )
+        's.bettingRounds',
+        'br',
+        'br.status IN (:...roundStatuses)',
+        {
+          roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
+        },
+      )
         .leftJoinAndSelect('br.bettingVariables', 'bv')
         .select('s.id', 'id')
         .addSelect('s.name', 'streamName')
@@ -167,11 +167,13 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       viewerCount,
       creatorId,
       bettingRounds = [],
+      type
     } = streamData;
 
     return {
       streamId: id,
       streamName: name,
+      streamType: type,
       description,
       createdAt,
       updatedAt,
@@ -219,6 +221,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     streamFilterDto: StreamFilterDto,
   ): Promise<{ data: Stream[]; total: number }> {
     try {
+      console.log(streamFilterDto);
+
       const sort: Sort = streamFilterDto.sort
         ? (JSON.parse(streamFilterDto.sort) as Sort)
         : undefined;
@@ -229,7 +233,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const range: Range = streamFilterDto.range
         ? (JSON.parse(streamFilterDto.range) as Range)
         : [0, 10];
-      const { pagination = true } = streamFilterDto;
+      const { pagination = true, type } = streamFilterDto;
       const { streamStatus } = filter;
 
       const streamQB = this.streamsRepository
@@ -238,6 +242,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
           q: `%${filter.q}%`,
+        });
+      }
+
+      if (type) {
+        streamQB.andWhere(`s.type = :type`, {
+          type,
         });
       }
 

@@ -29,7 +29,7 @@ import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
-import { StreamList, StreamStatus } from 'src/enums/stream.enum';
+import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -305,7 +305,9 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        status: BettingRoundStatus.CREATED,
+        status: stream.type === StreamEventType.STREAM
+          ? BettingRoundStatus.CREATED
+          : BettingRoundStatus.OPEN,
       });
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
