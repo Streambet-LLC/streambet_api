@@ -117,6 +117,21 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       total,
     };
   }
+
+  @ApiOperation({
+    summary: 'Lists top live streams',
+  })
+  // @UseGuards(GeoFencingGuard)
+  @Get('top')
+  async topLiveStreams() {
+    const { data } =
+      await this.streamService.getTopLivestreams();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
   /**
    * Retrieves a stream by its ID with selected fields (id, kickEmbedUrl, name).
    * Throws a NotFoundException if no stream is found with the given ID.

@@ -144,6 +144,33 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       );
     }
   }
+
+  async getTopLivestreams(): Promise<{ data: Pick<Stream, "id" | "name" | "viewerCount" | "creator"> & { pfp: string }[]; }> {
+    try {
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s')
+        .innerJoinAndSelect('s.creator', 'creator')
+        .where('s.status = :status', { status: StreamStatus.LIVE })
+        .orderBy('s.viewerCount', 'DESC')
+        .select('s.id', 'id')
+        .addSelect('s.name', 'streamName')
+        .addSelect('s.viewerCount', 'views')
+        .addSelect('creator.profile_image_url', 'pfp')
+        .addSelect('creator.username', 'creator')
+        .limit(20);
+
+      const data = await streamQB.getRawMany();
+
+      return { data: data as Pick<Stream, "id" | "name" | "viewerCount" | "creator"> & { pfp: string }[] };
+    } catch (e) {
+      Logger.error('Unable to retrieve top live streams', e);
+      throw new HttpException(
+        `Unable to retrieve top live streams at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   private async simplifyStreamResponse(
     streamData: any,
     bettingRoundStatus: string,
