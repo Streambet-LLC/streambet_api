@@ -28,12 +28,13 @@ import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
-import { StreamAnalyticsResponseDto } from 'src/admin/dto/analytics.dto';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
-import { BettingGateway } from 'src/betting/betting.gateway';
 import { StreamGateway } from './stream.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { User } from 'src/users/entities/user.entity';
+import { BettingRound } from 'src/betting/entities/betting-round.entity';
+import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -43,6 +44,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
+    @InjectRepository(BettingVariable)
+    private bettingVariableRepository: Repository<BettingVariable>,
+    @InjectRepository(BettingRound)
+    private bettingRoundRepository: Repository<BettingRound>,
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingService))
     private bettingService: BettingService,
@@ -163,6 +168,79 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       return { data: data as Pick<Stream, "id" | "name" | "viewerCount" | "creator"> & { pfp: string }[] };
     } catch (e) {
+      Logger.error('Unable to retrieve top live streams', e);
+      throw new HttpException(
+        `Unable to retrieve top live streams at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getTopPromotedBets(): Promise<any> {
+    try {
+      const betRoundsQB = this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .limit(10);
+
+      const data = await betRoundsQB.getRawMany();
+      const resultList = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+
+        const variables = await this.bettingVariableRepository
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
+          })
+          .getRawMany();
+
+        let totalVotes = 0;
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        });
+
+        const itemData = {
+          streamId: item.s_id,
+          thumbnail: item.s_thumbnailUrl ?? "",
+          creator: item.c_username,
+          streamName: item.s_name,
+          name: item.br_roundName,
+          type: item.s_type,
+          options: variables.map((v) => {
+            const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+            return {
+              option: v.bv_name,
+              percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            }
+          }),
+          totalPot: {
+            streamCoins: totalStreamCoins,
+            goldCoins: totalGoldCoins
+          }
+        }
+
+        resultList.push(itemData);
+      }
+
+      return {
+        data: resultList
+      }
+    } catch (e) {
+      console.log(e);
+
       Logger.error('Unable to retrieve top live streams', e);
       throw new HttpException(
         `Unable to retrieve top live streams at the moment. Please try again later`,
@@ -1305,6 +1383,98 @@ END
       const data = await streamQB.getRawMany();
 
       return { data, total };
+    } catch (e) {
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getDisplayBets(
+    homepageBetListDto: HomepageBetListDto,
+  ): Promise<any> {
+
+    const page = homepageBetListDto.page ?? 1;
+    const take = 15;
+    const offset = (page - 1) * take;
+
+    try {
+      const betRoundsQB = this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .limit(take)
+        .offset(offset);
+
+      const count = await this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+        })
+        .getCount()
+
+      const hasNextPage = count > (offset + take);
+
+      const data = await betRoundsQB.getRawMany();
+      const resultList = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+
+        const variables = await this.bettingVariableRepository
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
+          })
+          .getRawMany();
+
+        let totalVotes = 0;
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        });
+
+        const itemData = {
+          streamId: item.s_id,
+          thumbnail: item.s_thumbnailUrl ?? "",
+          creator: item.c_username,
+          streamName: item.s_name,
+          name: item.br_roundName,
+          type: item.s_type,
+          options: variables.map((v) => {
+            const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+            return {
+              option: v.bv_name,
+              percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            }
+          }),
+          totalPot: {
+            streamCoins: totalStreamCoins,
+            goldCoins: totalGoldCoins
+          }
+        }
+
+        resultList.push(itemData);
+      }
+
+      return {
+        data: {
+          data: resultList,
+          page,
+          hasNextPage
+        }
+      }
     } catch (e) {
       Logger.error('Unable to retrieve stream details', e);
       throw new HttpException(
