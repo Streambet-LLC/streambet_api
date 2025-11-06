@@ -4,18 +4,26 @@ import {
   IsUrl,
   IsOptional,
   IsDateString,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { StreamEventType } from 'src/enums/stream.enum';
 
 export class CreateStreamDto {
   @ApiProperty({
-    description: 'The name of the stream',
+    description: 'The name of the event',
     example: 'Champions League Final - Real Madrid vs Barcelona',
     type: 'string',
   })
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiProperty({
+    description: 'The type of event',
+  })
+  @IsNotEmpty()
+  type: StreamEventType;
 
   @ApiProperty({
     description: 'A description of the stream',
@@ -27,6 +35,7 @@ export class CreateStreamDto {
   @IsOptional()
   description?: string;
 
+  @ValidateIf(o => o.type === StreamEventType.STREAM)
   @ApiProperty({
     description: 'The embedded URL for the stream (YouTube, Twitch, etc.)',
     example: 'https://www.youtube.com/embed/dQw4w9WgXcQ',

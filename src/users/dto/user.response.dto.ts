@@ -29,6 +29,12 @@ export class UserProfileResponseDto {
 
   @ApiProperty({ type: Number, example: 10 })
   sweepCoinsPerDollar: number;
+
+  @ApiProperty({ type: Number, example: 50, description: 'Maximum allowed bet amount for sweep coins' })
+  maxSweepCoinsBet: number;
+
+  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for gold coins' })
+  maxGoldCoinsBet: number;
 }
 
 export class UserResponseDto {

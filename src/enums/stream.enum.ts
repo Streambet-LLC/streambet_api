@@ -14,3 +14,8 @@ export enum StreamStatus {
   DELETED = 'deleted',
   ACTIVE = 'active',
 }
+
+export enum StreamEventType {
+  STREAM = 'stream',
+  NON_VIDEO = 'non-video'
+}
