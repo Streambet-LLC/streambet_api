@@ -36,7 +36,10 @@ import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { StreamGateway } from 'src/stream/stream.gateway';
 import { BettingGateway } from './betting.gateway';
-import { MAX_AMOUNT_FOR_BETTING } from 'src/common/constants/currency.constants';
+import {
+  MAX_SWEEP_COINS_FOR_BETTING,
+  MAX_GOLD_COINS_FOR_BETTING,
+} from 'src/common/constants/currency.constants';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
 import _, { round } from 'lodash';
@@ -930,16 +933,32 @@ export class BettingService {
    * Ensures that the provided bet amount does not exceed the allowed maximum.
    *
    * @param amount - The bet amount to validate.
-   * @throws {BadRequestException} If the bet amount exceeds MAX_AMOUNT_FOR_BETTING.
+   * @param currencyType - The type of currency being bet.
+   * @throws {BadRequestException} If the bet amount exceeds the maximum for the currency type.
    *
    */
   private enforceMax(amount: number, currencyType: CurrencyType) {
+    // Validate sweep coins
     if (
-      amount > MAX_AMOUNT_FOR_BETTING &&
+      amount > MAX_SWEEP_COINS_FOR_BETTING &&
       currencyType === CurrencyType.SWEEP_COINS
     ) {
       throw new BadRequestException(
-        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_AMOUNT_FOR_BETTING.toLocaleString(
+        `The maximum allowed bet with ${CurrencyTypeText.SWEEP_COINS_TEXT} is ${MAX_SWEEP_COINS_FOR_BETTING.toLocaleString(
+          'en-US',
+        )}. Your bet amount of ${amount.toLocaleString(
+          'en-US',
+        )} exceeds this limit. Please place a lower bet.`,
+      );
+    }
+
+    // Validate gold coins
+    if (
+      amount > MAX_GOLD_COINS_FOR_BETTING &&
+      currencyType === CurrencyType.GOLD_COINS
+    ) {
+      throw new BadRequestException(
+        `The maximum allowed bet with ${CurrencyTypeText.GOLD_COINS_TEXT} is ${MAX_GOLD_COINS_FOR_BETTING.toLocaleString(
           'en-US',
         )}. Your bet amount of ${amount.toLocaleString(
           'en-US',
