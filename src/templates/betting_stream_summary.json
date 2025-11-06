@@ -1,0 +1,47 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "required": ["streamName", "fullName", "rounds", "dashboardLink"],
+  "properties": {
+    "streamName": {
+      "type": "string",
+      "description": "The name of the stream"
+    },
+    "fullName": {
+      "type": "string",
+      "description": "The user's full name or username"
+    },
+    "rounds": {
+      "type": "array",
+      "description": "Array of Pick rounds with results",
+      "items": {
+        "type": "object",
+        "required": ["roundName", "status"],
+        "properties": {
+          "roundName": {
+            "type": "string",
+            "description": "The name of the Pick round"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["won", "lost"],
+            "description": "Whether the user won or lost this round"
+          },
+          "amount": {
+            "type": "number",
+            "description": "The amount associated with the round (optional, present for wins and losses where applicable)"
+          },
+          "currencyType": {
+            "type": "string",
+            "description": "The currency type for the amount (optional, present for wins and losses where applicable)"
+          }
+        }
+      }
+    },
+    "dashboardLink": {
+      "type": "string",
+      "description": "Link to the user's Pick history dashboard"
+    }
+  }
+}

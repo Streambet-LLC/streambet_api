@@ -10,6 +10,7 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { StreamGateway } from './stream.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { RedisModule } from 'src/redis/redis.module';
+import { NotificationModule } from 'src/notification/notification.module';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 
@@ -22,6 +23,7 @@ import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
     GeoFencingModule,
     forwardRef(() => WsModule),
     RedisModule,
+    NotificationModule,
   ],
   controllers: [StreamController],
   providers: [StreamService, StreamGateway],

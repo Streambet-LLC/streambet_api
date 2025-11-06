@@ -26,12 +26,14 @@ import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
+import { BettingSummaryService } from 'src/redis/betting-summary.service';
 import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { StreamGateway } from './stream.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { User } from 'src/users/entities/user.entity';
+import { NotificationService } from 'src/notification/notification.service';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
@@ -55,6 +57,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private streamGateway: StreamGateway,
     private dataSource: DataSource,
     private queueService: QueueService,
+    private bettingSummaryService: BettingSummaryService,
+    private notificationService: NotificationService,
   ) { }
   async onModuleDestroy() {
     await this.flushViewerCounts('moduleDestroy');
@@ -842,6 +846,24 @@ END
 
     // Emit stream end socket event
     this.streamGateway.emitStreamEnd(streamId);
+
+    // Send aggregated betting summary emails to all participants (non-blocking)
+    this.bettingSummaryService
+      .getStreamParticipants(streamId)
+      .then((userIds) => {
+        if (userIds.length > 0) {
+          return this.notificationService.sendStreamBettingSummaryEmails(
+            streamId,
+            userIds,
+          );
+        }
+      })
+      .catch((error) => {
+        Logger.error(
+          `Failed to send Pick summary emails for stream ${streamId}`,
+          error,
+        );
+      });
 
     return savedStream;
   }
