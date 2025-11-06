@@ -4,6 +4,7 @@ interface BetNotificationData {
   amount?: number;
   currencyType?: string;
   bettingOption?: string;
+  originalOption?: string;
   roundName?: string;
   streamName?: string;
   username?: string;
@@ -95,12 +96,22 @@ export const NOTIFICATION_TEMPLATE = {
       `${data.username} Picks ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
   EDIT_BET_CHAT_MESSAGE: {
-    MESSAGE: (data: BetNotificationData) =>
-      `${data.username} updated Pick to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
+    MESSAGE: (data: BetNotificationData & { originalAmount?: number }) => {
+      const amountChanged = data.originalAmount !== data.amount;
+      const optionChanged = data.originalOption !== data.bettingOption;
+      
+      if (amountChanged && optionChanged) {
+        return `${data.username} changed Pick to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`;
+      } else if (optionChanged) {
+        return `${data.username} switched Pick from ${data.originalOption} to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`;
+      } else {
+        return `${data.username} updated Pick from ${data.originalAmount?.toLocaleString('en-US')} to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`;
+      }
+    },
   },
   CANCEL_BET_CHAT_MESSAGE: {
     MESSAGE: (data: BetNotificationData) =>
-      `${data.username} canceled Pick on ${data.bettingOption}`,
+      `${data.username} cancelled their Pick of ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`,
   },
   EMAIL_COIN_PURCHASED: {
     TITLE: () => `Gold Coins Added to Your Account`,
