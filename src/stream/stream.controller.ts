@@ -26,8 +26,9 @@ import {
 } from './dto/list-stream.dto';
 import { Stream } from './entities/stream.entity';
 import { UserIdDto } from 'src/users/dto/user.requests.dto';
-import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
+// import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
+import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -37,7 +38,7 @@ interface RequestWithUser extends Request {
 @ApiTags('stream')
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) {}
+  constructor(private readonly streamService: StreamService) { }
   /**
  * Retrieves a paginated list of live and scheduled streams for the home page view.
    * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
@@ -70,7 +71,7 @@ Pass "pagination=false" to retrieve all matching streams without pagination. \
 Returns essential fields (id, name, status, viewerCount) along with derived values such as bettingRoundStatus and userBetCount.',
   })
   @ApiOkResponse({ type: LiveScheduledStreamListDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get()
   async getScheduledAndLiveStreams(
     @Query() liveScheduledStreamListDto: LiveScheduledStreamListDto,
@@ -83,6 +84,47 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       message: 'Successfully Listed',
       data,
       total,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'List live bets for homepage',
+  })
+  @ApiOkResponse({ type: HomepageBetListDto })
+  // @UseGuards(GeoFencingGuard)
+  @Get('displayed-bets')
+  async getDisplayedBets(
+    @Query() homepageBetListDto: HomepageBetListDto,
+  ) {
+    const { data } = await this.streamService.getDisplayBets(
+      homepageBetListDto,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
+
+  @ApiOperation({
+    summary: 'List upcoming bets for homepage',
+  })
+  @ApiOkResponse({ type: HomepageBetListDto })
+  // @UseGuards(GeoFencingGuard)
+  @Get('displayed-upcoming-bets')
+  async getUpcomingBets(
+    @Query() homepageBetListDto: HomepageBetListDto,
+  ) {
+    const { data } = await this.streamService.getUpcomingBets(
+      homepageBetListDto,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
     };
   }
   /**
@@ -105,7 +147,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       'Retrieves a list of users with support for pagination, range, and filtering. Pass "pagination=false" to retrieve all users without pagination.',
   })
   @ApiOkResponse({ type: StreamFilterDto })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('home')
   async homePageStreamList(@Query() streamFilterDto: StreamFilterDto) {
     const { total, data } =
@@ -115,6 +157,35 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       message: 'Successfully Listed',
       data,
       total,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Lists top live streams',
+  })
+  // @UseGuards(GeoFencingGuard)
+  @Get('top')
+  async topLiveStreams() {
+    const { data } =
+      await this.streamService.getTopLivestreams();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Lists Promoted Bets',
+  })
+  // @UseGuards(GeoFencingGuard)
+  @Get('promoted-bets')
+  async promotedBets() {
+    const { data } = await this.streamService.getTopPromotedBets();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
     };
   }
   /**
@@ -157,7 +228,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     description: 'Stream details retrieved successfully.',
     type: StreamResponseDto,
   })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('/:id')
   async findStreamById(@Param('id') id: string): Promise<StreamResponseDto> {
     const stream = await this.streamService.findStreamById(id);
@@ -173,7 +244,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     status: 200,
     description: 'Stream details retrieved successfully',
   })
-  @UseGuards(GeoFencingGuard)
+  // @UseGuards(GeoFencingGuard)
   @Get('bet-round/:streamId')
   async findBetRoundDetailsByStreamId(
     @Param('streamId') streamId: string,

@@ -10,7 +10,7 @@ import { GatewayManager } from 'src/ws/gateway.manager';
 import { ChatService } from './chat.service';
 import { ChatMessage } from 'src/interface/chat-message.interface';
 import { WsJwtGuard } from 'src/auth/guards/ws-jwt.guard';
-import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
+// import { GeoFencingSocketGuard } from 'src/auth/guards/geo-fencing-socket.guard';
 import { AuthenticatedSocket } from 'src/interface/socket.interface';
 import { AuthenticatedSocketPayload } from 'src/auth/interfaces/jwt-payload.interface';
 import { emitToClient, emitToStream } from 'src/common/common';
@@ -83,7 +83,7 @@ export class ChatGateway {
    * @param client - Connected socket client
    * @param data - Payload containing streamId, message, and optional imageURL
    */
-  @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
+  // @UseGuards(WsJwtGuard, GeoFencingSocketGuard)
   @SubscribeMessage(SocketEventName.SendChatMessage)
   async handleChatMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
