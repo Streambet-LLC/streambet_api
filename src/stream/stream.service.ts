@@ -1406,17 +1406,24 @@ END
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.LIVE
+        })
         .limit(take)
         .offset(offset);
 
       const count = await this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.LIVE
         })
         .getCount()
 
@@ -1480,6 +1487,111 @@ END
         }
       }
     } catch (e) {
+      console.log(e);
+
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getUpcomingBets(
+    homepageBetListDto: HomepageBetListDto,
+  ): Promise<any> {
+
+    const page = homepageBetListDto.page ?? 1;
+    const take = 15;
+    const offset = (page - 1) * take;
+
+    try {
+      const betRoundsQB = this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.CREATED]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.SCHEDULED
+        })
+        .limit(take)
+        .offset(offset);
+
+      const count = await this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.SCHEDULED
+        })
+        .getCount()
+
+      const hasNextPage = count > (offset + take);
+
+      const data = await betRoundsQB.getRawMany();
+      const resultList = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+
+        const variables = await this.bettingVariableRepository
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
+          })
+          .getRawMany();
+
+        let totalVotes = 0;
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        });
+
+        const options = variables.map((v) => {
+          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+          return {
+            option: v.bv_name,
+            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+          }
+        });
+
+        const itemData = {
+          streamId: item.s_id,
+          thumbnail: item.s_thumbnailUrl ?? "",
+          creator: item.c_username,
+          streamName: item.s_name,
+          name: item.br_roundName,
+          type: item.s_type,
+          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          totalPot: {
+            streamCoins: totalStreamCoins,
+            goldCoins: totalGoldCoins
+          }
+        }
+
+        resultList.push(itemData);
+      }
+
+      return {
+        data: {
+          data: resultList,
+          page,
+          hasNextPage
+        }
+      }
+    } catch (e) {
+      console.log(e);
+
       Logger.error('Unable to retrieve stream details', e);
       throw new HttpException(
         `Unable to retrieve stream details at the moment. Please try again later`,

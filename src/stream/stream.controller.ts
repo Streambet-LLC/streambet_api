@@ -106,6 +106,27 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
       data,
     };
   }
+
+
+  @ApiOperation({
+    summary: 'List upcoming bets for homepage',
+  })
+  @ApiOkResponse({ type: HomepageBetListDto })
+  // @UseGuards(GeoFencingGuard)
+  @Get('displayed-upcoming-bets')
+  async getUpcomingBets(
+    @Query() homepageBetListDto: HomepageBetListDto,
+  ) {
+    const { data } = await this.streamService.getUpcomingBets(
+      homepageBetListDto,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
