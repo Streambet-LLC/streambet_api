@@ -388,15 +388,18 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
+        // Use streamId directly from the betting variable to ensure correct room targeting
+        const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
+
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
           betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
+            streamId,
           );
         }
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.BettingUpdate,
           {
             roundId: roundIdEmit,
@@ -409,22 +412,21 @@ export class BettingGateway {
         );
 
         await this.sendPersonalizedPotentialAmounts(
-          bettingVariable.stream.id,
+          streamId,
           roundIdEmit,
         );
 
-        // System chat message
-        const chatMessage: ChatMessage = {
-          type: ChatType.System,
-          username: ChatType.StreambetBot,
-          message: `${user.username} cancelled their bet of ${bet.amount} on ${bettingVariable.name}!`,
-          timestamp: new Date(),
-        };
-        void emitToStream(
-          this.gatewayManager,
-          bettingVariable.stream.id,
-          SocketEventName.ChatMessage,
-          chatMessage,
+        // System chat notification for bet cancellation
+        const systemMessage =
+          NOTIFICATION_TEMPLATE.CANCEL_BET_CHAT_MESSAGE.MESSAGE({
+            username: user.username,
+            amount: bet.amount,
+            bettingOption: bettingVariable.name,
+          });
+        await this.chatGateway.chatNotification(
+          user,
+          streamId,
+          systemMessage,
         );
       }
     } catch (error) {
@@ -444,7 +446,7 @@ export class BettingGateway {
       const user = client.data.user;
 
       // Edit bet in service
-      const { betDetails: editedBet, oldBettingAmount } =
+      const { betDetails: editedBet, oldBettingAmount, oldBettingOption } =
         await this.bettingService.editBet(user.sub, editBetDto);
 
       const [updatedWallet, bettingVariable] = await Promise.all([
@@ -525,15 +527,18 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
+        // Use streamId directly from the betting variable to ensure correct room targeting
+        const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
+
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
           betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
+            streamId,
           );
         }
         void emitToStream(
           this.gatewayManager,
-          bettingVariable.stream.id,
+          streamId,
           SocketEventName.BettingUpdate,
           {
             roundId: roundIdEmit,
@@ -546,22 +551,29 @@ export class BettingGateway {
         );
 
         await this.sendPersonalizedPotentialAmounts(
-          bettingVariable.stream.id,
+          streamId,
           roundIdEmit,
         );
 
-        const chatMessage: ChatMessage = {
-          type: ChatType.System,
-          username: ChatType.StreambetBot,
-          message: `${user.username} edited their Pick to ${editedBet.amount} on ${bettingVariable.name}!`,
-          timestamp: new Date(),
-        };
-        void emitToStream(
-          this.gatewayManager,
-          bettingVariable.stream.id,
-          SocketEventName.ChatMessage,
-          chatMessage,
-        );
+        // System chat notification for bet edit - only send if something actually changed
+        const amountChanged = Number(oldBettingAmount) !== editedBet.amount;
+        const optionChanged = oldBettingOption !== bettingVariable.name;
+        
+        if (amountChanged || optionChanged) {
+          const systemMessage =
+            NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
+              username: user.username,
+              originalAmount: Number(oldBettingAmount),
+              originalOption: oldBettingOption,
+              amount: editedBet.amount,
+              bettingOption: bettingVariable.name,
+            });
+          await this.chatGateway.chatNotification(
+            user,
+            streamId,
+            systemMessage,
+          );
+        }
       }
     } catch (error) {
       emitToClient(client, SocketEventName.Error, {

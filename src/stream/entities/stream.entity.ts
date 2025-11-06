@@ -2,7 +2,7 @@ import { BettingVariable } from '../../betting/entities/betting-variable.entity'
 import { BettingRound } from '../../betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Entity, Column, OneToMany, OneToOne, JoinColumn } from 'typeorm';
-import { StreamStatus } from 'src/enums/stream.enum';
+import { StreamEventType, StreamStatus } from 'src/enums/stream.enum';
 import { User } from 'src/users/entities/user.entity';
 
 @Entity('streams')
@@ -28,6 +28,13 @@ export class Stream extends BaseEntity {
     default: StreamStatus.SCHEDULED,
   })
   status: StreamStatus;
+
+  @Column({
+    type: 'enum',
+    enum: StreamEventType,
+    default: StreamEventType.STREAM,
+  })
+  type: StreamEventType;
 
   @Column({ type: 'timestamp', nullable: true })
   scheduledStartTime: Date;
