@@ -299,14 +299,15 @@ export class BettingService {
 
     const allRounds = [];
 
-    // Iterate through each provided round
-    for (const roundData of rounds) {
+    for (let i = 0; i < rounds.length; i++) {
+      const roundData = rounds[i];
+
       // Create and save a new betting round
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
         status: stream.type === StreamEventType.STREAM
-          ? BettingRoundStatus.CREATED
+          ? (i === 0 ? BettingRoundStatus.OPEN : BettingRoundStatus.CREATED)
           : BettingRoundStatus.OPEN,
       });
 
@@ -342,6 +343,7 @@ export class BettingService {
           betCountSweepCoin: variable.betCountSweepCoin,
         })),
       });
+
     }
 
     // Return structured response
