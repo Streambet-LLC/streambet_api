@@ -160,6 +160,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .createQueryBuilder('s')
         .innerJoinAndSelect('s.creator', 'creator')
         .where('s.status = :status', { status: StreamStatus.LIVE })
+        .andWhere('s.type = :type', {
+          type: StreamEventType.STREAM
+        })
         .orderBy('s.viewerCount', 'DESC')
         .select('s.id', 'id')
         .addSelect('s.name', 'streamName')
@@ -185,10 +188,14 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.SCHEDULED
+        })
+        .orderBy("s.scheduledStartTime", "ASC")
         .limit(10);
 
       const data = await betRoundsQB.getRawMany();
@@ -1421,19 +1428,22 @@ END
   ): Promise<any> {
 
     const page = homepageBetListDto.page ?? 1;
-    const take = 15;
+    const take = 24;
     const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
-        .andWhere("s.status = :status", {
-          status: StreamStatus.LIVE
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED
+          ]
         })
         .limit(take)
         .offset(offset);
@@ -1441,7 +1451,7 @@ END
       const count = await this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .andWhere("s.status = :status", {
@@ -1531,7 +1541,7 @@ END
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
@@ -1544,7 +1554,7 @@ END
       const count = await this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .andWhere("s.status = :status", {
