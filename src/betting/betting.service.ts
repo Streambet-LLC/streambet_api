@@ -309,6 +309,7 @@ export class BettingService {
           ? BettingRoundStatus.CREATED
           : BettingRoundStatus.OPEN,
       });
+
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
 
       const createdVariables: BettingVariable[] = [];
