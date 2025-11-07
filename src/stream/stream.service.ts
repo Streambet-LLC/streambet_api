@@ -1413,7 +1413,7 @@ END
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED, BettingRoundStatus.CLOSED]
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.CLOSED]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
@@ -1429,7 +1429,7 @@ END
       const count = await this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.CLOSED]
         })
         .leftJoinAndSelect("br.stream", "s")
         .andWhere("s.status = :status", {
@@ -1519,7 +1519,7 @@ END
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
@@ -1532,7 +1532,7 @@ END
       const count = await this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED, BettingRoundStatus.CREATED]
+          statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
         .andWhere("s.status = :status", {
