@@ -306,9 +306,7 @@ export class BettingService {
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        status: stream.type === StreamEventType.STREAM
-          ? (i === 0 ? BettingRoundStatus.OPEN : BettingRoundStatus.CREATED)
-          : BettingRoundStatus.OPEN,
+        status: BettingRoundStatus.OPEN,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);

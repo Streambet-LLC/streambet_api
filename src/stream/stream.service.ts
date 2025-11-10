@@ -229,6 +229,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
         const itemData = {
           streamId: item.s_id,
+          roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
           creator: item.c_username,
           streamName: item.s_name,
@@ -495,56 +496,56 @@ END
         );
       }
 
-      let rounds = [];
-      if (stream.bettingRounds && stream.bettingRounds.length > 0) {
-        let createdFound = false;
+      let resultList = [];
 
-        // Sort rounds by createdAt ASC, remove duplicate "created" rounds,
-        // and transform into the desired response format
-        rounds = stream.bettingRounds
-          .sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-          )
-          .filter((round) => {
-            if (round.status === BettingRoundStatus.CREATED) {
-              if (!createdFound) {
-                createdFound = true; // keep only the first "created"
-                return true;
-              }
-              return false; // skip subsequent "created"
-            }
-            return true; // keep other statuses
+      for (let i = 0; i < stream.bettingRounds.length; i++) {
+        const item = stream.bettingRounds[i];
+
+        const variables = await this.bettingVariableRepository
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.id
           })
-          .map((round) => {
-            // Calculate sum of totalBetsGoldCoinAmount for non-winning options
-            const nonWinningGoldCoinSum = (round.bettingVariables ?? [])
-              .filter((variable) => variable.is_winning_option === false)
-              .reduce(
-                (sum, variable) =>
-                  Number(sum) + (Number(variable.totalBetsGoldCoinAmount) || 0),
-                0,
-              );
+          .getRawMany();
 
-            return {
-              roundName: round.roundName,
-              roundStatus: round.status,
-              createdAt: new Date(round.createdAt).toISOString(),
-              winningOption: (round.bettingVariables ?? [])
-                .filter((variable) => variable.is_winning_option === true)
-                .map((variable) => ({
-                  variableName: variable.name,
-                  totalSweepCoinAmt: variable.totalBetsSweepCoinAmount,
-                  totalGoldCoinAmt: nonWinningGoldCoinSum,
-                  winners: (variable.bets ?? [])
-                    .filter((bet) => bet.status === BetStatus.Won && bet.user)
-                    .map((bet) => ({
-                      userName: bet.user.username,
-                      userProfileUrl: bet.user.profileImageUrl ?? null,
-                    })),
-                })),
-            };
-          });
+        let totalVotes = 0;
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        });
+
+        const options = variables.map((v) => {
+          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
+
+          return {
+            option: v.bv_name,
+            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+          }
+        });
+
+        const itemData = {
+          roundId: item.id,
+          streamId: stream.id,
+          thumbnail: stream.thumbnailUrl,
+          creator: stream.creator?.username,
+          streamName: stream.name,
+          name: item.roundName,
+          type: stream.type,
+          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          status: item.status,
+          totalPot: {
+            streamCoins: totalStreamCoins,
+            goldCoins: totalGoldCoins
+          }
+        }
+
+        resultList.push(itemData);
+
       }
 
       // Prepare the final structured response
@@ -558,7 +559,7 @@ END
         scheduledStartTime: stream.scheduledStartTime,
         description: stream.description, // typo in field kept as in entity
         viewerCount: stream.viewerCount,
-        roundDetails: rounds || [],
+        roundDetails: resultList,
         creatorId: stream.creatorId,
         creatorUsername: stream.creator?.username,
       };
@@ -575,7 +576,7 @@ END
     }
   }
 
-  async findBetRoundDetailsByStreamId(streamId: string, userId: string) {
+  async findBetRoundDetailsByStreamId(streamId: string, userId: string, roundId: string) {
     try {
       let userBetGoldCoins: number;
       let userBetSweepCoin: number;
@@ -585,7 +586,7 @@ END
         .leftJoinAndSelect(
           'stream.bettingRounds',
           'round',
-          'round.status IN (:...roundStatuses)',
+          'round.status IN (:...roundStatuses) AND round.id = :roundId',
         )
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .leftJoinAndSelect('variable.bets', 'b', 'b.userId = :userId')
@@ -594,6 +595,7 @@ END
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           userId,
+          roundId
         })
         .getOne();
       if (userId) {
@@ -676,6 +678,7 @@ END
       throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
   async findStreamDetailsForAdmin(streamId: string) {
     const stream = await this.streamsRepository.findOne({
       where: { id: streamId },
@@ -1474,6 +1477,7 @@ END
 
         const itemData = {
           streamId: item.s_id,
+          roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
           creator: item.c_username,
           streamName: item.s_name,
