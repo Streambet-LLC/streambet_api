@@ -29,6 +29,8 @@ import { UserIdDto } from 'src/users/dto/user.requests.dto';
 // import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
+import { RoundIdDto } from 'src/betting/dto/place-bet.dto';
+import { BetRoundDetailsDto } from './dto/stream.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -248,11 +250,12 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   @Get('bet-round/:streamId')
   async findBetRoundDetailsByStreamId(
     @Param('streamId') streamId: string,
-    @Query() userIdDto: UserIdDto,
+    @Query() roundDetails: BetRoundDetailsDto,
   ) {
     const stream = await this.streamService.findBetRoundDetailsByStreamId(
       streamId,
-      userIdDto?.userId,
+      roundDetails?.userId,
+      roundDetails?.roundId
     );
     return {
       message: 'Stream details retrieved successfully',
