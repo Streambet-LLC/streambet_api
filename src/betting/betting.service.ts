@@ -567,6 +567,19 @@ export class BettingService {
           winnerAmountSweepCoins > 0 ? winnerAmountSweepCoins : null;
       }
 
+      // Calculate per-round totals
+      let totalBetsGoldCoinAmount = 0;
+      let totalBetsSweepCoinAmount = 0;
+      let totalGoldCoinBet = 0;
+      let totalSweepCoinBet = 0;
+
+      round.bettingVariables.forEach((variable) => {
+        totalBetsGoldCoinAmount += Number(variable.totalBetsGoldCoinAmount || 0);
+        totalBetsSweepCoinAmount += Number(variable.totalBetsSweepCoinAmount || 0);
+        totalGoldCoinBet += Number(variable.betCountGoldCoin || 0);
+        totalSweepCoinBet += Number(variable.betCountSweepCoin || 0);
+      });
+
       // Push round summary into response
       result.rounds.push({
         roundId: round.id,
@@ -575,6 +588,10 @@ export class BettingService {
         winnerAmount,
         winners,
         options,
+        totalBetsGoldCoinAmount: totalBetsGoldCoinAmount.toString(),
+        totalBetsSweepCoinAmount: totalBetsSweepCoinAmount.toString(),
+        totalGoldCoinBet,
+        totalSweepCoinBet,
       });
     }
     return result;

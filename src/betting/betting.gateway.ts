@@ -164,25 +164,20 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
-        // Admin-specific betting stats
-        let betStat = {};
-        if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
-            bettingVariable.stream.id,
-          );
-        }
+        // Admin dashboard betting stats
+        const bettingUpdatePayload = {
+          roundId: roundIdEmit,
+          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+          totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+          totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+        };
+
         void emitToStream(
           this.gatewayManager,
           bettingVariable.stream.id,
           SocketEventName.BettingUpdate,
-          {
-            roundId: roundIdEmit,
-            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
-            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
-            ...betStat,
-          },
+          bettingUpdatePayload,
         );
 
         // Personalized potential amounts for all users
@@ -391,12 +386,6 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        let betStat = {};
-        if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
-            streamId,
-          );
-        }
         void emitToStream(
           this.gatewayManager,
           streamId,
@@ -407,7 +396,6 @@ export class BettingGateway {
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
             totalSweepCoinBet: roundTotals.totalSweepCoinBet,
             totalGoldCoinBet: roundTotals.totalGoldCoinBet,
-            ...betStat,
           },
         );
 
@@ -530,12 +518,6 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        let betStat = {};
-        if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
-            streamId,
-          );
-        }
         void emitToStream(
           this.gatewayManager,
           streamId,
@@ -546,7 +528,6 @@ export class BettingGateway {
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
             totalGoldCoinBet: roundTotals.totalGoldCoinBet,
             totalSweepCoinBet: roundTotals.totalSweepCoinBet,
-            ...betStat,
           },
         );
 

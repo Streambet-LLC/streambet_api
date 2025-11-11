@@ -121,6 +121,41 @@ export class RoundDto {
   @ValidateNested({ each: true })
   @Type(() => OptionDto)
   options: OptionDto[];
+
+  @ApiProperty({
+    description: 'Total gold coin amount for this round',
+    example: '0',
+    required: false
+  })
+  @IsOptional()
+  @IsNumberString()
+  totalBetsGoldCoinAmount?: string;
+
+  @ApiProperty({
+    description: 'Total Stream Coin amount for this round',
+    example: '0',
+    required: false })
+  @IsOptional()
+  @IsNumberString()
+  totalBetsSweepCoinAmount?: string;
+
+  @ApiProperty({
+    description: 'Number of gold coins placed in this round',
+    example: 0,
+    required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  totalGoldCoinBet?: number;
+
+  @ApiProperty({
+    description: 'Number of Stream Coins placed in this round',
+    example: 0,
+    required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  totalSweepCoinBet?: number;
 }
 
 export class StreamRoundsResponseDto {
