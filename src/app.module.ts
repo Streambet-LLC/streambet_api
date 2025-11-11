@@ -41,6 +41,7 @@ import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
 import personaConfig from './config/persona.config';
 import { WebhookModule } from './webhook/webhook.module';
+import { CreatorModule } from './creator/creator.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { WebhookModule } from './webhook/webhook.module';
     AssetsModule,
     UsersModule,
     AdminModule,
+    CreatorModule,
     BettingModule,
     WalletsModule,
     PaymentsModule,

@@ -222,7 +222,7 @@ export class UsersService {
           );
         }
       }
-      if (!existingUserObj?.isCreator) {
+      if (existingUserObj?.role !== UserRole.CREATOR) {
         delete profileUpdateDto.socials;
       }
       await this.usersRepository.update({ id }, profileUpdateDto);
@@ -235,7 +235,7 @@ export class UsersService {
 
   async getUserProfile(
     username: string,
-  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'accountCreationDate' | 'profileImageUrl' | 'isCreator' | 'socials'>> {
+  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'accountCreationDate' | 'profileImageUrl' | 'socials'>> {
     try {
       const user = await this.usersRepository.findOne({
         where: { 
@@ -249,14 +249,18 @@ export class UsersService {
       if (!user) {
         throw new NotFoundException('User not found');
       }
+
+      console.log(user);
       
       return {
         id: user.id,
         username: user.username,
         accountCreationDate: user.accountCreationDate,
         profileImageUrl: user.profileImageUrl,
-        isCreator: user.isCreator,
         socials: user.socials,
+        ...user.role === UserRole.CREATOR && {
+          isCreator: true,
+        }
       };
     } catch (e) {
       this.logger.error(`Error fetching profile for user with username ${username}:`, e);
@@ -341,7 +345,7 @@ export class UsersService {
   async findAllCreators(): Promise<{ data: User[] }> {
     const test = await this.usersRepository.find({
       where: {
-        isCreator: true,
+        role: UserRole.CREATOR,
       },
       select: {
         id: true,

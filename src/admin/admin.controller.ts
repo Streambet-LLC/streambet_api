@@ -76,6 +76,12 @@ export class AdminController {
     }
   }
 
+  private ensureAdminOrCreator(user: User) {
+    if (![UserRole.ADMIN, UserRole.CREATOR].includes(user.role)) {
+      throw new ForbiddenException('Admin/Creator access required');
+    }
+  }
+
   // Stream Management
   @ApiOperation({ summary: 'Create a new stream' })
   @SwaggerApiResponse({
@@ -161,8 +167,10 @@ export class AdminController {
     @Param('id') id: string,
     @Body() updateStreamDto: UpdateStreamDto,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const updatedStream = await this.streamService.updateStream(
+      req.user.role,
+      req.user.id,
       id,
       updateStreamDto,
     );
@@ -190,8 +198,10 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Body() createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const grouped = await this.bettingService.createBettingVariable(
+      req.user.role,
+      req.user.id,
       createBettingVariableDto,
     );
     return {
@@ -250,8 +260,8 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('id') id: string,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const result = await this.bettingService.declareWinner(id);
+    this.ensureAdminOrCreator(req.user);
+    const result = await this.bettingService.declareWinner(req.user.role, req.user.id, id);
     return {
       message: 'Winner declared and payouts processed successfully',
       status: HttpStatus.OK,
@@ -275,8 +285,10 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Body() editBettingVariableDto: EditBettingVariableDto,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const grouped = await this.bettingService.editBettingVariable(
+      req.user.role,
+      req.user.id,
       editBettingVariableDto,
     );
 
@@ -445,7 +457,7 @@ export class AdminController {
   ) {
     this.ensureAdmin(req.user);
     const { total, data } =
-      await this.streamService.allStreamsForAdmin(streamFilterDto);
+      await this.streamService.allStreamsForAdmin(req.user.role, req.user.id, streamFilterDto);
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
@@ -471,8 +483,8 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('id') id: string,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const data = await this.streamService.findStreamDetailsForAdmin(id);
+    this.ensureAdminOrCreator(req.user);
+    const data = await this.streamService.findStreamDetailsForAdmin(req.user.role, req.user.id, id);
     return {
       message: 'Successfully fetch Stream details',
       status: HttpStatus.OK,
@@ -503,9 +515,11 @@ export class AdminController {
     @Param('roundId') roundId: string,
     @Body() body: UpdateRoundStatusDto,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
 
     const updatedRound = await this.bettingService.updateRoundStatus(
+      req.user.role,
+      req.user.id,
       roundId,
       body.newStatus,
     );
@@ -525,7 +539,7 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
   ) {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const data = await this.bettingService.getStreamRoundsWithWinners(streamId);
     return {
       message: 'Details fetched successfully',
@@ -553,9 +567,9 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('id') id: string,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const endedStream =
-      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(id);
+      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(req.user.role, req.user.id, id);
     return {
       message: 'Stream ended successfully',
       status: HttpStatus.OK,
@@ -570,8 +584,8 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('roundId') roundId: string,
   ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const result = await this.bettingService.cancelRoundAndRefund(roundId);
+    this.ensureAdminOrCreator(req.user);
+    const result = await this.bettingService.cancelRoundAndRefund(req.user.role, req.user.id, roundId);
     return {
       message: 'Round cancelled and all bets refunded',
       status: HttpStatus.OK,
@@ -654,7 +668,7 @@ export class AdminController {
 
     // Get stream details (including betting rounds and variables)
     const { totalUsers, totalStreamTime } =
-      await this.streamService.getStreamAnalytics(streamId);
+      await this.streamService.getStreamAnalytics(req.user.role, req.user.id, streamId);
 
     // Get total bet value for the stream
     const totalBetValue =
@@ -714,9 +728,9 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
   ): Promise<{ message: string; data: String; statusCode: Number }> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const canceledStreamId =
-      await this.streamService.cancelScheduledStream(streamId);
+      await this.streamService.cancelScheduledStream(req.user.role, req.user.id, streamId);
     return {
       data: canceledStreamId,
       message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
@@ -762,9 +776,9 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
   ): Promise<{ message: string; data: String; statusCode: Number }> {
-    this.ensureAdmin(req.user);
+    this.ensureAdminOrCreator(req.user);
     const deletedStreamId =
-      await this.streamService.deleteScheduledStream(streamId);
+      await this.streamService.deleteScheduledStream(req.user.role, req.user.id, streamId);
     return {
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
