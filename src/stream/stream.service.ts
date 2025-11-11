@@ -1505,8 +1505,11 @@ END
           statuses: [BettingRoundStatus.OPEN]
         })
         .leftJoinAndSelect("br.stream", "s")
-        .andWhere("s.status = :status", {
-          status: StreamStatus.LIVE
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED
+          ]
         })
         .getCount()
 
