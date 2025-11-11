@@ -64,7 +64,7 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_ROUND_VOID: {
     MESSAGE: (data: BetNotificationData) =>
-      `"${data.roundName}" has been voided. No one bet on the other side! All Picks have been refunded to your wallet.`,
+      `'${data.roundName}' has been voided. No one bet on the other side! All Picks have been refunded to your wallet.`,
     TITLE: () => `Round Voided`,
   },
   BET_WINNER_DECLARED: {
