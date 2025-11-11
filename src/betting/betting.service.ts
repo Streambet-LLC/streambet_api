@@ -139,6 +139,8 @@ export class BettingService {
       } else {
         stream.status = StreamStatus.SCHEDULED; // Future time → scheduled
       }
+    } else {
+      stream.status = StreamStatus.LIVE;
     }
 
     // Auto-detect platform from embeddedUrl if provided
