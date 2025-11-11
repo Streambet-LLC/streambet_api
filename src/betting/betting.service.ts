@@ -44,6 +44,7 @@ import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
 import _, { round } from 'lodash';
 import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @Injectable()
 export class BettingService {
@@ -288,12 +289,20 @@ export class BettingService {
    * @throws {NotFoundException} If the stream ID does not exist.
    */
   async createBettingVariable(
+    role: UserRole,
+    creator: string,
     createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<any> {
     const { streamId, rounds } = createBettingVariableDto;
 
     // Validate stream existence
     const stream = await this.findStreamById(streamId);
+
+    if (role === UserRole.CREATOR) {
+      if (stream.creatorId !== creator) {
+        throw new NotFoundException(`Betting variable not found`);
+      }
+    }
 
     // Prevent adding betting variables to ended streams
     if (stream.status === StreamStatus.ENDED) {
@@ -605,10 +614,18 @@ export class BettingService {
    * @throws HttpException (500) - If an unexpected error occurs during persistence or event emission.
    */
   async editBettingVariable(
+    role: UserRole,
+    creator: string,
     editBettingVariableDto: EditBettingVariableDto,
   ): Promise<any> {
     const { streamId, rounds } = editBettingVariableDto;
     const stream = await this.findStreamById(streamId);
+
+    if (role === UserRole.CREATOR) {
+      if (stream.creatorId !== creator) {
+        throw new NotFoundException(`Betting variable not found`);
+      }
+    }
 
     // Prevent editing if stream is ended or cancelled
     if ([StreamStatus.ENDED, StreamStatus.CANCELLED].includes(stream.status)) {
@@ -1273,10 +1290,10 @@ export class BettingService {
         }
       }
 
-      return { 
-        betDetails, 
-        oldBettingAmount, 
-        oldBettingOption: oldBettingVariable?.name 
+      return {
+        betDetails,
+        oldBettingAmount,
+        oldBettingOption: oldBettingVariable?.name
       };
     } catch (error) {
       // Rollback transaction on failure
@@ -1512,9 +1529,16 @@ export class BettingService {
    *
    * @param variableId - ID of the betting variable that won
    */
-  async declareWinner(variableId: string): Promise<void> {
+  async declareWinner(role: UserRole, creator: string, variableId: string): Promise<void> {
     // Fetch the betting variable and associated round/stream
     const bettingVariable = await this.findBettingVariableById(variableId);
+    const stream = await this.findStreamById(bettingVariable.streamId);
+
+    if (role == UserRole.CREATOR) {
+      if (stream.creatorId !== creator) {
+        throw new NotFoundException(`Stream not found`);
+      }
+    }
 
     // Ensure the round is locked before declaring a winner
     this.validateRoundLocked(bettingVariable);
@@ -2509,6 +2533,8 @@ export class BettingService {
    * @throws BadRequestException if the status transition is invalid
    */
   async updateRoundStatus(
+    role: UserRole,
+    creator: string,
     roundId: string,
     newStatus: 'created' | 'open' | 'locked',
   ): Promise<BettingRound> {
@@ -2516,8 +2542,17 @@ export class BettingService {
     const round = await this.bettingRoundsRepository.findOne({
       where: { id: roundId },
     });
+
     if (!round) {
       throw new NotFoundException(`Round with ID ${roundId} not found`);
+    }
+
+    const stream = await this.findStreamById(round.streamId);
+
+    if (role === UserRole.CREATOR) {
+      if (stream.creatorId !== creator) {
+        throw new NotFoundException(`Betting variable not found`);
+      }
     }
 
     const current = round.status;
@@ -2622,6 +2657,8 @@ export class BettingService {
    * @throws NotFoundException if the betting round does not exist
    */
   async cancelRoundAndRefund(
+    role: UserRole,
+    creator: string,
     roundId: string,
   ): Promise<{ refundedBets: Bet[] }> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -2636,6 +2673,14 @@ export class BettingService {
       });
       if (!round) {
         throw new NotFoundException('Betting round not found');
+      }
+
+      const stream = await this.findStreamById(round.streamId);
+
+      if (role === UserRole.CREATOR) {
+        if (stream.creatorId !== creator) {
+          throw new NotFoundException(`Betting variable not found`);
+        }
       }
 
       // Set round status to CANCELLED

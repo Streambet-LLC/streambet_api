@@ -37,6 +37,7 @@ import { NotificationService } from 'src/notification/notification.service';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -337,11 +338,11 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
    * @author Reshma M S
    */
   async allStreamsForAdmin(
+    role: UserRole,
+    creator: string,
     streamFilterDto: StreamFilterDto,
   ): Promise<{ data: Stream[]; total: number }> {
     try {
-      console.log(streamFilterDto);
-
       const sort: Sort = streamFilterDto.sort
         ? (JSON.parse(streamFilterDto.sort) as Sort)
         : undefined;
@@ -381,6 +382,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
         streamQB.andWhere(`s.status != :streamStatus`, {
           streamStatus: StreamStatus.ENDED,
+        });
+      }
+
+      if (role === UserRole.CREATOR) {
+        streamQB.andWhere(`s.creatorId = :creatorId`, {
+          creatorId: creator,
         });
       }
 
@@ -683,7 +690,7 @@ END
     }
   }
 
-  async findStreamDetailsForAdmin(streamId: string) {
+  async findStreamDetailsForAdmin(role: UserRole, creator: string, streamId: string) {
     const stream = await this.streamsRepository.findOne({
       where: { id: streamId },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
@@ -729,6 +736,8 @@ END
    * @author Assistant
    */
   async updateStream(
+    role: UserRole,
+    creator: string,
     id: string,
     updateStreamDto: UpdateStreamDto,
   ): Promise<Stream> {
@@ -740,6 +749,13 @@ END
       if (!stream) {
         throw new NotFoundException(`Stream with ID ${id} not found`);
       }
+
+      if (role === UserRole.CREATOR) {
+        if (stream.creatorId !== creator) {
+          throw new NotFoundException(`Stream with ID ${id} not found`);
+        }
+      }
+
       const prevStatus = stream.status;
       // Update only the provided fields
       if (updateStreamDto.name !== undefined) {
@@ -828,6 +844,8 @@ END
    * @returns The updated stream entity.
    */
   async endStreamIfAllRoundsClosedOrCancelled(
+    role: UserRole,
+    creator: string,
     streamId: string,
   ): Promise<Stream> {
     // Fetch the stream with all its rounds
@@ -838,6 +856,14 @@ END
     if (!stream) {
       throw new NotFoundException(`Stream with ID ${streamId} not found`);
     }
+
+
+    if (role === UserRole.CREATOR) {
+      if (stream.creatorId !== creator) {
+        throw new NotFoundException(`Stream not found`);
+      }
+    }
+
     // Check all rounds are CLOSED or CANCELLED
     const allRoundsTerminal = (stream.bettingRounds || []).some(
       (round) =>
@@ -1073,9 +1099,9 @@ END
    *    - totalUsers: (currently uses viewerCount as a placeholder for unique users)
    *    - totalStreamTime: formatted duration string
    */
-  async getStreamAnalytics(streamId: string): Promise<any> {
+  async getStreamAnalytics(role: UserRole, creator: string, streamId: string): Promise<any> {
     // Fetch stream details for the given streamId
-    const stream = await this.findStreamDetailsForAdmin(streamId);
+    const stream = await this.findStreamDetailsForAdmin(role, creator, streamId);
 
     // Calculate total stream time in seconds
     const scheduledStart = stream.scheduledStartTime
@@ -1114,10 +1140,17 @@ END
    * @returns A promise that resolves with the canceled stream's ID.
    * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
    */
-  async cancelScheduledStream(streamId: string): Promise<String> {
+  async cancelScheduledStream(role: UserRole, creator: string, streamId: string): Promise<String> {
     try {
       //retun a sheduled stream with open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
+
+      if (role === UserRole.CREATOR) {
+        if (stream.creatorId !== creator) {
+          throw new NotFoundException(`Betting variable not found`);
+        }
+      }
+
       if (!stream) {
         throw new BadRequestException(
           `No scheduled stream found for stream ID: ${streamId}`,
@@ -1129,6 +1162,7 @@ END
           `"Stream "${stream.name}" was not found in the queue. It may have already been processed or removed.`,
         );
       }
+
       await this.streamsRepository
         .createQueryBuilder()
         .update(Stream)
@@ -1138,7 +1172,7 @@ END
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
         for (const round of stream.bettingRounds) {
-          await this.bettingService.cancelRoundAndRefund(round.id);
+          await this.bettingService.cancelRoundAndRefund(role, creator, round.id);
         }
       }
       return streamId;
@@ -1161,10 +1195,19 @@ END
    * @returns A promise that resolves with the delete stream's ID.
    * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
    */
-  async deleteScheduledStream(streamId: string): Promise<String> {
+  async deleteScheduledStream(role: UserRole, creator: string, streamId: string): Promise<String> {
     try {
       //retun a sheduled stream with created, open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
+
+      console.log(stream);
+
+      if (role === UserRole.CREATOR) {
+        if (stream.creatorId !== creator) {
+          throw new NotFoundException(`Stream not found`);
+        }
+      }
+
       if (!stream) {
         throw new BadRequestException(
           `No scheduled stream found for stream ID: ${streamId}`,
@@ -1185,7 +1228,7 @@ END
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
         for (const round of stream.bettingRounds) {
-          await this.bettingService.cancelRoundAndRefund(round.id);
+          await this.bettingService.cancelRoundAndRefund(role, creator, round.id);
         }
       }
 
@@ -1260,6 +1303,7 @@ END
       .select([
         'stream.id',
         'stream.name',
+        'stream.creatorId',
         'stream.status',
         'bettingRound.id',
         'bettingRound.status',
