@@ -755,7 +755,7 @@ export class BettingGateway {
       const message =
         currencyType === CurrencyType.GOLD_COINS
           ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({ amount })
-          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE();
+          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE({ amount });
 
       const title =
         currencyType === CurrencyType.GOLD_COINS
