@@ -1,0 +1,743 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Patch,
+  ForbiddenException,
+  HttpStatus,
+  Query,
+  Delete,
+  HttpCode,
+  NotFoundException,
+} from '@nestjs/common';
+import { BettingService } from '../betting/betting.service';
+import { UsersService } from '../users/users.service';
+import { WalletsService } from '../wallets/wallets.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User } from '../users/entities/user.entity';
+import {
+  CreateBettingVariableDto,
+  EditBettingVariableDto,
+  UpdateRoundStatusDto,
+} from '../betting/dto/create-betting-variable.dto';
+
+import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
+import { ApiResponse } from '../common/types/api-response.interface';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse as SwaggerApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+  ApiOkResponse,
+  ApiNotFoundResponse,
+} from '@nestjs/swagger';
+import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
+import { StreamService } from 'src/stream/stream.service';
+import {
+  AnalyticsSummaryResponseDto,
+  StreamAnalyticsResponseDto,
+} from './dto/analytics.dto';
+import { StreamStatus } from 'src/enums/stream.enum';
+import { UserRole } from 'src/enums/user-role.enum';
+import { CreatorService } from './creator.service';
+import { CreateStreamDto } from 'src/betting/dto/create-stream.dto';
+import { UpdateStreamDto } from 'src/betting/dto/update-stream.dto';
+
+// Define the request type with user property
+interface RequestWithUser extends Request {
+  user: User;
+}
+
+@ApiTags('creator')
+@ApiBearerAuth()
+@Controller('creator')
+@UseGuards(JwtAuthGuard)
+export class CreatorController {
+  constructor(
+    private readonly bettingService: BettingService,
+    private readonly usersService: UsersService,
+    private readonly walletsService: WalletsService,
+    private readonly streamService: StreamService,
+    private readonly creatorService: CreatorService,
+  ) { }
+
+  // Helper method to check if user is creator
+  private ensureCreator(user: User) {
+    if (user.role !== UserRole.CREATOR) {
+      throw new ForbiddenException('Creator access required');
+    }
+  }
+
+  // Stream Management
+  @ApiOperation({ summary: 'Create a new stream' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Stream created successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Creator access required',
+  })
+  @Post('streams')
+  async createStream(
+    @Request() req: RequestWithUser,
+    @Body() createStreamDto: Omit<CreateStreamDto, "creatorId">,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const stream = await this.bettingService.createStream({
+      ...createStreamDto,
+      creatorId: req.user.id,
+    });
+    return {
+      message: 'Successfully created stream',
+      status: HttpStatus.CREATED,
+      data: stream,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update stream status' })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @ApiBody({
+    schema: {
+      properties: {
+        status: {
+          type: 'string',
+          enum: Object.values(StreamStatus),
+          description: 'New stream status',
+        },
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream status updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('streams/:id/status')
+  async updateStreamStatus(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body('status') status: StreamStatus,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const updatedStream = await this.bettingService.updateStreamStatus(
+      id,
+      status,
+    );
+    return {
+      message: 'Stream status updated successfully',
+      status: HttpStatus.OK,
+      data: updatedStream,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update stream details' })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @ApiBody({ type: UpdateStreamDto })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Creator access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('streams/:id')
+  async updateStream(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() updateStreamDto: Omit<UpdateStreamDto, "creatorId">,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+
+    const stream = await this.streamService.findStreamById(id);
+
+    if (!stream) {
+      throw new NotFoundException('Stream not found');
+    }
+
+    if (stream.creatorId !== req.user.id) {
+      throw new ForbiddenException('Forbidden');
+    }
+
+    const updatedStream = await this.streamService.updateStream(
+      id,
+      {
+        ...updateStreamDto,
+      },
+    );
+    return {
+      message: 'Stream updated successfully',
+      status: HttpStatus.OK,
+      data: updatedStream,
+    };
+  }
+
+  // Betting Variable Management
+  @ApiOperation({ summary: 'Create betting options' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Betting variable created successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Creator access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Post('betting-variables')
+  async createBettingVariable(
+    @Request() req: RequestWithUser,
+    @Body() createBettingVariableDto: CreateBettingVariableDto,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const grouped = await this.bettingService.createBettingVariable(
+      createBettingVariableDto,
+    );
+    return {
+      message: 'Betting variable created successfully',
+      status: HttpStatus.CREATED,
+      data: grouped,
+    };
+  }
+
+  @ApiOperation({ summary: 'Lock betting' })
+  @ApiParam({ name: 'id', description: 'Betting variable ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Betting locked successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Creator access required',
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Betting variable not found',
+  })
+  @Patch('betting-variables/:id/lock')
+  async lockBetting(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const lockedBetting = await this.bettingService.lockBetting(id);
+    return {
+      message: 'Betting locked successfully',
+      status: HttpStatus.OK,
+      data: lockedBetting,
+    };
+  }
+
+  @ApiOperation({ summary: 'Declare a winner' })
+  @ApiParam({ name: 'id', description: 'Betting variable ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Winner declared and payouts processed successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Betting variable not found',
+  })
+  @Post('betting-variables/:id/declare-winner')
+  async declareWinner(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const result = await this.bettingService.declareWinner(id);
+    return {
+      message: 'Winner declared and payouts processed successfully',
+      status: HttpStatus.OK,
+      data: result,
+    };
+  }
+
+  @ApiOperation({ summary: 'Edit betting options for multiple rounds' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Betting variables updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden- Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('betting-variables')
+  async editBettingVariable(
+    @Request() req: RequestWithUser,
+    @Body() editBettingVariableDto: EditBettingVariableDto,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const grouped = await this.bettingService.editBettingVariable(
+      editBettingVariableDto,
+    );
+
+    return {
+      message: 'Betting variables updated successfully',
+      status: HttpStatus.OK,
+      data: grouped,
+    };
+  }
+
+  // User Management
+
+  @ApiOperation({ summary: "Adjust user's wallet balance" })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({
+    schema: {
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to add (positive) or subtract (negative)',
+        },
+        description: { type: 'string', description: 'Reason for adjustment' },
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Wallet balance adjusted successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Patch('users/:id/wallet')
+  async adjustWallet(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body('amount') amount: number,
+    @Body('description') description: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const wallet = await this.walletsService.addGoldCoins(
+      id,
+      amount,
+      description,
+    );
+    return {
+      message: 'Wallet balance adjusted successfully',
+      status: HttpStatus.OK,
+      data: wallet,
+    };
+  }
+
+  @ApiOperation({
+    summary: `Activate or Deactivate user.`,
+    description: 'API to activate or deactivate a user by their ID.',
+  })
+  @Patch('users')
+  async updateUserStatus(
+    @Body() userUpdateDto: UserUpdateDto,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureCreator(req.user);
+    const { result, message } =
+      await this.usersService.updateUserStatus(userUpdateDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message,
+      data: result,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'List all the users in the System',
+    description:
+      'API to list users details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('users')
+  async getAllUsers(
+    @Request() req: RequestWithUser,
+    @Query() userFilterDto: UserFilterDto,
+  ) {
+    this.ensureCreator(req.user);
+    const { total, data } = await this.usersService.findAllUser(userFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Get all creators',
+    description: 'API to list all possible creators',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('creators')
+  async getAllCreators(@Request() req: RequestWithUser) {
+    this.ensureCreator(req.user);
+    const { data } = await this.usersService.findAllCreators();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
+  /**
+   * Retrieves a paginated and filtered list of streams for the admin view.
+   * Supports optional text search, status-based filtering, sorting, and pagination.
+   *
+   * @param streamFilterDto - DTO containing optional filters such as query string (q),
+   *                          stream status, sorting, and pagination range.
+   *
+   * @returns A Promise resolving to an object containing:
+   *          - data: An array of streams with selected fields (id, name, status, viewerCount).
+   *          - total: Total number of streams matching the filter criteria.
+   * @author Reshma M S
+   */
+  @ApiOperation({
+    summary: 'List all the streams in the System',
+    description:
+      'API to list stream details.Implemented pagenation, range, sort and filter .Pass with parameter false if you want the results without pagination',
+  })
+  @ApiOkResponse({ type: UserFilterDto })
+  @Get('streams')
+  async allStreamsForAdmin(
+    @Request() req: RequestWithUser,
+    @Query() streamFilterDto: StreamFilterDto,
+  ) {
+    this.ensureCreator(req.user);
+    const { total, data } =
+      await this.streamService.allStreamsForAdmin(streamFilterDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
+  }
+
+  @ApiOperation({ summary: 'Fetch stream details' })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Successfully fetch Stream details',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Get('stream/:id')
+  async getStreamDetails(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const data = await this.streamService.findStreamDetailsForAdmin(id);
+    return {
+      message: 'Successfully fetch Stream details',
+      status: HttpStatus.OK,
+      data,
+    };
+  }
+
+  /**
+   * Admin: Update the status of a round (created -> open -> locked, no reverse)
+   */
+  @ApiOperation({ summary: 'Update round status' })
+  @ApiParam({ name: 'roundId', description: 'Round ID' })
+  @ApiBody({ type: UpdateRoundStatusDto })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Round status updated successfully',
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid status transition' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
+  @Patch('rounds/:roundId/status')
+  async updateRoundStatus(
+    @Request() req: RequestWithUser,
+    @Param('roundId') roundId: string,
+    @Body() body: UpdateRoundStatusDto,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+
+    const updatedRound = await this.bettingService.updateRoundStatus(
+      roundId,
+      body.newStatus,
+    );
+    return {
+      message: 'Round status updated successfully',
+      status: HttpStatus.OK,
+      data: updatedRound,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Get all rounds for a stream with winners and options',
+  })
+  @ApiParam({ name: 'streamId', description: 'Stream ID' })
+  @Get('streams/:streamId/rounds')
+  async getStreamRoundsWithWinners(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ) {
+    this.ensureCreator(req.user);
+    const data = await this.bettingService.getStreamRoundsWithWinners(streamId);
+    return {
+      message: 'Details fetched successfully',
+      status: HttpStatus.OK,
+      data: data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'End a stream if all rounds are closed or cancelled',
+  })
+  @ApiParam({ name: 'id', description: 'Stream ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream ended successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Stream not found' })
+  @Patch('streams/:id/end')
+  async endStreamById(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const endedStream =
+      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(id);
+    return {
+      message: 'Stream ended successfully',
+      status: HttpStatus.OK,
+      data: endedStream,
+    };
+  }
+
+  @ApiOperation({ summary: 'Cancel a round and refund all bets' })
+  @ApiParam({ name: 'roundId', description: 'Betting Round ID' })
+  @Patch('rounds/:roundId/cancel')
+  async cancelRoundAndRefund(
+    @Request() req: RequestWithUser,
+    @Param('roundId') roundId: string,
+  ): Promise<ApiResponse> {
+    this.ensureCreator(req.user);
+    const result = await this.bettingService.cancelRoundAndRefund(roundId);
+    return {
+      message: 'Round cancelled and all bets refunded',
+      status: HttpStatus.OK,
+      data: result,
+    };
+  }
+
+  /**
+   * Retrieves analytics summary data for the admin dashboard.
+   *
+   * This endpoint returns key metrics including:
+   * - Total number of active, non-deleted users with the USER role
+   * - Total number of live streams
+   * - Total number of active bets (implementation should be in bettingService)
+   * - Total live time duration for all streams (formatted as a string)
+   *
+   * The endpoint is protected and only accessible by admin users.
+   *
+   * @param req - The request object containing the authenticated user
+   * @returns An object containing the analytics summary data
+   */
+  @ApiOperation({ summary: 'Get analytics summary for dashboard' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Analytics summary fetched successfully',
+    type: AnalyticsSummaryResponseDto,
+  })
+  @Get('analytics/summary')
+  async getAnalyticsSummary(@Request() req: RequestWithUser) {
+    this.ensureCreator(req.user);
+
+    const data = await this.creatorService.getAnalyticsSummary({ creatorId: req.user.id });
+    
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Analytics summary fetched successfully',
+      data: data
+    };
+  }
+
+  /**
+   * Retrieves analytics summary data for a specific stream.
+   *
+   * This endpoint returns key metrics for a given stream, including:
+   * - Total number of unique users who participated in the stream (placed a bet)
+   * - Total bet value (sum of all bets placed on the stream)
+   * - Total stream time (duration from scheduledStartTime to endTime, formatted as a string)
+   *
+   * The endpoint is protected and only accessible by admin users.
+   *
+   * @param streamId - The ID of the stream to summarize
+   * @returns An object containing the analytics summary data for the stream
+   */
+  @ApiOperation({ summary: 'Get analytics summary for a specific stream' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Analytics summary for stream fetched successfully',
+    type: StreamAnalyticsResponseDto,
+  })
+  @Get('analytics/stream/:streamId')
+  async getStreamAnalyticsSummary(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ) {
+    this.ensureCreator(req.user);
+
+    // Get stream details (including betting rounds and variables)
+    const { totalUsers, totalStreamTime } =
+      await this.streamService.getStreamAnalytics(streamId);
+
+    // Get total bet value for the stream
+    const totalBetValue =
+      await this.bettingService.getTotalBetValueForStream(streamId);
+
+    const totalBetPlacedUsers =
+      await this.bettingService.getTotalBetPlacedUsersForStream(streamId);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Analytics summary fetched successfully',
+      data: {
+        totalUsers,
+        totalStreamTime,
+        totalBetValue,
+        platformVig: '15%',
+        totalBetPlacedUsers,
+      },
+    };
+  }
+  /**
+   * Cancel a scheduled stream by its stream ID.
+   *
+   * This endpoint cancels a scheduled stream, removes it from the processing queue,
+   * updates its status to `CANCELED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to cancel.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Patch('/stream/scheduled/cancel/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully canceled',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been canceled successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async cancelScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureCreator(req.user);
+    const canceledStreamId =
+      await this.streamService.cancelScheduledStream(streamId);
+    return {
+      data: canceledStreamId,
+      message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
+      statusCode: HttpStatus.OK,
+    };
+  }
+  /**
+   * Soft Delete a scheduled stream by its stream ID. Update status to delete
+   *
+   * This endpoint delet a scheduled stream, removes it from the processing queue,
+   * updates its status to `DELETED`, and cancels any associated betting rounds with refunds.
+   *
+   * @param streamId - The unique ID of the stream to delete.
+   * @returns A confirmation message with the stream ID.
+   */
+  @Delete('/stream/scheduled/delete/:streamId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a scheduled stream by ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Stream successfully deleted',
+    schema: {
+      example: {
+        data: '6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab',
+        statusCode: 200,
+        message:
+          'Stream with ID 6ac9f2e4-42a2-4e75-9a2a-31ad4458f5ab has been deleted successfully.',
+      },
+    },
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Stream not found or already removed from queue',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Stream-MyStream not found in the queue or already removed.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  async deleteScheduledStream(
+    @Request() req: RequestWithUser,
+    @Param('streamId') streamId: string,
+  ): Promise<{ message: string; data: String; statusCode: Number }> {
+    this.ensureCreator(req.user);
+    const deletedStreamId =
+      await this.streamService.deleteScheduledStream(streamId);
+    return {
+      data: deletedStreamId,
+      message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
+      statusCode: HttpStatus.OK,
+    };
+  }
+}
