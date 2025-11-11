@@ -509,8 +509,16 @@ END
 
       let resultList = [];
 
-      for (let i = 0; i < stream.bettingRounds.length; i++) {
-        const item = stream.bettingRounds[i];
+      const bettingRounds = stream.bettingRounds.sort((a, b) => {
+        if (new Date(a.createdAt) > new Date(b.createdAt)) return 1;
+        else if (new Date(b.createdAt) > new Date(a.createdAt)) return -1;
+        else return 0;
+      });
+
+      console.log(bettingRounds);
+
+      for (let i = 0; i < bettingRounds.length; i++) {
+        const item = bettingRounds[i];
 
         const variables = await this.bettingVariableRepository
           .createQueryBuilder("bv")
