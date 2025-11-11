@@ -573,6 +573,7 @@ END
         roundDetails: resultList,
         creatorId: stream.creatorId,
         creatorUsername: stream.creator?.username,
+        streamType: stream.type
       };
 
       return streamDetails;
@@ -1359,7 +1360,10 @@ END
       if (liveScheduledStreamListDto.username) {
         streamQB
           .innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
-          .setParameter('username', liveScheduledStreamListDto.username);
+          .setParameter('username', liveScheduledStreamListDto.username)
+          .andWhere("s.type = :type", {
+            type: "stream"
+          });
       } else {
         streamQB.leftJoinAndSelect('s.creator', 'creator');
       }
