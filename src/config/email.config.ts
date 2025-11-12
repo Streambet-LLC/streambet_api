@@ -2,7 +2,7 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('email', () => ({
   // Determine if we should use MailHog based on NODE_ENV
-  USE_MAILHOG: false,
+  USE_MAILHOG: process.env.NODE_ENV === 'development',
   
   // MailHog Configuration (Development)
   MAILHOG_HOST: process.env.MAILHOG_HOST || 'localhost',
