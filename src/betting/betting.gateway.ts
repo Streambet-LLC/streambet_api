@@ -386,17 +386,20 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
+        // Admin dashboard betting stats
+        const bettingUpdatePayload = {
+          roundId: roundIdEmit,
+          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+          betCountSweepCoin: roundTotals.betCountSweepCoin,
+          betCountGoldCoin: roundTotals.betCountGoldCoin,
+        };
+
         void emitToStream(
           this.gatewayManager,
           streamId,
           SocketEventName.BettingUpdate,
-          {
-            roundId: roundIdEmit,
-            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-            betCountSweepCoin: roundTotals.betCountSweepCoin,
-            betCountGoldCoin: roundTotals.betCountGoldCoin,
-          },
+          bettingUpdatePayload,
         );
 
         await this.sendPersonalizedPotentialAmounts(
@@ -518,17 +521,20 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
+        // Admin dashboard betting stats
+        const bettingUpdatePayload = {
+          roundId: roundIdEmit,
+          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+          betCountGoldCoin: roundTotals.betCountGoldCoin,
+          betCountSweepCoin: roundTotals.betCountSweepCoin,
+        };
+
         void emitToStream(
           this.gatewayManager,
           streamId,
           SocketEventName.BettingUpdate,
-          {
-            roundId: roundIdEmit,
-            totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-            totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-            betCountGoldCoin: roundTotals.betCountGoldCoin,
-            betCountSweepCoin: roundTotals.betCountSweepCoin,
-          },
+          bettingUpdatePayload,
         );
 
         await this.sendPersonalizedPotentialAmounts(
