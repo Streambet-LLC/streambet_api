@@ -164,7 +164,7 @@ export class BettingGateway {
         const roundTotals =
           await this.bettingService.getRoundTotals(roundIdEmit);
 
-        // Admin dashboard betting stats
+        // Emit round-level betting update to admin dashboard
         const bettingUpdatePayload = {
           roundId: roundIdEmit,
           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
@@ -386,7 +386,7 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        // Admin dashboard betting stats
+        // Emit round-level betting update to admin dashboard
         const bettingUpdatePayload = {
           roundId: roundIdEmit,
           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
@@ -521,13 +521,13 @@ export class BettingGateway {
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        // Admin dashboard betting stats
+        // Emit round-level betting update to admin dashboard
         const bettingUpdatePayload = {
           roundId: roundIdEmit,
           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
           totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-          betCountGoldCoin: roundTotals.betCountGoldCoin,
           betCountSweepCoin: roundTotals.betCountSweepCoin,
+          betCountGoldCoin: roundTotals.betCountGoldCoin,
         };
 
         void emitToStream(
@@ -568,15 +568,23 @@ export class BettingGateway {
       });
     }
   }
+  /**
+   * Emits variable-level betting updates to all clients in a stream.
+   * This emits betting statistics for a specific betting variable (option).
+   * Use BettingUpdate event for round-level aggregates instead.
+   *
+   * @param streamId - The ID of the stream
+   * @param bettingVariableId - The ID of the betting variable to emit updates for
+   */
   emitBettingUpdate(streamId: string, bettingVariableId: string): void {
     void this.bettingService
       .findBettingVariableById(bettingVariableId)
       .then(async (bettingVariable) => {
-        // Broadcast betting update to stream
+        // Broadcast variable-level betting update to stream
         emitToStream(
           this.gatewayManager,
           streamId,
-          SocketEventName.BettingUpdate,
+          SocketEventName.VariableBettingUpdate,
           {
             bettingVariableId: bettingVariable.id,
             totalBetsSweepCoinAmount: bettingVariable.totalBetsSweepCoinAmount,

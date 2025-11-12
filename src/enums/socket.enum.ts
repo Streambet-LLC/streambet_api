@@ -16,7 +16,8 @@ export enum SocketEventName {
   LeaveStreamBet = 'leaveStreamBet',
   PlaceBet = 'placeBet',
   BetPlaced = 'betPlaced',
-  BettingUpdate = 'bettingUpdate',
+  BettingUpdate = 'bettingUpdate', // Round-level betting aggregates (roundId)
+  VariableBettingUpdate = 'variableBettingUpdate', // Variable-level betting data (bettingVariableId)
   Error = 'error',
   PotentialAmountUpdate = 'potentialAmountUpdate',
   BotMessage = 'botMessage',
