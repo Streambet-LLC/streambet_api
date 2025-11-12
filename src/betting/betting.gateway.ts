@@ -551,11 +551,13 @@ export class BettingGateway {
     }
   }
   /**
-   * Emits variable-level betting updates to all clients in a stream.
-   * This emits betting statistics for a specific betting variable (option).
-   * Use BettingUpdate event for round-level aggregates instead.
+   * Emits variable-level betting updates to all clients in a stream via the VariableBettingUpdate event.
+   * This broadcasts betting statistics for a specific betting variable (option), including bet counts,
+   * total amounts, and status. Also sends personalized potential winning amounts to each user.
+   * 
+   * Note: Use emitRoundBettingUpdates() for round-level aggregates (BettingUpdate event) instead.
    *
-   * @param streamId - The ID of the stream
+   * @param streamId - The ID of the stream to broadcast to
    * @param bettingVariableId - The ID of the betting variable to emit updates for
    */
   emitBettingUpdate(streamId: string, bettingVariableId: string): void {
