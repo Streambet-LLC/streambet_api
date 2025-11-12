@@ -47,11 +47,21 @@ variables:
       fi
       echo "Docker client version:"
       docker version || { echo "Docker CLI not available"; exit 1; }
+    - |
+      # Install AWS CLI v2 on Debian/Ubuntu images attempt
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -y
+        apt-get install -y curl unzip ca-certificates
+        curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip -q awscliv2.zip
+        ./aws/install
+        rm -rf aws awscliv2.zip
+        aws --version
+      fi
 
 .build_template: &build_template
   <<: *before_script_template
-  image: amazon/aws-cli:latest
-  entrypoint: [""]
+  image: ubuntu:22.04
   stage: build
   artifacts:
     reports:
@@ -68,8 +78,7 @@ variables:
 
 .validate_template: &validate_template
   <<: *before_script_template
-  image: amazon/aws-cli:latest
-  entrypoint: [""]
+  image: ubuntu:22.04
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
@@ -82,8 +91,7 @@ variables:
 
 .deploy_template: &deploy_template
   <<: *before_script_template
-  image: amazon/aws-cli:latest
-  entrypoint: [""]
+  image: ubuntu:22.04
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
