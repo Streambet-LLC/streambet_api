@@ -161,30 +161,8 @@ export class BettingGateway {
           await this.bettingService.findBettingVariableById(bettingVariable.id);
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
-        const roundTotals =
-          await this.bettingService.getRoundTotals(roundIdEmit);
 
-        // Emit round-level betting update to admin dashboard
-        const bettingUpdatePayload = {
-          roundId: roundIdEmit,
-          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-          betCountSweepCoin: roundTotals.betCountSweepCoin,
-          betCountGoldCoin: roundTotals.betCountGoldCoin,
-        };
-
-        void emitToStream(
-          this.gatewayManager,
-          bettingVariable.stream.id,
-          SocketEventName.BettingUpdate,
-          bettingUpdatePayload,
-        );
-
-        // Personalized potential amounts for all users
-        await this.sendPersonalizedPotentialAmounts(
-          bettingVariable.stream.id,
-          roundIdEmit,
-        );
+        await this.emitRoundBettingUpdates(bettingVariable.stream.id, roundIdEmit);
 
         // System chat notification for bet placement
         const chatMessage: ChatMessage = {
@@ -218,6 +196,37 @@ export class BettingGateway {
         message: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+  }
+
+  /**
+   * Emits round-level betting updates and personalized potential amounts after a bet action.
+   * This is called after place/cancel/edit bet operations to update all clients.
+   * 
+   * @param streamId - The ID of the stream to broadcast to
+   * @param roundId - The ID of the round to get totals for
+   */
+  private async emitRoundBettingUpdates(
+    streamId: string,
+    roundId: string,
+  ): Promise<void> {
+    const roundTotals = await this.bettingService.getRoundTotals(roundId);
+
+    const bettingUpdatePayload = {
+      roundId,
+      totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+      totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+      betCountSweepCoin: roundTotals.betCountSweepCoin,
+      betCountGoldCoin: roundTotals.betCountGoldCoin,
+    };
+
+    void emitToStream(
+      this.gatewayManager,
+      streamId,
+      SocketEventName.BettingUpdate,
+      bettingUpdatePayload,
+    );
+
+    await this.sendPersonalizedPotentialAmounts(streamId, roundId);
   }
 
   private async sendPersonalizedPotentialAmounts(
@@ -380,32 +389,10 @@ export class BettingGateway {
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
 
-        const roundTotals =
-          await this.bettingService.getRoundTotals(roundIdEmit);
-
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        // Emit round-level betting update to admin dashboard
-        const bettingUpdatePayload = {
-          roundId: roundIdEmit,
-          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-          betCountSweepCoin: roundTotals.betCountSweepCoin,
-          betCountGoldCoin: roundTotals.betCountGoldCoin,
-        };
-
-        void emitToStream(
-          this.gatewayManager,
-          streamId,
-          SocketEventName.BettingUpdate,
-          bettingUpdatePayload,
-        );
-
-        await this.sendPersonalizedPotentialAmounts(
-          streamId,
-          roundIdEmit,
-        );
+        await this.emitRoundBettingUpdates(streamId, roundIdEmit);
 
         // System chat notification for bet cancellation
         const systemMessage =
@@ -515,32 +502,10 @@ export class BettingGateway {
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
 
-        const roundTotals =
-          await this.bettingService.getRoundTotals(roundIdEmit);
-
         // Use streamId directly from the betting variable to ensure correct room targeting
         const streamId = bettingVariable.streamId || bettingVariable.stream?.id;
 
-        // Emit round-level betting update to admin dashboard
-        const bettingUpdatePayload = {
-          roundId: roundIdEmit,
-          totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-          totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-          betCountSweepCoin: roundTotals.betCountSweepCoin,
-          betCountGoldCoin: roundTotals.betCountGoldCoin,
-        };
-
-        void emitToStream(
-          this.gatewayManager,
-          streamId,
-          SocketEventName.BettingUpdate,
-          bettingUpdatePayload,
-        );
-
-        await this.sendPersonalizedPotentialAmounts(
-          streamId,
-          roundIdEmit,
-        );
+        await this.emitRoundBettingUpdates(streamId, roundIdEmit);
 
         // System chat notification for bet edit - only send if something actually changed
         const amountChanged = Number(oldBettingAmount) !== editedBet.amount;
