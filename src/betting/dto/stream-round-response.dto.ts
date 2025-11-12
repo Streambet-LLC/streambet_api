@@ -134,28 +134,31 @@ export class RoundDto {
   @ApiProperty({
     description: 'Total Stream Coin amount for this round',
     example: '0',
-    required: false })
+    required: false,
+  })
   @IsOptional()
   @IsNumberString()
   totalBetsSweepCoinAmount?: string;
 
   @ApiProperty({
-    description: 'Number of gold coins placed in this round',
+    description: 'Total number of gold coin Picks placed in this round',
     example: 0,
-    required: false })
+    required: false,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
-  totalGoldCoinBet?: number;
+  betCountGoldCoin?: number;
 
   @ApiProperty({
-    description: 'Number of Stream Coins placed in this round',
+    description: 'Total number of Stream Coin Picks placed in this round',
     example: 0,
-    required: false })
+    required: false,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
-  totalSweepCoinBet?: number;
+  betCountSweepCoin?: number;
 }
 
 export class StreamRoundsResponseDto {

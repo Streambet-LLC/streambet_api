@@ -169,8 +169,8 @@ export class BettingGateway {
           roundId: roundIdEmit,
           totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
           totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-          totalSweepCoinBet: roundTotals.totalSweepCoinBet,
-          totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+          betCountSweepCoin: roundTotals.betCountSweepCoin,
+          betCountGoldCoin: roundTotals.betCountGoldCoin,
         };
 
         void emitToStream(
@@ -394,8 +394,8 @@ export class BettingGateway {
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
-            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            betCountSweepCoin: roundTotals.betCountSweepCoin,
+            betCountGoldCoin: roundTotals.betCountGoldCoin,
           },
         );
 
@@ -526,8 +526,8 @@ export class BettingGateway {
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-            totalGoldCoinBet: roundTotals.totalGoldCoinBet,
-            totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            betCountGoldCoin: roundTotals.betCountGoldCoin,
+            betCountSweepCoin: roundTotals.betCountSweepCoin,
           },
         );
 
