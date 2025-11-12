@@ -161,8 +161,9 @@ export class BettingGateway {
           await this.bettingService.findBettingVariableById(bettingVariable.id);
         const roundIdEmit =
           updatedBettingVariable.roundId || updatedBettingVariable.round?.id;
+        const streamId = bettingVariable.stream?.id;
 
-        await this.emitRoundBettingUpdates(bettingVariable.stream.id, roundIdEmit);
+        await this.emitRoundBettingUpdates(streamId, roundIdEmit);
 
         // System chat notification for bet placement
         const chatMessage: ChatMessage = {
@@ -206,27 +207,43 @@ export class BettingGateway {
    * @param roundId - The ID of the round to get totals for
    */
   private async emitRoundBettingUpdates(
-    streamId: string,
-    roundId: string,
+    streamId: string | undefined,
+    roundId: string | undefined,
   ): Promise<void> {
-    const roundTotals = await this.bettingService.getRoundTotals(roundId);
+    // Guard against undefined values early
+    if (!roundId || !streamId) {
+      this.logger.warn(
+        `Cannot emit round betting updates: roundId=${roundId}, streamId=${streamId}`,
+      );
+      return;
+    }
 
-    const bettingUpdatePayload = {
-      roundId,
-      totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
-      totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
-      betCountSweepCoin: roundTotals.betCountSweepCoin,
-      betCountGoldCoin: roundTotals.betCountGoldCoin,
-    };
+    try {
+      const roundTotals = await this.bettingService.getRoundTotals(roundId);
 
-    void emitToStream(
-      this.gatewayManager,
-      streamId,
-      SocketEventName.BettingUpdate,
-      bettingUpdatePayload,
-    );
+      const bettingUpdatePayload = {
+        roundId,
+        totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
+        totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+        betCountSweepCoin: roundTotals.betCountSweepCoin,
+        betCountGoldCoin: roundTotals.betCountGoldCoin,
+      };
 
-    await this.sendPersonalizedPotentialAmounts(streamId, roundId);
+      void emitToStream(
+        this.gatewayManager,
+        streamId,
+        SocketEventName.BettingUpdate,
+        bettingUpdatePayload,
+      );
+
+      await this.sendPersonalizedPotentialAmounts(streamId, roundId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to emit round betting updates for roundId=${roundId}, streamId=${streamId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
   }
 
   private async sendPersonalizedPotentialAmounts(
