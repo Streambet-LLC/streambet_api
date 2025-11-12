@@ -4,7 +4,7 @@ stages:
   - deploy
 
 services:
-  - name: docker:dind
+  - name: docker:25-dind
     alias: docker
     command: ["--tls=false"]
 
@@ -27,10 +27,21 @@ variables:
         export AWS_DEFAULT_REGION=$REGION_CLIENT
         export AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID_CLIENT
       fi
+    - |
+      # Checking Docker CLI to work with dind
+      if ! command -v docker >/dev/null 2>&1; then
+        echo "Installing Docker CLI 25 (static build)"
+        curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-25.0.5.tgz -o docker.tgz
+        tar xzvf docker.tgz
+        mv docker/docker /usr/local/bin/docker
+        rm -rf docker docker.tgz
+      fi
+      echo "Docker client version:"
+      docker version || { echo "Docker CLI not available"; exit 1; }
 
 .build_template: &build_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:2
   stage: build
   artifacts:
     reports:
@@ -43,10 +54,11 @@ variables:
     - docker build -t $IMAGE_TAG .
     - docker push $IMAGE_TAG
     - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
+    - echo "IMAGE_TAG=$IMAGE_TAG" >> image.env
 
 .validate_template: &validate_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:2
   stage: validate
   script:
     - echo "Validating ECS task def for $DEPLOY_ENV"
@@ -59,7 +71,7 @@ variables:
 
 .deploy_template: &deploy_template
   <<: *before_script_template
-  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  image: amazon/aws-cli:2
   stage: deploy
   script:
     - echo "Deploying to ECS - $DEPLOY_ENV"
