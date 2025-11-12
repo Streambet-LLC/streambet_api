@@ -56,7 +56,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
         useFactory: (configService: ConfigService) => ({
           name: EMAIL_QUEUE,
           defaultJobOptions: configService.get(
-            'queue.queues.emailQueue.defaultJobOptions',
+            'queue.queues.email.defaultJobOptions',
           ),
         }),
       },

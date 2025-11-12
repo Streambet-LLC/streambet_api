@@ -13,7 +13,8 @@ export default registerAs('email', () => ({
   SMTP_PASSWORD: process.env.AWS_SMTP_PASSWORD,
   SMTP_PORT: process.env.AWS_SMTP_PORT,
   SMTP_HOST: process.env.AWS_SMTP_HOST,
-  SMTP_SECURE: true,
+  // Use MAIL_SECURE env to control TLS; default to false (STARTTLS) - port 587
+  SMTP_SECURE: (process.env.MAIL_SECURE || 'false').toLowerCase() === 'true',
   defaultName: process.env.MAIL_DEFAULT_NAME,
   FROM_EMAIL: process.env.AWS_EMAIL_FROM,
   SMTP_REGION: process.env.AWS_SMTP_REGION,
