@@ -116,7 +116,7 @@ export class EmailsService {
         const pass = this.configService.get<string>('email.SMTP_PASSWORD');
 
         this.logger.debug(
-          `Production Mode: Using SMTP ${host}:${port} (secure=${secure}) with user ${user ? 'set' : 'missing'} with creds: host: ${host}, port: ${port}, user: ${user}, pass: ${pass}`,
+          `Production Mode: Using SMTP ${host}:${port} (secure=${secure}) with user ${user ? 'set' : 'missing'}`,
         );
 
         transporter = nodemailer.createTransport({
