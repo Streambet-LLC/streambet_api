@@ -4,9 +4,7 @@ const ejs = require('ejs');
 import { Validator } from 'jsonschema';
 import _ from 'lodash';
 const nodemailer = require('nodemailer');
-const sesTransport = require('nodemailer-ses-transport');
 const path = require('path');
-import AWS from 'aws-sdk';
 import { ConfigService } from '@nestjs/config';
 import { EmailPayloadDto } from './dto/email.dto';
 
@@ -20,11 +18,13 @@ export class EmailsService {
     
     if (useMailHog) {
       const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'localhost';
-      const mailhogPort = this.configService.get<number>('email.MAILHOG_PORT') || 8025;
-      const mailhogUrl = `http://${mailhogHost}:${mailhogPort}`;
-      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode - All emails will be captured by MailHog at ${mailhogUrl}`);
+      const mailhogSmtpPort = Number(this.configService.get<number>('email.MAILHOG_PORT') || 1025);
+      // MailHog web UI is usually at 8025
+      this.logger.log(
+        `Email Service (NODE_ENV=${nodeEnv}) - Using MailHog SMTP at ${mailhogHost}:${mailhogSmtpPort} (Web UI: http://${mailhogHost}:8025)`,
+      );
     } else {
-      this.logger.log(`Email Service initialized in (NODE_ENV=${nodeEnv}) mode - Emails will be sent via AWS SES`);
+      this.logger.log(`Email Service (NODE_ENV=${nodeEnv}) - Emails will be sent via SMTP host`);
     }
   }
   /**
@@ -32,19 +32,7 @@ export class EmailsService {
    * AWS and updates them without requiring a reload
    */
 
-  setAwsConfig() {
-    const accessKeyId = this.configService.get<string>('email.SMTP_USER');
-    const secretAccessKey = this.configService.get<string>(
-      'email.SMTP_PASSWORD',
-    );
-    const region = this.configService.get<string>('email.SMTP_REGION');
-    const awsconfig = new AWS.Config({
-      accessKeyId,
-      secretAccessKey,
-      region,
-    });
-    return new AWS.SES(awsconfig);
-  }
+  // Deprecated: AWS SDK transport removed in favor of SMTP (Nodemailer)
 
   public async getEmailHtml(payload: EmailPayloadDto, emailtype) {
     if (this.validSchema(payload, emailtype)) {
@@ -106,9 +94,9 @@ export class EmailsService {
       if (useMailHog) {
         // Development Mode: Use MailHog
         mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') ?? 'localhost';
-        mailhogPort = Number(this.configService.get<number>('email.MAILHOG_PORT') ?? 8025);
+        mailhogPort = Number(this.configService.get<number>('email.MAILHOG_PORT') ?? 1025);
         
-        this.logger.debug(`Development Mode: Using MailHog at ${mailhogHost}:${mailhogPort}`);
+        this.logger.debug(`Development Mode: Using MailHog SMTP at ${mailhogHost}:${mailhogPort}`);
         
         transporter = nodemailer.createTransport({
           host: mailhogHost,
@@ -120,21 +108,34 @@ export class EmailsService {
           },
         });
       } else {
-        // Production/Staging Mode: Use AWS SES
-        const accessKeyId = this.configService.get<string>('email.SMTP_USER');
-        const secretAccessKey = this.configService.get<string>(
-          'email.SMTP_PASSWORD',
-        );
-        const region = this.configService.get<string>('email.SMTP_REGION');
-        
-        this.logger.debug('Production Mode: Using AWS SES');
+        // Production/Staging Mode: Use SMTP (Amazon SES SMTP endpoint)
+        const host = this.configService.get<string>('email.SMTP_HOST');
+        const port = Number(this.configService.get<number>('email.SMTP_PORT'));
+        const secure = this.configService.get<boolean>('email.SMTP_SECURE');
+        const user = this.configService.get<string>('email.SMTP_USER');
+        const pass = this.configService.get<string>('email.SMTP_PASSWORD');
 
-        transporter = nodemailer.createTransport(
-          sesTransport({
-            accessKeyId,
-            secretAccessKey,
-            region,
-          }),
+        this.logger.debug(
+          `Production Mode: Using SMTP ${host}:${port} (secure=${secure}) with user ${user ? 'set' : 'missing'}`,
+        );
+
+        transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure,
+          auth: { user, pass },
+        });
+      }
+
+      // Verify the transporter configuration before attempting to send
+      try {
+        await transporter.verify();
+        this.logger.debug('SMTP transporter verified successfully');
+      } catch (verifyErr) {
+        this.logger.error('Failed to verify SMTP transporter', verifyErr as any);
+        throw new HttpException(
+          `SMTP transport verification failed: ${verifyErr?.message ?? 'unknown error'}`,
+          HttpStatus.BAD_REQUEST,
         );
       }
 
@@ -156,9 +157,9 @@ export class EmailsService {
 
       if (send) {
         if (useMailHog) {
-          this.logger.log(`Email sent to MailHog - View at http://${mailhogHost}:${mailhogPort}`);
+          this.logger.log(`Email sent to MailHog SMTP - View at http://${mailhogHost}:8025`);
         } else {
-          this.logger.log('Email sent successfully via AWS SES');
+          this.logger.log('Email sent successfully via SMTP');
         }
         return {
           message: 'Email sent successfully',
@@ -166,9 +167,9 @@ export class EmailsService {
         };
       }
     } catch (e) {
-      Logger.error('Error While send email', e);
+      Logger.error('Error while sending email', e);
       throw new HttpException(
-        `Error while send email`,
+        `Email sending failed: ${e?.message ?? 'unknown error'}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
