@@ -4,6 +4,7 @@ export default registerAs('email', () => ({
   // Determine if we should use MailHog based on NODE_ENV
   USE_MAILHOG: false,
   
+  
   // MailHog Configuration (Development)
   MAILHOG_HOST: process.env.MAILHOG_HOST || 'localhost',
   MAILHOG_PORT: parseInt(process.env.MAILHOG_PORT || '1025', 10),
