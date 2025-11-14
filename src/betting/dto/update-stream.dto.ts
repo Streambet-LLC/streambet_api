@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsDateString,
   ValidateIf,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { StreamEventType, StreamStatus } from 'src/enums/stream.enum';
@@ -79,4 +80,14 @@ export class UpdateStreamDto {
   })
   @IsOptional()
   creatorId?: string;
+
+  @ApiProperty({
+    description: 'Whether the stream is promoted (featured in carousel and prioritized in listings)',
+    example: false,
+    type: 'boolean',
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isPromoted?: boolean;
 }

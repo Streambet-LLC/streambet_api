@@ -64,6 +64,35 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
   async onModuleDestroy() {
     await this.flushViewerCounts('moduleDestroy');
   }
+
+  /**
+   * Applies standardized ordering for promoted streams across queries.
+   * 
+   * Business Rules:
+   * 1. isPromoted streams appear first (promoted = priority)
+   * 2. LIVE streams appear before SCHEDULED (live content takes precedence)
+   * 3. Within each group, earliest scheduled time first
+   *
+   * This ensures promoted streams get visibility while maintaining
+   * logical ordering by status and time.
+   *
+   * @param queryBuilder - The TypeORM SelectQueryBuilder to apply ordering to
+   * @param streamAlias - The alias used for the stream entity in the query (default: 's')
+   * @returns The same queryBuilder with ordering applied (for method chaining)
+   */
+  private applyPromotedStreamOrdering<T>(
+    queryBuilder: any,
+    streamAlias: string = 's',
+  ): any {
+    return queryBuilder
+      .orderBy(`${streamAlias}.isPromoted`, 'DESC')
+      .addOrderBy(
+        `CASE WHEN ${streamAlias}.status = '${StreamStatus.LIVE}' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy(`${streamAlias}.scheduledStartTime`, 'ASC');
+  }
+
   /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
@@ -195,9 +224,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
           status: StreamStatus.SCHEDULED
-        })
-        .orderBy("s.scheduledStartTime", "ASC")
-        .limit(10);
+        });
+
+      this.applyPromotedStreamOrdering(betRoundsQB, 's').limit(10);
 
       const data = await betRoundsQB.getRawMany();
       const resultList = [];
@@ -396,6 +425,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .addSelect('s.name', 'streamName')
         .addSelect('s.status', 'streamStatus')
         .addSelect('s.viewerCount', 'viewerCount')
+        .addSelect('s.isPromoted', 'isPromoted')
         .addSelect('creator.username', 'creator')
         .addSelect(
           `CASE
@@ -432,6 +462,7 @@ END
           'userBetCount',
         )
         .leftJoin(User, 'creator', 's.creatorId = creator.id')
+        .orderBy('s.isPromoted', 'DESC')
         .addOrderBy(
           `CASE s.status
               WHEN 'live' THEN 1
@@ -766,6 +797,8 @@ END
       }
 
       const prevStatus = stream.status;
+      const prevIsPromoted = stream.isPromoted;
+
       // Update only the provided fields
       if (updateStreamDto.name !== undefined) {
         stream.name = updateStreamDto.name;
@@ -804,6 +837,20 @@ END
         }
       }
 
+      // Handle isPromoted field updates with validation
+      if (updateStreamDto.isPromoted !== undefined) {
+        // Validate that only LIVE, SCHEDULED, or ACTIVE streams can be promoted
+        if (
+          updateStreamDto.isPromoted === true &&
+          ![StreamStatus.LIVE, StreamStatus.SCHEDULED, StreamStatus.ACTIVE].includes(stream.status)
+        ) {
+          throw new BadRequestException(
+            `Only streams with status LIVE, SCHEDULED, or ACTIVE can be promoted. Current status: ${stream.status}`
+          );
+        }
+        stream.isPromoted = updateStreamDto.isPromoted;
+      }
+
       const streamResponse = await this.streamsRepository.save(stream);
 
       // If the scheduled start time is updated, remove any existing job and reschedule if necessary
@@ -830,6 +877,14 @@ END
         streamResponse.status === StreamStatus.LIVE
       ) {
         this.streamGateway.emitScheduledStreamUpdatedToLive(streamResponse.id);
+      }
+
+      // Emit promotion update event if isPromoted was changed
+      if (updateStreamDto.isPromoted !== undefined && prevIsPromoted !== streamResponse.isPromoted) {
+        this.streamGateway.emitStreamPromotionUpdated(
+          streamResponse.id,
+          streamResponse.isPromoted,
+        );
       }
 
       return streamResponse;
@@ -1503,7 +1558,9 @@ END
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED
           ]
-        })
+        });
+
+      this.applyPromotedStreamOrdering(betRoundsQB, 's')
         .limit(take)
         .offset(offset);
 
@@ -1611,6 +1668,8 @@ END
         .andWhere("s.status = :status", {
           status: StreamStatus.SCHEDULED
         })
+
+      this.applyPromotedStreamOrdering(betRoundsQB, 's')
         .limit(take)
         .offset(offset);
 

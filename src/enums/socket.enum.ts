@@ -29,6 +29,7 @@ export enum SocketEventName {
   BetCancelledByAdmin = 'betCancelledByAdmin',
   PurchaseSettled = 'purchaseSettled',
   StreamListUpdated = 'streamListUpdated',
+  StreamPromotionUpdated = 'streamPromotionUpdated',
   WithdrawSuccess = 'withdrawSuccess',
   WithdrawFailed = 'withdrawFailed',
 }
