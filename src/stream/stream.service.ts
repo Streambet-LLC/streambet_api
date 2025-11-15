@@ -38,6 +38,7 @@ import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { UserRole } from 'src/enums/user-role.enum';
+import { getPromotedBetsConfig } from './config/promoted-bets.config';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -72,17 +73,20 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
    * 1. isPromoted streams appear first (promoted = priority)
    * 2. LIVE streams appear before SCHEDULED (live content takes precedence)
    * 3. Within each group, earliest scheduled time first
+   * 4. Rounds appear in chronological order (earliest created first)
    *
    * This ensures promoted streams get visibility while maintaining
-   * logical ordering by status and time.
+   * logical ordering by status, time, and round creation order.
    *
    * @param queryBuilder - The TypeORM SelectQueryBuilder to apply ordering to
    * @param streamAlias - The alias used for the stream entity in the query (default: 's')
+   * @param roundAlias - The alias used for the betting round entity in the query (default: 'br')
    * @returns The same queryBuilder with ordering applied (for method chaining)
    */
-  private applyPromotedStreamOrdering<T>(
+  private applyPromotedOrdering<T>(
     queryBuilder: any,
     streamAlias: string = 's',
+    roundAlias: string = 'br',
   ): any {
     return queryBuilder
       .orderBy(`${streamAlias}.isPromoted`, 'DESC')
@@ -90,7 +94,67 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         `CASE WHEN ${streamAlias}.status = '${StreamStatus.LIVE}' THEN 0 ELSE 1 END`,
         'ASC',
       )
-      .addOrderBy(`${streamAlias}.scheduledStartTime`, 'ASC');
+      .addOrderBy(`${streamAlias}.scheduledStartTime`, 'ASC')
+      .addOrderBy(`${roundAlias}.createdAt`, 'ASC');
+  }
+
+  /**
+   * Limits the number of rounds per promoted stream while allowing unlimited unpromoted rounds.
+   * 
+   * Business Rules:
+   * 1. Promoted streams: limited to maxPromotedRounds rounds each
+   * 2. Unpromoted streams: unlimited rounds (until finalLimit reached)
+   * 3. Maintains original ordering (promoted first, then by status/time)
+   * 4. Stops when finalLimit is reached
+   * 
+   * This ensures a single promoted stream with many rounds doesn't dominate the results.
+   * 
+   * @param rounds - Array of betting rounds (pre-ordered by applyPromotedOrdering)
+   * @param maxPromotedRounds - Maximum rounds to include per promoted stream
+   * @param finalLimit - Total number of rounds to return
+   * @returns Filtered array of rounds
+   * 
+   * @example
+   * // Input: Stream A (promoted) has 10 rounds, Stream B (unpromoted) has 5 rounds
+   * // maxPromotedRounds = 2, finalLimit = 10
+   * // Output: 2 rounds from Stream A, 5 rounds from Stream B, 3 more unpromoted rounds
+   */
+  private limitPromotedRounds(
+    rounds: any[],
+    maxPromotedRounds: number,
+    finalLimit: number,
+  ): any[] {
+    const result: any[] = [];
+    const promotedStreamRoundCounts = new Map<string, number>();
+
+    for (const round of rounds) {
+      const streamId = round.s_id;
+      const isPromoted = round.s_isPromoted;
+
+      if (isPromoted) {
+        // Check if this promoted stream has already hit its limit
+        const currentCount = promotedStreamRoundCounts.get(streamId) || 0;
+        
+        if (currentCount >= maxPromotedRounds) {
+          // Skip this round - promoted stream has reached its limit
+          continue;
+        }
+        
+        // Include this round and increment counter
+        result.push(round);
+        promotedStreamRoundCounts.set(streamId, currentCount + 1);
+      } else {
+        // Unpromoted rounds are always included (until finalLimit)
+        result.push(round);
+      }
+
+      // Stop once we have enough rounds
+      if (result.length >= finalLimit) {
+        break;
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -215,6 +279,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
   async getTopPromotedBets(): Promise<any> {
     try {
+      // Get configuration for homepage context
+      const config = getPromotedBetsConfig('homepage');
+      const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
+
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
         .where("br.status IN (:...statuses)", {
@@ -226,13 +294,21 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           status: StreamStatus.SCHEDULED
         });
 
-      this.applyPromotedStreamOrdering(betRoundsQB, 's').limit(10);
+      this.applyPromotedOrdering(betRoundsQB, 's', 'br').limit(fetchLimit);
 
-      const data = await betRoundsQB.getRawMany();
+      const allRounds = await betRoundsQB.getRawMany();
+      
+      // Filter to limit promoted streams to configured rounds per stream
+      const filteredRounds = this.limitPromotedRounds(
+        allRounds, 
+        config.maxPromotedRounds, 
+        config.totalLimit
+      );
+
       const resultList = [];
 
-      for (let i = 0; i < data.length; i++) {
-        const item = data[i];
+      for (let i = 0; i < filteredRounds.length; i++) {
+        const item = filteredRounds[i];
 
         const variables = await this.bettingVariableRepository
           .createQueryBuilder("bv")
@@ -1541,9 +1617,11 @@ END
     homepageBetListDto: HomepageBetListDto,
   ): Promise<any> {
 
+    const config = getPromotedBetsConfig('displayBets');
     const page = homepageBetListDto.page ?? 1;
-    const take = 24;
-    const offset = (page - 1) * take;
+    const take = config.totalLimit;
+    const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
+    const offset = (page - 1) * fetchLimit;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1560,8 +1638,8 @@ END
           ]
         });
 
-      this.applyPromotedStreamOrdering(betRoundsQB, 's')
-        .limit(take)
+      this.applyPromotedOrdering(betRoundsQB, 's', 'br')
+        .limit(fetchLimit)
         .offset(offset);
 
       const count = await this.bettingRoundRepository
@@ -1580,11 +1658,18 @@ END
 
       const hasNextPage = count > (offset + take);
 
-      const data = await betRoundsQB.getRawMany();
+      const allRounds = await betRoundsQB.getRawMany();
+      
+      const filteredRounds = this.limitPromotedRounds(
+        allRounds, 
+        config.maxPromotedRounds, 
+        config.totalLimit
+      );
+
       const resultList = [];
 
-      for (let i = 0; i < data.length; i++) {
-        const item = data[i];
+      for (let i = 0; i < filteredRounds.length; i++) {
+        const item = filteredRounds[i];
 
         const variables = await this.bettingVariableRepository
           .createQueryBuilder("bv")
@@ -1653,9 +1738,11 @@ END
     homepageBetListDto: HomepageBetListDto,
   ): Promise<any> {
 
+    const config = getPromotedBetsConfig('upcomingBets');
     const page = homepageBetListDto.page ?? 1;
-    const take = 15;
-    const offset = (page - 1) * take;
+    const take = config.totalLimit;
+    const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
+    const offset = (page - 1) * fetchLimit;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1669,8 +1756,8 @@ END
           status: StreamStatus.SCHEDULED
         })
 
-      this.applyPromotedStreamOrdering(betRoundsQB, 's')
-        .limit(take)
+      this.applyPromotedOrdering(betRoundsQB, 's', 'br')
+        .limit(fetchLimit)
         .offset(offset);
 
       const count = await this.bettingRoundRepository
@@ -1686,11 +1773,18 @@ END
 
       const hasNextPage = count > (offset + take);
 
-      const data = await betRoundsQB.getRawMany();
+      const allRounds = await betRoundsQB.getRawMany();
+      
+      const filteredRounds = this.limitPromotedRounds(
+        allRounds, 
+        config.maxPromotedRounds, 
+        config.totalLimit
+      );
+
       const resultList = [];
 
-      for (let i = 0; i < data.length; i++) {
-        const item = data[i];
+      for (let i = 0; i < filteredRounds.length; i++) {
+        const item = filteredRounds[i];
 
         const variables = await this.bettingVariableRepository
           .createQueryBuilder("bv")
