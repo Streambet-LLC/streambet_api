@@ -28,7 +28,7 @@ export const PromotedBetsConfig = {
    * Higher limits to show more variety and options
    */
   displayBets: {
-    totalLimit: 20,
+    totalLimit: 24,
     maxPromotedRounds: 3,
     fetchBufferMultiplier: 4,
   },
