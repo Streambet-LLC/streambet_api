@@ -224,11 +224,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         });
 
         const options = variables.map((v) => {
-          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
           return {
             option: v.bv_name,
-            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
           }
         });
 
@@ -539,11 +537,9 @@ END
         });
 
         const options = variables.map((v) => {
-          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
           return {
             option: v.bv_name,
-            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
           }
         });
 
@@ -1541,18 +1537,14 @@ END
         let totalGoldCoins = 0;
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
-
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
         });
 
         const options = variables.map((v) => {
-          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
           return {
             option: v.bv_name,
-            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
           }
         });
 
@@ -1652,11 +1644,9 @@ END
         });
 
         const options = variables.map((v) => {
-          const optionTotalVotes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin);
-
           return {
             option: v.bv_name,
-            percentage: totalVotes > 0 ? (optionTotalVotes / totalVotes * 100).toFixed(2) : 0
+            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
           }
         });
 
