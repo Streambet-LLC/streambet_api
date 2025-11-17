@@ -513,8 +513,6 @@ END
         else return 0;
       });
 
-      console.log(bettingRounds);
-
       for (let i = 0; i < bettingRounds.length; i++) {
         const item = bettingRounds[i];
 
@@ -1204,8 +1202,6 @@ END
     try {
       //retun a sheduled stream with created, open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
-
-      console.log(stream);
 
       if (role === UserRole.CREATOR) {
         if (stream.creatorId !== creator) {
