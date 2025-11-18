@@ -2352,7 +2352,8 @@ export class BettingService {
       const options = variables.map((v) => {
         return {
           option: v.bv_name,
-          percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
+          percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+          isWinner: v.bv_is_winning_option,
         }
       });
 
