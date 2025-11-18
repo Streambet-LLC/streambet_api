@@ -1360,10 +1360,7 @@ END
       if (liveScheduledStreamListDto.username) {
         streamQB
           .innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
-          .setParameter('username', liveScheduledStreamListDto.username)
-          .andWhere("s.type = :type", {
-            type: "stream"
-          });
+          .setParameter('username', liveScheduledStreamListDto.username);
       } else {
         streamQB.leftJoinAndSelect('s.creator', 'creator');
       }
