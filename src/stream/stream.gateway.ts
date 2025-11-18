@@ -299,11 +299,40 @@ export class StreamGateway {
       );
 
       // Log success for debugging and tracking
-      Logger.log(`Emitting stream list event: ${event}`);
+      this.logger.log(`Emitting stream list event: ${event}`);
     } catch (error) {
       // Catch and log any unexpected errors during broadcasting
-      Logger.error(
+      this.logger.error(
         `Failed to emit stream list event: ${JSON.stringify(event)}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  /**
+   * Emits a stream promotion update event to all connected clients.
+   * 
+   * @param streamId - The unique identifier of the stream
+   * @param isPromoted - Whether the stream is now promoted
+   */
+  public emitStreamPromotionUpdated(streamId: string, isPromoted: boolean) {
+    try {
+      // Prepare the payload with the stream promotion update
+      const payload = { streamId, isPromoted };
+
+      // Broadcast the payload to all sockets in the 'streambet' room
+      emitToStreamBet(
+        this.gatewayManager,
+        SocketEventName.StreamPromotionUpdated,
+        payload,
+      );
+
+      // Log success for debugging and tracking
+      this.logger.log(`Emitting stream promotion update for stream ${streamId}: promoted=${isPromoted}`);
+    } catch (error) {
+      // Catch and log any unexpected errors during broadcasting
+      this.logger.error(
+        `Failed to emit stream promotion update for stream ${streamId}`,
         error instanceof Error ? error.stack : String(error),
       );
     }

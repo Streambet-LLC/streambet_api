@@ -168,6 +168,12 @@ export class AdminController {
     @Body() updateStreamDto: UpdateStreamDto,
   ): Promise<ApiResponse> {
     this.ensureAdminOrCreator(req.user);
+
+    // Only admins can modify the isPromoted field
+    if (updateStreamDto.isPromoted !== undefined && req.user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only admins can promote or demote streams');
+    }
+
     const updatedStream = await this.streamService.updateStream(
       req.user.role,
       req.user.id,
