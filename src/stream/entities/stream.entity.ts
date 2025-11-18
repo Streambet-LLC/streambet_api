@@ -51,6 +51,9 @@ export class Stream extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   creatorId: string;
 
+  @Column({ type: 'boolean', default: false })
+  isPromoted: boolean;
+
   @OneToMany(() => BettingVariable, (variable) => variable.stream)
   bettingVariables: BettingVariable[];
 
