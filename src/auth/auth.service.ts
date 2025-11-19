@@ -71,6 +71,7 @@ export class AuthService {
   ): Promise<UserRegistrationResponseDto> {
     try {
       const {
+        name,
         email,
         password,
         profileImageUrl,
@@ -123,6 +124,7 @@ export class AuthService {
 
       // Create user
       const user = await this.usersService.create({
+        name,
         username,
         email,
         password: hashedPassword,
