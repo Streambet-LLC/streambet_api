@@ -2321,6 +2321,66 @@ export class BettingService {
     }
   }
 
+  async getRoundData(roundId: string) {
+    try {
+      // Fetch the betting round along with its betting variables
+      const bettingRound = await this.bettingRoundsRepository
+        .createQueryBuilder('br')
+        .where("br.id = :roundId", {
+          roundId
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .getOne();
+
+      const variables = await this.bettingVariablesRepository
+        .createQueryBuilder("bv")
+        .where("bv.roundId = :roundId", {
+          roundId: bettingRound.id
+        })
+        .getRawMany();
+
+      let totalVotes = 0;
+      let totalStreamCoins = 0;
+      let totalGoldCoins = 0;
+
+      variables.forEach((bv) => {
+        totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+        totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+      });
+
+      const options = variables.map((v) => {
+        return {
+          option: v.bv_name,
+          percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0
+        }
+      });
+
+      const itemData = {
+        streamId: bettingRound.streamId,
+        roundId: bettingRound.id,
+        thumbnail: bettingRound.stream.thumbnailUrl ?? "",
+        status: bettingRound.status,
+        name: bettingRound.roundName,
+        type: bettingRound.stream.type,
+        options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+        totalPot: {
+          streamCoins: totalStreamCoins,
+          goldCoins: totalGoldCoins
+        }
+      }
+
+
+      // Return structured response
+      return {
+        data: itemData
+      };
+    } catch (e) {
+      console.error('Error fetching round data:', e.message);
+      throw new NotFoundException(e.message);
+    }
+  }
+
   /**
    * Calculates potential winning amounts for all active bets in a given betting round.
    *
@@ -2478,15 +2538,6 @@ export class BettingService {
             2,
           )
           : 0;
-
-      console.log({
-        opposingGoldCoinAmount,
-        userOptionGoldCoinCount,
-        goldPotPerBettor,
-        userOptionSweepCoinCount,
-        opposingPotSweepCoinAmount,
-        sweepPotPerBettor,
-      });
 
       // --- MAIN LOGIC: always calculate from scratch ---
       let potentialGoldCoinAmt = goldCoinBetAmtForLoginUser;
