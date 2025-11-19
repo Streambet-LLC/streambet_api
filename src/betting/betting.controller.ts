@@ -362,7 +362,7 @@ export class BettingController {
   }
 
   @ApiOperation({ summary: 'Get Round Data' })
-  @Get('/:roundId')
+  @Get('round/:roundId')
   async findRoundData(
     @Param('roundId') roundId: string, // Round ID from URL
   ): Promise<ApiResponse> {
