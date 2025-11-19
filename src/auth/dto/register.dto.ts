@@ -77,6 +77,13 @@ export class RegisterDto {
   username: string;
 
   @ApiProperty({
+    description: 'Name of the user',
+    example: 'John Doe',
+  })
+  @IsString()
+  name: string;
+
+  @ApiProperty({
     description: 'Profile url of the user',
   })
   @IsOptional()
