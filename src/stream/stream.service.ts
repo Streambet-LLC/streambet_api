@@ -1617,7 +1617,7 @@ END
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
     const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
-    const offset = (page - 1) * fetchLimit;
+    const offset = (page - 1) * take; 
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1638,21 +1638,21 @@ END
         .limit(fetchLimit)
         .offset(offset);
 
-      const count = await this.bettingRoundRepository
-        .createQueryBuilder('br')
-        .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN]
-        })
-        .leftJoinAndSelect("br.stream", "s")
-        .andWhere("s.status IN (:...streamStatuses)", {
-          streamStatuses: [
-            StreamStatus.LIVE,
-            StreamStatus.SCHEDULED
-          ]
-        })
-        .getCount()
+      // const count = await this.bettingRoundRepository
+      //   .createQueryBuilder('br')
+      //   .where("br.status IN (:...statuses)", {
+      //     statuses: [BettingRoundStatus.OPEN]
+      //   })
+      //   .leftJoinAndSelect("br.stream", "s")
+      //   .andWhere("s.status IN (:...streamStatuses)", {
+      //     streamStatuses: [
+      //       StreamStatus.LIVE,
+      //       StreamStatus.SCHEDULED
+      //     ]
+      //   })
+      //   .getCount()
 
-      const hasNextPage = count > (offset + take);
+      // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
       
@@ -1661,6 +1661,9 @@ END
         config.maxPromotedRounds, 
         config.totalLimit
       );
+
+      // Calculate hasNextPage based on filtered results
+      const hasNextPage = filteredRounds.length >= take;
 
       const resultList = [];
 
@@ -1734,7 +1737,7 @@ END
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
     const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
-    const offset = (page - 1) * fetchLimit;
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1752,18 +1755,18 @@ END
         .limit(fetchLimit)
         .offset(offset);
 
-      const count = await this.bettingRoundRepository
-        .createQueryBuilder('br')
-        .where("br.status IN (:...statuses)", {
-          statuses: [BettingRoundStatus.OPEN]
-        })
-        .leftJoinAndSelect("br.stream", "s")
-        .andWhere("s.status = :status", {
-          status: StreamStatus.SCHEDULED
-        })
-        .getCount()
+      // const count = await this.bettingRoundRepository
+      //   .createQueryBuilder('br')
+      //   .where("br.status IN (:...statuses)", {
+      //     statuses: [BettingRoundStatus.OPEN]
+      //   })
+      //   .leftJoinAndSelect("br.stream", "s")
+      //   .andWhere("s.status = :status", {
+      //     status: StreamStatus.SCHEDULED
+      //   })
+      //   .getCount()
 
-      const hasNextPage = count > (offset + take);
+      // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
       
@@ -1772,6 +1775,9 @@ END
         config.maxPromotedRounds, 
         config.totalLimit
       );
+
+      // Calculate hasNextPage based on filtered results
+      const hasNextPage = filteredRounds.length >= take;
 
       const resultList = [];
 
