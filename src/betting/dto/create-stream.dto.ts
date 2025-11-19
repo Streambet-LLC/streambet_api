@@ -57,7 +57,6 @@ export class CreateStreamDto {
   @IsOptional()
   thumbnailUrl?: string;
 
-  @ValidateIf(o => o.type === StreamEventType.STREAM)
   @ApiProperty({
     description: 'Scheduled start time of the stream',
     example: '2024-01-01T20:00:00Z',

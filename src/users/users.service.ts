@@ -238,9 +238,9 @@ export class UsersService {
   ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'accountCreationDate' | 'profileImageUrl' | 'socials'>> {
     try {
       const user = await this.usersRepository.findOne({
-        where: { 
-          username, 
-          isActive: true, 
+        where: {
+          username,
+          isActive: true,
           isBanned: Or(Not(true), IsNull()),
           isSuspended: Or(Not(true), IsNull()),
         },
@@ -250,8 +250,6 @@ export class UsersService {
         throw new NotFoundException('User not found');
       }
 
-      console.log(user);
-      
       return {
         id: user.id,
         username: user.username,

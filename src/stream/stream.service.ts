@@ -620,8 +620,6 @@ END
         else return 0;
       });
 
-      console.log(bettingRounds);
-
       for (let i = 0; i < bettingRounds.length; i++) {
         const item = bettingRounds[i];
 
@@ -1336,8 +1334,6 @@ END
       //retun a sheduled stream with created, open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
 
-      console.log(stream);
-
       if (role === UserRole.CREATOR) {
         if (stream.creatorId !== creator) {
           throw new NotFoundException(`Stream not found`);
@@ -1495,10 +1491,7 @@ END
       if (liveScheduledStreamListDto.username) {
         streamQB
           .innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
-          .setParameter('username', liveScheduledStreamListDto.username)
-          .andWhere("s.type = :type", {
-            type: "stream"
-          });
+          .setParameter('username', liveScheduledStreamListDto.username);
       } else {
         streamQB.leftJoinAndSelect('s.creator', 'creator');
       }
