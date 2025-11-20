@@ -344,6 +344,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
+          streamStatus: item.s_status,
+          scheduledStartTime: item.s_scheduledStartTime,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
@@ -1697,6 +1699,8 @@ END
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
+          streamStatus: item.s_status,
+          scheduledStartTime: item.s_scheduledStartTime,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
@@ -1813,6 +1817,8 @@ END
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
+          streamStatus: item.s_status,
+          scheduledStartTime: item.s_scheduledStartTime,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
