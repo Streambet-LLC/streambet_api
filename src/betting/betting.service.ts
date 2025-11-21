@@ -567,6 +567,19 @@ export class BettingService {
           winnerAmountSweepCoins > 0 ? winnerAmountSweepCoins : null;
       }
 
+      // Calculate per-round totals
+      let totalBetsGoldCoinAmount = 0;
+      let totalBetsSweepCoinAmount = 0;
+      let betCountGoldCoin = 0;
+      let betCountSweepCoin = 0;
+
+      round.bettingVariables.forEach((variable) => {
+        totalBetsGoldCoinAmount += Number(variable.totalBetsGoldCoinAmount || 0);
+        totalBetsSweepCoinAmount += Number(variable.totalBetsSweepCoinAmount || 0);
+        betCountGoldCoin += Number(variable.betCountGoldCoin || 0);
+        betCountSweepCoin += Number(variable.betCountSweepCoin || 0);
+      });
+
       // Push round summary into response
       result.rounds.push({
         roundId: round.id,
@@ -575,6 +588,10 @@ export class BettingService {
         winnerAmount,
         winners,
         options,
+        totalBetsGoldCoinAmount: totalBetsGoldCoinAmount.toString(),
+        totalBetsSweepCoinAmount: totalBetsSweepCoinAmount.toString(),
+        betCountGoldCoin,
+        betCountSweepCoin,
       });
     }
     return result;
@@ -2829,8 +2846,8 @@ export class BettingService {
    * @returns Object containing:
    *   - totalBetsGoldCoinAmount: total Gold Coins bet in this round
    *   - totalBetsSweepCoinAmount: total Sweep Coins bet in this round
-   *   - totalGoldCoinBet: total number of Gold Coin bets
-   *   - totalSweepCoinBet: total number of Sweep Coin bets
+   *   - betCountGoldCoin: total number of Gold Coin bets
+   *   - betCountSweepCoin: total number of Sweep Coin bets
    */
   async getRoundTotals(roundId: string) {
     // Fetch all betting variables associated with this round
@@ -2851,21 +2868,21 @@ export class BettingService {
     );
 
     // Sum total number of Gold Coin bets
-    const totalGoldCoinBet = bettingVariables.reduce(
+    const betCountGoldCoin = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
       0,
     );
 
     // Sum total number of Sweep Coin bets
-    const totalSweepCoinBet = bettingVariables.reduce(
+    const betCountSweepCoin = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
       0,
     );
     return {
       totalBetsGoldCoinAmount,
       totalBetsSweepCoinAmount,
-      totalSweepCoinBet,
-      totalGoldCoinBet,
+      betCountSweepCoin,
+      betCountGoldCoin,
     };
   }
 
