@@ -268,6 +268,25 @@ export class UsersService {
     }
   }
 
+  async getCreators(): Promise<Pick<UserResponseDto, 'username' | 'name' | 'profileImageUrl'>[]> {
+    try {
+      const creators = await this.usersRepository.find({
+        where: {
+          role: UserRole.CREATOR,
+          isActive: true,
+          isBanned: Or(Not(true), IsNull()),
+          isSuspended: Or(Not(true), IsNull()),
+        },
+        select: ["username", "name", "profileImageUrl"]
+      });
+
+      return creators;
+    } catch (e) {
+      this.logger.error(`Error fetching creators`, e);
+      throw new NotFoundException((e as Error).message);
+    }
+  }
+
   async findAllUser(
     userFilterDto: UserFilterDto,
   ): Promise<{ data: User[]; total: number }> {
