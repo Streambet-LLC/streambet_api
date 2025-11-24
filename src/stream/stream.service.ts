@@ -39,6 +39,7 @@ import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { UserRole } from 'src/enums/user-role.enum';
 import { getPromotedBetsConfig } from './config/promoted-bets.config';
+import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -1473,7 +1474,7 @@ END
    */
 
   async getScheduledAndLiveStreams(
-    liveScheduledStreamListDto: LiveScheduledStreamListDto,
+    liveScheduledStreamListDto: StreamFilterDto,
   ): Promise<{ data: Stream[]; total: number }> {
     try {
       const range: Range = liveScheduledStreamListDto.range
@@ -1486,11 +1487,13 @@ END
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.bettingRounds', 'r')
         .leftJoinAndSelect('r.bettingVariables', 'bv')
+        .andWhere(`s.type = :type`, {
+          type: 'stream',
+        })
         .andWhere(`s.status = :scheduled or s.status = :live`, {
           scheduled: StreamStatus.SCHEDULED,
           live: StreamStatus.LIVE,
-        });
-
+        })
 
       if (liveScheduledStreamListDto.username) {
         streamQB
@@ -1716,6 +1719,101 @@ END
           data: resultList,
           page,
           hasNextPage
+        }
+      }
+    } catch (e) {
+      console.log(e);
+
+      Logger.error('Unable to retrieve stream details', e);
+      throw new HttpException(
+        `Unable to retrieve stream details at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getCreatorProfileNonVideoBets(
+    query: CreatorProfileNonVideoBetsDto,
+  ): Promise<any> {
+    const page = query.page ?? 1;
+    const take = query.limit ?? 4;
+    const username = query.username;
+    const offset = (page - 1) * take; 
+
+    try {
+      const betRoundsQB = this.bettingRoundRepository
+        .createQueryBuilder('br')
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN]
+        })
+        .leftJoinAndSelect("br.stream", "s")
+        .innerJoinAndSelect('s.creator', 'c', 'c.username = :username')
+        .setParameter('username', username)
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED
+          ]
+        })
+        .andWhere("s.type = 'non-video'");
+
+      const count = await betRoundsQB.getCount();
+      const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
+
+      const resultList = [];
+
+      for (let i = 0; i < allRounds.length; i++) {
+        const item = allRounds[i];
+
+        const variables = await this.bettingVariableRepository
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
+          })
+          .getRawMany();
+
+        let totalVotes = 0;
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        variables.forEach((bv) => {
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        });
+
+        const options = variables.map((v) => {
+          return {
+            option: v.bv_name,
+            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            isWinner: v.bv_is_winning_option,
+          }
+        });
+
+        const itemData = {
+          streamId: item.s_id,
+          roundId: item.br_id,
+          thumbnail: item.s_thumbnailUrl ?? "",
+          creator: item.c_username,
+          streamName: item.s_name,
+          name: item.br_roundName,
+          type: item.s_type,
+          streamStatus: item.s_status,
+          scheduledStartTime: item.s_scheduledStartTime,
+          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          totalPot: {
+            streamCoins: totalStreamCoins,
+            goldCoins: totalGoldCoins
+          }
+        }
+
+        resultList.push(itemData);
+      }
+
+      return {
+        data: {
+          data: resultList,
+          page,
+          total: count,
         }
       }
     } catch (e) {

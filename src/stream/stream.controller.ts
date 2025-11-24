@@ -31,6 +31,7 @@ import { StreamResponseDto } from './dto/stream-detail.response.dto';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { RoundIdDto } from 'src/betting/dto/place-bet.dto';
 import { BetRoundDetailsDto } from './dto/stream.dto';
+import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -76,7 +77,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   // @UseGuards(GeoFencingGuard)
   @Get()
   async getScheduledAndLiveStreams(
-    @Query() liveScheduledStreamListDto: LiveScheduledStreamListDto,
+    @Query() liveScheduledStreamListDto: StreamFilterDto,
   ) {
     const { total, data } = await this.streamService.getScheduledAndLiveStreams(
       liveScheduledStreamListDto,
@@ -109,6 +110,25 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     };
   }
 
+  @ApiOperation({
+    summary: 'List non-video bets for creator profile',
+  })
+  @ApiOkResponse({ type: CreatorProfileNonVideoBetsDto })
+  // @UseGuards(GeoFencingGuard)
+  @Get('creator-non-video-bets')
+  async getCreatorProfileNonVideoBets(
+    @Query() query: CreatorProfileNonVideoBetsDto,
+  ) {
+    const { data } = await this.streamService.getCreatorProfileNonVideoBets(
+      query,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
 
   @ApiOperation({
     summary: 'List upcoming bets for homepage',
