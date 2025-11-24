@@ -163,4 +163,25 @@ export class UsersController {
       statusCode: HttpStatus.OK,
     };
   }
+
+  @ApiOperation({
+    summary: 'Gets all creators',
+    description:
+      'This endpoint gets all the creators',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Creator list fetched successful',
+    type: User,
+  })
+  @Get('creators')
+  async getCreators() {
+    const data = await this.usersService.getCreators();
+
+    return {
+      data,
+      message: 'Creator list fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
 }
