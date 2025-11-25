@@ -351,7 +351,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
-          }
+          },
+          description: item.s_description,
         }
 
         resultList.push(itemData);
@@ -1487,12 +1488,12 @@ END
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.bettingRounds', 'r')
         .leftJoinAndSelect('r.bettingVariables', 'bv')
-        .andWhere(`s.type = :type`, {
-          type: 'stream',
-        })
-        .andWhere(`s.status = :scheduled or s.status = :live`, {
+        .andWhere(`(s.status = :scheduled or s.status = :live)`, {
           scheduled: StreamStatus.SCHEDULED,
           live: StreamStatus.LIVE,
+        })
+        .andWhere(`s.type = :type`, {
+          type: 'stream',
         })
 
       if (liveScheduledStreamListDto.username) {
@@ -1708,7 +1709,8 @@ END
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
-          }
+          },
+          description: item.s_description,
         }
 
         resultList.push(itemData);
@@ -1803,7 +1805,8 @@ END
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
-          }
+          },
+          description: item.s_description,
         }
 
         resultList.push(itemData);
@@ -1921,7 +1924,8 @@ END
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins
-          }
+          },
+          description: item.s_description,
         }
 
         resultList.push(itemData);
