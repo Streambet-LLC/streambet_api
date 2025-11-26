@@ -323,6 +323,7 @@ export class BettingService {
         roundName: roundData.roundName,
         stream: stream,
         status: BettingRoundStatus.OPEN,
+        lockDate: roundData.lockDate,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);

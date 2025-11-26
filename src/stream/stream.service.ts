@@ -135,12 +135,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       if (isPromoted) {
         // Check if this promoted stream has already hit its limit
         const currentCount = promotedStreamRoundCounts.get(streamId) || 0;
-        
+
         if (currentCount >= maxPromotedRounds) {
           // Skip this round - promoted stream has reached its limit
           continue;
         }
-        
+
         // Include this round and increment counter
         result.push(round);
         promotedStreamRoundCounts.set(streamId, currentCount + 1);
@@ -298,11 +298,11 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       this.applyPromotedOrdering(betRoundsQB, 's', 'br').limit(fetchLimit);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       // Filter to limit promoted streams to configured rounds per stream
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
@@ -341,6 +341,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -656,6 +657,7 @@ END
 
         const itemData = {
           roundId: item.id,
+          lockDate: item.lockDate,
           streamId: stream.id,
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
@@ -1618,7 +1620,7 @@ END
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
     const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
-    const offset = (page - 1) * take; 
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1656,10 +1658,10 @@ END
       // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
@@ -1699,6 +1701,7 @@ END
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -1870,10 +1873,10 @@ END
       // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
