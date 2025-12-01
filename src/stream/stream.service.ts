@@ -1746,7 +1746,7 @@ END
     const page = query.page ?? 1;
     const take = query.limit ?? 4;
     const username = query.username;
-    const offset = (page - 1) * take;
+    const offset = (page - 1) * take; 
 
     try {
       const betRoundsQB = this.bettingRoundRepository
