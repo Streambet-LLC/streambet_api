@@ -5,6 +5,7 @@ import {
   IsArray,
   ValidateNested,
   IsOptional,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -52,6 +53,14 @@ export class RoundDto {
   @IsString()
   @IsNotEmpty()
   roundName: string;
+
+  @ApiProperty({
+    description: 'Optional Lock Date',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  lockDate?: string;
 
   @ApiProperty({
     description: 'Array of betting options for this round',
