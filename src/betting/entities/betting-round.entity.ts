@@ -39,7 +39,7 @@ export class BettingRound extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   createdBy: string;
 
-  @OneToOne(() => User, (creator) => creator.username)
+  @ManyToOne(() => User, (creator) => creator.username)
   @JoinColumn({ name: 'createdBy' })
   creator: User;
 }

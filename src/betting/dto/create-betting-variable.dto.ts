@@ -99,6 +99,14 @@ export class EditRoundDto {
   roundName: string;
 
   @ApiProperty({
+    description: 'Optional Lock Date',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  lockDate?: string;
+
+  @ApiProperty({
     description:
       'Array of betting options for this round (can include existing and new options)',
     type: [EditOptionDto],
