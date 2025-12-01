@@ -342,6 +342,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -658,6 +659,7 @@ END
 
         const itemData = {
           roundId: item.id,
+          lockDate: item.lockDate,
           streamId: stream.id,
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
@@ -1702,6 +1704,7 @@ END
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -1743,7 +1746,7 @@ END
     const page = query.page ?? 1;
     const take = query.limit ?? 4;
     const username = query.username;
-    const offset = (page - 1) * take;
+    const offset = (page - 1) * take; 
 
     try {
       const betRoundsQB = this.bettingRoundRepository
