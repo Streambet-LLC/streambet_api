@@ -1,9 +1,10 @@
 import { BaseEntity } from '../../common/entities/base.entity';
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, OneToMany, JoinColumn, OneToOne } from 'typeorm';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { BettingRoundStatus } from '../../enums/round-status.enum';
 import { Bet } from './bet.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {
@@ -31,4 +32,11 @@ export class BettingRound extends BaseEntity {
 
   @OneToMany(() => Bet, (bet) => bet.round)
   bet: Bet[];
+
+  @Column({ type: 'uuid', nullable: true })
+  createdBy: string;
+
+  @OneToOne(() => User, (creator) => creator.username)
+  @JoinColumn({ name: 'createdBy' })
+  creator: User;
 }
