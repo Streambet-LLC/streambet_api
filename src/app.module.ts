@@ -43,6 +43,9 @@ import personaConfig from './config/persona.config';
 import { WebhookModule } from './webhook/webhook.module';
 import { CreatorModule } from './creator/creator.module';
 
+import { ScheduleModule } from '@nestjs/schedule';
+import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
+
 @Module({
   imports: [
     CacheModule.register({
@@ -121,7 +124,9 @@ import { CreatorModule } from './creator/creator.module';
     GeoFencingModule,
     RedisModule,
     CoinPackageModule,
-    WebhookModule
+    WebhookModule,
+    ScheduleModule.forRoot(),
+    ScheduledTaskModule
   ],
   controllers: [AppController],
   providers: [
@@ -133,5 +138,5 @@ import { CreatorModule } from './creator/creator.module';
   ],
 })
 export class AppModule {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 }

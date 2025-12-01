@@ -20,6 +20,9 @@ export class BettingRound extends BaseEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   roundName: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  lockDate: Date;
+
   @Column({
     type: 'enum',
     enum: BettingRoundStatus,

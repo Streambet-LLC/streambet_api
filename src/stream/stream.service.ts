@@ -135,12 +135,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       if (isPromoted) {
         // Check if this promoted stream has already hit its limit
         const currentCount = promotedStreamRoundCounts.get(streamId) || 0;
-        
+
         if (currentCount >= maxPromotedRounds) {
           // Skip this round - promoted stream has reached its limit
           continue;
         }
-        
+
         // Include this round and increment counter
         result.push(round);
         promotedStreamRoundCounts.set(streamId, currentCount + 1);
@@ -298,11 +298,11 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       this.applyPromotedOrdering(betRoundsQB, 's', 'br').limit(fetchLimit);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       // Filter to limit promoted streams to configured rounds per stream
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
@@ -331,6 +331,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
         const options = variables.map((v) => {
           return {
+            id: v.bv_id,
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
@@ -341,6 +342,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -648,6 +650,7 @@ END
 
         const options = variables.map((v) => {
           return {
+            id: v.bv_id,
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
@@ -656,6 +659,7 @@ END
 
         const itemData = {
           roundId: item.id,
+          lockDate: item.lockDate,
           streamId: stream.id,
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
@@ -1618,7 +1622,7 @@ END
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
     const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
-    const offset = (page - 1) * take; 
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1656,10 +1660,10 @@ END
       // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
@@ -1689,6 +1693,7 @@ END
 
         const options = variables.map((v) => {
           return {
+            id: v.bv_id,
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
@@ -1699,6 +1704,7 @@ END
           streamId: item.s_id,
           roundId: item.br_id,
           thumbnail: item.s_thumbnailUrl ?? "",
+          lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -1740,7 +1746,7 @@ END
     const page = query.page ?? 1;
     const take = query.limit ?? 4;
     const username = query.username;
-    const offset = (page - 1) * take; 
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1785,6 +1791,7 @@ END
 
         const options = variables.map((v) => {
           return {
+            id: v.bv_id,
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
@@ -1870,10 +1877,10 @@ END
       // const hasNextPage = count > (offset + take);
 
       const allRounds = await betRoundsQB.getRawMany();
-      
+
       const filteredRounds = this.limitPromotedRounds(
-        allRounds, 
-        config.maxPromotedRounds, 
+        allRounds,
+        config.maxPromotedRounds,
         config.totalLimit
       );
 
@@ -1905,6 +1912,7 @@ END
 
         const options = variables.map((v) => {
           return {
+            id: v.bv_id,
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,

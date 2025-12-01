@@ -326,6 +326,7 @@ export class BettingService {
         stream: stream,
         status: BettingRoundStatus.OPEN,
         createdBy: creator,
+        lockDate: roundData.lockDate,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
@@ -2357,6 +2358,7 @@ export class BettingService {
 
       const options = variables.map((v) => {
         return {
+          id: v.bv_id,
           option: v.bv_name,
           percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
           isWinner: v.bv_is_winning_option,
