@@ -318,11 +318,14 @@ export class BettingService {
     for (let i = 0; i < rounds.length; i++) {
       const roundData = rounds[i];
 
+      console.log("Create", creator);
+
       // Create and save a new betting round
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
         status: BettingRoundStatus.OPEN,
+        createdBy: creator,
         lockDate: roundData.lockDate,
       });
 
@@ -656,11 +659,14 @@ export class BettingService {
         bettingRound.roundName = roundData.roundName;
         await this.bettingRoundsRepository.save(bettingRound);
       } else {
+        console.log("Update", creator);
+
         // Create new round
         bettingRound = this.bettingRoundsRepository.create({
           roundName: roundData.roundName,
           stream: stream,
           status: BettingRoundStatus.CREATED,
+          createdBy: creator
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
