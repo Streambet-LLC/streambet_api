@@ -3,6 +3,7 @@ import { Entity, Column, ManyToOne, OneToMany, JoinColumn, OneToOne } from 'type
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { BettingRoundStatus } from '../../enums/round-status.enum';
+import { BettingCategory } from '../../enums/betting-category.enum';
 import { Bet } from './bet.entity';
 import { User } from 'src/users/entities/user.entity';
 
@@ -30,6 +31,14 @@ export class BettingRound extends BaseEntity {
   })
   status: BettingRoundStatus;
 
+  @Column({
+    type: 'enum',
+    enum: BettingCategory,
+    default: BettingCategory.OTHER,
+    nullable: true,
+  })
+  category: BettingCategory;
+
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];
 
@@ -39,7 +48,10 @@ export class BettingRound extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   createdBy: string;
 
-  @OneToOne(() => User, (creator) => creator.username)
+  // ManyToOne relationship: One creator (User) can create many betting rounds
+  // Unidirectional - User entity has no inverse @OneToMany relationship
+  // Changed from @OneToOne to @ManyToOne to match actual data model where creators can create multiple rounds
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'createdBy' })
   creator: User;
 }

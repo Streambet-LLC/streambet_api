@@ -1643,6 +1643,13 @@ END
         { search: `%${search}%` },
       );
 
+      // Filter by category if provided
+      if (homepageBetListDto.category) {
+        betRoundsQB.andWhere("br.category = :category", {
+          category: homepageBetListDto.category
+        });
+      }
+
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
         .offset(offset);
@@ -1715,6 +1722,7 @@ END
           type: item.s_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          category: item.br_category,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
