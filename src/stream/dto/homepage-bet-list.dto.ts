@@ -10,4 +10,11 @@ export class HomepageBetListDto {
   })
   @IsNumber()
   page?: number;
+ 
+  @ApiPropertyOptional({
+    type: String,
+    default: "",
+  })
+  @IsString()
+  search?: string;
 }
