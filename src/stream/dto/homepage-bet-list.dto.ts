@@ -16,6 +16,7 @@ export class HomepageBetListDto {
     type: String,
     default: "",
   })
+  @IsOptional()
   @IsString()
   search?: string;
 

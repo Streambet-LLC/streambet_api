@@ -1638,10 +1638,15 @@ END
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED
           ]
-        }).andWhere(
-        `(LOWER(br.roundName) ILIKE LOWER(:search) OR LOWER(s.name) ILIKE LOWER(:search) OR LOWER(s.description) ILIKE LOWER(:search) OR LOWER(c.username) ILIKE LOWER(:search))`,
-        { search: `%${search}%` },
-      );
+        });
+
+      // Only apply search filter if search term is provided
+      if (search && search.trim()) {
+        betRoundsQB.andWhere(
+          `(LOWER(br.roundName) ILIKE LOWER(:search) OR LOWER(s.name) ILIKE LOWER(:search) OR LOWER(s.description) ILIKE LOWER(:search) OR LOWER(c.username) ILIKE LOWER(:search))`,
+          { search: `%${search}%` },
+        );
+      }
 
       // Filter by category if provided
       if (homepageBetListDto.category) {
