@@ -1648,13 +1648,6 @@ END
         );
       }
 
-      // Filter by category if provided
-      if (homepageBetListDto.category) {
-        betRoundsQB.andWhere("br.category = :category", {
-          category: homepageBetListDto.category
-        });
-      }
-
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
         .offset(offset);

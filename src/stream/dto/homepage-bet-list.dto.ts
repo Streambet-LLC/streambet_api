@@ -19,12 +19,4 @@ export class HomepageBetListDto {
   @IsOptional()
   @IsString()
   search?: string;
-
-  @ApiPropertyOptional({
-    enum: BettingCategory,
-    description: 'Filter Picks by category',
-  })
-  @IsOptional()
-  @IsEnum(BettingCategory)
-  category?: BettingCategory;
 }
