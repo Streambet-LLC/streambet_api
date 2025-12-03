@@ -35,7 +35,6 @@ export class BettingRound extends BaseEntity {
     type: 'enum',
     enum: BettingCategory,
     default: BettingCategory.OTHER,
-    nullable: true,
   })
   category: BettingCategory;
 
