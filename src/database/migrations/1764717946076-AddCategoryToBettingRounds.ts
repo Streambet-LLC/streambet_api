@@ -4,7 +4,7 @@ export class AddCategoryToBettingRounds1764717946076 implements MigrationInterfa
     name = 'AddCategoryToBettingRounds1764717946076'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`CREATE TYPE "public"."betting_rounds_category_enum" AS ENUM('trading_cards', 'neosports_alternative', 'sports', 'streaming_competitions', 'other')`);
+        await queryRunner.query(`CREATE TYPE "public"."betting_rounds_category_enum" AS ENUM('trading_cards', 'neosports_alternative', 'sports', 'streaming_competitions', 'emerging_sports', 'other')`);
         await queryRunner.query(`ALTER TABLE "betting_rounds" ADD "category" "public"."betting_rounds_category_enum" DEFAULT 'other'`);
     }
 
