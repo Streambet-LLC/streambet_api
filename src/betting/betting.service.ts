@@ -327,6 +327,7 @@ export class BettingService {
         status: BettingRoundStatus.OPEN,
         createdBy: creator,
         lockDate: roundData.lockDate,
+        category: roundData.category,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
@@ -350,6 +351,7 @@ export class BettingService {
         roundId: savedRound.id,
         roundName: savedRound.roundName,
         status: savedRound.status,
+        category: savedRound.category,
         options: createdVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -657,6 +659,9 @@ export class BettingService {
       if (bettingRound) {
         // Update existing round
         bettingRound.roundName = roundData.roundName;
+        if (roundData.category !== undefined) {
+          bettingRound.category = roundData.category;
+        }
         await this.bettingRoundsRepository.save(bettingRound);
       } else {
         console.log("Update", creator);
@@ -666,7 +671,8 @@ export class BettingService {
           roundName: roundData.roundName,
           stream: stream,
           status: BettingRoundStatus.CREATED,
-          createdBy: creator
+          createdBy: creator,
+          category: roundData.category,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -797,6 +803,7 @@ export class BettingService {
       roundId: bettingRound.id,
       roundName: bettingRound.roundName,
       status: bettingRound.status,
+      category: bettingRound.category,
       options: updatedVariables.map((variable) => ({
         id: variable.id,
         name: variable.name,
@@ -2370,13 +2377,20 @@ export class BettingService {
         roundId: bettingRound.id,
         thumbnail: bettingRound.stream.thumbnailUrl ?? "",
         status: bettingRound.status,
+        lockDate: bettingRound.lockDate,
+        creator: bettingRound.stream.creator.username,
+        streamName: bettingRound.stream.name,
         name: bettingRound.roundName,
         type: bettingRound.stream.type,
+        streamStatus: bettingRound.stream.status,
+        scheduledStartTime: bettingRound.stream.scheduledStartTime,
+        category: bettingRound.category,
         options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
         totalPot: {
           streamCoins: totalStreamCoins,
           goldCoins: totalGoldCoins
-        }
+        },
+        description: bettingRound.stream.description,
       }
 
 
