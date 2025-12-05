@@ -6,10 +6,12 @@ import {
   ValidateNested,
   IsOptional,
   IsDateString,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { BettingCategory } from 'src/enums/betting-category.enum';
 
 export class OptionDto {
   @ApiProperty({
@@ -63,6 +65,16 @@ export class RoundDto {
   lockDate?: string;
 
   @ApiProperty({
+    description: 'Category of the Pick round',
+    enum: BettingCategory,
+    example: BettingCategory.SPORTS,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BettingCategory)
+  category?: BettingCategory;
+
+  @ApiProperty({
     description: 'Array of betting options for this round',
     type: [OptionDto],
     example: [
@@ -105,6 +117,16 @@ export class EditRoundDto {
   @IsOptional()
   @IsDateString()
   lockDate?: string;
+
+  @ApiProperty({
+    description: 'Category of the Pick round',
+    enum: BettingCategory,
+    example: BettingCategory.SPORTS,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BettingCategory)
+  category?: BettingCategory;
 
   @ApiProperty({
     description:

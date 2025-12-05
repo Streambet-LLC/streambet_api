@@ -1638,10 +1638,15 @@ END
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED
           ]
-        }).andWhere(
-        `(LOWER(br.roundName) ILIKE LOWER(:search) OR LOWER(s.name) ILIKE LOWER(:search) OR LOWER(s.description) ILIKE LOWER(:search) OR LOWER(c.username) ILIKE LOWER(:search))`,
-        { search: `%${search}%` },
-      );
+        });
+
+      // Only apply search filter if search term is provided
+      if (search && search.trim()) {
+        betRoundsQB.andWhere(
+          `(LOWER(br.roundName) ILIKE LOWER(:search) OR LOWER(s.name) ILIKE LOWER(:search) OR LOWER(s.description) ILIKE LOWER(:search) OR LOWER(c.username) ILIKE LOWER(:search))`,
+          { search: `%${search}%` },
+        );
+      }
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
@@ -1715,6 +1720,7 @@ END
           type: item.s_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          category: item.br_category,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
