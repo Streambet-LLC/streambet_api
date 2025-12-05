@@ -1,7 +1,7 @@
 import { BettingVariable } from '../../betting/entities/betting-variable.entity';
 import { BettingRound } from '../../betting/entities/betting-round.entity';
 import { BaseEntity } from '../../common/entities/base.entity';
-import { Entity, Column, OneToMany, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { StreamEventType, StreamStatus } from 'src/enums/stream.enum';
 import { User } from 'src/users/entities/user.entity';
 
@@ -60,7 +60,10 @@ export class Stream extends BaseEntity {
   @OneToMany(() => BettingRound, (round) => round.stream)
   bettingRounds: BettingRound[];
 
-  @OneToOne(() => User, (creator) => creator.username)
+  // ManyToOne relationship: One creator (User) can have many streams
+  // Unidirectional - User entity has no inverse @OneToMany relationship
+  // Changed from @OneToOne to @ManyToOne to match actual data model where creators can create multiple streams
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'creatorId' })
   creator: User;
 }
