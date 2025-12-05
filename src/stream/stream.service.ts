@@ -427,6 +427,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           roundId: round.id,
           roundName: round.roundName ?? '',
           createdAt: round.createdAt ?? '',
+          category: round.category,
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
             option: variable.name,
