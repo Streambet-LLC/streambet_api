@@ -11,6 +11,14 @@ export default registerAs('coinflow', () => ({
   retryDelayMs: Number(process.env.COINFLOW_RETRY_DELAY_MS || 300),
   webhookSecret: process.env.COINFLOW_WEBHOOK_SECRET || '',
   webhookEnv: (process.env.COINFLOW_WEBHOOK_ENV || '').toLowerCase(),
+  n8n: {
+    webhookUrl: process.env.N8N_WEBHOOK_URL || '',
+    webhookSecret: process.env.N8N_WEBHOOK_SECRET || '',
+    enabled: process.env.N8N_ENABLED === 'true',
+    retries: Number(process.env.N8N_RETRIES || 3),
+    retryDelayMs: Number(process.env.N8N_RETRY_DELAY_MS || 1000),
+    timeoutMs: Number(process.env.N8N_TIMEOUT_MS || 5000),
+  },
 }));
 
 
