@@ -44,7 +44,12 @@
         { "name": "COINFLOW_WEBHOOK_ENV", "value": "prod" },
         { "name": "REDIS_TLS", "value": "false" },
         { "name": "NEW_RELIC_ENABLED", "value": "true" },
-        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" }
+        { "name": "NEW_RELIC_APP_NAME", "value": "Streambet" },
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "prod" },
+        { "name": "N8N_ENABLED", "value": "true" },
+        { "name": "N8N_RETRIES", "value": "3" },
+        { "name": "N8N_RETRY_DELAY_MS", "value": "1000" },
+        { "name": "N8N_TIMEOUT_MS", "value": "5000" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/prod/CLIENT_URL" },
@@ -153,7 +158,9 @@
         {
           "name": "ABSTRACT_API_KEY",
           "valueFrom": "/streambet/prod/ABSTRACT_API_KEY"
-        }
+        },
+        { "name": "N8N_WEBHOOK_URL", "valueFrom": "/streambet/prod/N8N_WEBHOOK_URL" },
+        { "name": "N8N_WEBHOOK_SECRET", "valueFrom": "/streambet/prod/N8N_WEBHOOK_SECRET" }
       ],
       "mountPoints": [],
       "volumesFrom": [],

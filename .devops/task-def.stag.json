@@ -44,7 +44,11 @@
         { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
         { "name": "REDIS_TLS", "value": "false" },
-        { "name": "COINFLOW_WEBHOOK_ENV", "value": "stag" }
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "stag" },
+        { "name": "N8N_ENABLED", "value": "true" },
+        { "name": "N8N_RETRIES", "value": "3" },
+        { "name": "N8N_RETRY_DELAY_MS", "value": "1000" },
+        { "name": "N8N_TIMEOUT_MS", "value": "5000" }
       ],
       "secrets": [
         { "name": "CLIENT_URL", "valueFrom": "/streambet/stag/CLIENT_URL" },
@@ -156,6 +160,14 @@
         {
           "name": "COINFLOW_WEBHOOK_SECRET",
           "valueFrom": "/streambet/stag/COINFLOW_WEBHOOK_SECRET"
+        },
+        {
+          "name": "N8N_WEBHOOK_URL",
+          "valueFrom": "/streambet/stag/N8N_WEBHOOK_URL"
+        },
+        {
+          "name": "N8N_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/stag/N8N_WEBHOOK_SECRET"
         },
         {
           "name": "PERSONA_API_KEY",
