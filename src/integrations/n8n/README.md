@@ -176,11 +176,14 @@ async queueCoinflowWebhookEvent(payload: CoinflowWebhookDto) {
 ```
 {{ $json.body.status === 'failed' ? '❌ FAILED' : '✅ SUCCESS' }} *Purchase - ${{ $json.body.transaction.amount }}*
 
+*Event:* {{ $json.body.eventType }}
 *Timestamp:* {{ $json.body.timestamp }}
-*Customer:* {{ $json.body.customer.name }} ({{ $json.body.customer.state }})
-*Email:* {{ $json.body.customer.email }}
-*Payment:* {{ $json.body.transaction.paymentMethod }}
-*Status:* {{ $json.body.status }}
+*Customer:* {{ $json.body.customer.name }} ({{ $json.body.customer.state }}) 
+*Email:* {{ $json.body.customer.email }} 
+*Payment:* {{ $json.body.transaction.paymentMethod }} 
+*Decline Code:* {{ $json.body.transaction.declineCode }}
+*Decline Reason:* {{ $json.body.transaction.declineDescription }}
+*Status:* {{ $json.body.status }} 
 *Transaction ID:* {{ $json.body.transaction.transactionId }}
 *User ID:* {{ $json.body.customer.userId }}
 ```
