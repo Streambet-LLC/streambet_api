@@ -56,6 +56,9 @@ export class UserResponseDto {
   @ApiProperty({ example: 'john.doe@example.com' })
   email: string;
 
+  @ApiProperty({ example: 'California', nullable: true })
+  state: string | null;
+
   @ApiProperty({
     example: 'https://example.com/images/avatar.png',
     nullable: true,
