@@ -302,6 +302,15 @@ export class WalletsService {
           throw new BadRequestException('Insufficient Stream Coins');
         }
         wallet.sweepCoins = Number(newBalance);
+
+        if ([
+          TransactionType.BET_WON,
+          TransactionType.WITHDRAWAL_PENDING,
+          TransactionType.WITHDRAWAL_FAILED,
+          TransactionType.WITHDRAWAL_SUCCESS
+        ].includes(transactionType)) {
+          wallet.withdrawableBalance = Number(wallet.withdrawableBalance) + Number(amount);
+        }
       }
 
       await manager.save(wallet);
