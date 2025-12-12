@@ -236,7 +236,7 @@ export class UsersService {
 
   async getUserProfile(
     username: string,
-  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'name' | 'accountCreationDate' | 'profileImageUrl' | 'socials'>> {
+  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'name' | 'accountCreationDate' | 'profileImageUrl' | 'socials' | 'isCreator'>> {
     try {
       const user = await this.usersRepository.findOne({
         where: {
@@ -258,7 +258,6 @@ export class UsersService {
         accountCreationDate: user.accountCreationDate,
         profileImageUrl: user.profileImageUrl,
         socials: user.socials,
-
         ...user.role === UserRole.CREATOR && {
           isCreator: true,
         }
