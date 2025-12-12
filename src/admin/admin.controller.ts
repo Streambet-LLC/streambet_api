@@ -50,6 +50,8 @@ import {
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
 import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
+import { PayoutReportFilterDto } from 'src/platform-payout/dto/payout-report/payout-report.requests.dto';
+import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -67,6 +69,7 @@ export class AdminController {
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
     private readonly streamService: StreamService,
+    private readonly payoutService: PlatformPayoutService,
   ) { }
 
   // Helper method to check if user is admin
@@ -778,6 +781,7 @@ export class AdminController {
       },
     },
   })
+
   async deleteScheduledStream(
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
@@ -789,6 +793,27 @@ export class AdminController {
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
       statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Stream Payout Report',
+  })
+  @ApiOkResponse({ type: PayoutReportFilterDto })
+  @Get('stream-payout-report')
+  async getStreamPayoutReport(
+    @Request() req: RequestWithUser,
+    @Query() payoutReportFilterDto: PayoutReportFilterDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const { total, data } = await this.payoutService.generatePayoutReport(
+      payoutReportFilterDto,
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
     };
   }
 }

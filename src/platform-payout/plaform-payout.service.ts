@@ -9,6 +9,8 @@ import { Bet } from 'src/betting/entities/bet.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { WalletsService } from 'src/wallets/wallets.service';
 import { CurrencyType } from 'src/enums/currency.enum';
+import { PayoutReportFilterDto } from './dto/payout-report/payout-report.requests.dto';
+import { Range } from 'src/common/filters/filter.dto';
 
 @Injectable()
 export class PlatformPayoutService {
@@ -26,6 +28,76 @@ export class PlatformPayoutService {
     private readonly walletsService: WalletsService,
   ) { }
 
+  async generatePayoutReport(
+    payoutReportFilterDto: PayoutReportFilterDto,
+  ): Promise<{ data: any[]; total: number }> {
+    let data = [];
+    let total = 0;
+
+    const reportQb = this.platformPayoutRepository
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.creator', 'wallet')
+      .leftJoinAndSelect('u.bettingRound', 'bettingRound')
+      .leftJoinAndSelect('bettingRound.bettingVariables', 'bettingVariables')
+      .leftJoinAndSelect('bettingRound.stream', 'stream')
+      .orderBy('u.createdAt', 'DESC');
+
+    const searchFilter = payoutReportFilterDto.search;
+    const range: Range = payoutReportFilterDto.range
+      ? (JSON.parse(payoutReportFilterDto.range) as Range)
+      : [0, 10];
+
+    if (searchFilter) {
+      reportQb.andWhere(
+        `(LOWER(bettingRound.roundName) ILIKE LOWER(:q) OR LOWER(stream.name) ILIKE LOWER(:q))`,
+        {
+          q: `%${searchFilter}%`,
+        }
+      );
+    }
+
+    const [offset, limit] = range;
+
+    total = Math.ceil(
+      await reportQb.getCount() / limit
+    );
+
+    reportQb.skip(offset).take(limit);
+    const result = await reportQb.getMany();
+    console.log(result.length);
+
+    // Fetch paginated or full data
+    data = result.map((item) => {
+      return {
+        id: item.id,
+        stream: item.bettingRound.stream.name,
+        round: item.bettingRound.roundName,
+        totalSweepBets: item.bettingRound.bettingVariables.reduce((sum, bv) => {
+          return sum + Number(bv.totalBetsSweepCoinAmount);
+        }, 0),
+        winningSideBets: item.bettingRound.bettingVariables
+          .filter((bv) => bv.is_winning_option)
+          .reduce((sum, bv) => {
+            return sum + Number(bv.totalBetsSweepCoinAmount);
+          }, 0),
+        losingSideBets: item.bettingRound.bettingVariables
+          .filter((bv) => !bv.is_winning_option)
+          .reduce((sum, bv) => {
+            return sum + Number(bv.totalBetsSweepCoinAmount);
+          }, 0),
+        platformPayouts: item.platform_payout_amount,
+        creator: item.creator ? item.creator.username : '',
+        creatorSplit: item.creator_split_pct,
+        creatorSplitAmount: item.creator_split_amount,
+        date: item.createdAt,
+      };
+    });
+
+    console.log(data);
+
+    return { data, total };
+  }
+
   async recordPayout(
     queryRunner: QueryRunner,
     payoutAmount: number,
@@ -37,8 +109,8 @@ export class PlatformPayoutService {
 
     const creatorAssigned = stream.creatorId
       ? await this.userRepository.findOne({
-          where: { id: stream.creatorId },
-        })
+        where: { id: stream.creatorId },
+      })
       : null;
 
     let platformPayout = payoutAmount;
