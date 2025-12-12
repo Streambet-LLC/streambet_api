@@ -7,6 +7,7 @@ import { CreatorController } from './creator.controller';
 import { CreatorService } from './creator.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Stream } from 'src/stream/entities/stream.entity';
+import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
 
 @Module({
   imports: [
@@ -14,7 +15,8 @@ import { Stream } from 'src/stream/entities/stream.entity';
     WalletsModule,
     UsersModule,
     BettingModule,
-    StreamModule
+    StreamModule,
+    PlatformPayoutModule,
   ],
   controllers: [CreatorController],
   providers: [CreatorService],

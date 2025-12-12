@@ -47,6 +47,7 @@ import { UserRole } from 'src/enums/user-role.enum';
 import { CreatorService } from './creator.service';
 import { CreateStreamDto } from 'src/betting/dto/create-stream.dto';
 import { UpdateStreamDto } from 'src/betting/dto/update-stream.dto';
+import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -60,6 +61,7 @@ interface RequestWithUser extends Request {
 export class CreatorController {
   constructor(
     private readonly bettingService: BettingService,
+    private readonly platformPayoutService: PlatformPayoutService,
     private readonly usersService: UsersService,
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
@@ -281,6 +283,28 @@ export class CreatorController {
       statusCode: HttpStatus.OK,
       message: 'Analytics summary fetched successfully',
       data: data
+    };
+  }
+
+  @Get('payoutsHistory')
+  async getCreatorPayoutsHistory(
+    @Request() req: RequestWithUser,
+    @Query() query: {
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    this.ensureCreator(req.user);
+
+    const results = await this.platformPayoutService.getPayoutsByUserId({
+      userId: req.user.id,
+      pagination: { page: query.page, limit: query.limit }
+    });
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Creator payout history fetched successfully',
+      data: results
     };
   }
 
