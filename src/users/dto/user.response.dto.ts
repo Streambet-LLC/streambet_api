@@ -119,4 +119,7 @@ export class UserResponseDto {
 
   @ApiProperty({ description: 'Stream Coin balance', example: 0 })
   walletBalanceSweepCoin: number;
+
+  @ApiProperty({ description: 'Withdrawable Stream Coin balance', example: 0 })
+  withdrawableBalanceSweepCoin: number;
 }
