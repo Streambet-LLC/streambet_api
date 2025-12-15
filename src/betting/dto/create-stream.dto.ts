@@ -37,13 +37,14 @@ export class CreateStreamDto {
 
   @ValidateIf(o => o.type === StreamEventType.STREAM)
   @ApiProperty({
-    description: 'The embedded URL for the stream (YouTube, Twitch, etc.)',
+    description: 'The embedded URL for the stream (YouTube, Twitch, etc.). Required for stream type, optional for non-video and promo.',
     example: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
     type: 'string',
     format: 'uri',
+    required: false,
   })
-  @IsUrl()
   @IsNotEmpty()
+  @IsUrl()
   embeddedUrl?: string;
 
   @ApiProperty({
