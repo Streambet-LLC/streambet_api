@@ -43,8 +43,8 @@ export class CreateStreamDto {
     format: 'uri',
     required: false,
   })
-  @IsNotEmpty()
   @IsUrl()
+  @IsNotEmpty()
   embeddedUrl?: string;
 
   @ApiProperty({
