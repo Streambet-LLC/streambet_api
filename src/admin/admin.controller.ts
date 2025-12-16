@@ -807,6 +807,28 @@ export class AdminController {
     @Query() viewBetDto: ViewBetDto,
   ) {
     this.ensureAdmin(req.user);
+    const { total, data } = await this.payoutService.generatePayoutReport(
+      payoutReportFilterDto,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Bet Details per round',
+  })
+  @ApiOkResponse({ type: ViewBetDto })
+  @Get('view-bets')
+  async getBetsPerRound(
+    @Request() req: RequestWithUser,
+    @Query() viewBetDto: ViewBetDto,
+  ) {
+    this.ensureAdmin(req.user);
     const { total, data } =
       await this.bettingService.getBetsPerRound(viewBetDto);
 
