@@ -52,6 +52,7 @@ import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
 import { PayoutReportFilterDto } from 'src/platform-payout/dto/payout-report/payout-report.requests.dto';
 import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
+import { ViewBetDto } from 'src/betting/dto/view-bet.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -797,18 +798,18 @@ export class AdminController {
   }
 
   @ApiOperation({
-    summary: 'Stream Payout Report',
+    summary: 'Bet Details per round',
   })
-  @ApiOkResponse({ type: PayoutReportFilterDto })
-  @Get('stream-payout-report')
-  async getStreamPayoutReport(
+  @ApiOkResponse({ type: ViewBetDto })
+  @Get('view-bets')
+  async getBetsPerRound(
     @Request() req: RequestWithUser,
-    @Query() payoutReportFilterDto: PayoutReportFilterDto,
+    @Query() viewBetDto: ViewBetDto,
   ) {
     this.ensureAdmin(req.user);
-    const { total, data } = await this.payoutService.generatePayoutReport(
-      payoutReportFilterDto,
-    );
+    const { total, data } =
+      await this.bettingService.getBetsPerRound(viewBetDto);
+
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
