@@ -23,6 +23,15 @@ export class Wallet extends BaseEntity {
   })
   sweepCoins: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    nullable: true,
+    name: 'withdrawable_balance',
+  })
+  withdrawableBalance: number;
+
   @Column({ type: 'boolean', default: false })
   autoReloadEnabled: boolean;
 

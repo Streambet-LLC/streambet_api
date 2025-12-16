@@ -67,6 +67,7 @@ export class UsersService {
         maxGoldCoinsBet: MAX_GOLD_COINS_FOR_BETTING,
         walletBalanceGoldCoin: Number(user.wallet?.goldCoins ?? 0),
         walletBalanceSweepCoin: Number(user.wallet?.sweepCoins ?? 0),
+        withdrawableBalanceSweepCoin: Number(user.wallet?.withdrawableBalance ?? 0),
       };
       // Exclude password from the response
       return result;
