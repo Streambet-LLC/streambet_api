@@ -810,6 +810,16 @@ export class AdminController {
     const { total, data } = await this.payoutService.generatePayoutReport(
       payoutReportFilterDto,
     );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+      total,
+    };
+  }
+
+  @ApiOperation({
     summary: 'Bet Details per round',
   })
   @ApiOkResponse({ type: ViewBetDto })
