@@ -280,6 +280,19 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
   async getTopPromotedBets(): Promise<any> {
     try {
+      // Fetch active promo card (if any)
+      const promoCard = await this.streamsRepository
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.creator', 'c')
+        .where('s.type = :type', { type: StreamEventType.PROMO })
+        .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
+        .andWhere('s.status IN (:...statuses)', { 
+          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
+        })
+        .orderBy('s.updatedAt', 'DESC')
+        .limit(1)
+        .getOne();
+
       // Get configuration for homepage context
       const config = getPromotedBetsConfig('homepage');
       const fetchLimit = config.totalLimit * config.fetchBufferMultiplier;
@@ -293,6 +306,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
           status: StreamStatus.SCHEDULED
+        })
+        .andWhere("s.type != :promoType", {
+          promoType: StreamEventType.PROMO
         });
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br').limit(fetchLimit);
@@ -360,8 +376,23 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         resultList.push(itemData);
       }
 
+      // Format promo card response if exists
+      const promoCardData = promoCard ? {
+        streamId: promoCard.id,
+        thumbnail: promoCard.thumbnailUrl ?? "",
+        name: promoCard.name,
+        description: promoCard.description,
+        creator: promoCard.creator?.username || null,
+        type: promoCard.type,
+        streamStatus: promoCard.status,
+        scheduledStartTime: promoCard.scheduledStartTime,
+      } : null;
+
       return {
-        data: resultList
+        data: {
+          bets: resultList,
+          promoCard: promoCardData
+        }
       }
     } catch (e) {
       console.log(e);
