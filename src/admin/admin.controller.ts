@@ -798,13 +798,13 @@ export class AdminController {
   }
 
   @ApiOperation({
-    summary: 'Stream Payout Report',
+    summary: 'Bet Details per round',
   })
-  @ApiOkResponse({ type: PayoutReportFilterDto })
-  @Get('stream-payout-report')
-  async getStreamPayoutReport(
+  @ApiOkResponse({ type: ViewBetDto })
+  @Get('view-bets')
+  async getBetsPerRound(
     @Request() req: RequestWithUser,
-    @Query() payoutReportFilterDto: PayoutReportFilterDto,
+    @Query() viewBetDto: ViewBetDto,
   ) {
     this.ensureAdmin(req.user);
     const { total, data } = await this.payoutService.generatePayoutReport(
