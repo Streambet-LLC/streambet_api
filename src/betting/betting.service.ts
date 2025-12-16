@@ -45,6 +45,7 @@ import { TransactionType } from 'src/enums/transaction-type.enum';
 import _, { round } from 'lodash';
 import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 import { UserRole } from 'src/enums/user-role.enum';
+import { ViewBetDto } from './dto/view-bet.dto';
 
 @Injectable()
 export class BettingService {
@@ -3144,5 +3145,60 @@ export class BettingService {
         'Unable to retrieve betting history at the moment. Please try again later',
       );
     }
+  }
+
+  async getBetsPerRound(
+    viewBetDto: ViewBetDto,
+  ): Promise<{ data: any[]; total: number }> {
+    let data = [];
+    let total = 0;
+    const roundId = viewBetDto.roundId;
+
+    const reportQb = this.betsRepository
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.user', 'user')
+      .leftJoinAndSelect('u.bettingVariable', 'variable')
+      .leftJoinAndSelect('variable.round', 'round')
+      .where(`round.id = :id`, {
+        id: roundId,
+      })
+      .orderBy('u.createdAt', 'DESC');
+
+    const searchFilter = viewBetDto.search;
+    const range: Range = viewBetDto.range
+      ? (JSON.parse(viewBetDto.range) as Range)
+      : [0, 10];
+
+    if (searchFilter) {
+      reportQb.andWhere(
+        `(LOWER(user.username) ILIKE LOWER(:q) OR LOWER(user.email) ILIKE LOWER(:q))`,
+        {
+          q: `%${searchFilter}%`,
+        }
+      );
+    }
+
+    const [offset, limit] = range;
+
+    total = Math.ceil((await reportQb.getCount()) / limit);
+
+    reportQb.skip(offset).take(limit);
+    const result = await reportQb.getMany();
+
+    // Fetch paginated or full data
+    data = result.map((item) => {
+      return {
+        id: item.id,
+        username: item.user.username,
+        email: item.user.email,
+        amount: item.amount,
+        currency: item.currency,
+        status: item.status,
+        selectedOption: item.bettingVariable.name,
+        payoutAmount: item.payoutAmount,
+      };
+    });
+
+    return { data, total };
   }
 }
