@@ -1,14 +1,24 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { WalletsService } from '../wallets/wallets.service';
 
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import { UserResponseDto } from 'src/users/dto/user.response.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { User } from 'src/users/entities/user.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly walletsService: WalletsService) {}
+  private readonly logger = new Logger(AdminService.name);
+
+  constructor(
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+    private readonly walletsService: WalletsService,
+  ) {}
 
   // This service acts primarily as a facade for admin operations
   // Most of the actual business logic is delegated to the appropriate service
@@ -42,5 +52,34 @@ export class AdminService {
     );
     //emit an event to the user, notify about the coin updation
     return updateResult;
+  }
+
+  async getUserProfile(
+    userId: string,
+  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'email' | 'name' | 'profileImageUrl' | 'socials' | 'state'>> {
+    try {
+      const user = await this.usersRepository.findOne({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        profileImageUrl: user.profileImageUrl,
+        socials: user.socials,
+        state: user.state,
+      };
+    } catch (e) {
+      this.logger.error(`Error fetching profile for user with userId ${userId}:`, e);
+      throw new NotFoundException((e as Error).message);
+    }
   }
 }
