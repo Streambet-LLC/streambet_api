@@ -97,6 +97,26 @@ export class UsersController {
     };
   }
 
+  @ApiOperation({
+    summary: 'Gets leaderboard',
+    description:
+      'This endpoint gets the top 20 users by gold balance',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard fetched successfully',
+  })
+  @Get('profile/leaderboard')
+  async getLeaderboard() {
+    const data = await this.usersService.getLeaderboard();
+
+    return {
+      data,
+      message: 'Leaderboard fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   /**
    * Updates the profile of the currently logged-in user.
    * @param req - The request object containing user information.
@@ -181,26 +201,6 @@ export class UsersController {
     return {
       data,
       message: 'Creator list fetched successfully',
-      statusCode: HttpStatus.OK,
-    };
-  }
-
-  @ApiOperation({
-    summary: 'Gets leaderboard',
-    description:
-      'This endpoint gets the top 20 users by gold balance',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Leaderboard fetched successfully',
-  })
-  @Get('leaderboard')
-  async getLeaderboard() {
-    const data = await this.usersService.getLeaderboard();
-
-    return {
-      data,
-      message: 'Leaderboard fetched successfully',
       statusCode: HttpStatus.OK,
     };
   }
