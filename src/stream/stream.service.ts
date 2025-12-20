@@ -458,6 +458,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           roundId: round.id,
           roundName: round.roundName ?? '',
           createdAt: round.createdAt ?? '',
+          lockDate: round.lockDate ?? null,
           category: round.category,
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
@@ -937,6 +938,9 @@ END
         stream.scheduledStartTime = new Date(
           updateStreamDto.scheduledStartTime,
         );
+      }
+      if (updateStreamDto.creatorId !== undefined) {
+        stream.creatorId = updateStreamDto.creatorId;
       }
       if (updateStreamDto.status !== undefined) {
         stream.status = updateStreamDto.status;
