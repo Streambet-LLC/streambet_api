@@ -38,7 +38,7 @@ import {
   ApiOkResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import { ProfileUpdateDto, UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
@@ -747,6 +747,45 @@ export class AdminController {
       statusCode: HttpStatus.OK,
     };
   }
+
+  @ApiOperation({ summary: 'Get a user profile' })
+  @Get('user/:userId/profile')
+  async getUserProfile(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+  ) {
+    this.ensureAdminOrCreator(req.user);
+
+    const data = await this.adminService.getUserProfile(
+      userId,
+    );
+    return {
+      data,
+      message: 'User profile fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update a user profile' })
+  @Patch('user/:userId/profile')
+  async updateUserProfile(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+    @Body() profileUpdateDto: Omit<ProfileUpdateDto, "password" | "currentPassword" | "newPassword">,
+  ) {
+    this.ensureAdminOrCreator(req.user);
+
+    const data = await this.usersService.profileUpdate(
+      userId,
+      profileUpdateDto,
+    );
+    return {
+      data,
+      message: 'User profile updated successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   /**
    * Soft Delete a scheduled stream by its stream ID. Update status to delete
    *
