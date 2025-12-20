@@ -468,6 +468,7 @@ export class BettingService {
         'bettingVariables',
         'bettingVariables.bets',
         'bettingVariables.bets.user',
+        'creator',
       ],
       order: { createdAt: 'ASC' }, // Show rounds in chronological order
     });
@@ -579,6 +580,14 @@ export class BettingService {
         roundId: round.id,
         roundName: round.roundName,
         status: round.status,
+        lockDate: round.lockDate,
+        category: round.category,
+        createdBy: round.createdBy,
+        creator: round.creator ? {
+          id: round.creator.id,
+          username: round.creator.username,
+          profileImageUrl: round.creator.profileImageUrl,
+        } : null,
         winnerAmount,
         winners,
         options,
@@ -662,6 +671,9 @@ export class BettingService {
         bettingRound.roundName = roundData.roundName;
         if (roundData.category !== undefined) {
           bettingRound.category = roundData.category;
+        }
+        if (roundData.lockDate !== undefined) {
+          bettingRound.lockDate = roundData.lockDate ? new Date(roundData.lockDate) : null;
         }
         await this.bettingRoundsRepository.save(bettingRound);
       } else {
