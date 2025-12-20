@@ -106,7 +106,7 @@ export class UsersController {
     status: 200,
     description: 'Leaderboard fetched successfully',
   })
-  @Get('profile/leaderboard')
+  @Get('leaderboard')
   async getLeaderboard() {
     const data = await this.usersService.getLeaderboard();
 
