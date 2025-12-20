@@ -184,4 +184,24 @@ export class UsersController {
       statusCode: HttpStatus.OK,
     };
   }
+
+  @ApiOperation({
+    summary: 'Gets leaderboard',
+    description:
+      'This endpoint gets the top 20 users by gold balance',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard fetched successfully',
+  })
+  @Get('leaderboard')
+  async getLeaderboard() {
+    const data = await this.usersService.getLeaderboard();
+
+    return {
+      data,
+      message: 'Leaderboard fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
 }
