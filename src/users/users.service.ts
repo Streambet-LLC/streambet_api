@@ -433,4 +433,28 @@ export class UsersService {
       },
     });
   }
+
+  /**
+   * Retrieves the top 20 users by gold coin balance for the leaderboard.
+   * @returns Promise<Array<{username: string, goldCoins: number, profileImageUrl: string}>>
+   */
+  async getLeaderboard(): Promise<Array<{ username: string; goldCoins: number; profileImageUrl: string }>> {
+    const users = await this.usersRepository
+      .createQueryBuilder('u')
+      .innerJoin('u.wallet', 'w')
+      .addSelect(['w.goldCoins'])
+      .where('u.isActive = :isActive', { isActive: true })
+      .andWhere('(u.isBanned IS NULL OR u.isBanned = false)')
+      .andWhere('(u.isSuspended IS NULL OR u.isSuspended = false)')
+      .andWhere('u.deletedAt IS NULL')
+      .orderBy('w.goldCoins', 'DESC')
+      .limit(20)
+      .getMany();
+
+    return users.map(u => ({
+      username: u.username,
+      goldCoins: Number(u.wallet?.goldCoins || 0),
+      profileImageUrl: u.profileImageUrl || '',
+    }));
+  }
 }
