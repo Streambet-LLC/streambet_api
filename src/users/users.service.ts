@@ -473,6 +473,7 @@ export class UsersService {
       .andWhere('(u.isBanned IS NULL OR u.isBanned = false)')
       .andWhere('(u.isSuspended IS NULL OR u.isSuspended = false)')
       .andWhere('u.deletedAt IS NULL')
+      .andWhere('u.username != :excludedUser', { excludedUser: 'Tom396' })
       .orderBy('w.goldCoins', 'DESC')
       .limit(20)
       .getMany();
