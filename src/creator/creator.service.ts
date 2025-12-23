@@ -9,6 +9,7 @@ import {
   Inject,
   OnModuleDestroy,
   OnApplicationShutdown,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -31,6 +32,9 @@ import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { AnalyticsSummaryResponseDto } from './dto/analytics.dto';
 import { Stream } from 'src/stream/entities/stream.entity';
+import { CreatorApplicationDto } from './dto/creator-application.dto';
+import { CreatorApplication } from './entities/creator-application.entity';
+import { UserRole } from 'src/enums/user-role.enum';
 
 @Injectable()
 export class CreatorService {
@@ -38,6 +42,10 @@ export class CreatorService {
   constructor(
     @InjectRepository(Stream)
     private streamsRepository: Repository<Stream>,
+    @InjectRepository(CreatorApplication)
+    private creatorApplicationsRepository: Repository<CreatorApplication>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private dataSource: DataSource,
   ) {}
 
@@ -94,6 +102,83 @@ export class CreatorService {
       Logger.error('Unable to retrieve top live streams', e);
       throw new HttpException(
         `Unable to retrieve top live streams at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async upsertCreatorApplication({
+    userId,
+    applicationDto,
+  } : {
+    userId: string;
+    applicationDto: CreatorApplicationDto;
+  }) {
+    const user = await this.userRepository.findOne({ 
+      where: { id: userId }
+    });
+
+    if (!user) {
+      throw new HttpException(
+        `Logged in user not existing in system`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    if (user.role === UserRole.CREATOR) {
+      throw new ConflictException("User is already a creator")
+    }
+
+    try {
+      const application = await this.creatorApplicationsRepository.findOne({
+        where: { userId },
+      });
+
+      if (application) {
+        await this.creatorApplicationsRepository.update({ id: application.id }, {
+          userId,
+          firstName: applicationDto.firstName,
+          lastName: applicationDto.lastName,
+          email: applicationDto.email,
+          socials: applicationDto.socials,
+          message: applicationDto.message,
+        });
+      }
+
+      await this.creatorApplicationsRepository.create({
+        userId,
+        firstName: applicationDto.firstName,
+        lastName: applicationDto.lastName,
+        email: applicationDto.email,
+        socials: applicationDto.socials,
+        message: applicationDto.message,
+      });
+
+      return;
+    } catch (e) {
+      Logger.error('Unable to upsert creator application', e);
+      throw new HttpException(
+        `Unable to upsert creator application at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getCreatorApplication({
+    userId,
+  } : {
+    userId: string;
+  }) {
+    try {
+      const application = await this.creatorApplicationsRepository.findOne({
+        where: { userId },
+      });
+
+      return application;
+    } catch (e) {
+      Logger.error('Unable to get creator application', e);
+      throw new HttpException(
+        `Unable to get creator application at the moment. Please try again later`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
