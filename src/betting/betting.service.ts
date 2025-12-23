@@ -3119,6 +3119,7 @@ export class BettingService {
         .addSelect('bv.name', 'optionName')
         .addSelect('b.currency', 'coinType')
         .addSelect('b.amount', 'amountPlaced')
+        .addSelect('r.id', 'roundId')
         .addSelect(
           `CASE WHEN b.status = :won THEN b.payoutAmount ELSE 0 END`,
           'amountWon',
@@ -3149,7 +3150,34 @@ export class BettingService {
         qb.offset(offset).limit(limit);
       }
 
-      const data = await qb.getRawMany();
+      const result = await qb.getRawMany();
+      const data = [];
+
+      for (let i = 0; i < result.length; i++) {
+        const item = result[i];
+        let status = item.status;
+
+        if (status === "lost") {
+          const winningVariable = await this.bettingVariablesRepository.findOne({
+            where: {
+              roundId: item.roundId,
+              is_winning_option: true
+            }
+          });
+
+          if (winningVariable) {
+            if (winningVariable.betCountGoldCoin + winningVariable.betCountSweepCoin === 0) {
+              status = "void";
+            }
+          }
+        }
+
+        data.push({
+          ...item,
+          status,
+        });
+      }
+
       return { data, total };
     } catch (e) {
       Logger.error('Unable to retrieve betting history', e);
