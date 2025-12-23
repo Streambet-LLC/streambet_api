@@ -289,7 +289,7 @@ export class UsersService {
 
   async findAllUser(
     userFilterDto: UserFilterDto,
-  ): Promise<{ data: User[]; total: number }> {
+  ): Promise<{ data: any[]; total: number }> {
     const sort: Sort = userFilterDto.sort
       ? (JSON.parse(userFilterDto.sort) as Sort)
       : undefined;
@@ -333,7 +333,33 @@ export class UsersService {
     }
 
     // Fetch paginated or full data
-    const data = await usersQB.getMany();
+    const users = await usersQB.getMany();
+    const data = users.map((item) => {
+      console.log(item);
+      const returnData = {
+        // ...item,
+        id: item.id,
+        username: item.username,
+        isActive: item.isActive,
+        createdAt: item.createdAt,
+        email: item.email,
+        isVerify: item.isVerify,
+        promoCode: item.promoCode,
+        name: item.name,
+        state: item.state,
+        role: item.role,
+        profileImageUrl: item.profileImageUrl,
+        revShare: item.revShare,
+        wallet: item.wallet
+          ? {
+            id: item.wallet.id,
+            goldCoins: item.wallet.goldCoins,
+            sweepCoins: item.wallet.sweepCoins,
+          } : null,
+      };
+
+      return returnData;
+    });
 
     return { data, total };
   }
