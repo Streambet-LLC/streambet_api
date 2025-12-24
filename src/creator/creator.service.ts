@@ -130,22 +130,25 @@ export class CreatorService {
     }
 
     try {
-      const application = await this.creatorApplicationsRepository.findOne({
-        where: { userId },
+      let existing = await this.creatorApplicationsRepository.findOne({
+        where: { userId, isDeleted: false },
       });
 
-      if (application) {
-        await this.creatorApplicationsRepository.update({ id: application.id }, {
-          userId,
+      let application;
+
+      if (existing) {
+        application = await this.creatorApplicationsRepository.update(existing.id, {
           firstName: applicationDto.firstName,
           lastName: applicationDto.lastName,
           email: applicationDto.email,
           socials: applicationDto.socials,
           message: applicationDto.message,
         });
-      }
 
-      await this.creatorApplicationsRepository.create({
+        return;
+      } 
+
+      application = this.creatorApplicationsRepository.create({
         userId,
         firstName: applicationDto.firstName,
         lastName: applicationDto.lastName,
@@ -153,6 +156,8 @@ export class CreatorService {
         socials: applicationDto.socials,
         message: applicationDto.message,
       });
+
+      await this.creatorApplicationsRepository.save(application);
 
       return;
     } catch (e) {
@@ -171,7 +176,7 @@ export class CreatorService {
   }) {
     try {
       const application = await this.creatorApplicationsRepository.findOne({
-        where: { userId },
+        where: { userId, isDeleted: false },
       });
 
       return application;
@@ -179,6 +184,32 @@ export class CreatorService {
       Logger.error('Unable to get creator application', e);
       throw new HttpException(
         `Unable to get creator application at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async cancelCreatorApplication({
+    userId,
+  } : {
+    userId: string;
+  }) {
+    try {
+      const application = await this.creatorApplicationsRepository.findOne({
+        where: { userId, isDeleted: false },
+      });
+
+      if (!application) return;
+
+      await this.creatorApplicationsRepository.update(application.id, {
+        isDeleted: true
+      });      
+
+      return;
+    } catch (e) {
+      Logger.error('Unable to cancel creator application', e);
+      throw new HttpException(
+        `Unable to cancel creator application at the moment. Please try again later`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

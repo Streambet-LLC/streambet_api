@@ -425,4 +425,23 @@ export class CreatorController {
       data: application,
     };
   }
+
+  @ApiOperation({ summary: 'Cancel the creator application of the logged in user' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Creator application cancelled successfully',
+    type: CreatorApplicationDto,
+  })
+  @Delete('application')
+  async cancelCreatorApplication(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    await this.creatorService.cancelCreatorApplication({ userId: req.user.id });
+
+    return {
+      status: HttpStatus.OK,
+      message: 'Creator application cancelled successfully',
+      data: true,
+    };
+  }
 }

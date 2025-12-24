@@ -8,7 +8,7 @@ export class CreatorApplication extends BaseEntity {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ unique: true, name: 'user_id' })
+  @Column({ name: 'user_id' })
   userId: string;
 
   @Column({ type: 'varchar', length: 255 })
@@ -25,4 +25,7 @@ export class CreatorApplication extends BaseEntity {
 
   @Column({ type: 'text' })
   message: string;
+
+  @Column({ default: false, name: 'is_deleted', type: 'boolean' })
+  isDeleted: boolean;
 }
