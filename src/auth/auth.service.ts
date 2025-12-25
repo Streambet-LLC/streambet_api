@@ -44,7 +44,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private notificationService: NotificationService,
-  ) {}
+  ) { }
 
   private calculateAge(birthDate: Date): number {
     const today = new Date();
@@ -82,6 +82,7 @@ export class AuthService {
         dob,
         redirect,
         promoCode,
+        refLink,
       } = registerDto;
       if (!isOlder) {
         throw new BadRequestException(
@@ -135,6 +136,7 @@ export class AuthService {
         lastKnownIp,
         dateOfBirth: dob,
         promoCode,
+        refLink,
       });
 
       // Create wallet for the user

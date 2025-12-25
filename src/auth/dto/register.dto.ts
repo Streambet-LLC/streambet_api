@@ -137,6 +137,15 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   promoCode?: string;
+
+  @ApiProperty({
+    description: 'Referral Link for user registration',
+    example: 'WELCOME2025',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  refLink?: string;
 }
 
 export class UserRegistrationResponseDto {
