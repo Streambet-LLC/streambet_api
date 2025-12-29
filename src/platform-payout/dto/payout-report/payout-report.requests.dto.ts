@@ -1,6 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsOptional, IsString } from "class-validator";
-import { AdminFilterDto } from "src/common/filters/filter.dto";
+import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 
 export class PayoutReportFilterDto {
   @ApiProperty({
