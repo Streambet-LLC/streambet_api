@@ -48,6 +48,7 @@ import { CreatorService } from './creator.service';
 import { CreateStreamDto } from 'src/betting/dto/create-stream.dto';
 import { UpdateStreamDto } from 'src/betting/dto/update-stream.dto';
 import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
+import { CreatorApplicationDto } from './dto/creator-application.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -355,6 +356,92 @@ export class CreatorController {
         platformVig: '15%',
         totalBetPlacedUsers,
       },
+    };
+  }
+
+  @ApiOperation({ summary: 'Create a creator application' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Creator application created successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @Post('application')
+  async createCreatorApplication(
+    @Request() req: RequestWithUser,
+    @Body() applicationDto: CreatorApplicationDto,
+  ): Promise<ApiResponse> {
+
+    await this.creatorService.upsertCreatorApplication({
+      userId: req.user.id,
+      applicationDto,
+    });
+
+    return {
+      message: 'Successfully created creator application',
+      status: HttpStatus.CREATED,
+      data: true,
+    };
+  }
+
+  @ApiOperation({ summary: 'Updates a creator application' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Creator application updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @Patch('application')
+  async updateCreatorApplication(
+    @Request() req: RequestWithUser,
+    @Body() applicationDto: CreatorApplicationDto,
+  ): Promise<ApiResponse> {
+
+    await this.creatorService.upsertCreatorApplication({
+      userId: req.user.id,
+      applicationDto,
+    });
+
+    return {
+      message: 'Successfully updated creator application',
+      status: HttpStatus.CREATED,
+      data: true,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get the creator application of the logged in user' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Creator application fetched successfully',
+    type: CreatorApplicationDto,
+  })
+  @Get('application')
+  async getCreatorApplication(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    const application = await this.creatorService.getCreatorApplication({ userId: req.user.id });
+
+    return {
+      status: HttpStatus.OK,
+      message: 'Creator application fetched successfully',
+      data: application,
+    };
+  }
+
+  @ApiOperation({ summary: 'Cancel the creator application of the logged in user' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Creator application cancelled successfully',
+    type: CreatorApplicationDto,
+  })
+  @Delete('application')
+  async cancelCreatorApplication(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    await this.creatorService.cancelCreatorApplication({ userId: req.user.id });
+
+    return {
+      status: HttpStatus.OK,
+      message: 'Creator application cancelled successfully',
+      data: true,
     };
   }
 }
