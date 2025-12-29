@@ -7,6 +7,7 @@ import {
   Request,
   HttpStatus,
   Param,
+  Post,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
@@ -18,7 +19,12 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserProfileResponseDto } from './dto/user.response.dto';
-import { NotificationSettingsUpdateDto, ProfileUpdateDto } from './dto/user.requests.dto';
+import {
+  NotificationSettingsUpdateDto,
+  ProfileUpdateDto,
+} from './dto/user.requests.dto';
+import { CreateNewReferralLinkDto } from 'src/referral/create-referral-link.requests.dto';
+import { ReferralService } from 'src/referral/referral.service';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -28,7 +34,10 @@ interface RequestWithUser extends Request {
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly referralService: ReferralService,
+  ) { }
   /**
    * Retrieves the profile of the currently logged-in user.
    * @param req - The request object containing user information.
@@ -162,7 +171,7 @@ export class UsersController {
   @ApiResponse({
     status: 200,
     description: 'User notification settings updated successfully',
-    type: User, 
+    type: User,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
@@ -201,6 +210,42 @@ export class UsersController {
     return {
       data,
       message: 'Creator list fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Create New Referral Link',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('referral-link')
+  async createNewReferralLink(
+    @Request() req: RequestWithUser,
+    @Body() newLinkDto: CreateNewReferralLinkDto,
+  ) {
+    const data = await this.referralService.createReferralLink(
+      req.user.id,
+      newLinkDto.code,
+    );
+    return {
+      data,
+      message: 'New referral link created successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Create New Referral Link',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('referral-link')
+  async getReferralLinks(@Request() req: RequestWithUser) {
+    const data = await this.referralService.getReferralLinks(req.user.id);
+    return {
+      data,
+      message: 'Success',
       statusCode: HttpStatus.OK,
     };
   }
