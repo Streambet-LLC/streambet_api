@@ -8,10 +8,12 @@ import { CreatorService } from './creator.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
+import { CreatorApplication } from './entities/creator-application.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Stream]),
+    TypeOrmModule.forFeature([User, Stream, CreatorApplication]),
     WalletsModule,
     UsersModule,
     BettingModule,
