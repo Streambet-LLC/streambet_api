@@ -25,6 +25,7 @@ import {
 } from './dto/user.requests.dto';
 import { CreateNewReferralLinkDto } from 'src/referral/create-referral-link.requests.dto';
 import { ReferralService } from 'src/referral/referral.service';
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -142,17 +143,74 @@ export class UsersController {
     description: 'User profile fetched successful',
     type: User,
   })
+  @ApiBearerAuth()
   @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('profile/:username')
   async getUserProfile(
+    @Request() req: RequestWithUser,
     @Param('username') username: string,
   ) {
-    const data = await this.usersService.getUserProfile(username);
+    const data = await this.usersService.getUserProfile(req.user ? req.user.id : null, username);
 
     return {
       data,
       message: 'Profile fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Follow user profile',
+    description:
+      'This endpoint follows a user profile',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Followed/Unfollowed Successfully',
+  })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @UseGuards(JwtAuthGuard)
+  @Get('profile/:username/follow')
+  async followUser(
+    @Request() req: RequestWithUser,
+    @Param('username') username: string,
+  ) {
+    const data = await this.usersService.followUser(req.user.id, username);
+
+    return {
+      data,
+      message: 'Profile followed successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Unfollow user profile',
+    description:
+      'This endpoint unfollows a user profile',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Followed/Unfollowed Successfully',
+  })
+  @ApiBearerAuth()
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid data' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @UseGuards(JwtAuthGuard)
+  @Get('profile/:username/unfollow')
+  async unfollowUser(
+    @Request() req: RequestWithUser,
+    @Param('username') username: string,
+  ) {
+    const data = await this.usersService.unfollowUser(req.user.id, username);
+
+    return {
+      data,
+      message: 'Profile unfollowed successfully',
       statusCode: HttpStatus.OK,
     };
   }
