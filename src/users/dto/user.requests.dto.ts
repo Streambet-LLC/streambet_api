@@ -185,6 +185,24 @@ export class UserUpdateDto {
   userId: string;
 }
 
+export class UserCreatorRoleUpdateDto {
+  @ApiProperty({
+    description: 'User Id of the user',
+  })
+  @IsDefined()
+  @IsNotEmpty()
+  @IsString()
+  userId: string;
+
+  @ApiProperty({
+    description: 'Pass true to give creator role, false to remove creator role',
+  })
+  @IsDefined()
+  @IsNotEmpty()
+  @IsBoolean()
+  isCreator: boolean;
+}
+
 export class NotificationSettingsUpdateDto {
   @ApiPropertyOptional({
     description: 'Enable or disable email notifications',
