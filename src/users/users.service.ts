@@ -25,6 +25,7 @@ import {
   MAX_GOLD_COINS_FOR_BETTING,
 } from 'src/common/constants/currency.constants';
 import { UserRole } from 'src/enums/user-role.enum';
+import { Follower } from 'src/follower/follower.entity';
 
 @Injectable()
 export class UsersService {
@@ -33,6 +34,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Follower)
+    private readonly followerRepository: Repository<Follower>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) { }
 
@@ -234,9 +237,54 @@ export class UsersService {
     }
   }
 
+  async followUser(
+    followerId: string,
+    followedUsername: string,
+  ): Promise<void> {
+    const followedUser = await this.usersRepository.findOne({
+      where: {
+        username: followedUsername,
+      },
+    });
+
+    if (followedUser) {
+      const hasFollowed = await this.followerRepository.count({
+        where: {
+          followedUuid: followedUser.id,
+          followerUuid: followerId,
+        },
+      });
+
+      if (hasFollowed === 0) {
+        await this.followerRepository
+          .create({
+            followedUuid: followedUser.id,
+            followerUuid: followerId,
+          })
+          .save();
+      }
+    }
+  }
+
+  async unfollowUser(follower: string, followedUsername: string): Promise<void> {
+    const followedUser = await this.usersRepository.findOne({
+      where: {
+        username: followedUsername,
+      },
+    });
+
+    if (followedUser) {
+      await this.followerRepository.delete({
+        followerUuid: follower,
+        followedUuid: followedUser.id,
+      });
+    }
+  }
+
   async getUserProfile(
+    requestor: string | null,
     username: string,
-  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'name' | 'accountCreationDate' | 'profileImageUrl' | 'socials' | 'isCreator'>> {
+  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'name' | 'accountCreationDate' | 'profileImageUrl' | 'socials' | 'isCreator' | 'isFollowed' | 'followers'>> {
     try {
       const user = await this.usersRepository.findOne({
         where: {
@@ -251,6 +299,24 @@ export class UsersService {
         throw new NotFoundException('User not found');
       }
 
+      let isFollowed = false;
+      const followers = await this.followerRepository.count({
+        where: {
+          followedUuid: user.id,
+        },
+      });
+
+      if (requestor) {
+        const hasFollowed = await this.followerRepository.count({
+          where: {
+            followedUuid: user.id,
+            followerUuid: requestor,
+          },
+        });
+
+        isFollowed = hasFollowed > 0;
+      }
+
       return {
         id: user.id,
         username: user.username,
@@ -258,6 +324,8 @@ export class UsersService {
         accountCreationDate: user.accountCreationDate,
         profileImageUrl: user.profileImageUrl,
         socials: user.socials,
+        isFollowed,
+        followers,
         ...user.role === UserRole.CREATOR && {
           isCreator: true,
         }
