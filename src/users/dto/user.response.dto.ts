@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { NotificationPreference } from '../entities/user.entity';
 import { UserRole } from 'src/enums/user-role.enum';
+import { IsOptional } from 'class-validator';
 
 export class UserProfileResponseDto {
   @ApiProperty()
@@ -114,6 +115,15 @@ export class UserResponseDto {
 
   @ApiProperty({ example: true })
   isActive: boolean;
+
+  @ApiProperty({ example: true })
+  @IsOptional()
+  isFollowed?: boolean;
+
+  @ApiProperty({ example: 10 })
+  @IsOptional()
+  followers?: number;
+
   @ApiProperty({ description: 'Gold Coin balance', example: 0 })
   walletBalanceGoldCoin: number;
 
