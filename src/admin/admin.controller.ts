@@ -38,7 +38,7 @@ import {
   ApiOkResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { ProfileUpdateDto, UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
+import { ProfileUpdateDto, UserFilterDto, UserUpdateDto, UserCreatorRoleUpdateDto } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
@@ -366,6 +366,25 @@ export class AdminController {
     this.ensureAdmin(req.user);
     const { result, message } =
       await this.usersService.updateUserStatus(userUpdateDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message,
+      data: result,
+    };
+  }
+
+  @ApiOperation({
+    summary: `Update user creator role.`,
+    description: 'API to grant or revoke creator role for a user by their ID.',
+  })
+  @Patch('users/creator-role')
+  async updateUserCreatorRole(
+    @Body() userCreatorRoleUpdateDto: UserCreatorRoleUpdateDto,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureAdmin(req.user);
+    const { result, message } =
+      await this.usersService.updateUserCreatorRole(userCreatorRoleUpdateDto);
     return {
       statusCode: HttpStatus.OK,
       message,
