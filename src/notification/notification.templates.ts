@@ -10,20 +10,30 @@ interface BetNotificationData {
   username?: string;
 }
 
+const getCurrencyText = (currencyType) => {
+  switch(currencyType) {
+    case CurrencyType.FREE_TOKENS: return CurrencyTypeText.GOLD_COINS_TEXT;
+    case CurrencyType.SWEEP_COINS: return CurrencyTypeText.SWEEP_COINS_TEXT;
+    case CurrencyType.STREAM_COINS: return CurrencyTypeText.SWEEP_COINS_TEXT;
+    case CurrencyType.GOLD_COINS: return CurrencyTypeText.GOLD_COINS_TEXT;
+    case CurrencyType.CADE_COINS: return CurrencyTypeText.CADE_COINS_TEXT;
+  }
+};
+
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You put ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT} on ${data.bettingOption} for '${data.roundName}'!`,
+      `You put ${data.amount.toLocaleString('en-US')} ${getCurrencyText(data.currencyType)} on ${data.bettingOption} for '${data.roundName}'!`,
     TITLE: () => `Pick Placed Successfully`,
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
-      `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT} on ${data.bettingOption} for ${data.roundName}`,
+      `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${getCurrencyText(data.currencyType)} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Pick Modified`,
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT} were returned to your wallet`,
+      `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${getCurrencyText(data.currencyType)} were returned to your wallet`,
     TITLE: () => `Pick Cancelled`,
   },
 
@@ -37,6 +47,11 @@ export const NOTIFICATION_TEMPLATE = {
       `${data.amount.toLocaleString('en-US')} ${CurrencyTypeText.SWEEP_COINS_TEXT} were added to your wallet.`,
     TITLE: () => `You Won!`,
   },
+  BET_WON_CADE_COIN: {
+    MESSAGE: (data: BetNotificationData) =>
+      `${data.amount.toLocaleString('en-US')} ${CurrencyTypeText.CADE_COINS_TEXT} were added to your wallet.`,
+    TITLE: () => `You Won!`,
+  },
   BET_LOST: {
     MESSAGE: (data: BetNotificationData) =>
       `'${data.roundName}' didn't go your way. Better luck next time!`,
@@ -44,12 +59,12 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_MODIFIED_INCREASE: {
     MESSAGE: (data: BetNotificationData) =>
-      `You increased your position to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}`,
+      `You increased your position to ${data.amount.toLocaleString('en-US')} ${getCurrencyText(data.currencyType)}`,
     TITLE: () => `Pick Modified (Increase)`,
   },
   BET_MODIFIED_DECREASE: {
     MESSAGE: (data: BetNotificationData) =>
-      `You decreased your position to ${data.amount.toLocaleString('en-US')} ${data.currencyType === CurrencyType.GOLD_COINS ? CurrencyTypeText.GOLD_COINS_TEXT : CurrencyTypeText.SWEEP_COINS_TEXT}`,
+      `You decreased your position to ${data.amount.toLocaleString('en-US')} ${getCurrencyText(data.currencyType)}`,
     TITLE: () => `Pick Modified (Decrease)`,
   },
   BET_OPEN: {

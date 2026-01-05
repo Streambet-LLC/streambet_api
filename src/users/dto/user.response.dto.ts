@@ -25,17 +25,8 @@ export class UserProfileResponseDto {
   @ApiProperty()
   isActive?: boolean;
 
-  @ApiProperty({ type: Number, example: 100 })
-  minWithdrawableSweepCoins: number;
-
-  @ApiProperty({ type: Number, example: 10 })
-  sweepCoinsPerDollar: number;
-
-  @ApiProperty({ type: Number, example: 50, description: 'Maximum allowed bet amount for sweep coins' })
-  maxSweepCoinsBet: number;
-
-  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for gold coins' })
-  maxGoldCoinsBet: number;
+  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for cade coins' })
+  maxCadeCoinsBet: number;
 }
 
 export class UserResponseDto {
@@ -124,12 +115,6 @@ export class UserResponseDto {
   @IsOptional()
   followers?: number;
 
-  @ApiProperty({ description: 'Gold Coin balance', example: 0 })
-  walletBalanceGoldCoin: number;
-
-  @ApiProperty({ description: 'Stream Coin balance', example: 0 })
-  walletBalanceSweepCoin: number;
-
-  @ApiProperty({ description: 'Withdrawable Stream Coin balance', example: 0 })
-  withdrawableBalanceSweepCoin: number;
+  @ApiProperty({ description: 'Cade Coin balance', example: 0 })
+  walletBalanceCadeCoin: number;
 }

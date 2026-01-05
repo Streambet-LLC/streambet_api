@@ -744,6 +744,7 @@ END
     try {
       let userBetGoldCoins: number;
       let userBetSweepCoin: number;
+      let userBetCadeCoin: number;
       let wallet: Wallet;
       const stream = await this.streamsRepository
         .createQueryBuilder('stream')
@@ -771,7 +772,7 @@ END
           `Could not find a live stream with the specified ID. Please check the ID and try again.`,
         );
       }
-      const total = { goldCoinSum: 0, sweepCoinSum: 0 };
+      const total = { goldCoinSum: 0, sweepCoinSum: 0, cadeCoinSum: 0 };
 
       if (stream?.bettingRounds) {
         const rounds = stream.bettingRounds;
@@ -786,6 +787,9 @@ END
                 acc.sweepCoinSum += Number(
                   variable.totalBetsSweepCoinAmount || 0,
                 );
+                // acc.cadeCoinSum += Number(
+                //   variable.totalBetsSweepCoinAmount || 0,
+                // );
                 return acc;
               },
               { goldCoinSum: 0, sweepCoinSum: 0 },
@@ -798,6 +802,7 @@ END
       const {
         goldCoinSum: roundTotalBetsGoldCoinAmount,
         sweepCoinSum: roundTotalBetsSweepCoinAmount,
+        cadeCoinSum: roundTotalBetsCadeCoinAmount,
       } = total;
       stream.bettingRounds.forEach((round) => {
         //sort betting varirable,
@@ -813,6 +818,8 @@ END
               if (bet.status === BetStatus.Active) {
                 if (bet.currency === CurrencyType.GOLD_COINS) {
                   userBetGoldCoins = bet.amount;
+                } else if (bet.currency === CurrencyType.CADE_COINS) {
+                  userBetCadeCoin = bet.amount;
                 } else {
                   userBetSweepCoin = bet.amount;
                 }
@@ -826,10 +833,13 @@ END
       const result = {
         walletGoldCoin: wallet?.goldCoins || 0,
         walletSweepCoin: wallet?.sweepCoins || 0,
+        walletCadeCoin: wallet?.cadeCoins || 0,
         userBetGoldCoins: userBetGoldCoins || 0,
         userBetSweepCoin: userBetSweepCoin || 0,
+        userBetCadeCoin: userBetCadeCoin || 0,
         roundTotalBetsGoldCoinAmount,
         roundTotalBetsSweepCoinAmount,
+        roundTotalBetsCadeCoinAmount,
         ...stream,
       };
       return result;
@@ -1667,6 +1677,7 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
+        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status IN (:...streamStatuses)", {
@@ -1730,10 +1741,12 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0;
 
         variables.forEach((bv) => {
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
@@ -1760,7 +1773,8 @@ END
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }

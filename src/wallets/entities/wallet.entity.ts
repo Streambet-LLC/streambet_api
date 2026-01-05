@@ -23,6 +23,9 @@ export class Wallet extends BaseEntity {
   })
   sweepCoins: number;
 
+  @Column({ type: 'decimal', default: 1000, name: 'cade_coins' })
+  cadeCoins: number;
+
   @Column({
     type: 'decimal',
     precision: 12,

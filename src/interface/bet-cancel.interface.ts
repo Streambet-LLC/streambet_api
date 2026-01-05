@@ -8,5 +8,6 @@ export interface CancelBetPayout {
   updatedWalletBalance: {
     goldCoins: number;
     sweepCoins: number;
+    cadeCoins: number;
   };
 }

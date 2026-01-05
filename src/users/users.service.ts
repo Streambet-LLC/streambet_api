@@ -20,10 +20,7 @@ import { UserResponseDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
-  MIN_WITHDRAWABLE_SWEEP_COINS,
-  SWEEP_COINS_PER_DOLLAR,
-  MAX_SWEEP_COINS_FOR_BETTING,
-  MAX_GOLD_COINS_FOR_BETTING,
+  MAX_CADE_COINS_FOR_BETTING,
 } from 'src/common/constants/currency.constants';
 import { UserRole } from 'src/enums/user-role.enum';
 import { Follower } from 'src/follower/follower.entity';
@@ -65,13 +62,8 @@ export class UsersService {
       const { password: _unused, wallet, ...sanitizedUser } = user;
       const result = {
         ...sanitizedUser,
-        minWithdrawableSweepCoins: MIN_WITHDRAWABLE_SWEEP_COINS,
-        sweepCoinsPerDollar: SWEEP_COINS_PER_DOLLAR,
-        maxSweepCoinsBet: MAX_SWEEP_COINS_FOR_BETTING,
-        maxGoldCoinsBet: MAX_GOLD_COINS_FOR_BETTING,
-        walletBalanceGoldCoin: Number(user.wallet?.goldCoins ?? 0),
-        walletBalanceSweepCoin: Number(user.wallet?.sweepCoins ?? 0),
-        withdrawableBalanceSweepCoin: Number(user.wallet?.withdrawableBalance ?? 0),
+        maxCadeCoinsBet: MAX_CADE_COINS_FOR_BETTING,
+        walletBalanceCadeCoin: Number(user.wallet?.cadeCoins ?? 0),
       };
       // Exclude password from the response
       return result;

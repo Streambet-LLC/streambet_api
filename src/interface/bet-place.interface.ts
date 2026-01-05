@@ -7,6 +7,7 @@ export interface PlaceBetResult {
   currencyType: CurrencyType;
   potentialSweepCoinWinningAmount: any;
   potentialGoldCoinWinningAmount: any;
+  potentialCadeCoinWinningAmount: any;
   amount: number;
   selectedWinner: string;
   message?: string;
@@ -14,5 +15,6 @@ export interface PlaceBetResult {
   updatedWalletBalance: {
     goldCoins: number;
     sweepCoins: number;
+    cadeCoins: number;
   };
 }

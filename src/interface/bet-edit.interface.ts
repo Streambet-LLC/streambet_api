@@ -7,11 +7,13 @@ export interface EditedBetPayload {
   currencyType: CurrencyType;
   potentialSweepCoinWinningAmount: number;
   potentialGoldCoinWinningAmount: number;
+  potentialCadeCoinWinningAmount: number;
   amount: number;
   selectedWinner: string;
   updatedWalletBalance: {
     goldCoins: number;
     sweepCoins: number;
+    cadeCoins: number;
   };
   message?: string;
   title?: string;

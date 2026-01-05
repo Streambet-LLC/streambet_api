@@ -44,11 +44,17 @@ export class BettingVariable extends BaseEntity {
   @Column({ type: 'bigint', default: 0, name: 'total_bets_sweep_coin_amount' })
   totalBetsSweepCoinAmount: number;
 
+  @Column({ type: 'bigint', default: 0, name: 'total_bets_cade_coin_amount' })
+  totalBetsCadeCoinAmount: number;
+
   @Column({ type: 'int', default: 0, name: 'bet_count_gold_coin' })
   betCountGoldCoin: number;
 
   @Column({ type: 'int', default: 0, name: 'bet_count_sweep_coin' })
   betCountSweepCoin: number;
+
+  @Column({ type: 'int', default: 0, name: 'bet_count_cade_coin' })
+  betCountCadeCoin: number;
 
   @OneToMany(() => Bet, (bet) => bet.bettingVariable)
   bets: Bet[];

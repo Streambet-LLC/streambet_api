@@ -21,3 +21,8 @@ export const MAX_SWEEP_COINS_FOR_BETTING = 100;
  * The maximum allowed amount a user can place for a single bet with gold coins.
  */
 export const MAX_GOLD_COINS_FOR_BETTING = 1000;
+
+/**
+ * The maximum allowed amount a user can place for a single bet with gold coins.
+ */
+export const MAX_CADE_COINS_FOR_BETTING = 1000;

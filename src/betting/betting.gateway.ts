@@ -127,11 +127,14 @@ export class BettingGateway {
           potentialAmount?.potentialSweepCoinAmt || 0,
         potentialGoldCoinWinningAmount:
           potentialAmount?.potentialGoldCoinAmt || 0,
+        potentialCadeCoinWinningAmount:
+          potentialAmount?.potentialCadeCoinAmt || 0,
         amount: placeBetDto.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
           sweepCoins: updatedWallet.sweepCoins,
+          cadeCoins: updatedWallet.cadeCoins,
         },
       };
 
@@ -179,8 +182,10 @@ export class BettingGateway {
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalBetsCadeCoinAmount: roundTotals.totalBetsCadeCoinAmount,
             totalSweepCoinBet: roundTotals.totalSweepCoinBet,
             totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            totalCadeCoinBet: roundTotals.totalCadeCoinBet,
             ...betStat,
           },
         );
@@ -354,6 +359,7 @@ export class BettingGateway {
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
           sweepCoins: updatedWallet.sweepCoins,
+          cadeCoins: updatedWallet.sweepCoins,
         },
       };
 
@@ -405,8 +411,10 @@ export class BettingGateway {
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalBetsCadeCoinAmount: roundTotals.totalBetsCadeCoinAmount,
             totalSweepCoinBet: roundTotals.totalSweepCoinBet,
             totalGoldCoinBet: roundTotals.totalGoldCoinBet,
+            totalCadeCoinBet: roundTotals.totalCadeCoinBet,
             ...betStat,
           },
         );
@@ -480,11 +488,14 @@ export class BettingGateway {
           potentialAmount?.potentialSweepCoinAmt || 0,
         potentialGoldCoinWinningAmount:
           potentialAmount?.potentialGoldCoinAmt || 0,
+        potentialCadeCoinWinningAmount:
+          potentialAmount?.potentialCadeCoinAmt || 0,
         amount: editedBet.amount,
         selectedWinner: bettingVariable?.name || '',
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
           sweepCoins: updatedWallet.sweepCoins,
+          cadeCoins: updatedWallet.cadeCoins,
         },
       };
 
@@ -496,6 +507,7 @@ export class BettingGateway {
           betEditedPayload.message =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.MESSAGE({
               amount: editedBet.amount,
+              currencyType: editedBet.currency,
             });
           betEditedPayload.title =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.TITLE();
@@ -503,6 +515,7 @@ export class BettingGateway {
           betEditedPayload.message =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.MESSAGE({
               amount: editedBet.amount,
+              currencyType: editedBet.currency,
             });
           betEditedPayload.title =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_DECREASE.TITLE();
@@ -544,8 +557,10 @@ export class BettingGateway {
             roundId: roundIdEmit,
             totalBetsSweepCoinAmount: roundTotals.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: roundTotals.totalBetsGoldCoinAmount,
+            totalBetsCadeCoinAmount: roundTotals.totalBetsCadeCoinAmount,
             totalGoldCoinBet: roundTotals.totalGoldCoinBet,
             totalSweepCoinBet: roundTotals.totalSweepCoinBet,
+            totalCadeCoinBet: roundTotals.totalCadeCoinBet,
             ...betStat,
           },
         );
@@ -594,8 +609,10 @@ export class BettingGateway {
             bettingVariableId: bettingVariable.id,
             totalBetsSweepCoinAmount: bettingVariable.totalBetsSweepCoinAmount,
             totalBetsGoldCoinAmount: bettingVariable.totalBetsGoldCoinAmount,
+            totalBetsCadeCoinAmount: bettingVariable.totalBetsCadeCoinAmount,
             betCountSweepCoin: bettingVariable.betCountSweepCoin,
             betCountGoldCoin: bettingVariable.betCountGoldCoin,
+            betCountCadeCoin: bettingVariable.betCountCadeCoin,
             status: bettingVariable.status,
           },
         );
@@ -620,9 +637,10 @@ export class BettingGateway {
     winnerName: string,
     winners: { userId: string; username: string }[],
     losers: { userId: string; username: string }[],
-    voided: { goldCoin: boolean; sweepCoin: boolean } = {
+    voided: { goldCoin: boolean; sweepCoin: boolean, cadeCoin: boolean } = {
       goldCoin: false,
       sweepCoin: false,
+      cadeCoin: false,
     },
   ): void {
     emitToStream(

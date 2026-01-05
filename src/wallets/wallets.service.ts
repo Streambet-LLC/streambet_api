@@ -148,6 +148,24 @@ export class WalletsService {
     );
   }
 
+  async addCadeCoins(
+    userId: string,
+    amount: number,
+    description: string,
+    manager?: EntityManager,
+  ): Promise<Wallet> {
+    return this.updateBalance(
+      userId,
+      amount,
+      CurrencyType.CADE_COINS,
+      TransactionType.REFUND,
+      description,
+      undefined,
+      undefined,
+      manager,
+    );
+  }
+
   /**
    * deductForBet - Deducts a specified bet amount from the user's wallet.
    *
@@ -296,6 +314,12 @@ export class WalletsService {
           throw new BadRequestException('Insufficient free Gold Coins');
         }
         wallet.goldCoins = Number(newBalance);
+      } else if (currencyType === CurrencyType.CADE_COINS) {
+        newBalance = Number(wallet.cadeCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient Cade Coins');
+        }
+        wallet.cadeCoins = Number(newBalance);
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {
@@ -375,6 +399,12 @@ export class WalletsService {
           throw new BadRequestException('Insufficient free Gold Coins');
         }
         wallet.goldCoins = Number(newBalance);
+      } else if (currencyType === CurrencyType.CADE_COINS) {
+        newBalance = Number(wallet.cadeCoins) + Number(amount);
+        if (newBalance < 0) {
+          throw new BadRequestException('Insufficient Cade Coins');
+        }
+        wallet.cadeCoins = Number(newBalance);
       } else {
         newBalance = Number(wallet.sweepCoins) + Number(amount);
         if (newBalance < 0) {

@@ -53,4 +53,7 @@ export class BettingRound extends BaseEntity {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'createdBy' })
   creator: User;
+
+  @Column({ default: 'pro' })
+  app: string;
 }

@@ -39,6 +39,7 @@ import { BettingGateway } from './betting.gateway';
 import {
   MAX_SWEEP_COINS_FOR_BETTING,
   MAX_GOLD_COINS_FOR_BETTING,
+  MAX_CADE_COINS_FOR_BETTING,
 } from 'src/common/constants/currency.constants';
 import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
@@ -949,6 +950,12 @@ export class BettingService {
           Number(amount);
         lockedBettingVariable.betCountGoldCoin =
           Number(lockedBettingVariable.betCountGoldCoin) + 1;
+      } else if (currencyType === CurrencyType.CADE_COINS) {
+        lockedBettingVariable.totalBetsCadeCoinAmount =
+          Number(lockedBettingVariable.totalBetsCadeCoinAmount) +
+          Number(amount);
+        lockedBettingVariable.betCountCadeCoin =
+          Number(lockedBettingVariable.betCountCadeCoin) + 1;
       } else if (currencyType === CurrencyType.SWEEP_COINS) {
         lockedBettingVariable.totalBetsSweepCoinAmount =
           Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
@@ -1006,6 +1013,20 @@ export class BettingService {
     ) {
       throw new BadRequestException(
         `The maximum allowed bet with ${CurrencyTypeText.GOLD_COINS_TEXT} is ${MAX_GOLD_COINS_FOR_BETTING.toLocaleString(
+          'en-US',
+        )}. Your bet amount of ${amount.toLocaleString(
+          'en-US',
+        )} exceeds this limit. Please place a lower bet.`,
+      );
+    }
+
+    // Validate cade coins
+    if (
+      amount > MAX_CADE_COINS_FOR_BETTING &&
+      currencyType === CurrencyType.CADE_COINS
+    ) {
+      throw new BadRequestException(
+        `The maximum allowed bet with ${CurrencyTypeText.CADE_COINS_TEXT} is ${MAX_CADE_COINS_FOR_BETTING.toLocaleString(
           'en-US',
         )}. Your bet amount of ${amount.toLocaleString(
           'en-US',
@@ -1121,6 +1142,13 @@ export class BettingService {
             `Refund from bet currency change: ${oldAmount}`,
             queryRunner.manager,
           );
+        } else if (oldCurrency === CurrencyType.CADE_COINS) {
+          await this.walletsService.addCadeCoins(
+            userId,
+            oldAmount,
+            `Refund from bet currency change: ${oldAmount}`,
+            queryRunner.manager,
+          );
         } else {
           await this.walletsService.addSweepCoins(
             userId,
@@ -1156,6 +1184,13 @@ export class BettingService {
           const refundAmount = Math.abs(amountDiff);
           if (oldCurrency === CurrencyType.GOLD_COINS) {
             await this.walletsService.addGoldCoins(
+              userId,
+              refundAmount,
+              `Refund from bet edit: ${refundAmount}`,
+              queryRunner.manager,
+            );
+          } else if (oldCurrency === CurrencyType.CADE_COINS) {
+            await this.walletsService.addCadeCoins(
               userId,
               refundAmount,
               `Refund from bet edit: ${refundAmount}`,
@@ -1208,6 +1243,13 @@ export class BettingService {
               oldAmount +
               newAmt,
             );
+          } else if (newCurrency === CurrencyType.CADE_COINS) {
+            lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
+              oldAmount +
+              newAmt,
+            );
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
@@ -1229,6 +1271,16 @@ export class BettingService {
               0,
               Number(lockedNewBettingVariable.betCountGoldCoin) - 1,
             );
+          } else if (newCurrency === CurrencyType.CADE_COINS) {
+            lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
+              0,
+              Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
+              oldAmount,
+            );
+            lockedNewBettingVariable.betCountCadeCoin = Math.max(
+              0,
+              Number(lockedNewBettingVariable.betCountCadeCoin) - 1,
+            );
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
@@ -1247,6 +1299,11 @@ export class BettingService {
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) + newAmt;
             lockedNewBettingVariable.betCountGoldCoin =
               Number(lockedNewBettingVariable.betCountGoldCoin) + 1;
+          } else if (newCurrency === CurrencyType.CADE_COINS) {
+            lockedNewBettingVariable.totalBetsCadeCoinAmount =
+              Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) + newAmt;
+            lockedNewBettingVariable.betCountCadeCoin =
+              Number(lockedNewBettingVariable.betCountCadeCoin) + 1;
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount =
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) +
@@ -1267,6 +1324,16 @@ export class BettingService {
             0,
             Number(lockedOldBettingVariable.betCountGoldCoin) - 1,
           );
+        } else if (oldCurrency === CurrencyType.CADE_COINS) {
+          lockedOldBettingVariable.totalBetsCadeCoinAmount = Math.max(
+            0,
+            Number(lockedOldBettingVariable.totalBetsCadeCoinAmount) -
+            oldAmount,
+          );
+          lockedOldBettingVariable.betCountCadeCoin = Math.max(
+            0,
+            Number(lockedOldBettingVariable.betCountCadeCoin) - 1,
+          );
         } else {
           lockedOldBettingVariable.totalBetsSweepCoinAmount = Math.max(
             0,
@@ -1284,6 +1351,11 @@ export class BettingService {
             Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) + newAmt;
           lockedNewBettingVariable.betCountGoldCoin =
             Number(lockedNewBettingVariable.betCountGoldCoin) + 1;
+        } else if (newCurrency === CurrencyType.CADE_COINS) {
+          lockedNewBettingVariable.totalBetsCadeCoinAmount =
+            Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) + newAmt;
+          lockedNewBettingVariable.betCountCadeCoin =
+            Number(lockedNewBettingVariable.betCountCadeCoin) + 1;
         } else {
           lockedNewBettingVariable.totalBetsSweepCoinAmount =
             Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) + newAmt;
@@ -1517,6 +1589,16 @@ export class BettingService {
         bettingVariable.totalBetsGoldCoinAmount =
           Number(bettingVariable.totalBetsGoldCoinAmount) - amount;
         bettingVariable.betCountGoldCoin -= 1;
+      } else if (currencyType === CurrencyType.CADE_COINS) {
+        await this.walletsService.addCadeCoins(
+          userId,
+          bet.amount,
+          refundMessage,
+          queryRunner.manager,
+        );
+        bettingVariable.totalBetsCadeCoinAmount =
+          Number(bettingVariable.totalBetsCadeCoinAmount) - amount;
+        bettingVariable.betCountCadeCoin -= 1;
       } else {
         await this.walletsService.addSweepCoins(
           userId,
@@ -1607,7 +1689,7 @@ export class BettingService {
         bettingVariable.round.id,
       );
 
-      const refundAllGoldWinners = roundCalculation.gold.totalLosingBetCount == 0;
+      const refundAllCadeWinners = roundCalculation.cade.totalLosingBetCount == 0;
       const refundAllSweepWinners = roundCalculation.sweep.totalLosingBetCount == 0;
 
       const processedBets = [];
@@ -1640,7 +1722,7 @@ export class BettingService {
         let roundData = roundCalculation.sweep;
 
         if (!isSweep) {
-          refundAllWinners = refundAllGoldWinners;
+          refundAllWinners = refundAllCadeWinners;
           roundData = roundCalculation.gold;
         }
 
@@ -1714,8 +1796,9 @@ export class BettingService {
         winners,
         losers,
         {
-          goldCoin:
-            roundCalculation.gold.totalWinningBetCount === 0 || roundCalculation.gold.totalLosingBetCount === 0,
+          goldCoin: false,
+          cadeCoin:
+            roundCalculation.cade.totalWinningBetCount === 0 || roundCalculation.cade.totalLosingBetCount === 0,
           sweepCoin:
             roundCalculation.sweep.totalWinningBetCount === 0 || roundCalculation.sweep.totalLosingBetCount === 0,
         },
@@ -1872,8 +1955,8 @@ export class BettingService {
   private calculatePerCurrencyRoundPayout(currency, winningOptions, losingOptions) {
     const MAX_PAYOUT = 4;
 
-    const betAmountVariable = currency == "sweep" ? "totalBetsSweepCoinAmount" : "totalBetsGoldCoinAmount";
-    const betCountVariable = currency == "sweep" ? "betCountSweepCoin" : "betCountGoldCoin";
+    const betAmountVariable = currency == "sweep" ? "totalBetsSweepCoinAmount" : currency === "cade" ? "totalBetsCadeCoinAmount" : "totalBetsGoldCoinAmount";
+    const betCountVariable = currency == "sweep" ? "betCountSweepCoin" : currency === "cade" ? "betCountCadeCoin" : "betCountGoldCoin";
 
     const totalWinningBetAmount = Number(winningOptions[betAmountVariable]);
     const totalLosingBetAmount = losingOptions.reduce((sum, item) => sum += Number(item[betAmountVariable]), 0);
@@ -1948,10 +2031,12 @@ export class BettingService {
 
     const sweepCalculation = this.calculatePerCurrencyRoundPayout("sweep", winningOptions, losingOptions);
     const goldCalculation = this.calculatePerCurrencyRoundPayout("gold", winningOptions, losingOptions);
+    const cadeCalculation = this.calculatePerCurrencyRoundPayout("cade", winningOptions, losingOptions);
 
     return {
       sweep: sweepCalculation,
       gold: goldCalculation,
+      cade: cadeCalculation,
     }
   }
 
@@ -2516,12 +2601,17 @@ export class BettingService {
   private potentialAmountCal(bettingRound, bets: any) {
     try {
       let goldCoinBetAmtForLoginUser = 0;
+      let cadeCoinBetAmtForLoginUser = 0;
       let sweepCoinBetAmtForLoginUser = 0;
       //bet amount of login user
       const betAmount = Number(bets?.betamount || 0);
 
       if (bets.betcurrency === CurrencyType.GOLD_COINS) {
         goldCoinBetAmtForLoginUser = betAmount || 0;
+      }
+
+      if (bets.betcurrency === CurrencyType.CADE_COINS) {
+        cadeCoinBetAmtForLoginUser = betAmount || 0;
       }
 
       if (bets.betcurrency === CurrencyType.SWEEP_COINS) {
@@ -2545,12 +2635,18 @@ export class BettingService {
         userOption?.totalBetsSweepCoinAmount || 0,
       );
       const userOptionGoldCoinCount = Number(userOption?.betCountGoldCoin || 0);
+      const userOptionCadeCoinCount = Number(userOption?.betCountCadeCoin || 0);
       const userOptionSweepCoinCount = Number(
         userOption?.betCountSweepCoin || 0,
       );
 
       const opposingGoldCoinAmount = opposingOptions.reduce(
         (sum, v) => sum + Number(v.totalBetsGoldCoinAmount || 0),
+        0,
+      );
+
+      const opposingCadeCoinAmount = opposingOptions.reduce(
+        (sum, v) => sum + Number(v.totalBetsCadeCoinAmount || 0),
         0,
       );
 
@@ -2566,6 +2662,10 @@ export class BettingService {
         userOptionGoldCoinCount > 0
           ? round(opposingGoldCoinAmount / userOptionGoldCoinCount, 2)
           : 0;
+      const cadePotPerBettor =
+        userOptionCadeCoinCount > 0
+          ? round(opposingCadeCoinAmount / userOptionCadeCoinCount, 2)
+          : 0;
       const sweepPotPerBettor =
         userOptionSweepCoinCount > 0
           ? round(
@@ -2577,12 +2677,20 @@ export class BettingService {
 
       // --- MAIN LOGIC: always calculate from scratch ---
       let potentialGoldCoinAmt = goldCoinBetAmtForLoginUser;
+      let potentialCadeCoinAmt = cadeCoinBetAmtForLoginUser;
 
       if (
         bets.betcurrency === CurrencyType.GOLD_COINS &&
         userOptionGoldCoinCount > 0
       ) {
         potentialGoldCoinAmt += goldPotPerBettor;
+      }
+
+      if (
+        bets.betcurrency === CurrencyType.CADE_COINS &&
+        userOptionCadeCoinCount > 0
+      ) {
+        potentialCadeCoinAmt += cadePotPerBettor;
       }
 
       let potentialSweepCoinAmt = sweepCoinBetAmtForLoginUser;
@@ -2598,6 +2706,7 @@ export class BettingService {
       return {
         potentialSweepCoinAmt,
         potentialGoldCoinAmt: Math.floor(potentialGoldCoinAmt),
+        potentialCadeCoinAmt: Math.floor(potentialCadeCoinAmt),
         betAmount,
       };
     } catch (e) {
@@ -2885,6 +2994,12 @@ export class BettingService {
       0,
     );
 
+    // Sum up total Cade Coins bet across all variables
+    const totalBetsCadeCoinAmount = bettingVariables.reduce(
+      (sum, v) => Number(sum) + Number(v.totalBetsCadeCoinAmount || 0),
+      0,
+    );
+
     // Sum total number of Gold Coin bets
     const totalGoldCoinBet = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.betCountGoldCoin || 0),
@@ -2896,11 +3011,19 @@ export class BettingService {
       (sum, v) => Number(sum) + Number(v.betCountSweepCoin || 0),
       0,
     );
+
+    // Sum total number of Cade Coin bets
+    const totalCadeCoinBet = bettingVariables.reduce(
+      (sum, v) => Number(sum) + Number(v.betCountCadeCoin || 0),
+      0,
+    );
     return {
       totalBetsGoldCoinAmount,
       totalBetsSweepCoinAmount,
+      totalBetsCadeCoinAmount,
       totalSweepCoinBet,
       totalGoldCoinBet,
+      totalCadeCoinBet,
     };
   }
 

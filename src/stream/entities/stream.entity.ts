@@ -60,6 +60,9 @@ export class Stream extends BaseEntity {
   @OneToMany(() => BettingRound, (round) => round.stream)
   bettingRounds: BettingRound[];
 
+  @Column({ default: 'pro' })
+  app: string;
+
   // ManyToOne relationship: One creator (User) can have many streams
   // Unidirectional - User entity has no inverse @OneToMany relationship
   // Changed from @OneToOne to @ManyToOne to match actual data model where creators can create multiple streams
