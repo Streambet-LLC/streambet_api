@@ -27,8 +27,7 @@ jobs:
       - name: Build and Push Image
         id: build-image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.registry }}
-          # Logic to match your GitLab ECR_REPO_NAME variable
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: cardcade-${{ github.ref_name }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
