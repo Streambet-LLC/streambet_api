@@ -187,7 +187,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const { pagination = true, streamStatus, username } = streamFilterDto;
 
       const streamQB = this.streamsRepository
-        .createQueryBuilder('s');
+        .createQueryBuilder('s')
+        .where("s.app = 'non-pro'");
 
       if (username) {
         streamQB.innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
@@ -255,6 +256,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .createQueryBuilder('s')
         .innerJoinAndSelect('s.creator', 'creator')
         .where('s.status = :status', { status: StreamStatus.LIVE })
+        .andWhere("s.app = 'non-pro'")
         .andWhere('s.type = :type', {
           type: StreamEventType.STREAM
         })
@@ -285,6 +287,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.creator', 'c')
         .where('s.type = :type', { type: StreamEventType.PROMO })
+        .andWhere("s.app = 'non-pro'")
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
         .andWhere('s.status IN (:...statuses)', { 
           statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
@@ -302,6 +305,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
+        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
@@ -337,19 +341,23 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0;
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -368,7 +376,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }
@@ -501,6 +510,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
+        .andWhere("s.app = 'non-pro'")
         .leftJoinAndSelect('s.bettingRounds', 'r');
       if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
@@ -636,6 +646,7 @@ END
         .leftJoinAndSelect('bv.bets', 'b')
         .leftJoinAndSelect('b.user', 'u')
         .where('stream.id = :streamId', { streamId })
+        .andWhere("stream.app = 'non-pro'")
         .andWhere('stream.status IN (:...statuses)', {
           statuses: [
             StreamStatus.LIVE,
@@ -673,19 +684,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -703,7 +718,8 @@ END
           status: item.status,
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           }
         }
 
@@ -756,7 +772,7 @@ END
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .leftJoinAndSelect('variable.bets', 'b', 'b.userId = :userId')
         .where('stream.id = :streamId', { streamId })
-
+        .andWhere("stream.app = 'non-pro'")
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           userId,
@@ -787,15 +803,16 @@ END
                 acc.sweepCoinSum += Number(
                   variable.totalBetsSweepCoinAmount || 0,
                 );
-                // acc.cadeCoinSum += Number(
-                //   variable.totalBetsSweepCoinAmount || 0,
-                // );
+                acc.cadeCoinSum += Number(
+                  variable.totalBetsCadeCoinAmount || 0,
+                );
                 return acc;
               },
-              { goldCoinSum: 0, sweepCoinSum: 0 },
+              { goldCoinSum: 0, sweepCoinSum: 0, cadeCoinSum: 0 },
             );
             total.goldCoinSum += roundTotals.goldCoinSum;
             total.sweepCoinSum += roundTotals.sweepCoinSum;
+            total.cadeCoinSum += roundTotals.cadeCoinSum;
           }
         }
       }
@@ -855,7 +872,7 @@ END
 
   async findStreamDetailsForAdmin(role: UserRole, creator: string, streamId: string) {
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId },
+      where: { id: streamId, app: 'non-pro' },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
 
@@ -906,7 +923,7 @@ END
   ): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id },
+        where: { id, app: 'non-pro' },
       });
 
       if (!stream) {
@@ -1040,7 +1057,7 @@ END
   ): Promise<Stream> {
     // Fetch the stream with all its rounds
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId },
+      where: { id: streamId, app: "non-pro" },
       relations: ['bettingRounds'],
     });
     if (!stream) {
@@ -1178,7 +1195,7 @@ END
   async updateStreamStatus(streamId: string) {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id: streamId },
+        where: { id: streamId, app: "non-pro" },
         select: ['id', 'status', 'scheduledStartTime'],
       });
 
@@ -1211,7 +1228,7 @@ END
         { status: stream.status, actualStartTime: stream.actualStartTime },
       );
       const streamUpdated = await this.streamsRepository.findOne({
-        where: { id: stream.id },
+        where: { id: stream.id, app: "non-pro" },
         select: ['id', 'status'],
       });
       this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
@@ -1242,7 +1259,7 @@ END
    */
   async getViewerCount(streamId: string): Promise<number> {
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId },
+      where: { id: streamId, app: "non-pro" },
     });
     return stream ? stream.viewerCount : 0;
   }
@@ -1251,6 +1268,7 @@ END
     return this.streamsRepository.count({
       where: {
         status: StreamStatus.LIVE, // Only count live streams
+        app: "non-pro"
       },
     });
   }
@@ -1358,6 +1376,7 @@ END
         .update(Stream)
         .set({ status: StreamStatus.CANCELLED })
         .where('id = :streamId', { streamId })
+        .andWhere("app = 'non-pro'")
         .returning('status')
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
@@ -1412,6 +1431,7 @@ END
         .update(Stream)
         .set({ status: StreamStatus.DELETED })
         .where('id = :streamId', { streamId })
+        .andWhere("app = 'non-pro'")
         .returning('status')
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
@@ -1487,6 +1507,7 @@ END
         betStatus: BetStatus.Active,
       })
       .where('stream.id = :streamId', { streamId })
+      .andWhere("stream.app = 'non-pro'")
       .andWhere('stream.status = :status', { status: StreamStatus.SCHEDULED })
       .select([
         'stream.id',
@@ -1545,6 +1566,7 @@ END
         .andWhere(`s.type = :type`, {
           type: 'stream',
         })
+        .andWhere("s.app = 'non-pro'")
 
       if (liveScheduledStreamListDto.username) {
         streamQB
@@ -1741,19 +1763,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1814,6 +1840,7 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
+        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .innerJoinAndSelect('s.creator', 'c', 'c.username = :username')
         .setParameter('username', username)
@@ -1823,7 +1850,8 @@ END
             StreamStatus.SCHEDULED
           ]
         })
-        .andWhere("s.type = 'non-video'");
+        .andWhere("s.type = 'non-video'")
+        .andWhere("s.app = 'non-video'");
 
       const count = await betRoundsQB.getCount();
       const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
@@ -1843,17 +1871,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1871,7 +1905,8 @@ END
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }
@@ -1913,6 +1948,7 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
+        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
@@ -1962,19 +1998,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1991,7 +2031,8 @@ END
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }

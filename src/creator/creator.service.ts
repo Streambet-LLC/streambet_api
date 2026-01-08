@@ -73,12 +73,14 @@ export class CreatorService {
         "viewerCount", 
         {
           creatorId, 
+          app: 'non-pro'
         },
       );
 
       const totalStreams = await this.streamsRepository.count({
         where: {
           creatorId,
+          app: 'non-pro'
         }
       });
 
