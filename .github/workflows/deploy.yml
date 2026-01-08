@@ -17,9 +17,6 @@ jobs:
       - name: Install sudo
         run: apt-get update && apt-get install -y sudo
 
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v4
-
       - name: Install or Update AWS CLI v2 to the latest
         run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
