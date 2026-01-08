@@ -20,8 +20,14 @@ import { join } from 'path';
         migrationsRun: false, // We'll run migrations manually
         synchronize: configService.get('NODE_ENV') === 'development', // Only for development
         logging: configService.get('NODE_ENV') === 'development',
+        ssl: true,
+        extra: {
+          ssl: {
+            rejectUnauthorized: false,
+          },
+        },
       }),
     }),
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule { }

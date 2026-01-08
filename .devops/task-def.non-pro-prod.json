@@ -1,0 +1,219 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "cardcade-non-pro-prod",
+      "image": "<IMAGE_URI>",
+      "cpu": 256,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "NODE_ENV", "value": "development" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "ENABLE_API_LOGGING", "value": "true" },
+        { "name": "ENABLE_DETAILED_LOGGING", "value": "true" },
+        { "name": "DB_HOST", "value": "db-private.streambet.tv" },
+        { "name": "DB_PORT", "value": "5432" },
+        { "name": "JWT_EXPIRES_IN", "value": "1d" },
+        { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
+        { "name": "FILE_DRIVER", "value": "s3" },
+        { "name": "AWS_SMTP_PORT", "value": "465" },
+        { "name": "MAIL_DEFAULT_NAME", "value": "CardCade" },
+        { "name": "MAIL_SECURE", "value": "true" },
+        { "name": "MAIL_REQUIRE_TLS", "value": "true" },
+        { "name": "HOSTED", "value": "false" },
+        { "name": "REDIS_HOST", "value": "54.172.250.213" },
+        { "name": "REDIS_PORT", "value": "6301" },
+        { "name": "REDIS_USERNAME", "value": "default" },
+        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
+        { "name": "REDIS_DB", "value": "0" },
+        { "name": "IS_SWAGGER_ENABLED", "value": "true" },
+        { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
+        { "name": "NEW_RELIC_ENABLED", "value": "false" },
+        { "name": "NEW_RELIC_APP_NAME", "value": "CardCade" },
+        {
+          "name": "BLOCKED_REGION",
+          "value": "Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia"
+        },
+        { "name": "BLOCK_VPN", "value": "false" },
+        { "name": "TRUST_PROXY", "value": "true" },
+        { "name": "REDIS_TLS", "value": "false" },
+        { "name": "COINFLOW_WEBHOOK_ENV", "value": "stag" },
+        { "name": "N8N_ENABLED", "value": "true" },
+        { "name": "N8N_RETRIES", "value": "3" },
+        { "name": "N8N_RETRY_DELAY_MS", "value": "1000" },
+        { "name": "N8N_TIMEOUT_MS", "value": "5000" }
+      ],
+      "secrets": [
+        {
+          "name": "CLIENT_URL",
+          "valueFrom": "/cardcade/non-pro-prod/CLIENT_URL"
+        },
+        {
+          "name": "DB_USERNAME",
+          "valueFrom": "/cardcade/non-pro-prod/DB_USERNAME"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "/cardcade/non-pro-prod/DB_PASSWORD"
+        },
+        {
+          "name": "DB_DATABASE",
+          "valueFrom": "/cardcade/non-pro-prod/DB_DATABASE"
+        },
+
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/JWT_SECRET"
+        },
+        {
+          "name": "REFRESH_TOKEN_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/REFRESH_TOKEN_SECRET"
+        },
+
+        {
+          "name": "GOOGLE_CLIENT_ID",
+          "valueFrom": "/cardcade/non-pro-prod/GOOGLE_CLIENT_ID"
+        },
+        {
+          "name": "GOOGLE_CLIENT_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/GOOGLE_CLIENT_SECRET"
+        },
+        {
+          "name": "GOOGLE_CALLBACK_URL",
+          "valueFrom": "/cardcade/non-pro-prod/GOOGLE_CALLBACK_URL"
+        },
+
+        {
+          "name": "STRIPE_SECRET_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/STRIPE_SECRET_KEY"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/STRIPE_WEBHOOK_SECRET"
+        },
+        {
+          "name": "NEW_RELIC_LICENSE_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/NEW_RELIC_LICENSE_KEY"
+        },
+        {
+          "name": "ACCESS_KEY_ID",
+          "valueFrom": "/cardcade/non-pro-prod/ACCESS_KEY_ID"
+        },
+        {
+          "name": "SECRET_ACCESS_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/SECRET_ACCESS_KEY"
+        },
+        {
+          "name": "AWS_DEFAULT_S3_BUCKET",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_DEFAULT_S3_BUCKET"
+        },
+        {
+          "name": "AWS_S3_REGION",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_S3_REGION"
+        },
+
+        {
+          "name": "AWS_SMTP_USER",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_SMTP_USER"
+        },
+        {
+          "name": "AWS_SMTP_PASSWORD",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_SMTP_PASSWORD"
+        },
+        {
+          "name": "AWS_SMTP_HOST",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_SMTP_HOST"
+        },
+        {
+          "name": "MAIL_DEFAULT_EMAIL",
+          "valueFrom": "/cardcade/non-pro-prod/MAIL_DEFAULT_EMAIL"
+        },
+        {
+          "name": "AWS_SMTP_REGION",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_SMTP_REGION"
+        },
+        {
+          "name": "AWS_EMAIL_FROM",
+          "valueFrom": "/cardcade/non-pro-prod/AWS_EMAIL_FROM"
+        },
+        {
+          "name": "APP_HOST_URL",
+          "valueFrom": "/cardcade/non-pro-prod/APP_HOST_URL"
+        },
+        {
+          "name": "REDIS_PASSWORD",
+          "valueFrom": "/cardcade/non-pro-prod/REDIS_PASSWORD"
+        },
+        {
+          "name": "ABSTRACT_API_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/ABSTRACT_API_KEY"
+        },
+        {
+          "name": "COINFLOW_API_URL",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_API_URL"
+        },
+        {
+          "name": "COINFLOW_API_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_API_KEY"
+        },
+        {
+          "name": "COINFLOW_DEFAULT_TOKEN",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_DEFAULT_TOKEN"
+        },
+        {
+          "name": "COINFLOW_MERCHANT_ID",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_MERCHANT_ID"
+        },
+        {
+          "name": "COINFLOW_BLOCKCHAIN",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_BLOCKCHAIN"
+        },
+        {
+          "name": "COINFLOW_WEBHOOK_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/COINFLOW_WEBHOOK_SECRET"
+        },
+        {
+          "name": "N8N_WEBHOOK_URL",
+          "valueFrom": "/cardcade/non-pro-prod/N8N_WEBHOOK_URL"
+        },
+        {
+          "name": "N8N_WEBHOOK_SECRET",
+          "valueFrom": "/cardcade/non-pro-prod/N8N_WEBHOOK_SECRET"
+        },
+        {
+          "name": "PERSONA_API_KEY",
+          "valueFrom": "/cardcade/non-pro-prod/PERSONA_API_KEY"
+        },
+        {
+          "name": "PERSONA_API_URL",
+          "valueFrom": "/cardcade/non-pro-prod/PERSONA_API_URL"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/cardcade-nonpro-stag",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "cardcade-non-pro-prod",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::208889940603:role/ecsTaskExecutionRole"
+}
