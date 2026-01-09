@@ -28,6 +28,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
           username: configService.get('queue.redis.username'),
           password: configService.get('queue.redis.password'),
           tls: configService.get('queue.redis.tls'),
+          enableReadyCheck: false,
         },
         defaultJobOptions: {
           attempts: 3,
