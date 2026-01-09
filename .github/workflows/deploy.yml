@@ -2,7 +2,7 @@ name: Build and Deploy to ECS
 
 on:
   push:
-    branches: [non-pro-prod]
+    branches: [non_pro_prod]
 
 jobs:
   build:
@@ -86,7 +86,7 @@ jobs:
         env:
           # Mapping names as per your GitLab logic
           CLUSTER: cardcade-clusters
-          SERVICE: cardcade-${{ github.ref_name }}
+          SERVICE: cardcade_${{ github.ref_name }}
         run: |
           aws ecs register-task-definition --cli-input-json file://.devops/task-def.${{ github.ref_name }}.json
           aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $SERVICE --desired-count 1
