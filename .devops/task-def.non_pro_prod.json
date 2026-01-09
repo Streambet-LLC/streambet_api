@@ -201,7 +201,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/cardcade-nonpro-stag",
+          "awslogs-group": "/ecs/cardcade-non_pro_prod",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
