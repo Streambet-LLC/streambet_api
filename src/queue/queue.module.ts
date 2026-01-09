@@ -27,6 +27,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
           port: configService.get('queue.redis.port'),
           username: configService.get('queue.redis.username'),
           password: configService.get('queue.redis.password'),
+          tls: configService.get('queue.redis.tls'),
         },
         defaultJobOptions: {
           attempts: 3,
@@ -77,4 +78,4 @@ import { PaymentsModule } from 'src/payments/payments.module';
   providers: [StreamLiveProcessor, QueueService, EmailProcessor, CoinflowWebhookProcessor],
   exports: [QueueService],
 })
-export class QueueModule {}
+export class QueueModule { }

@@ -40,7 +40,6 @@
         },
         { "name": "BLOCK_VPN", "value": "false" },
         { "name": "TRUST_PROXY", "value": "true" },
-        { "name": "REDIS_TLS", "value": "false" },
         { "name": "COINFLOW_WEBHOOK_ENV", "value": "stag" },
         { "name": "N8N_ENABLED", "value": "true" },
         { "name": "N8N_RETRIES", "value": "3" },
@@ -151,6 +150,10 @@
         {
           "name": "REDIS_HOST",
           "valueFrom": "/cardcade/non_pro_prod/REDIS_HOST"
+        },
+        {
+          "name": "REDIS_TLS",
+          "valueFrom": "/cardcade/non_pro_prod/REDIS_TLS"
         },
         {
           "name": "REDIS_USERNAME",
