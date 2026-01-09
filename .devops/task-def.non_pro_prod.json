@@ -18,7 +18,6 @@
         { "name": "PORT", "value": "3000" },
         { "name": "ENABLE_API_LOGGING", "value": "true" },
         { "name": "ENABLE_DETAILED_LOGGING", "value": "true" },
-        { "name": "DB_HOST", "value": "db-private.streambet.tv" },
         { "name": "DB_PORT", "value": "5432" },
         { "name": "JWT_EXPIRES_IN", "value": "1d" },
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
@@ -28,10 +27,8 @@
         { "name": "MAIL_SECURE", "value": "true" },
         { "name": "MAIL_REQUIRE_TLS", "value": "true" },
         { "name": "HOSTED", "value": "false" },
-        { "name": "REDIS_HOST", "value": "54.172.250.213" },
-        { "name": "REDIS_PORT", "value": "6301" },
-        { "name": "REDIS_USERNAME", "value": "default" },
-        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
+        { "name": "REDIS_PORT", "value": "6379" },
+        { "name": "REDIS_KEY_PREFIX", "value": "CARDCADE_NON_PRO_PROD" },
         { "name": "REDIS_DB", "value": "0" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
@@ -54,6 +51,10 @@
         {
           "name": "CLIENT_URL",
           "valueFrom": "/cardcade/non_pro_prod/CLIENT_URL"
+        },
+        {
+          "name": "DB_HOST",
+          "valueFrom": "/cardcade/non_pro_prod/DB_HOST"
         },
         {
           "name": "DB_USERNAME",
@@ -146,6 +147,14 @@
         {
           "name": "APP_HOST_URL",
           "valueFrom": "/cardcade/non_pro_prod/APP_HOST_URL"
+        },
+        {
+          "name": "REDIS_HOST",
+          "valueFrom": "/cardcade/non_pro_prod/REDIS_HOST"
+        },
+        {
+          "name": "REDIS_USERNAME",
+          "valueFrom": "/cardcade/non_pro_prod/REDIS_USERNAME"
         },
         {
           "name": "REDIS_PASSWORD",
