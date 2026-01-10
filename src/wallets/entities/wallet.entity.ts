@@ -32,6 +32,15 @@ export class Wallet extends BaseEntity {
   })
   withdrawableBalance: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 3,
+    default: 0,
+    name: 'lifetime_coins_earned',
+  })
+  lifetimeCoinsEarned: number; // Tracks lifetime gamification currency earned (currently Gold Coins, will be Cade Coins)
+
   @Column({ type: 'boolean', default: false })
   autoReloadEnabled: boolean;
 

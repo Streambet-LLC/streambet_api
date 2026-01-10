@@ -17,6 +17,9 @@ import {
   SWEEP_COINS_PER_DOLLAR,
   MIN_WITHDRAWABLE_SWEEP_COINS,
 } from 'src/common/constants/currency.constants';
+import {
+  GAMIFICATION_CURRENCY,
+} from 'src/common/constants/gamification.constants';
 import { WalletGateway } from './wallets.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
@@ -313,6 +316,11 @@ export class WalletsService {
         }
       }
 
+      // Track lifetime gamification currency earned (only for additions)
+      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
+        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(amount);
+      }
+
       await manager.save(wallet);
 
       const transactionRepo = manager.getRepository(Transaction);
@@ -390,6 +398,11 @@ export class WalletsService {
         ].includes(transactionType)) {
           wallet.withdrawableBalance = Number(wallet.withdrawableBalance) + Number(amount);
         }
+      }
+
+      // Track lifetime gamification currency earned (only for additions)
+      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
+        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(amount);
       }
 
       await queryRunner.manager.save(wallet);

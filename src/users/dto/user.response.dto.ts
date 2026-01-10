@@ -2,6 +2,58 @@ import { ApiProperty } from '@nestjs/swagger';
 import { NotificationPreference } from '../entities/user.entity';
 import { UserRole } from 'src/enums/user-role.enum';
 import { IsOptional } from 'class-validator';
+import { PrizeProgressDto } from 'src/prize/dto';
+
+export class PublicUserProfileDto {
+  @ApiProperty({ example: '0b9f2a90-c43d-493d-b55d-d89455d35744' })
+  id: string;
+
+  @ApiProperty({ example: 'johndoe' })
+  username: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  name: string;
+
+  @ApiProperty({ example: '2024-01-15T10:30:00.000Z' })
+  accountCreationDate: Date;
+
+  @ApiProperty({ example: 'https://example.com/avatar.png' })
+  profileImageUrl: string;
+
+  @ApiProperty({ 
+    example: { twitter: '@johndoe', youtube: 'johndoe123' }, 
+    nullable: true,
+    description: 'Social media links' 
+  })
+  socials: { [social: string]: string } | null;
+
+  @ApiProperty({ enum: UserRole, example: UserRole.USER })
+  role: UserRole;
+
+  @ApiProperty({ example: true, description: 'Whether the requesting user follows this profile' })
+  isFollowed: boolean;
+
+  @ApiProperty({ example: 1250, description: 'Total follower count' })
+  followers: number;
+
+  @ApiProperty({ example: 500, description: 'Current Cade Coins balance' })
+  currentCadeCoins: number;
+
+  @ApiProperty({ example: 15000, description: 'Lifetime Cade Coins earned' })
+  lifetimeCadeCoins: number;
+
+  @ApiProperty({ example: 'Master', description: 'Current achievement title' })
+  title: string;
+
+  @ApiProperty({ example: 'Dealer', description: 'Current badge level' })
+  badgeLevel: string;
+
+  @ApiProperty({ type: PrizeProgressDto, description: 'Prize progression details' })
+  prizeProgress: PrizeProgressDto;
+
+  @ApiProperty({ required: false, example: true, description: 'Whether user is a creator' })
+  isCreator?: boolean;
+}
 
 export class UserProfileResponseDto {
   @ApiProperty()
