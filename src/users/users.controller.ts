@@ -23,6 +23,7 @@ import {
   NotificationSettingsUpdateDto,
   ProfileUpdateDto,
 } from './dto/user.requests.dto';
+import { UserAddressDto } from './dto/user-address.dto';
 import { CreateNewReferralLinkDto } from 'src/referral/create-referral-link.requests.dto';
 import { ReferralService } from 'src/referral/referral.service';
 import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
@@ -67,6 +68,42 @@ export class UsersController {
     return {
       data,
       message: 'User profile retrieved successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  /**
+   * Get authenticated user's address for redemption form pre-population.
+   * Security: Only returns address to the authenticated user for their own data.
+   * @param req - The request object containing authenticated user information.
+   * @returns The user's shipping address.
+   */
+  @ApiOperation({
+    summary: 'Get own address',
+    description: 'Returns authenticated user\'s shipping address. Only accessible to the user themselves.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Address retrieved successfully',
+    type: UserAddressDto
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('me/address')
+  async getOwnAddress(@Request() req: RequestWithUser) {
+    const user = await this.usersService.findOneWithAddress(req.user.id);
+    const addressData: UserAddressDto = {
+      address: user.address || null,
+      address2: user.address2 || null,
+      city: user.city || null,
+      state: user.state || null,
+      zipCode: user.zipCode || null,
+      country: user.country || null,
+    };
+    return {
+      data: addressData,
+      message: 'Address retrieved successfully',
       statusCode: HttpStatus.OK,
     };
   }

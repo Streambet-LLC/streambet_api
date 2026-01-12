@@ -16,7 +16,7 @@ import {
   UserUpdateDto,
   UserCreatorRoleUpdateDto,
 } from './dto/user.requests.dto';
-import { UserResponseDto } from './dto/user.response.dto';
+import { UserResponseDto, PublicUserProfileDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
@@ -24,6 +24,7 @@ import {
 } from 'src/common/constants/currency.constants';
 import { UserRole } from 'src/enums/user-role.enum';
 import { Follower } from 'src/follower/follower.entity';
+import { PrizeService } from 'src/prize/prize.service';
 
 @Injectable()
 export class UsersService {
@@ -35,6 +36,7 @@ export class UsersService {
     @InjectRepository(Follower)
     private readonly followerRepository: Repository<Follower>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly prizeService: PrizeService,
   ) { }
 
   async findAll(): Promise<User[]> {
@@ -72,7 +74,23 @@ export class UsersService {
       throw new NotFoundException((e as Error).message);
     }
   }
-
+  /**
+   * Retrieves a user with address fields by their ID.
+   * Used for secure endpoints that need access to address data.
+   * @param id - The ID of the user to retrieve.
+   * @returns The user entity with address fields or throws NotFoundException if not found.
+   */
+  async findOneWithAddress(id: string): Promise<User> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
+    if (!user) {
+      throw new NotFoundException(
+        `we couldn't find a user matching that information`,
+      );
+    }
+    return user;
+  }
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
@@ -277,7 +295,7 @@ export class UsersService {
   async getUserProfile(
     requestor: string | null,
     username: string,
-  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'name' | 'accountCreationDate' | 'profileImageUrl' | 'socials' | 'isCreator' | 'isFollowed' | 'followers'>> {
+  ): Promise<PublicUserProfileDto> {
     try {
       const user = await this.usersRepository.findOne({
         where: {
@@ -286,12 +304,14 @@ export class UsersService {
           isBanned: Or(Not(true), IsNull()),
           isSuspended: Or(Not(true), IsNull()),
         },
+        relations: ['wallet'],
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
+      // Get follower information
       let isFollowed = false;
       const followers = await this.followerRepository.count({
         where: {
@@ -310,19 +330,34 @@ export class UsersService {
         isFollowed = hasFollowed > 0;
       }
 
-      return {
+      // Get prize information based on lifetime coins using PrizeService
+      const lifetimeCoins = Number(user.wallet?.lifetimeCoinsEarned ?? 0);
+      const prizeData = await this.prizeService.getPrizeInfo(lifetimeCoins);
+
+      // Base response combining both follower and gamification features
+      const response: PublicUserProfileDto = {
         id: user.id,
         username: user.username,
         name: user.name,
         accountCreationDate: user.accountCreationDate,
         profileImageUrl: user.profileImageUrl,
         socials: user.socials,
+        role: user.role,
+        // Follower data
         isFollowed,
         followers,
+        // Gamification data for ALL roles
+        currentCadeCoins: Number(user.wallet?.goldCoins || 0),
+        lifetimeCadeCoins: lifetimeCoins,
+        title: prizeData.title,
+        badgeLevel: prizeData.badgeLevel,
+        prizeProgress: prizeData.prizeProgress,
         ...user.role === UserRole.CREATOR && {
           isCreator: true,
         }
       };
+
+      return response;
     } catch (e) {
       this.logger.error(`Error fetching profile for user with username ${username}:`, e);
       throw new NotFoundException((e as Error).message);
