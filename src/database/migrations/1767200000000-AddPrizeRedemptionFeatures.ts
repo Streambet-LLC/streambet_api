@@ -21,7 +21,7 @@ export class AddPrizeRedemptionFeatures1767200000000 implements MigrationInterfa
             ADD COLUMN "tracking_number" varchar(200) NULL,
             ADD COLUMN "shipping_carrier" varchar(100) NULL,
             ADD COLUMN "fulfilled" boolean NOT NULL DEFAULT false,
-            ADD COLUMN "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+            ADD COLUMN "updatedAt" TIMESTAMP NOT NULL DEFAULT now()
         `);
 
         // Add constraint to check shipping_status values
@@ -65,7 +65,7 @@ export class AddPrizeRedemptionFeatures1767200000000 implements MigrationInterfa
         // Remove columns from prize_redemptions
         await queryRunner.query(`
             ALTER TABLE "prize_redemptions"
-            DROP COLUMN IF EXISTS "updated_at",
+            DROP COLUMN IF EXISTS "updatedAt",
             DROP COLUMN IF EXISTS "fulfilled",
             DROP COLUMN IF EXISTS "shipping_carrier",
             DROP COLUMN IF EXISTS "tracking_number",

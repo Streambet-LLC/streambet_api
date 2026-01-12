@@ -19,8 +19,8 @@ export class AddGamificationAndPrizeSystem1767053199410 implements MigrationInte
                 "description" text NULL,
                 "image_url" varchar(500) NULL,
                 "is_active" boolean NOT NULL DEFAULT true,
-                "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-                "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+                "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
                 "created_by" uuid NULL,
                 "updated_by" uuid NULL,
                 CONSTRAINT "fk_created_by" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL,
@@ -48,7 +48,7 @@ export class AddGamificationAndPrizeSystem1767053199410 implements MigrationInte
                 "user_id" uuid NOT NULL,
                 "prize_configuration_id" uuid NOT NULL,
                 "date_redeemed" TIMESTAMP NOT NULL DEFAULT now(),
-                "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+                "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
                 CONSTRAINT "fk_prize_redemption_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE,
                 CONSTRAINT "fk_prize_redemption_config" FOREIGN KEY ("prize_configuration_id") REFERENCES "prize_configurations"("id") ON DELETE CASCADE
             )
@@ -80,8 +80,8 @@ export class AddGamificationAndPrizeSystem1767053199410 implements MigrationInte
                 "description",
                 "image_url",
                 "is_active",
-                "created_at",
-                "updated_at"
+                "createdAt",
+                "updatedAt"
             ) VALUES (
                 1,
                 500,
@@ -103,8 +103,8 @@ export class AddGamificationAndPrizeSystem1767053199410 implements MigrationInte
                 "description",
                 "image_url",
                 "is_active",
-                "created_at",
-                "updated_at"
+                "createdAt",
+                "updatedAt"
             ) VALUES (
                 2,
                 5000,
@@ -126,8 +126,8 @@ export class AddGamificationAndPrizeSystem1767053199410 implements MigrationInte
                 "description",
                 "image_url",
                 "is_active",
-                "created_at",
-                "updated_at"
+                "createdAt",
+                "updatedAt"
             ) VALUES (
                 3,
                 100000,
