@@ -30,6 +30,18 @@ export class User extends BaseEntity {
   @Column({ length: 255, type: 'varchar', nullable: true })
   state: string;
 
+  @Column({ length: 500, type: 'varchar', nullable: true, name: 'address' })
+  address: string;
+
+  @Column({ length: 200, type: 'varchar', nullable: true, name: 'address2' })
+  address2: string;
+
+  @Column({ length: 20, type: 'varchar', nullable: true, name: 'zip_code' })
+  zipCode: string;
+
+  @Column({ length: 100, type: 'varchar', nullable: true, name: 'country' })
+  country: string;
+
   @Column({
     length: 255,
     type: 'varchar',
@@ -145,6 +157,6 @@ export class User extends BaseEntity {
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;
 
-  @Column({ length: 255, type: 'varchar', nullable: true, name: 'ref_link' })
+  @Column({ length: 255, type: 'varchar', nullable: true, name: 'ref_link', unique: true })
   refLink: string;
 }

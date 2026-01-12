@@ -2455,17 +2455,23 @@ export class BettingService {
       let totalVotes = 0;
       let totalStreamCoins = 0;
       let totalGoldCoins = 0;
+      let totalCadeCoins = 0;
 
       variables.forEach((bv) => {
+        totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+
         totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
         totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+        totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
       });
 
       const options = variables.map((v) => {
+        const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+        
         return {
           id: v.bv_id,
           option: v.bv_name,
-          percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+          percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
           isWinner: v.bv_is_winning_option,
         }
       });
@@ -2486,7 +2492,8 @@ export class BettingService {
         options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
         totalPot: {
           streamCoins: totalStreamCoins,
-          goldCoins: totalGoldCoins
+          goldCoins: totalGoldCoins,
+          cadeCoins: totalCadeCoins
         },
         description: bettingRound.stream.description,
       }

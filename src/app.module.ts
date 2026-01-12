@@ -42,6 +42,7 @@ import { WsModule } from './ws/ws.module';
 import personaConfig from './config/persona.config';
 import { WebhookModule } from './webhook/webhook.module';
 import { CreatorModule } from './creator/creator.module';
+import { PrizeModule } from './prize/prize.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
@@ -131,6 +132,7 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
     RedisModule,
     CoinPackageModule,
     WebhookModule,
+    PrizeModule,
     ScheduleModule.forRoot(),
     ScheduledTaskModule
   ],
