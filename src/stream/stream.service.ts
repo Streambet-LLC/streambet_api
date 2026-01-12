@@ -1704,6 +1704,12 @@ END
         );
       }
 
+      // Hide bets with (GCA) in the name
+      betRoundsQB.andWhere(
+        `LOWER(s.name) NOT LIKE :excludedName`,
+        { excludedName: '%(gca)%' }
+      );
+
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
         .offset(offset);
