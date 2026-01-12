@@ -16,4 +16,10 @@ export const getTypeOrmConfig = (
   migrations: [join(__dirname, 'src/database/migrations/*{.ts,.js}')],
   migrationsTableName: 'migrations',
   logging: configService.get('NODE_ENV') === 'development',
+  ssl: true,
+  extra: {
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  },
 });

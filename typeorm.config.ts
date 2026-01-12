@@ -21,4 +21,10 @@ export default new DataSource({
   migrations: ['src/database/migrations/*{.ts,.js}'],
   migrationsTableName: 'migrations',
   logging: process.env.NODE_ENV !== 'production',
+  ssl: true,
+  extra: {
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  },
 });
