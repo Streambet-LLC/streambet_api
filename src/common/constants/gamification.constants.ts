@@ -14,7 +14,7 @@ import { CurrencyType } from 'src/enums/currency.enum';
  * Currency type used for the gamification system (lifetime coin tracking).
  * Gold Coins are temporarily being used to track lifetime progress for prize achievements.
  */
-export const GAMIFICATION_CURRENCY = CurrencyType.GOLD_COINS;
+export const GAMIFICATION_CURRENCY = CurrencyType.CADE_COINS;
 
 /**
  * Starting amount of gamification currency given to new users.

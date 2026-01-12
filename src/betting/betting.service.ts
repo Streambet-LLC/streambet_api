@@ -155,8 +155,6 @@ export class BettingService {
       }
     }
 
-    stream.app = 'non-pro';
-
     // Save the stream into the database
     const streamResponse = await this.streamsRepository.save(stream);
 
@@ -192,9 +190,6 @@ export class BettingService {
     if (includeEnded) {
       // Fetch all streams regardless of status
       return this.streamsRepository.find({
-        where: {
-          app: 'non-pro'
-        },
         relations: ['bettingVariables'],
         order: { createdAt: 'DESC' }, // Most recent streams first
       });
@@ -202,7 +197,7 @@ export class BettingService {
 
     // Fetch only currently live streams
     return this.streamsRepository.find({
-      where: { status: StreamStatus.LIVE, app: 'non-pro' },
+      where: { status: StreamStatus.LIVE },
       relations: ['bettingVariables'],
       order: { createdAt: 'DESC' }, // Most recent live streams first
     });
@@ -224,7 +219,7 @@ export class BettingService {
   async findStreamById(id: string): Promise<Stream> {
     // Attempt to find the stream by its ID, including bettingVariables relation
     const stream = await this.streamsRepository.findOne({
-      where: { id, app: 'non-pro' },
+      where: { id },
       relations: ['bettingVariables'],
     });
 
@@ -270,8 +265,6 @@ export class BettingService {
     else if (status === StreamStatus.ENDED) {
       stream.endTime = new Date();
     }
-
-    stream.app = 'non-pro';
 
     // Save and return the updated stream entity
     return this.streamsRepository.save(stream);
@@ -337,7 +330,6 @@ export class BettingService {
         createdBy: creator,
         lockDate: roundData.lockDate,
         category: roundData.category,
-        app: 'non-pro'
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
@@ -472,7 +464,7 @@ export class BettingService {
   ): Promise<StreamRoundsResponseDto> {
     // Get all rounds for the stream, with their betting variables and bets (including users)
     const rounds = await this.bettingRoundsRepository.find({
-      where: { streamId, app: 'non-pro' },
+      where: { streamId },
       relations: [
         'bettingVariables',
         'bettingVariables.bets',
@@ -662,7 +654,7 @@ export class BettingService {
     }
     // Fetch existing rounds with variables
     const existingRounds = await this.bettingRoundsRepository.find({
-      where: { streamId, app: 'non-pro' },
+      where: { streamId },
       relations: ['bettingVariables'],
       order: { createdAt: 'ASC' },
     });
@@ -695,7 +687,6 @@ export class BettingService {
           status: BettingRoundStatus.CREATED,
           createdBy: creator,
           category: roundData.category,
-          app: 'non-pro',
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
       }
@@ -788,7 +779,7 @@ export class BettingService {
     // 🔹 Ensure bettingRound has stream relation populated
     if (!bettingRound.stream) {
       const roundWithStream = await this.bettingRoundsRepository.findOne({
-        where: { id: bettingRound.id, app: 'non-pro' },
+        where: { id: bettingRound.id },
         relations: ['stream'],
       });
       bettingRound.stream = roundWithStream?.stream;
@@ -1457,7 +1448,6 @@ export class BettingService {
         { variableId: bet.bettingVariableId },
       )
       .where('round.id = :roundId', { roundId: bet.roundId })
-      .andWhere("round.app = 'non-pro'")
       .getOne();
 
     // If the betting round is not open, the bet cannot be cancelled
@@ -2264,7 +2254,7 @@ export class BettingService {
     // If round is not attached to the variable, fetch it from the repository
     if (!round) {
       round = await this.bettingRoundsRepository.findOne({
-        where: { id: bettingVariable.roundId, app: 'non-pro' },
+        where: { id: bettingVariable.roundId },
       });
     }
 
@@ -2392,7 +2382,7 @@ export class BettingService {
     try {
       // Fetch the betting round along with its betting variables
       const bettingRound = await this.bettingRoundsRepository.findOne({
-        where: { id: roundId, app: 'non-pro' },
+        where: { id: roundId },
         relations: ['bettingVariables'],
       });
 
@@ -2451,7 +2441,6 @@ export class BettingService {
         .where("br.id = :roundId", {
           roundId
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .getOne();
@@ -2531,7 +2520,7 @@ export class BettingService {
     try {
       // Fetch the betting round along with its betting variables
       const bettingRound = await this.bettingRoundsRepository.findOne({
-        where: { id: roundId, app: 'non-pro' },
+        where: { id: roundId },
         relations: ['bettingVariables'],
       });
 
@@ -2756,7 +2745,7 @@ export class BettingService {
   ): Promise<BettingRound> {
     // Fetch the round by ID
     const round = await this.bettingRoundsRepository.findOne({
-      where: { id: roundId, app: 'non-pro' },
+      where: { id: roundId },
     });
 
     if (!round) {
@@ -2783,7 +2772,7 @@ export class BettingService {
       if (newStatus === BettingRoundStatus.LOCKED) {
         // Fetch round with stream info
         const roundWithStream = await this.bettingRoundsRepository.findOne({
-          where: { id: roundId, app: 'non-pro' },
+          where: { id: roundId },
           relations: ['stream'],
         });
 
@@ -2822,7 +2811,7 @@ export class BettingService {
         savedRound = await this.bettingRoundsRepository.save(round);
 
         const roundWithStream = await this.bettingRoundsRepository.findOne({
-          where: { id: roundId, app: 'non-pro' },
+          where: { id: roundId },
           relations: ['stream'],
         });
 
@@ -2884,7 +2873,7 @@ export class BettingService {
     try {
       // Fetch the round with its variables and associated bets
       const round = await this.bettingRoundsRepository.findOne({
-        where: { id: roundId, app: 'non-pro' },
+        where: { id: roundId },
         relations: ['bettingVariables', 'bettingVariables.bets'],
       });
       if (!round) {

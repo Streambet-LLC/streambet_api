@@ -187,8 +187,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const { pagination = true, streamStatus, username } = streamFilterDto;
 
       const streamQB = this.streamsRepository
-        .createQueryBuilder('s')
-        .where("s.app = 'non-pro'");
+        .createQueryBuilder('s');
 
       if (username) {
         streamQB.innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
@@ -256,7 +255,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .createQueryBuilder('s')
         .innerJoinAndSelect('s.creator', 'creator')
         .where('s.status = :status', { status: StreamStatus.LIVE })
-        .andWhere("s.app = 'non-pro'")
         .andWhere('s.type = :type', {
           type: StreamEventType.STREAM
         })
@@ -287,7 +285,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.creator', 'c')
         .where('s.type = :type', { type: StreamEventType.PROMO })
-        .andWhere("s.app = 'non-pro'")
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
         .andWhere('s.status IN (:...statuses)', { 
           statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
@@ -305,7 +302,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
@@ -510,7 +506,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
-        .andWhere("s.app = 'non-pro'")
         .leftJoinAndSelect('s.bettingRounds', 'r');
       if (filter?.q) {
         streamQB.andWhere(`(LOWER(s.name) ILIKE LOWER(:q) )`, {
@@ -646,7 +641,6 @@ END
         .leftJoinAndSelect('bv.bets', 'b')
         .leftJoinAndSelect('b.user', 'u')
         .where('stream.id = :streamId', { streamId })
-        .andWhere("stream.app = 'non-pro'")
         .andWhere('stream.status IN (:...statuses)', {
           statuses: [
             StreamStatus.LIVE,
@@ -772,7 +766,6 @@ END
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .leftJoinAndSelect('variable.bets', 'b', 'b.userId = :userId')
         .where('stream.id = :streamId', { streamId })
-        .andWhere("stream.app = 'non-pro'")
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           userId,
@@ -872,7 +865,7 @@ END
 
   async findStreamDetailsForAdmin(role: UserRole, creator: string, streamId: string) {
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId, app: 'non-pro' },
+      where: { id: streamId },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
     });
 
@@ -923,7 +916,7 @@ END
   ): Promise<Stream> {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id, app: 'non-pro' },
+        where: { id },
       });
 
       if (!stream) {
@@ -1057,7 +1050,7 @@ END
   ): Promise<Stream> {
     // Fetch the stream with all its rounds
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId, app: "non-pro" },
+      where: { id: streamId },
       relations: ['bettingRounds'],
     });
     if (!stream) {
@@ -1195,7 +1188,7 @@ END
   async updateStreamStatus(streamId: string) {
     try {
       const stream = await this.streamsRepository.findOne({
-        where: { id: streamId, app: "non-pro" },
+        where: { id: streamId },
         select: ['id', 'status', 'scheduledStartTime'],
       });
 
@@ -1228,7 +1221,7 @@ END
         { status: stream.status, actualStartTime: stream.actualStartTime },
       );
       const streamUpdated = await this.streamsRepository.findOne({
-        where: { id: stream.id, app: "non-pro" },
+        where: { id: stream.id },
         select: ['id', 'status'],
       });
       this.streamGateway.emitStreamListEvent(StreamList.StreamUpdated);
@@ -1259,7 +1252,7 @@ END
    */
   async getViewerCount(streamId: string): Promise<number> {
     const stream = await this.streamsRepository.findOne({
-      where: { id: streamId, app: "non-pro" },
+      where: { id: streamId },
     });
     return stream ? stream.viewerCount : 0;
   }
@@ -1268,7 +1261,6 @@ END
     return this.streamsRepository.count({
       where: {
         status: StreamStatus.LIVE, // Only count live streams
-        app: "non-pro"
       },
     });
   }
@@ -1376,7 +1368,6 @@ END
         .update(Stream)
         .set({ status: StreamStatus.CANCELLED })
         .where('id = :streamId', { streamId })
-        .andWhere("app = 'non-pro'")
         .returning('status')
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
@@ -1431,7 +1422,6 @@ END
         .update(Stream)
         .set({ status: StreamStatus.DELETED })
         .where('id = :streamId', { streamId })
-        .andWhere("app = 'non-pro'")
         .returning('status')
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
@@ -1507,7 +1497,6 @@ END
         betStatus: BetStatus.Active,
       })
       .where('stream.id = :streamId', { streamId })
-      .andWhere("stream.app = 'non-pro'")
       .andWhere('stream.status = :status', { status: StreamStatus.SCHEDULED })
       .select([
         'stream.id',
@@ -1565,8 +1554,7 @@ END
         })
         .andWhere(`s.type = :type`, {
           type: 'stream',
-        })
-        .andWhere("s.app = 'non-pro'")
+        });
 
       if (liveScheduledStreamListDto.username) {
         streamQB
@@ -1699,7 +1687,6 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status IN (:...streamStatuses)", {
@@ -1840,7 +1827,6 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .innerJoinAndSelect('s.creator', 'c', 'c.username = :username')
         .setParameter('username', username)
@@ -1948,7 +1934,6 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status = :status", {
