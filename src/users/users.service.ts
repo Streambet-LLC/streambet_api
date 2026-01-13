@@ -347,7 +347,7 @@ export class UsersService {
         isFollowed,
         followers,
         // Gamification data for ALL roles
-        currentCadeCoins: Number(user.wallet?.goldCoins || 0),
+        currentCadeCoins: Number(user.wallet?.cadeCoins || 0),
         lifetimeCadeCoins: lifetimeCoins,
         title: prizeData.title,
         badgeLevel: prizeData.badgeLevel,
