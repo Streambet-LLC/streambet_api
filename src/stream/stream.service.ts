@@ -337,19 +337,23 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0;
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -368,7 +372,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }
@@ -673,19 +678,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -703,7 +712,8 @@ END
           status: item.status,
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           }
         }
 
@@ -756,7 +766,6 @@ END
         .leftJoinAndSelect('round.bettingVariables', 'variable')
         .leftJoinAndSelect('variable.bets', 'b', 'b.userId = :userId')
         .where('stream.id = :streamId', { streamId })
-
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           userId,
@@ -787,15 +796,16 @@ END
                 acc.sweepCoinSum += Number(
                   variable.totalBetsSweepCoinAmount || 0,
                 );
-                // acc.cadeCoinSum += Number(
-                //   variable.totalBetsSweepCoinAmount || 0,
-                // );
+                acc.cadeCoinSum += Number(
+                  variable.totalBetsCadeCoinAmount || 0,
+                );
                 return acc;
               },
-              { goldCoinSum: 0, sweepCoinSum: 0 },
+              { goldCoinSum: 0, sweepCoinSum: 0, cadeCoinSum: 0 },
             );
             total.goldCoinSum += roundTotals.goldCoinSum;
             total.sweepCoinSum += roundTotals.sweepCoinSum;
+            total.cadeCoinSum += roundTotals.cadeCoinSum;
           }
         }
       }
@@ -1544,7 +1554,7 @@ END
         })
         .andWhere(`s.type = :type`, {
           type: 'stream',
-        })
+        });
 
       if (liveScheduledStreamListDto.username) {
         streamQB
@@ -1677,7 +1687,6 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere("br.app = 'non-pro'")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status IN (:...streamStatuses)", {
@@ -1694,6 +1703,12 @@ END
           { search: `%${search}%` },
         );
       }
+
+      // Hide bets with (GCA) in the name
+      betRoundsQB.andWhere(
+        `LOWER(s.name) NOT LIKE :excludedName`,
+        { excludedName: '%(gca)%' }
+      );
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
@@ -1741,19 +1756,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1823,7 +1842,8 @@ END
             StreamStatus.SCHEDULED
           ]
         })
-        .andWhere("s.type = 'non-video'");
+        .andWhere("s.type = 'non-video'")
+        .andWhere("s.app = 'non-video'");
 
       const count = await betRoundsQB.getCount();
       const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
@@ -1843,17 +1863,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1871,7 +1897,8 @@ END
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }
@@ -1962,19 +1989,23 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin)
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
           totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
           totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+          
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
           }
         });
@@ -1991,7 +2022,8 @@ END
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           totalPot: {
             streamCoins: totalStreamCoins,
-            goldCoins: totalGoldCoins
+            goldCoins: totalGoldCoins,
+            cadeCoins: totalCadeCoins,
           },
           description: item.s_description,
         }
