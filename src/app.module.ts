@@ -86,12 +86,12 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
           synchronize: configService.get('database.synchronize'),
           logging: configService.get('database.logging'),
           dropSchema: configService.get('database.dropSchema'),
-          ssl: true,
-          extra: {
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          },
+          // ssl: true,
+          // extra: {
+          //   ssl: {
+          //     rejectUnauthorized: false,
+          //   },
+          // },
         }) as DataSourceOptions,
       dataSourceFactory: async (options) => {
         const dataSource = await new DataSource(options).initialize();
