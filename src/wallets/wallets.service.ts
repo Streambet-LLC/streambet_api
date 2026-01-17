@@ -341,20 +341,7 @@ export class WalletsService {
         }
       }
 
-      // Track lifetime gamification currency earned (only for additions)
-      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
-        let lifetimeIncrement = amount;
-        
-        // For bet winnings, only count net profit (payout - original bet)
-        if (transactionType === TransactionType.BET_WON && metadata?.originalBetAmount) {
-          lifetimeIncrement = amount - Number(metadata.originalBetAmount);
-        }
-        
-        // Only increment if there's actual profit
-        if (lifetimeIncrement > 0) {
-          wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(lifetimeIncrement);
-        }
-      }
+      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
 
       await manager.save(wallet);
 
@@ -441,20 +428,7 @@ export class WalletsService {
         }
       }
 
-      // Track lifetime gamification currency earned (only for additions)
-      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
-        let lifetimeIncrement = amount;
-        
-        // For bet winnings, only count net profit (payout - original bet)
-        if (transactionType === TransactionType.BET_WON && metadata?.originalBetAmount) {
-          lifetimeIncrement = amount - Number(metadata.originalBetAmount);
-        }
-        
-        // Only increment if there's actual profit
-        if (lifetimeIncrement > 0) {
-          wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(lifetimeIncrement);
-        }
-      }
+      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
 
       await queryRunner.manager.save(wallet);
 
@@ -480,6 +454,42 @@ export class WalletsService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  /**
+   * updateLifetimeCoinsEarned - Updates the lifetime gamification currency earned for a wallet.
+   *
+   * - Only tracks additions (positive amounts) of the gamification currency (Cade Coins).
+   * - For bet winnings, calculates net profit by subtracting the original bet amount.
+   * - Only increments if there is actual profit (positive net gain).
+   *
+   * @param wallet - The wallet entity to update
+   * @param amount - The transaction amount (positive for credits)
+   * @param transactionType - The type of transaction being processed
+   * @param currencyType - The currency type of the transaction
+   * @param metadata - Optional metadata containing originalBetAmount for bet winnings
+   */
+  private updateLifetimeCoinsEarned(
+    wallet: Wallet,
+    amount: number,
+    transactionType: TransactionType,
+    currencyType: CurrencyType,
+    metadata?: Record<string, any>,
+  ): void {
+    // Track lifetime gamification currency earned (only for additions)
+    if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
+      let lifetimeIncrement = amount;
+      
+      // For bet winnings, only count net profit (payout - original bet)
+      if (transactionType === TransactionType.BET_WON && metadata?.originalBetAmount) {
+        lifetimeIncrement = amount - Number(metadata.originalBetAmount);
+      }
+      
+      // Only increment if there's actual profit
+      if (lifetimeIncrement > 0) {
+        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(lifetimeIncrement);
+      }
     }
   }
 
