@@ -66,7 +66,9 @@ export class AdminService {
     }
     
     // Skip transaction if there's no balance change (no-op update)
-    if (amount === currentBalance) {
+    // Round to 3 decimals to match database precision and avoid floating-point comparison issues
+    const roundToThreeDecimals = (n: number) => Math.round(n * 1000) / 1000;
+    if (roundToThreeDecimals(amount) === roundToThreeDecimals(currentBalance)) {
       this.logger.log(
         `No balance change detected for user ${userId}: ` +
         `amount (${amount}) equals currentBalance (${currentBalance}) for ${currencyType}`

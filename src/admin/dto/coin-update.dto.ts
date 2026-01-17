@@ -1,4 +1,4 @@
-import { IsDefined, IsEnum, IsNotEmpty, IsNumber, IsUUID } from 'class-validator';
+import { IsDefined, IsEnum, IsNotEmpty, IsNumber, IsUUID, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { CurrencyType } from 'src/enums/currency.enum';
 
@@ -20,7 +20,7 @@ export class UpdateCoinDto {
   })
   @IsNumber()
   @IsDefined()
-  @IsNotEmpty()
+  @Min(0, { message: 'Amount cannot be negative' })
   amount: number;
 
   @ApiProperty({
@@ -53,6 +53,6 @@ export class AddGoldCoinDto {
   })
   @IsNumber()
   @IsDefined()
-  @IsNotEmpty()
+  @Min(0, { message: 'Amount cannot be negative' })
   amount: number;
 }

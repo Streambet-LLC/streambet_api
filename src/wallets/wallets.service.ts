@@ -463,6 +463,7 @@ export class WalletsService {
    * - Only tracks additions (positive amounts) of the gamification currency (Cade Coins).
    * - For bet winnings, calculates net profit by subtracting the original bet amount.
    * - Only increments if there is actual profit (positive net gain).
+   * - Logs all operations for audit trail and debugging.
    *
    * @param wallet - The wallet entity to update
    * @param amount - The transaction amount (positive for credits)
@@ -477,19 +478,62 @@ export class WalletsService {
     currencyType: CurrencyType,
     metadata?: Record<string, any>,
   ): void {
-    // Track lifetime gamification currency earned (only for additions)
-    if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
-      let lifetimeIncrement = amount;
-      
-      // For bet winnings, only count net profit (payout - original bet)
-      if (transactionType === TransactionType.BET_WON && metadata?.originalBetAmount) {
-        lifetimeIncrement = amount - Number(metadata.originalBetAmount);
+    // Skip if not gamification currency
+    if (currencyType !== GAMIFICATION_CURRENCY) {
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: currency is ${currencyType}, not ${GAMIFICATION_CURRENCY}`
+      );
+      return;
+    }
+
+    // Skip if amount is not positive
+    if (amount <= 0) {
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: amount ${amount} is not positive`
+      );
+      return;
+    }
+
+    let lifetimeIncrement = amount;
+    
+    // Handle bet winnings - only count net profit
+    if (transactionType === TransactionType.BET_WON) {
+      if (metadata?.originalBetAmount) {
+        const originalBet = Number(metadata.originalBetAmount);
+        lifetimeIncrement = amount - originalBet;
+        
+        this.logger.log(
+          `Bet win for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net profit=${lifetimeIncrement}`
+        );
+        
+        // Warn if net profit is negative (shouldn't happen)
+        if (lifetimeIncrement < 0) {
+          this.logger.warn(
+            `Negative net profit for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net=${lifetimeIncrement}`
+          );
+        }
+      } else {
+        this.logger.warn(
+          `BET_WON transaction for user ${wallet.userId} missing originalBetAmount in metadata - skipping lifetime coins increment`
+        );
+        return; // Skip lifetime coins update if we can't calculate net profit
       }
+    }
+    
+    // Only increment if there's actual profit
+    if (lifetimeIncrement > 0) {
+      const previousTotal = Number(wallet.lifetimeCoinsEarned || 0);
+      wallet.lifetimeCoinsEarned = previousTotal + Number(lifetimeIncrement);
       
-      // Only increment if there's actual profit
-      if (lifetimeIncrement > 0) {
-        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(lifetimeIncrement);
-      }
+      this.logger.log(
+        `Lifetime coins updated for user ${wallet.userId}: +${lifetimeIncrement} ${currencyType} ` +
+        `(${transactionType}) | Previous: ${previousTotal} → New: ${wallet.lifetimeCoinsEarned}`
+      );
+    } else {
+      this.logger.debug(
+        `No lifetime coins increment for user ${wallet.userId}: ` +
+        `calculated increment=${lifetimeIncrement} (${transactionType})`
+      );
     }
   }
 

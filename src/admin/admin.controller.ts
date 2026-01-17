@@ -448,6 +448,16 @@ export class AdminController {
     summary: `Update user coins`,
     description: 'Generic API to update any currency type by admin.',
   })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Coins updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User wallet not found' })
   @Patch('coins')
   async updateCoins(
     @Body() updateCoinDto: UpdateCoinDto,
