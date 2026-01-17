@@ -42,7 +42,7 @@ export class Wallet extends BaseEntity {
     default: 0,
     name: 'lifetime_coins_earned',
   })
-  lifetimeCoinsEarned: number; // Tracks lifetime gamification currency earned (currently Gold Coins, will be Cade Coins)
+  lifetimeCoinsEarned: number; // Tracks lifetime gamification currency earned
 
   @Column({ type: 'boolean', default: false })
   autoReloadEnabled: boolean;

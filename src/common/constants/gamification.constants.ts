@@ -18,6 +18,5 @@ export const GAMIFICATION_CURRENCY = CurrencyType.CADE_COINS;
 
 /**
  * Starting amount of gamification currency given to new users.
- * TODO: Will be used for Cade Coins once implemented, currently applies to Gold Coins
  */
 export const STARTING_CADE_COINS = 100;

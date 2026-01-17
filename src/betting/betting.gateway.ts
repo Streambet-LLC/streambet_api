@@ -770,15 +770,20 @@ export class BettingGateway {
 
     if (receiverNotificationPermission['inAppNotification']) {
       // Construct message and title based on currency type
-      const message =
-        currencyType === CurrencyType.GOLD_COINS
-          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({ amount })
-          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE({ amount });
+      let message: string;
+      let title: string;
 
-      const title =
-        currencyType === CurrencyType.GOLD_COINS
-          ? NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE()
-          : NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
+      if (currencyType === CurrencyType.GOLD_COINS) {
+        message = NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.MESSAGE({ amount });
+        title = NOTIFICATION_TEMPLATE.BET_WON_GOLD_COIN.TITLE();
+      } else if (currencyType === CurrencyType.CADE_COINS) {
+        message = NOTIFICATION_TEMPLATE.BET_WON_CADE_COIN.MESSAGE({ amount });
+        title = NOTIFICATION_TEMPLATE.BET_WON_CADE_COIN.TITLE();
+      } else {
+        // SWEEP_COINS or STREAM_COINS
+        message = NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.MESSAGE({ amount });
+        title = NOTIFICATION_TEMPLATE.BET_WON_SWEEP_COIN.TITLE();
+      }
 
       const chatMessage: ChatMessage = {
         type: ChatType.System,

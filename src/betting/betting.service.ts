@@ -1020,7 +1020,7 @@ export class BettingService {
       );
     }
 
-    // Validate cade coins
+    // Validate CadeCoins
     if (
       amount > MAX_CADE_COINS_FOR_BETTING &&
       currencyType === CurrencyType.CADE_COINS
@@ -1710,20 +1710,29 @@ export class BettingService {
           originalBet: item,
         };
 
-        const isSweep = betData.currency === "sweep_coins";
-
         if (item.bettingVariableId === bettingVariable.id) {
           betData.status = BetStatus.Won;
           isWon = true;
         }
 
         const betAmount = Number(item.amount);
-        let refundAllWinners = refundAllSweepWinners;
-        let roundData = roundCalculation.sweep;
+        let refundAllWinners;
+        let roundData;
 
-        if (!isSweep) {
+        // Map currency type to correct round calculation data
+        if (betData.currency === CurrencyType.SWEEP_COINS) {
+          roundData = roundCalculation.sweep;
+          refundAllWinners = refundAllSweepWinners;
+        } else if (betData.currency === CurrencyType.CADE_COINS) {
+          roundData = roundCalculation.cade;
           refundAllWinners = refundAllCadeWinners;
+        } else if (betData.currency === CurrencyType.GOLD_COINS) {
           roundData = roundCalculation.gold;
+          refundAllWinners = false; // Gold coins don't have the same refund logic
+        } else {
+          // Fallback for any other currency types
+          roundData = roundCalculation.gold;
+          refundAllWinners = false;
         }
 
         const variableData = roundData.round[item.bettingVariableId];
@@ -2205,6 +2214,7 @@ export class BettingService {
               bet.currency,
               `Winnings from bet on ${bettingVariableName}`,
               queryRunner.manager,
+              { originalBetAmount: bet.amount },
             );
           }
 
@@ -3001,7 +3011,7 @@ export class BettingService {
       0,
     );
 
-    // Sum up total Cade Coins bet across all variables
+    // Sum up total CadeCoins bet across all variables
     const totalBetsCadeCoinAmount = bettingVariables.reduce(
       (sum, v) => Number(sum) + Number(v.totalBetsCadeCoinAmount || 0),
       0,

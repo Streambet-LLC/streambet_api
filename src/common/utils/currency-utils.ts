@@ -22,6 +22,10 @@ export function formatCurrencyType(currencyType: string): string {
     return CurrencyTypeText.SWEEP_COINS_TEXT;
   }
   
+  if (currencyType === CurrencyType.CADE_COINS) {
+    return CurrencyTypeText.CADE_COINS_TEXT;
+  }
+  
   // Invalid or unrecognized currency type - return sentinel value
   // Caller should check for this value and log appropriate warnings with context
   return CurrencyTypeText.UNKNOWN_CURRENCY;

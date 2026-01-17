@@ -8,6 +8,6 @@ export enum CurrencyType {
 export enum CurrencyTypeText {
   SWEEP_COINS_TEXT = 'Stream Coins',
   GOLD_COINS_TEXT = 'Gold Coins',
-  CADE_COINS_TEXT = 'Cade Coins',
+  CADE_COINS_TEXT = 'CadeCoins',
   UNKNOWN_CURRENCY = 'UNKNOWN_CURRENCY',
 }

@@ -36,10 +36,10 @@ export class PublicUserProfileDto {
   @ApiProperty({ example: 1250, description: 'Total follower count' })
   followers: number;
 
-  @ApiProperty({ example: 500, description: 'Current Cade Coins balance' })
+  @ApiProperty({ example: 500, description: 'Current CadeCoins balance' })
   currentCadeCoins: number;
 
-  @ApiProperty({ example: 15000, description: 'Lifetime Cade Coins earned' })
+  @ApiProperty({ example: 15000, description: 'Lifetime CadeCoins earned' })
   lifetimeCadeCoins: number;
 
   @ApiProperty({ example: 'Master', description: 'Current achievement title' })
@@ -77,7 +77,7 @@ export class UserProfileResponseDto {
   @ApiProperty()
   isActive?: boolean;
 
-  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for cade coins' })
+  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for CadeCoins' })
   maxCadeCoinsBet: number;
 }
 
