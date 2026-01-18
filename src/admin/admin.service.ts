@@ -2,9 +2,10 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { WalletsService } from '../wallets/wallets.service';
 
 import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
+import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import { formatCurrencyType } from 'src/common/utils/currency-utils';
 import { UserResponseDto } from 'src/users/dto/user.response.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
@@ -34,24 +35,73 @@ export class AdminService {
     };
   }
 
-  async updateGoldCoinsByAdmin(
-    addGoldCoinDto: AddGoldCoinDto,
+  async updateCoinsByAdmin(
+    updateCoinDto: UpdateCoinDto,
   ): Promise<Wallet> {
-    const { userId, amount } = addGoldCoinDto;
-    // Ensure amount is positive for admin updates
-    if (amount <= 0) {
-      throw new BadRequestException('Invalid amount');
+    const { userId, amount, currencyType } = updateCoinDto;
+    // Ensure amount is not negative
+    if (amount < 0) {
+      throw new BadRequestException('Amount cannot be negative');
     }
-    const description = `Admin credit adjustment of ${amount} Gold Coins for user ${userId}`;
-    const updateResult = await this.walletsService.updateGoldCoinsByAdmin(
+    
+    // Get current wallet to determine if this is a credit or debit
+    const currentWallet = await this.walletsService.findByUserId(userId);
+    let currentBalance = 0;
+    switch (currencyType) {
+      case CurrencyType.GOLD_COINS:
+        currentBalance = Number(currentWallet.goldCoins || 0);
+        break;
+      case CurrencyType.CADE_COINS:
+        currentBalance = Number(currentWallet.cadeCoins || 0);
+        break;
+      case CurrencyType.SWEEP_COINS:
+        currentBalance = Number(currentWallet.sweepCoins || 0);
+        break;
+      default:
+        this.logger.error(`Unhandled CurrencyType: ${currencyType}`);
+        throw new BadRequestException(
+          `Unhandled CurrencyType: ${currencyType}. ` +
+          `Please update the switch statement in admin.service.ts to handle this currency type.`
+        );
+    }
+    
+    // Skip transaction if there's no balance change (no-op update)
+    // Round to 3 decimals to match database precision and avoid floating-point comparison issues
+    const roundToThreeDecimals = (n: number) => Math.round(n * 1000) / 1000;
+    if (roundToThreeDecimals(amount) === roundToThreeDecimals(currentBalance)) {
+      this.logger.log(
+        `No balance change detected for user ${userId}: ` +
+        `amount (${amount}) equals currentBalance (${currentBalance}) for ${currencyType}`
+      );
+      return currentWallet;
+    }
+    
+    // Determine transaction type based on whether balance increases or decreases
+    const transactionType = amount > currentBalance
+      ? TransactionType.ADMIN_CREDIT
+      : TransactionType.ADMIN_DEBITED;
+    
+    const currencyName = formatCurrencyType(currencyType);
+    const description = `Admin adjustment: ${amount} ${currencyName} for user ${userId}`;
+    
+    return await this.walletsService.updateCoinsByAdmin(
       userId,
       amount,
       description,
-      CurrencyType.GOLD_COINS,
-      TransactionType.ADMIN_CREDIT,
+      currencyType,
+      transactionType,
     );
-    //emit an event to the user, notify about the coin updation
-    return updateResult;
+  }
+
+  // Keep for backward compatibility
+  async updateGoldCoinsByAdmin(
+    addGoldCoinDto: AddGoldCoinDto,
+  ): Promise<Wallet> {
+    return this.updateCoinsByAdmin({
+      userId: addGoldCoinDto.userId,
+      amount: addGoldCoinDto.amount,
+      currencyType: CurrencyType.GOLD_COINS,
+    });
   }
 
   async getUserProfile(

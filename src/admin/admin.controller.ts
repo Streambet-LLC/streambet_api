@@ -47,7 +47,7 @@ import {
   AnalyticsSummaryResponseDto,
   StreamAnalyticsResponseDto,
 } from './dto/analytics.dto';
-import { AddGoldCoinDto } from './dto/gold-coin-update.dto';
+import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
 import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
 import { PayoutReportFilterDto } from 'src/platform-payout/dto/payout-report/payout-report.requests.dto';
@@ -442,6 +442,34 @@ export class AdminController {
     @Query() softDeleteUserDto: SoftDeleteUserDto,
   ): Promise<User> {
     return this.usersService.softDeleteUser(softDeleteUserDto.userId);
+  }
+
+  @ApiOperation({
+    summary: `Update user coins`,
+    description: 'Generic API to update any currency type by admin.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Coins updated successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User wallet not found' })
+  @Patch('coins')
+  async updateCoins(
+    @Body() updateCoinDto: UpdateCoinDto,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureAdmin(req.user);
+    const data = await this.adminService.updateCoinsByAdmin(updateCoinDto);
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully updated coins',
+      data,
+    };
   }
 
   @ApiOperation({

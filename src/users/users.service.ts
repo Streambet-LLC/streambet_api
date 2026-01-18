@@ -451,6 +451,7 @@ export class UsersService {
             id: item.wallet.id,
             goldCoins: item.wallet.goldCoins,
             sweepCoins: item.wallet.sweepCoins,
+            cadeCoins: item.wallet.cadeCoins,
           } : null,
       };
 

@@ -6,10 +6,11 @@ import { CurrencyType, CurrencyTypeText } from 'src/enums/currency.enum';
  * Accepts any string input for flexibility with runtime data (e.g., from JSON parsing).
  * 
  * @param currencyType - The currency type string (should match CurrencyType enum values)
- * @returns The formatted currency text ('Gold Coins', 'Sweep Coins') or CurrencyTypeText.UNKNOWN_CURRENCY for invalid values
+ * @returns The formatted currency text ('Gold Coins', 'Cade Coins', 'Sweep Coins') or CurrencyTypeText.UNKNOWN_CURRENCY for invalid values
  * 
  * @example
  * formatCurrencyType(CurrencyType.GOLD_COINS) // returns 'Gold Coins'
+ * formatCurrencyType(CurrencyType.CADE_COINS) // returns 'Cade Coins'
  * formatCurrencyType(CurrencyType.SWEEP_COINS) // returns 'Sweep Coins'
  * formatCurrencyType('invalid') // returns 'UNKNOWN_CURRENCY'
  */
@@ -20,6 +21,10 @@ export function formatCurrencyType(currencyType: string): string {
   
   if (currencyType === CurrencyType.SWEEP_COINS) {
     return CurrencyTypeText.SWEEP_COINS_TEXT;
+  }
+  
+  if (currencyType === CurrencyType.CADE_COINS) {
+    return CurrencyTypeText.CADE_COINS_TEXT;
   }
   
   // Invalid or unrecognized currency type - return sentinel value

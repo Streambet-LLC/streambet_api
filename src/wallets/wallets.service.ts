@@ -220,6 +220,7 @@ export class WalletsService {
     currencyType: CurrencyType,
     description: string,
     manager?: EntityManager,
+    metadata?: Record<string, any>,
   ): Promise<Wallet> {
     return this.updateBalance(
       userId,
@@ -227,7 +228,7 @@ export class WalletsService {
       currencyType,
       TransactionType.BET_WON,
       description,
-      undefined,
+      metadata,
       undefined,
       manager,
     );
@@ -320,7 +321,7 @@ export class WalletsService {
       } else if (currencyType === CurrencyType.CADE_COINS) {
         newBalance = Number(wallet.cadeCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient Cade Coins');
+          throw new BadRequestException('Insufficient CadeCoins');
         }
         wallet.cadeCoins = Number(newBalance);
       } else {
@@ -340,10 +341,7 @@ export class WalletsService {
         }
       }
 
-      // Track lifetime gamification currency earned (only for additions)
-      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
-        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(amount);
-      }
+      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
 
       await manager.save(wallet);
 
@@ -410,7 +408,7 @@ export class WalletsService {
       } else if (currencyType === CurrencyType.CADE_COINS) {
         newBalance = Number(wallet.cadeCoins) + Number(amount);
         if (newBalance < 0) {
-          throw new BadRequestException('Insufficient Cade Coins');
+          throw new BadRequestException('Insufficient CadeCoins');
         }
         wallet.cadeCoins = Number(newBalance);
       } else {
@@ -430,10 +428,7 @@ export class WalletsService {
         }
       }
 
-      // Track lifetime gamification currency earned (only for additions)
-      if (amount > 0 && currencyType === GAMIFICATION_CURRENCY) {
-        wallet.lifetimeCoinsEarned = Number(wallet.lifetimeCoinsEarned || 0) + Number(amount);
-      }
+      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
 
       await queryRunner.manager.save(wallet);
 
@@ -459,6 +454,86 @@ export class WalletsService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  /**
+   * updateLifetimeCoinsEarned - Updates the lifetime gamification currency earned for a wallet.
+   *
+   * - Only tracks additions (positive amounts) of the gamification currency (Cade Coins).
+   * - For bet winnings, calculates net profit by subtracting the original bet amount.
+   * - Only increments if there is actual profit (positive net gain).
+   * - Logs all operations for audit trail and debugging.
+   *
+   * @param wallet - The wallet entity to update
+   * @param amount - The transaction amount (positive for credits)
+   * @param transactionType - The type of transaction being processed
+   * @param currencyType - The currency type of the transaction
+   * @param metadata - Optional metadata containing originalBetAmount for bet winnings
+   */
+  private updateLifetimeCoinsEarned(
+    wallet: Wallet,
+    amount: number,
+    transactionType: TransactionType,
+    currencyType: CurrencyType,
+    metadata?: Record<string, any>,
+  ): void {
+    // Skip if not gamification currency
+    if (currencyType !== GAMIFICATION_CURRENCY) {
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: currency is ${currencyType}, not ${GAMIFICATION_CURRENCY}`
+      );
+      return;
+    }
+
+    // Skip if amount is not positive
+    if (amount <= 0) {
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: amount ${amount} is not positive`
+      );
+      return;
+    }
+
+    let lifetimeIncrement = amount;
+    
+    // Handle bet winnings - only count net profit
+    if (transactionType === TransactionType.BET_WON) {
+      if (metadata?.originalBetAmount) {
+        const originalBet = Number(metadata.originalBetAmount);
+        lifetimeIncrement = amount - originalBet;
+        
+        this.logger.log(
+          `Bet win for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net profit=${lifetimeIncrement}`
+        );
+        
+        // Warn if net profit is negative (shouldn't happen)
+        if (lifetimeIncrement < 0) {
+          this.logger.warn(
+            `Negative net profit for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net=${lifetimeIncrement}`
+          );
+        }
+      } else {
+        this.logger.warn(
+          `BET_WON transaction for user ${wallet.userId} missing originalBetAmount in metadata - skipping lifetime coins increment`
+        );
+        return; // Skip lifetime coins update if we can't calculate net profit
+      }
+    }
+    
+    // Only increment if there's actual profit
+    if (lifetimeIncrement > 0) {
+      const previousTotal = Number(wallet.lifetimeCoinsEarned || 0);
+      wallet.lifetimeCoinsEarned = previousTotal + Number(lifetimeIncrement);
+      
+      this.logger.log(
+        `Lifetime coins updated for user ${wallet.userId}: +${lifetimeIncrement} ${currencyType} ` +
+        `(${transactionType}) | Previous: ${previousTotal} → New: ${wallet.lifetimeCoinsEarned}`
+      );
+    } else {
+      this.logger.debug(
+        `No lifetime coins increment for user ${wallet.userId}: ` +
+        `calculated increment=${lifetimeIncrement} (${transactionType})`
+      );
     }
   }
 
@@ -614,21 +689,22 @@ export class WalletsService {
   }
 
   /**
-   * updateGoldCoinsByAdmin - Updates a user's gold coin balance by an admin.
+   * updateCoinsByAdmin - Updates a user's wallet balance for any currency type by an admin.
    *
    * - Ensures the provided amount is positive.
-   * - Updates the user's gold coin balance.
-   * - Determines whether the operation is an admin credit or debit.
+   * - Updates the user's balance for the specified currency type.
+   * - Determines whether the operation is an admin credit or debit based on the change.
    * - Creates and saves a corresponding transaction record.
    * - Returns the updated wallet entity.
    *
    * @param userId - ID of the user whose wallet is being updated
-   * @param amount - New gold coin balance to set
+   * @param amount - New balance to set for the specified currency
    * @param description - Description for the transaction
-   * @param currencyType - Type of currency (should be GOLD_COINS)
-   * @param transactionType - Original transaction type (overridden internally)
+   * @param currencyType - Type of currency (GOLD_COINS, CADE_COINS, or SWEEP_COINS)
+   * @param transactionType - Transaction type for record keeping (typically ADMIN_CREDIT)
+   * @returns Updated wallet entity
    */
-  async updateGoldCoinsByAdmin(
+  async updateCoinsByAdmin(
     userId: string,
     amount: number,
     description: string,
@@ -646,35 +722,75 @@ export class WalletsService {
       throw new BadRequestException('Invalid Amount');
     }
 
-    if (currencyType === CurrencyType.GOLD_COINS) {
-      await this.walletsRepository.update(wallet.id, { goldCoins: amount });
-      const addedAmount = amount - wallet.goldCoins;
+    // Get the field name and current balance based on currency type
+    const { field, currentBalance } = this.getCurrencyField(wallet, currencyType);
+    
+    // Update the wallet
+    await this.walletsRepository.update(wallet.id, { [field]: amount });
+    const addedAmount = amount - currentBalance;
+      
+    const trans = this.transactionsRepository.create({
+      userId,
+      type: transactionType,
+      currencyType,
+      amount: addedAmount,
+      balanceAfter: amount,
+      description,
+    });
+    await this.transactionsRepository.save(trans);
 
-      const transactionType =
-        addedAmount >= 0
-          ? TransactionType.ADMIN_CREDIT
-          : TransactionType.ADMIN_DEBITED;
-      const trans = this.transactionsRepository.create({
-        userId,
-        type: transactionType,
-        currencyType,
-        amount: addedAmount,
-        balanceAfter: amount,
-        description,
-      });
-      await this.transactionsRepository.save(trans);
-
-      // fire-and-forget; log on failure so admin API success isn't affected by WS issues
-      void this.walletGateway
-        .emitAdminAddedGoldCoin(userId)
-        .catch((err) =>
-          this.logger?.warn?.(
-            `emitAdminAddedGoldCoin failed for ${userId}: ${err?.message ?? err}`,
-          ),
-        );
-    }
+    // fire-and-forget; log on failure so admin API success isn't affected by WS issues
+    void this.walletGateway
+      .emitAdminAddedGoldCoin(userId)
+      .catch((err) =>
+        this.logger?.warn?.(
+          `emitAdminAddedCoin failed for ${userId}: ${err?.message ?? err}`
+        ),
+      );
 
     return await this.findByUserId(userId);
+  }
+
+  /**
+   * updateGoldCoinsByAdmin - Legacy method for updating gold coin balance.
+   *
+   * @deprecated Use updateCoinsByAdmin instead for better flexibility
+   * @param userId - ID of the user whose wallet is being updated
+   * @param amount - New gold coin balance to set
+   * @param description - Description for the transaction
+   * @param currencyType - Type of currency (should be GOLD_COINS)
+   * @param transactionType - Transaction type (typically ADMIN_CREDIT)
+   * @returns Updated wallet entity
+   */
+  async updateGoldCoinsByAdmin(
+    userId: string,
+    amount: number,
+    description: string,
+    currencyType: CurrencyType,
+    transactionType: TransactionType,
+  ): Promise<Wallet> {
+    return this.updateCoinsByAdmin(userId, amount, description, currencyType, transactionType);
+  }
+
+  /**
+   * getCurrencyField - Helper method to get the wallet field name and current balance for a currency type.
+   *
+   * @param wallet - The wallet entity
+   * @param currencyType - The currency type to get field information for
+   * @returns Object containing the field name and current balance
+   * @throws BadRequestException if currency type is invalid
+   */
+  private getCurrencyField(wallet: Wallet, currencyType: CurrencyType): { field: string; currentBalance: number } {
+    switch (currencyType) {
+      case CurrencyType.GOLD_COINS:
+        return { field: 'goldCoins', currentBalance: Number(wallet.goldCoins || 0) };
+      case CurrencyType.CADE_COINS:
+        return { field: 'cadeCoins', currentBalance: Number(wallet.cadeCoins || 0) };
+      case CurrencyType.SWEEP_COINS:
+        return { field: 'sweepCoins', currentBalance: Number(wallet.sweepCoins || 0) };
+      default:
+        throw new BadRequestException('Invalid currency type');
+    }
   }
 
   /**
