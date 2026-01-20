@@ -47,6 +47,9 @@ export class BettingRound extends BaseEntity {
   @Column({ type: 'uuid', nullable: true })
   createdBy: string;
 
+  @Column({ name: 'is_landing_hidden', type: 'boolean', default: false })
+  isHiddenOnLanding: boolean;
+
   // ManyToOne relationship: One creator (User) can create many betting rounds
   // Unidirectional - User entity has no inverse @OneToMany relationship
   // Changed from @OneToOne to @ManyToOne to match actual data model where creators can create multiple rounds

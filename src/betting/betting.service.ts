@@ -270,6 +270,18 @@ export class BettingService {
     return this.streamsRepository.save(stream);
   }
 
+  async updateBetRoundLandingVisibility(id: string, hidden: boolean): Promise<void> {
+    const round = await this.bettingRoundsRepository.findOne({
+      where: { id },
+    });
+
+    round.isHiddenOnLanding = hidden;
+
+    this.bettingRoundsRepository.save(round);
+
+    return;
+  }
+
   // Betting Variable Management
   /**
    * Creates betting rounds and betting variables for a given stream.
@@ -592,6 +604,7 @@ export class BettingService {
         winnerAmount,
         winners,
         options,
+        isHiddenOnLanding: round.isHiddenOnLanding,
       });
     }
     return result;
