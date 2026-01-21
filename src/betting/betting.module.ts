@@ -15,6 +15,7 @@ import { BettingGateway } from './betting.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
+import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module
     forwardRef(() => WsModule),
     NotificationModule,
     PlatformPayoutModule,
+    BetRoundHistoryModule,
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway],

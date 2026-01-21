@@ -46,6 +46,8 @@ import _, { round } from 'lodash';
 import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 import { UserRole } from 'src/enums/user-role.enum';
 import { ViewBetDto } from './dto/view-bet.dto';
+import { BetRoundHistoryService } from 'src/bet-round-history/bet-round-history.service';
+import { BetRoundHistoryEventType } from 'src/enums/bet-round-history-event-type.enum';
 
 @Injectable()
 export class BettingService {
@@ -60,6 +62,7 @@ export class BettingService {
     private betsRepository: Repository<Bet>,
     private walletsService: WalletsService,
     private notificationService: NotificationService,
+    private betRoundHistoryService: BetRoundHistoryService,
     private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
     private platformPayoutService: PlatformPayoutService,
@@ -332,6 +335,13 @@ export class BettingService {
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
+
+      await this.betRoundHistoryService.recordBetRoundHistory(
+        creator,
+        bettingRound.id,
+        BetRoundHistoryEventType.OPEN,
+        '',
+      );
 
       const createdVariables: BettingVariable[] = [];
 
@@ -688,6 +698,13 @@ export class BettingService {
           category: roundData.category,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
+
+        await this.betRoundHistoryService.recordBetRoundHistory(
+          creator,
+          bettingRound.id,
+          BetRoundHistoryEventType.CREATED,
+          '',
+        );
       }
 
       // Update options for this round
@@ -1589,7 +1606,7 @@ export class BettingService {
       // If there are no active bets, close the round and emit events
       if (!allStreamBets || allStreamBets.length === 0) {
         Logger.log('No active bets found for this round');
-        await this.closeRound(queryRunner, bettingVariable);
+        await this.closeRound(queryRunner, bettingVariable, creator);
         await queryRunner.commitTransaction();
         this.bettingGateway.emitWinnerDeclared(
           bettingVariable.stream.id,
@@ -1671,7 +1688,7 @@ export class BettingService {
       );
 
       // Close the betting round
-      await this.closeRound(queryRunner, bettingVariable);
+      await this.closeRound(queryRunner, bettingVariable, creator);
 
       // Fetch winning bets with user info to send notifications
       const winningBetsWithUserInfo = await queryRunner.manager.find(Bet, {
@@ -2162,7 +2179,7 @@ export class BettingService {
    * @param queryRunner - TypeORM QueryRunner to handle the database transaction
    * @param bettingVariable - The betting variable whose round needs to be closed
    */
-  private async closeRound(queryRunner, bettingVariable: BettingVariable) {
+  private async closeRound(queryRunner, bettingVariable: BettingVariable, creator: string) {
     // Retrieve the round from the betting variable if available
     let round = bettingVariable.round;
 
@@ -2176,6 +2193,14 @@ export class BettingService {
     // If round exists, update its status to CLOSED
     if (round) {
       round.status = BettingRoundStatus.CLOSED;
+
+      await this.betRoundHistoryService.recordBetRoundHistory(
+        creator,
+        round.id,
+        BetRoundHistoryEventType.CLOSED,
+        '',
+      );
+
       // Save the updated round within the current transaction
       await queryRunner.manager.save(round);
     }
@@ -2665,6 +2690,13 @@ export class BettingService {
           round.status = newStatus as any;
           savedRound = await this.bettingRoundsRepository.save(round);
 
+          await this.betRoundHistoryService.recordBetRoundHistory(
+            creator,
+            round.id,
+            BetRoundHistoryEventType.LOCKED,
+            '',
+          );
+
           // Emit websocket events for the stream
           await this.bettingGateway.emitBettingStatus(
             roundWithStream.streamId,
@@ -2693,6 +2725,13 @@ export class BettingService {
       if (newStatus === BettingRoundStatus.OPEN) {
         round.status = newStatus as any;
         savedRound = await this.bettingRoundsRepository.save(round);
+
+        await this.betRoundHistoryService.recordBetRoundHistory(
+          creator,
+          round.id,
+          BetRoundHistoryEventType.OPEN,
+          '',
+        );
 
         const roundWithStream = await this.bettingRoundsRepository.findOne({
           where: { id: roundId },
@@ -2774,6 +2813,13 @@ export class BettingService {
 
       // Set round status to CANCELLED
       round.status = BettingRoundStatus.CANCELLED;
+
+      await this.betRoundHistoryService.recordBetRoundHistory(
+        creator,
+        round.id,
+        BetRoundHistoryEventType.CANCELLED,
+        '',
+      );
       await queryRunner.manager.save(round);
 
       const refundedBets: Bet[] = [];
