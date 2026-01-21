@@ -23,6 +23,8 @@ import type { StringValue } from 'ms';
 import { userVerificationDto } from './dto/verify-password.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { UserRole } from 'src/enums/user-role.enum';
+import { PromoCodeService } from 'src/promo-code/promo-code.service';
+import { isEmpty } from 'lodash-es';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -44,6 +46,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private notificationService: NotificationService,
+    private promoCodeService: PromoCodeService
   ) { }
 
   private calculateAge(birthDate: Date): number {
@@ -142,9 +145,14 @@ export class AuthService {
       // Create wallet for the user
       await this.walletsService.create(user.id);
 
-      // Generate tokens
+      // credit promo code
+      if (!isEmpty(promoCode)) {
+        await this.promoCodeService.creditPromo(user.id, promoCode);
+      }
 
+      // Generate tokens
       await this.sendAccountVerificationEmail(user, redirect);
+
       return {
         id: user.id,
         username: user.username,
