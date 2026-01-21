@@ -559,6 +559,39 @@ export class AdminController {
     };
   }
 
+  @ApiOperation({ summary: 'Toggle round visibility on landing page' })
+  @ApiParam({ name: 'roundId', description: 'Round ID' })
+  @ApiBody({ type: UpdateRoundStatusDto })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Round visibility on landing page updated successfully',
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Invalid status transition' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
+  @Patch('rounds/:roundId/landing-visiblity')
+  async updateBetRoundLandingVisibility(
+    @Request() req: RequestWithUser,
+    @Param('roundId') roundId: string,
+    @Body() body: {
+      hidden: boolean
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+
+    await this.bettingService.updateBetRoundLandingVisibility(roundId, body.hidden);
+
+    return {
+      message: 'Round visibility on landing page updated successfully',
+      status: HttpStatus.OK,
+      data: null,
+    };
+  }
+
   @ApiOperation({
     summary: 'Get all rounds for a stream with winners and options',
   })
