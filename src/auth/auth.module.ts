@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { CoinflowWebhookGuard } from './guards/coinflow-webhook.guard';
 import { NotificationModule } from 'src/notification/notification.module';
+import { PromoCodeModule } from 'src/promo-code/promo-code.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { NotificationModule } from 'src/notification/notification.module';
     WalletsModule,
     GeoFencingModule,
     NotificationModule,
+    PromoCodeModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -43,4 +45,4 @@ import { NotificationModule } from 'src/notification/notification.module';
   ],
   exports: [PassportModule, JwtModule, AuthService],
 })
-export class AuthModule {}
+export class AuthModule { }
