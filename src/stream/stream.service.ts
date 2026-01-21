@@ -1667,6 +1667,7 @@ END
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
+        .andWhere("br.is_landing_hidden = false")
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
         .andWhere("s.status IN (:...streamStatuses)", {
