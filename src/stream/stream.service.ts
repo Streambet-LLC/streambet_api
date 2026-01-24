@@ -823,6 +823,24 @@ END
         });
       });
 
+      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map((round) => {
+        let totalStreamCoins = 0;
+        let totalGoldCoins = 0;
+
+        round.bettingVariables.forEach((bv) => {
+          totalStreamCoins += Number(bv.totalBetsSweepCoinAmount)
+          totalGoldCoins += Number(bv.totalBetsGoldCoinAmount)
+        });
+
+        const variables = round.bettingVariables.map((bv) => ({
+          percentage: totalStreamCoins > 0 ? (Number(bv.totalBetsSweepCoinAmount) / totalStreamCoins * 100).toFixed(2) : 0,
+        }))
+
+        return {
+          bettingVariables: variables,
+        }
+      })
+
       const result = {
         walletGoldCoin: wallet?.goldCoins || 0,
         walletSweepCoin: wallet?.sweepCoins || 0,
@@ -830,8 +848,10 @@ END
         userBetSweepCoin: userBetSweepCoin || 0,
         roundTotalBetsGoldCoinAmount,
         roundTotalBetsSweepCoinAmount,
+        bettingRoundsWithVariablePercentages,
         ...stream,
       };
+      
       return result;
     } catch (e) {
       if (e instanceof NotFoundException) {
