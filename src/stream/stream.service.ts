@@ -840,6 +840,22 @@ END
         });
       });
 
+      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map((round) => {
+        let totalCadeCoins = 0;
+
+        round.bettingVariables.forEach((bv) => {
+          totalCadeCoins += Number(bv.totalBetsCadeCoinAmount)
+        });
+
+        const variables = round.bettingVariables.map((bv) => ({
+          percentage: totalCadeCoins > 0 ? (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins * 100).toFixed(2) : 0,
+        }))
+
+        return {
+          bettingVariables: variables,
+        }
+      })
+
       const result = {
         walletGoldCoin: wallet?.goldCoins || 0,
         walletSweepCoin: wallet?.sweepCoins || 0,
@@ -850,8 +866,10 @@ END
         roundTotalBetsGoldCoinAmount,
         roundTotalBetsSweepCoinAmount,
         roundTotalBetsCadeCoinAmount,
+        bettingRoundsWithVariablePercentages,
         ...stream,
       };
+      
       return result;
     } catch (e) {
       if (e instanceof NotFoundException) {
