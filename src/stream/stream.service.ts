@@ -1799,7 +1799,7 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-            userBet: !!v.user_bet_id ? {
+            userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
               amount: v.user_bet_amount,
               currency: v.user_bet_currency,
             } : null
