@@ -304,8 +304,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         })
         .leftJoinAndSelect("br.stream", "s")
         .leftJoinAndSelect("s.creator", "c")
-        .andWhere("s.status = :status", {
-          status: StreamStatus.SCHEDULED
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
         })
         .andWhere("s.type != :promoType", {
           promoType: StreamEventType.PROMO
