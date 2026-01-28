@@ -32,6 +32,7 @@ import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { RoundIdDto } from 'src/betting/dto/place-bet.dto';
 import { BetRoundDetailsDto } from './dto/stream.dto';
 import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -95,12 +96,15 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   })
   @ApiOkResponse({ type: HomepageBetListDto })
   // @UseGuards(GeoFencingGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('displayed-bets')
   async getDisplayedBets(
+    @Request() req: RequestWithUser,
     @Query() homepageBetListDto: HomepageBetListDto,
   ) {
     const { data } = await this.streamService.getDisplayBets(
       homepageBetListDto,
+      req.user ? req.user.id : null,
     );
 
     return {

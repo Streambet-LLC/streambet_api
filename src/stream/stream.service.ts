@@ -1690,6 +1690,7 @@ END
 
   async getDisplayBets(
     homepageBetListDto: HomepageBetListDto,
+    userId?: string | null,
   ): Promise<any> {
 
     const config = getPromotedBetsConfig('displayBets');
@@ -1768,12 +1769,17 @@ END
       for (let i = 0; i < filteredRounds.length; i++) {
         const item = filteredRounds[i];
 
-        const variables = await this.bettingVariableRepository
+        const variablesQb = this.bettingVariableRepository
           .createQueryBuilder("bv")
           .where("bv.roundId = :roundId", {
             roundId: item.br_id
-          })
-          .getRawMany();
+          });
+
+        if (userId) {
+          variablesQb.leftJoinAndSelect('bv.bets', 'user_bet', 'user_bet.user_id = :userId', { userId });
+        }
+
+        const variables = await variablesQb.getRawMany();
 
         let totalVotes = 0;
         let totalStreamCoins = 0;
@@ -1796,6 +1802,10 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
+              amount: v.user_bet_amount,
+              currency: v.user_bet_currency,
+            } : null
           }
         });
 
