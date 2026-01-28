@@ -1769,7 +1769,7 @@ END
             option: v.bv_name,
             percentage: totalStreamCoins > 0 ? (Number(v.bv_total_bets_sweep_coin_amount) / totalStreamCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-            userBet: !!v.user_bet_id ? {
+            userBet: (!!v.user_bet_id && (v.user_bet_currency === CurrencyType.SWEEP_COINS || v.user_bet_currency === CurrencyType.GOLD_COINS)) ? {
               amount: v.user_bet_amount,
               currency: v.user_bet_currency,
             } : null
