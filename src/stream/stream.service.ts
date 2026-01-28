@@ -1713,6 +1713,9 @@ END
             StreamStatus.LIVE,
             StreamStatus.SCHEDULED
           ]
+        })
+        .andWhere("s.type != :promoType", {
+          promoType: StreamEventType.PROMO
         });
 
       // Only apply search filter if search term is provided
