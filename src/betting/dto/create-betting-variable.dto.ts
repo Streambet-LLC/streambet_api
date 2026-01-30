@@ -141,6 +141,16 @@ export class EditRoundDto {
   category?: BettingCategory;
 
   @ApiProperty({
+    description: 'Type of the Pick round',
+    enum: BetRoundType,
+    example: BetRoundType.AUCTION,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BetRoundType)
+  betRoundType?: BetRoundType;
+
+  @ApiProperty({
     description:
       'Array of betting options for this round (can include existing and new options)',
     type: [EditOptionDto],

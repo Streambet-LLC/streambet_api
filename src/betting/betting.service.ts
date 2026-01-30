@@ -701,6 +701,9 @@ export class BettingService {
         if (roundData.lockDate !== undefined) {
           bettingRound.lockDate = roundData.lockDate ? new Date(roundData.lockDate) : null;
         }
+        if (roundData.betRoundType !== undefined) {
+          bettingRound.type = roundData.betRoundType;
+        }
         await this.bettingRoundsRepository.save(bettingRound);
       } else {
         console.log("Update", creator);
@@ -712,6 +715,7 @@ export class BettingService {
           status: BettingRoundStatus.CREATED,
           createdBy: creator,
           category: roundData.category,
+          type: roundData.betRoundType,
         });
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
 
