@@ -280,8 +280,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
   async getTopPromotedBets(): Promise<any> {
     try {
-      // Fetch active promo card (if any)
-      const promoCard = await this.streamsRepository
+      // Fetch active promo cards (up to 10)
+      const promoCards = await this.streamsRepository
         .createQueryBuilder('s')
         .leftJoinAndSelect('s.creator', 'c')
         .where('s.type = :type', { type: StreamEventType.PROMO })
@@ -290,8 +290,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
         })
         .orderBy('s.updatedAt', 'DESC')
-        .limit(1)
-        .getOne();
+        .limit(10)
+        .getMany();
 
       // Get configuration for homepage context
       const config = getPromotedBetsConfig('homepage');
@@ -382,8 +382,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         resultList.push(itemData);
       }
 
-      // Format promo card response if exists
-      const promoCardData = promoCard ? {
+      // Format promo cards response as array
+      const promoCardsData = promoCards.map(promoCard => ({
         streamId: promoCard.id,
         thumbnail: promoCard.thumbnailUrl ?? "",
         name: promoCard.name,
@@ -392,12 +392,12 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         type: promoCard.type,
         streamStatus: promoCard.status,
         scheduledStartTime: promoCard.scheduledStartTime,
-      } : null;
+      }));
 
       return {
         data: {
           bets: resultList,
-          promoCard: promoCardData
+          promoCards: promoCardsData
         }
       }
     } catch (e) {

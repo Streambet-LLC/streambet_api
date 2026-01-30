@@ -18,7 +18,7 @@ export const PromotedBetsConfig = {
    * Conservative limits for focused, curated user experience
    */
   homepage: {
-    totalLimit: 10,
+    totalLimit: 6,
     maxPromotedRounds: 2,
     fetchBufferMultiplier: 5,
   },
