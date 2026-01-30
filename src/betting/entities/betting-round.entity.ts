@@ -6,6 +6,7 @@ import { BettingRoundStatus } from '../../enums/round-status.enum';
 import { BettingCategory } from '../../enums/betting-category.enum';
 import { Bet } from './bet.entity';
 import { User } from 'src/users/entities/user.entity';
+import { BetRoundType } from 'src/enums/bet-round-type';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {
@@ -37,6 +38,13 @@ export class BettingRound extends BaseEntity {
     default: BettingCategory.OTHER,
   })
   category: BettingCategory;
+
+  @Column({
+    type: 'enum',
+    enum: BetRoundType,
+    default: BetRoundType.PICK,
+  })
+  type: BetRoundType;
 
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];

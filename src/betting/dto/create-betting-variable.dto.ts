@@ -12,6 +12,7 @@ import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingCategory } from 'src/enums/betting-category.enum';
+import { BetRoundType } from 'src/enums/bet-round-type';
 
 export class OptionDto {
   @ApiProperty({
@@ -73,6 +74,17 @@ export class RoundDto {
   @IsOptional()
   @IsEnum(BettingCategory)
   category?: BettingCategory;
+
+
+  @ApiProperty({
+    description: 'Type of the Pick round',
+    enum: BetRoundType,
+    example: BetRoundType.AUCTION,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BetRoundType)
+  betRoundType?: BetRoundType;
 
   @ApiProperty({
     description: 'Array of betting options for this round',

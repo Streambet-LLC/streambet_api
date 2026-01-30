@@ -345,6 +345,7 @@ export class BettingService {
         createdBy: creator,
         lockDate: roundData.lockDate,
         category: roundData.category,
+        type: roundData.betRoundType,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
@@ -376,6 +377,7 @@ export class BettingService {
         roundName: savedRound.roundName,
         status: savedRound.status,
         category: savedRound.category,
+        betRoundType: savedRound.type,
         options: createdVariables.map((variable) => ({
           id: variable.id,
           name: variable.name,
@@ -2534,6 +2536,7 @@ export class BettingService {
         streamName: bettingRound.stream.name,
         name: bettingRound.roundName,
         type: bettingRound.stream.type,
+        betRoundType: bettingRound.type,
         streamStatus: bettingRound.stream.status,
         scheduledStartTime: bettingRound.stream.scheduledStartTime,
         category: bettingRound.category,
@@ -3280,7 +3283,7 @@ export class BettingService {
     try {
       const sort: Sort = betHistoryFilterDto?.sort
         ? (JSON.parse(betHistoryFilterDto.sort) as Sort)
-        : (['createdAt', 'DESC'] as unknown as Sort);
+        : (['updatedAt', 'DESC'] as unknown as Sort);
       const range: Range = betHistoryFilterDto?.range
         ? (JSON.parse(betHistoryFilterDto.range) as Range)
         : [0, 24];
@@ -3312,7 +3315,7 @@ export class BettingService {
       }
 
       // Select requested fields in required schema
-      qb.select('b.createdAt', 'date')
+      qb.select('b.updatedAt', 'date')
         .addSelect('s.name', 'streamName')
         .addSelect('r.roundName', 'roundName')
         .addSelect('bv.name', 'optionName')
