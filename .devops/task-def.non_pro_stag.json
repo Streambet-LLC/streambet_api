@@ -53,147 +53,147 @@
       "secrets": [
         {
           "name": "CLIENT_URL",
-          "valueFrom": "/cardcade/non-pro-stag/CLIENT_URL"
+          "valueFrom": "/cardcade/non_pro_stag/CLIENT_URL"
         },
         {
           "name": "DB_USERNAME",
-          "valueFrom": "/cardcade/non-pro-stag/DB_USERNAME"
+          "valueFrom": "/cardcade/non_pro_stag/DB_USERNAME"
         },
         {
           "name": "DB_PASSWORD",
-          "valueFrom": "/cardcade/non-pro-stag/DB_PASSWORD"
+          "valueFrom": "/cardcade/non_pro_stag/DB_PASSWORD"
         },
         {
           "name": "DB_DATABASE",
-          "valueFrom": "/cardcade/non-pro-stag/DB_DATABASE"
+          "valueFrom": "/cardcade/non_pro_stag/DB_DATABASE"
         },
 
         {
           "name": "JWT_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/JWT_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/JWT_SECRET"
         },
         {
           "name": "REFRESH_TOKEN_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/REFRESH_TOKEN_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/REFRESH_TOKEN_SECRET"
         },
 
         {
           "name": "GOOGLE_CLIENT_ID",
-          "valueFrom": "/cardcade/non-pro-stag/GOOGLE_CLIENT_ID"
+          "valueFrom": "/cardcade/non_pro_stag/GOOGLE_CLIENT_ID"
         },
         {
           "name": "GOOGLE_CLIENT_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/GOOGLE_CLIENT_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/GOOGLE_CLIENT_SECRET"
         },
         {
           "name": "GOOGLE_CALLBACK_URL",
-          "valueFrom": "/cardcade/non-pro-stag/GOOGLE_CALLBACK_URL"
+          "valueFrom": "/cardcade/non_pro_stag/GOOGLE_CALLBACK_URL"
         },
 
         {
           "name": "STRIPE_SECRET_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/STRIPE_SECRET_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/STRIPE_SECRET_KEY"
         },
         {
           "name": "STRIPE_WEBHOOK_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/STRIPE_WEBHOOK_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/STRIPE_WEBHOOK_SECRET"
         },
         {
           "name": "NEW_RELIC_LICENSE_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/NEW_RELIC_LICENSE_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/NEW_RELIC_LICENSE_KEY"
         },
         {
           "name": "ACCESS_KEY_ID",
-          "valueFrom": "/cardcade/non-pro-stag/ACCESS_KEY_ID"
+          "valueFrom": "/cardcade/non_pro_stag/ACCESS_KEY_ID"
         },
         {
           "name": "SECRET_ACCESS_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/SECRET_ACCESS_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/SECRET_ACCESS_KEY"
         },
         {
           "name": "AWS_DEFAULT_S3_BUCKET",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_DEFAULT_S3_BUCKET"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_DEFAULT_S3_BUCKET"
         },
         {
           "name": "AWS_S3_REGION",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_S3_REGION"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_S3_REGION"
         },
 
         {
           "name": "AWS_SMTP_USER",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_SMTP_USER"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_SMTP_USER"
         },
         {
           "name": "AWS_SMTP_PASSWORD",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_SMTP_PASSWORD"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_SMTP_PASSWORD"
         },
         {
           "name": "AWS_SMTP_HOST",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_SMTP_HOST"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_SMTP_HOST"
         },
         {
           "name": "MAIL_DEFAULT_EMAIL",
-          "valueFrom": "/cardcade/non-pro-stag/MAIL_DEFAULT_EMAIL"
+          "valueFrom": "/cardcade/non_pro_stag/MAIL_DEFAULT_EMAIL"
         },
         {
           "name": "AWS_SMTP_REGION",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_SMTP_REGION"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_SMTP_REGION"
         },
         {
           "name": "AWS_EMAIL_FROM",
-          "valueFrom": "/cardcade/non-pro-stag/AWS_EMAIL_FROM"
+          "valueFrom": "/cardcade/non_pro_stag/AWS_EMAIL_FROM"
         },
         {
           "name": "APP_HOST_URL",
-          "valueFrom": "/cardcade/non-pro-stag/APP_HOST_URL"
+          "valueFrom": "/cardcade/non_pro_stag/APP_HOST_URL"
         },
         {
           "name": "REDIS_PASSWORD",
-          "valueFrom": "/cardcade/non-pro-stag/REDIS_PASSWORD"
+          "valueFrom": "/cardcade/non_pro_stag/REDIS_PASSWORD"
         },
         {
           "name": "ABSTRACT_API_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/ABSTRACT_API_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/ABSTRACT_API_KEY"
         },
         {
           "name": "COINFLOW_API_URL",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_API_URL"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_API_URL"
         },
         {
           "name": "COINFLOW_API_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_API_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_API_KEY"
         },
         {
           "name": "COINFLOW_DEFAULT_TOKEN",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_DEFAULT_TOKEN"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_DEFAULT_TOKEN"
         },
         {
           "name": "COINFLOW_MERCHANT_ID",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_MERCHANT_ID"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_MERCHANT_ID"
         },
         {
           "name": "COINFLOW_BLOCKCHAIN",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_BLOCKCHAIN"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_BLOCKCHAIN"
         },
         {
           "name": "COINFLOW_WEBHOOK_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/COINFLOW_WEBHOOK_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/COINFLOW_WEBHOOK_SECRET"
         },
         {
           "name": "N8N_WEBHOOK_URL",
-          "valueFrom": "/cardcade/non-pro-stag/N8N_WEBHOOK_URL"
+          "valueFrom": "/cardcade/non_pro_stag/N8N_WEBHOOK_URL"
         },
         {
           "name": "N8N_WEBHOOK_SECRET",
-          "valueFrom": "/cardcade/non-pro-stag/N8N_WEBHOOK_SECRET"
+          "valueFrom": "/cardcade/non_pro_stag/N8N_WEBHOOK_SECRET"
         },
         {
           "name": "PERSONA_API_KEY",
-          "valueFrom": "/cardcade/non-pro-stag/PERSONA_API_KEY"
+          "valueFrom": "/cardcade/non_pro_stag/PERSONA_API_KEY"
         },
         {
           "name": "PERSONA_API_URL",
-          "valueFrom": "/cardcade/non-pro-stag/PERSONA_API_URL"
+          "valueFrom": "/cardcade/non_pro_stag/PERSONA_API_URL"
         }
       ],
       "mountPoints": [],
@@ -201,7 +201,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/cardcade-nonpro-stag",
+          "awslogs-group": "/ecs/cardcade-non_pro_stag",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
