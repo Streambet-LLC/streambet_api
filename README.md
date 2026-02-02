@@ -16,7 +16,7 @@ This is the backend for the Streambet platform, a live betting application that 
 
 ### Prerequisites
 
-- Node.js (v18+)
+- Node.js(v18+)
 - PostgreSQL
 - Redis
 - Docker (optional, for containerization)
