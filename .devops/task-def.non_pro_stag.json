@@ -28,7 +28,7 @@
         { "name": "MAIL_REQUIRE_TLS", "value": "true" },
         { "name": "HOSTED", "value": "false" },
         { "name": "REDIS_PORT", "value": "6379" },
-        { "name": "REDIS_KEY_PREFIX", "value": "STREAMBET_STAG" },
+        { "name": "REDIS_KEY_PREFIX", "value": "CARDCADE_NON_PRO_STAG" },
         { "name": "REDIS_DB", "value": "0" },
         { "name": "IS_SWAGGER_ENABLED", "value": "true" },
         { "name": "IS_BULLMQ_UI_ENABLED", "value": "true" },
@@ -50,6 +50,10 @@
         {
           "name": "CLIENT_URL",
           "valueFrom": "/cardcade/non_pro_stag/CLIENT_URL"
+        },
+        {
+          "name": "DB_HOST",
+          "valueFrom": "/cardcade/non_pro_stag/DB_HOST"
         },
         {
           "name": "DB_USERNAME",
@@ -142,6 +146,18 @@
         {
           "name": "APP_HOST_URL",
           "valueFrom": "/cardcade/non_pro_stag/APP_HOST_URL"
+        },
+        {
+          "name": "REDIS_HOST",
+          "valueFrom": "/cardcade/non_pro_stag/REDIS_HOST"
+        },
+        {
+          "name": "REDIS_TLS",
+          "valueFrom": "/cardcade/non_pro_stag/REDIS_TLS"
+        },
+        {
+          "name": "REDIS_USERNAME",
+          "valueFrom": "/cardcade/non_pro_stag/REDIS_USERNAME"
         },
         {
           "name": "REDIS_PASSWORD",
