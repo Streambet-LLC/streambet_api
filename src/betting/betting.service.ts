@@ -2530,6 +2530,18 @@ export class BettingService {
         }
       });
 
+      // Get user count of cade coin bettors
+      const cadeCoinUsersCountResult = await this.betsRepository
+        .createQueryBuilder('bet')
+        .innerJoin('bet.bettingVariable', 'bv')
+        .where('bv.roundId = :roundId', { roundId: bettingRound.id })
+        .andWhere('bet.currency = :currency', { currency: CurrencyType.CADE_COINS })
+        .andWhere('bet.status = :status', { status: BetStatus.Active })
+        .select('COUNT(DISTINCT bet.userId)', 'count')
+        .getRawOne();
+      
+      const cadeCoinUsersCount = Number(cadeCoinUsersCountResult?.count || 0);
+
       const itemData = {
         streamId: bettingRound.streamId,
         roundId: bettingRound.id,
@@ -2550,6 +2562,7 @@ export class BettingService {
           goldCoins: totalGoldCoins,
           cadeCoins: totalCadeCoins
         },
+        cadeCoinUsersCount: cadeCoinUsersCount,
         description: bettingRound.stream.description,
       }
 
