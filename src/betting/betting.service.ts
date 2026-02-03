@@ -3447,4 +3447,132 @@ export class BettingService {
 
     return { data, total };
   }
+
+  /**
+   * Get pick timeline for a specific round
+   * 
+   * This method retrieves the timeline of picks placed on a round, showing
+   * how the pick pool distribution evolved over time between the two options.
+   * Data is bucketed into 5-minute intervals with cumulative totals for each option.
+   * Only CadeCoin picks are included in the timeline.
+   * 
+   * @param roundId - The ID of the betting round
+   * @returns Object containing options metadata and timeline data points
+   */
+  async getRoundPickTimeline(roundId: string) {
+    // Get the round with its betting variables (should be 2)
+    const round = await this.bettingRoundsRepository.findOne({
+      where: { id: roundId },
+      relations: ['bettingVariables'],
+    });
+
+    if (!round) {
+      throw new NotFoundException(`Round with ID ${roundId} not found`);
+    }
+
+    // Fetch all CadeCoin bets for this round (Active and Cancelled), ordered by created_at
+    const bets = await this.betsRepository
+      .createQueryBuilder('bet')
+      .leftJoin('bet.bettingVariable', 'bettingVariable')
+      .leftJoin('bet.user', 'user')
+      .where('bet.roundId = :roundId', { roundId })
+      .andWhere('bet.currency = :currency', { currency: CurrencyType.CADE_COINS })
+      .andWhere('bet.status IN (:...statuses)', { statuses: [BetStatus.Active, BetStatus.Cancelled] })
+      .select([
+        'bet.id',
+        'bet.amount',
+        'bet.created_at',
+        'bet.status',
+        'bet.updatedAt',
+        'bettingVariable.id',
+        'bettingVariable.name',
+        'user.id',
+      ])
+      .orderBy('bet.created_at', 'ASC')
+      .getMany();
+
+    // Group betting variables by ID
+    const variables = round.bettingVariables.slice(0, 2); // Only first 2
+    const [variableA, variableB] = variables;
+
+    // Build timeline with all placement and cancellation events
+    const events = [];
+    
+    bets.forEach((bet) => {
+      const amount = Number(bet.amount);
+      
+      // Add placement event (all bets were placed at some point)
+      events.push({
+        timestamp: bet.created_at,
+        type: 'place',
+        amount,
+        variableId: bet.bettingVariable.id,
+        userId: bet.user.id,
+      });
+      
+      // Add cancellation event if bet was cancelled
+      if (bet.status === BetStatus.Cancelled) {
+        events.push({
+          timestamp: bet.updatedAt,
+          type: 'cancel',
+          amount,
+          variableId: bet.bettingVariable.id,
+          userId: bet.user.id,
+        });
+      }
+    });
+    
+    // Sort all events chronologically
+    events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    
+    // Build timeline from events
+    const timeline = [];
+    let cumulativeA = 0;
+    let cumulativeB = 0;
+    const userSetA = new Set<string>();
+    const userSetB = new Set<string>();
+
+    events.forEach((event) => {
+      const isOptionA = event.variableId === variableA.id;
+      const isOptionB = variableB && event.variableId === variableB.id;
+
+      if (event.type === 'place') {
+        // Placement: ADD to cumulative and user set
+        if (isOptionA) {
+          cumulativeA += event.amount;
+          userSetA.add(event.userId);
+        } else if (isOptionB) {
+          cumulativeB += event.amount;
+          userSetB.add(event.userId);
+        }
+      } else if (event.type === 'cancel') {
+        // Cancellation: SUBTRACT from cumulative and remove user
+        if (isOptionA) {
+          cumulativeA -= event.amount;
+          userSetA.delete(event.userId);
+        } else if (isOptionB) {
+          cumulativeB -= event.amount;
+          userSetB.delete(event.userId);
+        }
+      }
+
+      // Add data point at exact timestamp of this event
+      timeline.push({
+        timestamp: event.timestamp,
+        [variableA.id]: Math.max(0, cumulativeA),
+        [variableB?.id || 'optionB']: Math.max(0, cumulativeB),
+        userCountA: userSetA.size,
+        userCountB: userSetB.size,
+      });
+    });
+
+    // Return metadata and timeline
+    return {
+      options: [
+        { id: variableA.id, name: variableA.name, userCount: userSetA.size },
+        variableB ? { id: variableB.id, name: variableB.name, userCount: userSetB.size } : null,
+      ].filter(Boolean),
+      timeline,
+    };
+  }
 }

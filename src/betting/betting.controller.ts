@@ -483,4 +483,35 @@ export class BettingController {
       data: bet,
     };
   }
+
+  /**
+   * Get pick timeline for a specific round
+   * 
+   * Functional Comment:
+   * -------------------
+   * This endpoint retrieves the timeline of picks placed on a round, showing
+   * how the pick pool distribution evolved over time between the two options.
+   * Data is bucketed into 5-minute intervals with cumulative totals for each option.
+   * Only CadeCoin picks are included in the timeline.
+   * 
+   * Swagger Responses:
+   * - 200: Timeline retrieved successfully
+   * - 404: Round not found
+   */
+  @ApiOperation({ summary: 'Get pick timeline for a round' })
+  @ApiParam({ name: 'roundId', description: 'Pick Round ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Round pick timeline retrieved successfully',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
+  @Get('round/:roundId/pick-timeline')
+  async getRoundPickTimeline(@Param('roundId') roundId: string): Promise<ApiResponse> {
+    const timeline = await this.bettingService.getRoundPickTimeline(roundId);
+    return {
+      message: 'Round pick timeline retrieved successfully',
+      status: HttpStatus.OK,
+      data: timeline,
+    };
+  }
 }
