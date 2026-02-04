@@ -286,8 +286,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .leftJoinAndSelect('s.creator', 'c')
         .where('s.type = :type', { type: StreamEventType.PROMO })
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
-        .andWhere('s.status IN (:...statuses)', { 
-          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
+        .andWhere('s.status IN (:...statuses)', {
+          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
         })
         .orderBy('s.updatedAt', 'DESC')
         .limit(10)
@@ -349,7 +349,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
@@ -465,6 +465,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           roundName: round.roundName ?? '',
           createdAt: round.createdAt ?? '',
           lockDate: round.lockDate ?? null,
+          type: round.type,
           category: round.category,
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
@@ -691,7 +692,7 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
@@ -870,7 +871,7 @@ END
         bettingRoundsWithVariablePercentages,
         ...stream,
       };
-      
+
       return result;
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -1797,7 +1798,7 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
@@ -1859,7 +1860,7 @@ END
     const page = query.page ?? 1;
     const take = query.limit ?? 4;
     const username = query.username;
-    const offset = (page - 1) * take; 
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1909,7 +1910,7 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
@@ -2036,7 +2037,7 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
