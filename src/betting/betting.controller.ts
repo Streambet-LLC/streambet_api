@@ -45,7 +45,7 @@ interface RequestWithUser extends Request {
 @ApiTags('betting')
 @Controller('betting')
 export class BettingController {
-  constructor(private readonly bettingService: BettingService) { }
+  constructor(private readonly bettingService: BettingService) {}
 
   /**
    * Controller method to fetch all streams (active by default).

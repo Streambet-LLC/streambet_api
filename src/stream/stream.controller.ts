@@ -42,7 +42,7 @@ interface RequestWithUser extends Request {
 @ApiTags('stream')
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) { }
+  constructor(private readonly streamService: StreamService) {}
   /**
  * Retrieves a paginated list of live and scheduled streams for the home page view.
    * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
@@ -123,9 +123,8 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   async getCreatorProfileNonVideoBets(
     @Query() query: CreatorProfileNonVideoBetsDto,
   ) {
-    const { data } = await this.streamService.getCreatorProfileNonVideoBets(
-      query,
-    );
+    const { data } =
+      await this.streamService.getCreatorProfileNonVideoBets(query);
 
     return {
       statusCode: HttpStatus.OK,
@@ -140,12 +139,9 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   @ApiOkResponse({ type: HomepageBetListDto })
   // @UseGuards(GeoFencingGuard)
   @Get('displayed-upcoming-bets')
-  async getUpcomingBets(
-    @Query() homepageBetListDto: HomepageBetListDto,
-  ) {
-    const { data } = await this.streamService.getUpcomingBets(
-      homepageBetListDto,
-    );
+  async getUpcomingBets(@Query() homepageBetListDto: HomepageBetListDto) {
+    const { data } =
+      await this.streamService.getUpcomingBets(homepageBetListDto);
 
     return {
       statusCode: HttpStatus.OK,
@@ -192,8 +188,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   // @UseGuards(GeoFencingGuard)
   @Get('top')
   async topLiveStreams() {
-    const { data } =
-      await this.streamService.getTopLivestreams();
+    const { data } = await this.streamService.getTopLivestreams();
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
@@ -279,7 +274,7 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     const stream = await this.streamService.findBetRoundDetailsByStreamId(
       streamId,
       roundDetails?.userId,
-      roundDetails?.roundId
+      roundDetails?.roundId,
     );
     return {
       message: 'Stream details retrieved successfully',

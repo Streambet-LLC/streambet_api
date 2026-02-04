@@ -1,5 +1,12 @@
 import { BaseEntity } from '../../common/entities/base.entity';
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn, OneToOne } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  OneToOne,
+} from 'typeorm';
 import { Stream } from '../../stream/entities/stream.entity';
 import { BettingVariable } from './betting-variable.entity';
 import { BettingRoundStatus } from '../../enums/round-status.enum';
@@ -7,6 +14,7 @@ import { BettingCategory } from '../../enums/betting-category.enum';
 import { Bet } from './bet.entity';
 import { User } from 'src/users/entities/user.entity';
 import { BetRoundType } from 'src/enums/bet-round-type';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 
 @Entity('betting_rounds')
 export class BettingRound extends BaseEntity {
@@ -45,6 +53,22 @@ export class BettingRound extends BaseEntity {
     default: BetRoundType.PICK,
   })
   type: BetRoundType;
+
+  @Column({
+    type: 'enum',
+    enum: PickMechanism,
+    default: PickMechanism.DEFAULT,
+  })
+  mechanism: PickMechanism;
+
+  @Column({ type: 'timestamp', nullable: true })
+  firstRevealTime: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastRevealTime: Date;
+
+  @Column({ type: 'boolean', default: false })
+  isInitialRevealPeriod: boolean;
 
   @OneToMany(() => BettingVariable, (bettingVariable) => bettingVariable.round)
   bettingVariables: BettingVariable[];

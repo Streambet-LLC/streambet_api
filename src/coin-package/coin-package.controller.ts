@@ -1,6 +1,19 @@
-import { Controller, Get, HttpStatus, UseGuards, BadRequestException, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpStatus,
+  UseGuards,
+  BadRequestException,
+  Request,
+} from '@nestjs/common';
 import { CoinPackageService } from './coin-package.service';
-import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth, ApiBadRequestResponse } from '@nestjs/swagger';
+import {
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiBearerAuth,
+  ApiBadRequestResponse,
+} from '@nestjs/swagger';
 import { CoinPackageListResponseDto } from './dto/coin-package.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WalletsService } from '../wallets/wallets.service';
@@ -37,9 +50,18 @@ export class CoinPackageController {
    * @param req - Express request augmented by `JwtAuthGuard` to contain `user.id`.
    * @returns CoinPackageListResponseDto
    */
-  @ApiOperation({ summary: 'List active coin packages with canPurchase flag by remaining lifetime limit' })
-  @ApiOkResponse({ description: 'Coin packages retrieved successfully', type: CoinPackageListResponseDto })
-  @ApiBadRequestResponse({ description: 'No coin package can be purchased within your remaining lifetime limit.' })
+  @ApiOperation({
+    summary:
+      'List active coin packages with canPurchase flag by remaining lifetime limit',
+  })
+  @ApiOkResponse({
+    description: 'Coin packages retrieved successfully',
+    type: CoinPackageListResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'No coin package can be purchased within your remaining lifetime limit.',
+  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -47,15 +69,17 @@ export class CoinPackageController {
     const userId = req.user.id;
 
     const capUSD = LIFETIME_PURCHASE_CAP_USD;
-    const { spentUSD, remainingUSD } = await this.walletsService.getLifetimeRemainingUSDFromCap(
-      userId,
-      capUSD,
-    );
+    const { spentUSD, remainingUSD } =
+      await this.walletsService.getLifetimeRemainingUSDFromCap(userId, capUSD);
 
     // Convert raw entities to DTO instances to ensure only whitelisted fields are exposed
-    const dtoPackages = plainToInstance(CoinPackageDto, await this.coinPackageService.findAll(), {
-      excludeExtraneousValues: true,
-    });
+    const dtoPackages = plainToInstance(
+      CoinPackageDto,
+      await this.coinPackageService.findAll(),
+      {
+        excludeExtraneousValues: true,
+      },
+    );
 
     const enriched = dtoPackages.map((pkg) => {
       const price = Number((pkg as any).totalAmount);
@@ -66,7 +90,9 @@ export class CoinPackageController {
     // Check if the user can purchase at least one package; if not, throw 400
     const hasPurchasable = enriched.some((p: any) => p.canPurchase);
     if (!hasPurchasable) {
-      throw new BadRequestException('Lifetime purchase limit reached. No coin packages available within your remaining limit.');
+      throw new BadRequestException(
+        'Lifetime purchase limit reached. No coin packages available within your remaining limit.',
+      );
     }
 
     return {

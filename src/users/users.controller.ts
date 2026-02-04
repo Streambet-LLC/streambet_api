@@ -39,7 +39,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly referralService: ReferralService,
-  ) { }
+  ) {}
   /**
    * Retrieves the profile of the currently logged-in user.
    * @param req - The request object containing user information.
@@ -80,12 +80,13 @@ export class UsersController {
    */
   @ApiOperation({
     summary: 'Get own address',
-    description: 'Returns authenticated user\'s shipping address. Only accessible to the user themselves.',
+    description:
+      "Returns authenticated user's shipping address. Only accessible to the user themselves.",
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Address retrieved successfully',
-    type: UserAddressDto
+    type: UserAddressDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
@@ -146,8 +147,7 @@ export class UsersController {
 
   @ApiOperation({
     summary: 'Gets leaderboard',
-    description:
-      'This endpoint gets the top 20 users by gold balance',
+    description: 'This endpoint gets the top 20 users by gold balance',
   })
   @ApiResponse({
     status: 200,
@@ -172,8 +172,7 @@ export class UsersController {
    */
   @ApiOperation({
     summary: 'Gets user profile',
-    description:
-      'This endpoint gets the profile of the provided username',
+    description: 'This endpoint gets the profile of the provided username',
   })
   @ApiResponse({
     status: 200,
@@ -189,7 +188,10 @@ export class UsersController {
     @Request() req: RequestWithUser,
     @Param('username') username: string,
   ) {
-    const data = await this.usersService.getUserProfile(req.user ? req.user.id : null, username);
+    const data = await this.usersService.getUserProfile(
+      req.user ? req.user.id : null,
+      username,
+    );
 
     return {
       data,
@@ -200,8 +202,7 @@ export class UsersController {
 
   @ApiOperation({
     summary: 'Follow user profile',
-    description:
-      'This endpoint follows a user profile',
+    description: 'This endpoint follows a user profile',
   })
   @ApiResponse({
     status: 200,
@@ -227,8 +228,7 @@ export class UsersController {
 
   @ApiOperation({
     summary: 'Unfollow user profile',
-    description:
-      'This endpoint unfollows a user profile',
+    description: 'This endpoint unfollows a user profile',
   })
   @ApiResponse({
     status: 200,
@@ -290,8 +290,7 @@ export class UsersController {
 
   @ApiOperation({
     summary: 'Gets all creators',
-    description:
-      'This endpoint gets all the creators',
+    description: 'This endpoint gets all the creators',
   })
   @ApiResponse({
     status: 200,

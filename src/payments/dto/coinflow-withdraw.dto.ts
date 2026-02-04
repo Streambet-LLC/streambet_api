@@ -49,8 +49,7 @@ export class CoinflowWithdrawDto {
 
 export class CoinflowWithdrawKycDto {
   @ApiProperty({
-    description:
-      'Redirect link to redirect user after additional verification',
+    description: 'Redirect link to redirect user after additional verification',
     example: 'https://stag.streambet.tv/withdraw',
     required: true,
     type: String,
@@ -59,8 +58,7 @@ export class CoinflowWithdrawKycDto {
   redirectLink: string;
 
   @ApiProperty({
-    description:
-      'Email of the redeeming user.',
+    description: 'Email of the redeeming user.',
     example: 'johndoe@gmail.com',
     required: true,
     type: String,
@@ -70,8 +68,7 @@ export class CoinflowWithdrawKycDto {
   email: string;
 
   @ApiProperty({
-    description:
-      'Country code of the redeeming user.',
+    description: 'Country code of the redeeming user.',
     example: 'US',
     type: String,
   })
@@ -81,18 +78,16 @@ export class CoinflowWithdrawKycDto {
 
 export class CoinflowWithdrawKycUsDto {
   @ApiProperty({
-    description:
-      'Redirect link to redirect user after additional verification',
+    description: 'Redirect link to redirect user after additional verification',
     example: 'https://stag.streambet.tv/withdraw',
     required: true,
     type: String,
   })
   @IsString()
   redirectLink: string;
-  
+
   @ApiProperty({
-    description:
-      'Email of the redeeming user.',
+    description: 'Email of the redeeming user.',
     example: 'johndoe@gmail.com',
     required: true,
     type: String,
@@ -102,8 +97,7 @@ export class CoinflowWithdrawKycUsDto {
   email: string;
 
   @ApiProperty({
-    description:
-      'Country code of the redeeming user.',
+    description: 'Country code of the redeeming user.',
     example: 'US',
     type: String,
   })
@@ -111,8 +105,7 @@ export class CoinflowWithdrawKycUsDto {
   country: string;
 
   @ApiProperty({
-    description:
-      'First name of the redeeming user.',
+    description: 'First name of the redeeming user.',
     example: 'John',
     type: String,
   })
@@ -120,8 +113,7 @@ export class CoinflowWithdrawKycUsDto {
   firstName: string;
 
   @ApiProperty({
-    description:
-      'Last name of the redeeming user.',
+    description: 'Last name of the redeeming user.',
     example: 'Doe',
     type: String,
   })
@@ -129,8 +121,7 @@ export class CoinflowWithdrawKycUsDto {
   lastName: string;
 
   @ApiProperty({
-    description:
-      'Address of the redeeming user.',
+    description: 'Address of the redeeming user.',
     example: '15 Applesweet St. Rocky Road',
     type: String,
   })
@@ -138,8 +129,7 @@ export class CoinflowWithdrawKycUsDto {
   address: string;
 
   @ApiProperty({
-    description:
-      'City of the redeeming user.',
+    description: 'City of the redeeming user.',
     example: 'New York',
     type: String,
   })
@@ -147,8 +137,7 @@ export class CoinflowWithdrawKycUsDto {
   city: string;
 
   @ApiProperty({
-    description:
-      'State of the redeeming user.',
+    description: 'State of the redeeming user.',
     example: 'CA',
     type: String,
   })
@@ -156,8 +145,7 @@ export class CoinflowWithdrawKycUsDto {
   state: string;
 
   @ApiProperty({
-    description:
-      'Zip of the redeeming user.',
+    description: 'Zip of the redeeming user.',
     example: '7000',
     type: String,
   })
@@ -165,8 +153,7 @@ export class CoinflowWithdrawKycUsDto {
   zip: string;
 
   @ApiProperty({
-    description:
-      'Date of birth (YYYYMMDD) of the redeeming user.',
+    description: 'Date of birth (YYYYMMDD) of the redeeming user.',
     example: '19701012',
     type: String,
   })
@@ -174,8 +161,7 @@ export class CoinflowWithdrawKycUsDto {
   dob: string;
 
   @ApiProperty({
-    description:
-      'Last 4 digits of SSN of the redeeming user.',
+    description: 'Last 4 digits of SSN of the redeeming user.',
     example: '1234',
     type: String,
   })
@@ -184,5 +170,3 @@ export class CoinflowWithdrawKycUsDto {
   @MaxLength(4)
   ssn: string;
 }
-
-

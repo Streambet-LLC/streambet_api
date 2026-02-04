@@ -21,31 +21,31 @@ export class N8nIntegrationService {
       const webhookInfo = data.webhookInfo || {};
       const eventType = payload.eventType || 'unknown';
       const category = payload.category || 'unknown';
-      
+
       // Determine status based on official Coinflow event types
       // Reference: https://docs.coinflow.cash/guides/checkout/checkout-webhooks
       const eventTypeLower = eventType.toLowerCase();
-      const isFailedEvent = 
-        eventTypeLower.includes('declined') ||           // "Card Payment Declined"
-        eventTypeLower.includes('fraud') ||              // "Card Payment Suspected Fraud"
-        eventTypeLower.includes('failed') ||             // "ACH Failed", "PIX Failed", "Subscription Failure"
-        eventTypeLower.includes('pending review') ||     // "Payment Pending Review"
-        eventTypeLower.includes('chargeback opened') ||  // "Card Payment Chargeback Opened"
-        eventTypeLower.includes('chargeback lost') ||    // "Card Payment Chargeback Lost"
-        eventTypeLower.includes('returned') ||           // "ACH Returned"
-        eventTypeLower.includes('expiration') ||         // "PIX Expiration", "Payment Expiration"
-        eventTypeLower.includes('expired') ||            // "Subscription Expired"
-        eventTypeLower.includes('canceled') ||           // "Subscription Canceled"
-        eventTypeLower.includes('concluded');            // "Subscription Concluded"
-      
+      const isFailedEvent =
+        eventTypeLower.includes('declined') || // "Card Payment Declined"
+        eventTypeLower.includes('fraud') || // "Card Payment Suspected Fraud"
+        eventTypeLower.includes('failed') || // "ACH Failed", "PIX Failed", "Subscription Failure"
+        eventTypeLower.includes('pending review') || // "Payment Pending Review"
+        eventTypeLower.includes('chargeback opened') || // "Card Payment Chargeback Opened"
+        eventTypeLower.includes('chargeback lost') || // "Card Payment Chargeback Lost"
+        eventTypeLower.includes('returned') || // "ACH Returned"
+        eventTypeLower.includes('expiration') || // "PIX Expiration", "Payment Expiration"
+        eventTypeLower.includes('expired') || // "Subscription Expired"
+        eventTypeLower.includes('canceled') || // "Subscription Canceled"
+        eventTypeLower.includes('concluded'); // "Subscription Concluded"
+
       const status = isFailedEvent ? 'failed' : 'success';
-      
+
       // Query database for user name, email, and state
       let customerName = '';
       let customerEmail = '';
       let customerState = '';
       const userId = webhookInfo.user_id || '';
-      
+
       if (userId) {
         try {
           const user = await this.usersService.findOne(userId);
@@ -55,10 +55,13 @@ export class N8nIntegrationService {
             customerState = user.state || '';
           }
         } catch (error) {
-          this.logger.warn(`Failed to fetch user data for userId ${userId}`, error);
+          this.logger.warn(
+            `Failed to fetch user data for userId ${userId}`,
+            error,
+          );
         }
       }
-      
+
       // Extract specific fields from Coinflow payload
       const transaction: any = {
         transactionId: data.id || '',
@@ -106,7 +109,9 @@ export class N8nIntegrationService {
     }
   }
 
-  private extractError(data: any): { message: string; details: any } | undefined {
+  private extractError(
+    data: any,
+  ): { message: string; details: any } | undefined {
     if (data.error) {
       return {
         message: data.error,

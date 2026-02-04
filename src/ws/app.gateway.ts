@@ -107,7 +107,7 @@ export class AppGateway
         if (!this.userSocketMap.has(username)) {
           this.userSocketMap.set(username, new Set());
         }
-        this.userSocketMap.get(username)!.add(client.id);
+        this.userSocketMap.get(username).add(client.id);
         // Store reverse mapping for cleanup
         this.socketIdToUsername.set(client.id, username);
       }

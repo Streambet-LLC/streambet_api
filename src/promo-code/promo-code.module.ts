@@ -9,4 +9,4 @@ import { WalletsModule } from 'src/wallets/wallets.module';
   providers: [PromoCodeService],
   exports: [PromoCodeService],
 })
-export class PromoCodeModule { }
+export class PromoCodeModule {}

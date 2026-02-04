@@ -38,7 +38,12 @@ import {
   ApiOkResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { ProfileUpdateDto, UserFilterDto, UserUpdateDto, UserCreatorRoleUpdateDto } from 'src/users/dto/user.requests.dto';
+import {
+  ProfileUpdateDto,
+  UserFilterDto,
+  UserUpdateDto,
+  UserCreatorRoleUpdateDto,
+} from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
@@ -71,7 +76,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly streamService: StreamService,
     private readonly payoutService: PlatformPayoutService,
-  ) { }
+  ) {}
 
   // Helper method to check if user is admin
   private ensureAdmin(user: User) {
@@ -174,7 +179,10 @@ export class AdminController {
     this.ensureAdminOrCreator(req.user);
 
     // Only admins can modify the isPromoted field
-    if (updateStreamDto.isPromoted !== undefined && req.user.role !== UserRole.ADMIN) {
+    if (
+      updateStreamDto.isPromoted !== undefined &&
+      req.user.role !== UserRole.ADMIN
+    ) {
       throw new ForbiddenException('Only admins can promote or demote streams');
     }
 
@@ -271,7 +279,11 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdminOrCreator(req.user);
-    const result = await this.bettingService.declareWinner(req.user.role, req.user.id, id);
+    const result = await this.bettingService.declareWinner(
+      req.user.role,
+      req.user.id,
+      id,
+    );
     return {
       message: 'Winner declared and payouts processed successfully',
       status: HttpStatus.OK,
@@ -383,8 +395,9 @@ export class AdminController {
     @Request() req: RequestWithUser,
   ) {
     this.ensureAdmin(req.user);
-    const { result, message } =
-      await this.usersService.updateUserCreatorRole(userCreatorRoleUpdateDto);
+    const { result, message } = await this.usersService.updateUserCreatorRole(
+      userCreatorRoleUpdateDto,
+    );
     return {
       statusCode: HttpStatus.OK,
       message,
@@ -513,8 +526,11 @@ export class AdminController {
     @Query() streamFilterDto: StreamFilterDto,
   ) {
     this.ensureAdmin(req.user);
-    const { total, data } =
-      await this.streamService.allStreamsForAdmin(req.user.role, req.user.id, streamFilterDto);
+    const { total, data } = await this.streamService.allStreamsForAdmin(
+      req.user.role,
+      req.user.id,
+      streamFilterDto,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
@@ -541,7 +557,11 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureAdminOrCreator(req.user);
-    const data = await this.streamService.findStreamDetailsForAdmin(req.user.role, req.user.id, id);
+    const data = await this.streamService.findStreamDetailsForAdmin(
+      req.user.role,
+      req.user.id,
+      id,
+    );
     return {
       message: 'Successfully fetch Stream details',
       status: HttpStatus.OK,
@@ -605,13 +625,17 @@ export class AdminController {
   async updateBetRoundLandingVisibility(
     @Request() req: RequestWithUser,
     @Param('roundId') roundId: string,
-    @Body() body: {
-      hidden: boolean
+    @Body()
+    body: {
+      hidden: boolean;
     },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
 
-    await this.bettingService.updateBetRoundLandingVisibility(roundId, body.hidden);
+    await this.bettingService.updateBetRoundLandingVisibility(
+      roundId,
+      body.hidden,
+    );
 
     return {
       message: 'Round visibility on landing page updated successfully',
@@ -659,7 +683,11 @@ export class AdminController {
   ): Promise<ApiResponse> {
     this.ensureAdminOrCreator(req.user);
     const endedStream =
-      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(req.user.role, req.user.id, id);
+      await this.streamService.endStreamIfAllRoundsClosedOrCancelled(
+        req.user.role,
+        req.user.id,
+        id,
+      );
     return {
       message: 'Stream ended successfully',
       status: HttpStatus.OK,
@@ -675,7 +703,11 @@ export class AdminController {
     @Param('roundId') roundId: string,
   ): Promise<ApiResponse> {
     this.ensureAdminOrCreator(req.user);
-    const result = await this.bettingService.cancelRoundAndRefund(req.user.role, req.user.id, roundId);
+    const result = await this.bettingService.cancelRoundAndRefund(
+      req.user.role,
+      req.user.id,
+      roundId,
+    );
     return {
       message: 'Round cancelled and all bets refunded',
       status: HttpStatus.OK,
@@ -758,7 +790,11 @@ export class AdminController {
 
     // Get stream details (including betting rounds and variables)
     const { totalUsers, totalStreamTime } =
-      await this.streamService.getStreamAnalytics(req.user.role, req.user.id, streamId);
+      await this.streamService.getStreamAnalytics(
+        req.user.role,
+        req.user.id,
+        streamId,
+      );
 
     // Get total bet value for the stream
     const totalBetValue =
@@ -817,10 +853,13 @@ export class AdminController {
   async cancelScheduledStream(
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
-  ): Promise<{ message: string; data: String; statusCode: Number }> {
+  ): Promise<{ message: string; data: string; statusCode: number }> {
     this.ensureAdminOrCreator(req.user);
-    const canceledStreamId =
-      await this.streamService.cancelScheduledStream(req.user.role, req.user.id, streamId);
+    const canceledStreamId = await this.streamService.cancelScheduledStream(
+      req.user.role,
+      req.user.id,
+      streamId,
+    );
     return {
       data: canceledStreamId,
       message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
@@ -836,9 +875,7 @@ export class AdminController {
   ) {
     this.ensureAdminOrCreator(req.user);
 
-    const data = await this.adminService.getUserProfile(
-      userId,
-    );
+    const data = await this.adminService.getUserProfile(userId);
     return {
       data,
       message: 'User profile fetched successfully',
@@ -851,7 +888,11 @@ export class AdminController {
   async updateUserProfile(
     @Request() req: RequestWithUser,
     @Param('userId') userId: string,
-    @Body() profileUpdateDto: Omit<ProfileUpdateDto, "password" | "currentPassword" | "newPassword">,
+    @Body()
+    profileUpdateDto: Omit<
+      ProfileUpdateDto,
+      'password' | 'currentPassword' | 'newPassword'
+    >,
   ) {
     this.ensureAdminOrCreator(req.user);
 
@@ -901,14 +942,16 @@ export class AdminController {
       },
     },
   })
-
   async deleteScheduledStream(
     @Request() req: RequestWithUser,
     @Param('streamId') streamId: string,
-  ): Promise<{ message: string; data: String; statusCode: Number }> {
+  ): Promise<{ message: string; data: string; statusCode: number }> {
     this.ensureAdminOrCreator(req.user);
-    const deletedStreamId =
-      await this.streamService.deleteScheduledStream(req.user.role, req.user.id, streamId);
+    const deletedStreamId = await this.streamService.deleteScheduledStream(
+      req.user.role,
+      req.user.id,
+      streamId,
+    );
     return {
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,

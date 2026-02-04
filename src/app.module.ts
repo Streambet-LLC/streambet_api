@@ -24,7 +24,10 @@ import emailConfig from './config/email.config';
 import { StreamModule } from './stream/stream.module';
 import { NotificationModule } from './notification/notification.module';
 import { QueueBoardModule } from './queue/queue-board.module';
-import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  STREAM_LIVE_QUEUE,
+} from './common/constants/queue.constants';
 import { ChatModule } from './chat/chat.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
@@ -134,7 +137,7 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
     WebhookModule,
     PrizeModule,
     ScheduleModule.forRoot(),
-    ScheduledTaskModule
+    ScheduledTaskModule,
   ],
   controllers: [AppController],
   providers: [
@@ -146,5 +149,5 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
   ],
 })
 export class AppModule {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 }

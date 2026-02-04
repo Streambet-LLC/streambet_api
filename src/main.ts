@@ -15,7 +15,10 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { Queue } from 'bullmq';
-import { EMAIL_QUEUE, STREAM_LIVE_QUEUE } from './common/constants/queue.constants';
+import {
+  EMAIL_QUEUE,
+  STREAM_LIVE_QUEUE,
+} from './common/constants/queue.constants';
 import { getQueueToken } from '@nestjs/bullmq';
 import { SocketIoAdapter } from './ws/socket-io.adapter';
 
@@ -32,7 +35,6 @@ async function bootstrap() {
 
   // app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
 
-  
   const trustProxy = configService.get<string>('geo.trustProxy');
   const enableTrustProxy =
     trustProxy === 'true' || trustProxy === '1' || trustProxy === 'yes';
@@ -46,7 +48,10 @@ async function bootstrap() {
   serverAdapter.setBasePath('/admin/queues');
 
   createBullBoard({
-    queues: [new BullMQAdapter(streamLiveQueue), new BullMQAdapter(sendEmailQueue)],
+    queues: [
+      new BullMQAdapter(streamLiveQueue),
+      new BullMQAdapter(sendEmailQueue),
+    ],
     serverAdapter,
   });
 
