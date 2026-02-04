@@ -13,10 +13,11 @@ import { RedisModule } from 'src/redis/redis.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { Bet } from 'src/betting/entities/bet.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Stream, BettingRound, BettingVariable]),
+    TypeOrmModule.forFeature([Stream, BettingRound, BettingVariable, Bet]),
     forwardRef(() => WalletsModule),
     forwardRef(() => BettingModule),
     forwardRef(() => QueueModule),

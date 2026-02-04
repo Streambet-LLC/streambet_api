@@ -40,6 +40,7 @@ import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { UserRole } from 'src/enums/user-role.enum';
 import { getPromotedBetsConfig } from './config/promoted-bets.config';
 import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
+import { Bet } from 'src/betting/entities/bet.entity';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -53,6 +54,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private bettingVariableRepository: Repository<BettingVariable>,
     @InjectRepository(BettingRound)
     private bettingRoundRepository: Repository<BettingRound>,
+    @InjectRepository(Bet)
+    private betRepository: Repository<Bet>,
     private walletService: WalletsService,
     @Inject(forwardRef(() => BettingService))
     private bettingService: BettingService,
@@ -286,8 +289,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .leftJoinAndSelect('s.creator', 'c')
         .where('s.type = :type', { type: StreamEventType.PROMO })
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
-        .andWhere('s.status IN (:...statuses)', { 
-          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED] 
+        .andWhere('s.status IN (:...statuses)', {
+          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
         })
         .orderBy('s.updatedAt', 'DESC')
         .limit(10)
@@ -349,12 +352,18 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+          }
+        });
+
+        const users = await this.betRepository.count({
+          where: {
+            roundId: item.br_id
           }
         });
 
@@ -371,6 +380,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          users,
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
@@ -691,12 +701,18 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+          }
+        });
+
+        const users = await this.betRepository.count({
+          where: {
+            roundId: item.id
           }
         });
 
@@ -711,6 +727,7 @@ END
           type: stream.type,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           status: item.status,
+          users,
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
@@ -870,7 +887,7 @@ END
         bettingRoundsWithVariablePercentages,
         ...stream,
       };
-      
+
       return result;
     } catch (e) {
       if (e instanceof NotFoundException) {
@@ -1797,7 +1814,7 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
@@ -1807,6 +1824,12 @@ END
               amount: v.user_bet_amount,
               currency: v.user_bet_currency,
             } : null
+          }
+        });
+
+        const users = await this.betRepository.count({
+          where: {
+            roundId: item.br_id
           }
         });
 
@@ -1829,6 +1852,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          users,
           description: item.s_description,
         }
 
@@ -1859,7 +1883,7 @@ END
     const page = query.page ?? 1;
     const take = query.limit ?? 4;
     const username = query.username;
-    const offset = (page - 1) * take; 
+    const offset = (page - 1) * take;
 
     try {
       const betRoundsQB = this.bettingRoundRepository
@@ -1909,12 +1933,18 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+          }
+        });
+
+        const users = await this.betRepository.count({
+          where: {
+            roundId: item.br_id
           }
         });
 
@@ -1935,6 +1965,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          users,
           description: item.s_description,
         }
 
@@ -2036,12 +2067,18 @@ END
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+          }
+        });
+
+        const users = await this.betRepository.count({
+          where: {
+            roundId: item.br_id
           }
         });
 
@@ -2061,6 +2098,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          users,
           description: item.s_description,
         }
 

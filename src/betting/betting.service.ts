@@ -2506,6 +2506,12 @@ export class BettingService {
         })
         .getRawMany();
 
+      const users = await this.betsRepository.count({
+        where: {
+          roundId: bettingRound.id
+        }
+      });
+
       let totalVotes = 0;
       let totalStreamCoins = 0;
       let totalGoldCoins = 0;
@@ -2521,7 +2527,7 @@ export class BettingService {
 
       const options = variables.map((v) => {
         const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-        
+
         return {
           id: v.bv_id,
           option: v.bv_name,
@@ -2545,6 +2551,7 @@ export class BettingService {
         scheduledStartTime: bettingRound.stream.scheduledStartTime,
         category: bettingRound.category,
         options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+        users,
         totalPot: {
           streamCoins: totalStreamCoins,
           goldCoins: totalGoldCoins,
