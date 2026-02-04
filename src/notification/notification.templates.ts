@@ -74,8 +74,7 @@ export const NOTIFICATION_TEMPLATE = {
     TITLE: () => `Round Voided`,
   },
   BET_WINNER_DECLARED: {
-    MESSAGE: (data: BetNotificationData) =>
-      `${data.bettingOption}!`,
+    MESSAGE: (data: BetNotificationData) => `${data.bettingOption}!`,
     TITLE: () => `Winner Declared!`,
   },
   EMAIL_BET_WON: {
@@ -105,7 +104,7 @@ export const NOTIFICATION_TEMPLATE = {
     MESSAGE: (data: BetNotificationData & { originalAmount?: number }) => {
       const amountChanged = data.originalAmount !== data.amount;
       const optionChanged = data.originalOption !== data.bettingOption;
-      
+
       if (amountChanged && optionChanged) {
         return `${data.username} changed Pick to ${data.amount.toLocaleString('en-US')} on ${data.bettingOption}`;
       } else if (optionChanged) {

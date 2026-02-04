@@ -5,46 +5,46 @@ import { ApiProperty } from '@nestjs/swagger';
  * Only returned to authenticated users for their own address
  */
 export class UserAddressDto {
-  @ApiProperty({ 
-    example: '123 Main Street, Apt 4B', 
+  @ApiProperty({
+    example: '123 Main Street, Apt 4B',
     description: 'Street address',
-    nullable: true
+    nullable: true,
   })
   address: string | null;
 
-  @ApiProperty({ 
-    example: 'Apt 4B', 
+  @ApiProperty({
+    example: 'Apt 4B',
     description: 'Apartment, suite, unit, etc.',
     nullable: true,
-    required: false
+    required: false,
   })
   address2: string | null;
 
-  @ApiProperty({ 
-    example: 'New York', 
+  @ApiProperty({
+    example: 'New York',
     description: 'City',
-    nullable: true
+    nullable: true,
   })
   city: string | null;
 
-  @ApiProperty({ 
-    example: 'NY', 
+  @ApiProperty({
+    example: 'NY',
     description: 'State or province',
-    nullable: true
+    nullable: true,
   })
   state: string | null;
 
-  @ApiProperty({ 
-    example: '10001', 
+  @ApiProperty({
+    example: '10001',
     description: 'ZIP or postal code',
-    nullable: true
+    nullable: true,
   })
   zipCode: string | null;
 
-  @ApiProperty({ 
-    example: 'United States', 
+  @ApiProperty({
+    example: 'United States',
     description: 'Country',
-    nullable: true
+    nullable: true,
   })
   country: string | null;
 }

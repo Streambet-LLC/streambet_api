@@ -53,7 +53,7 @@ export class BettingGateway {
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
     const userId = client.data?.user?.sub;
     const username = client.data?.user?.username || 'Guest';
-    
+
     client.join(STREAMBET); // join common betting room
 
     // Add authenticated users to the socket map
@@ -62,13 +62,17 @@ export class BettingGateway {
         this.appGateway.userSocketMap.set(userId, new Set());
       }
       // Add this socket ID to the set
-      this.appGateway.userSocketMap.get(userId)!.add(client.id);
+      this.appGateway.userSocketMap.get(userId).add(client.id);
     }
 
     // Notify all users in 'streambet' room
-    await emitToStreamBet(this.gatewayManager, SocketEventName.JoinedStreamBet, {
-      username,
-    });
+    await emitToStreamBet(
+      this.gatewayManager,
+      SocketEventName.JoinedStreamBet,
+      {
+        username,
+      },
+    );
 
     this.logger.log(`User ${username} joined room streambet`);
   }
@@ -119,7 +123,7 @@ export class BettingGateway {
       }
 
       // Prepare payload for the user's socket
-      let betPlacePayload: PlaceBetResult = {
+      const betPlacePayload: PlaceBetResult = {
         bet,
         success: true,
         currencyType: placeBetDto.currencyType,
@@ -353,7 +357,7 @@ export class BettingGateway {
 
       const roundId = bettingVariable?.roundId || bettingVariable?.round?.id;
 
-      let betCancelPayout: CancelBetPayout = {
+      const betCancelPayout: CancelBetPayout = {
         bet,
         success: true,
         updatedWalletBalance: {
@@ -399,9 +403,7 @@ export class BettingGateway {
 
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
-            streamId,
-          );
+          betStat = await this.bettingService.getBetStatsByStream(streamId);
         }
         void emitToStream(
           this.gatewayManager,
@@ -419,10 +421,7 @@ export class BettingGateway {
           },
         );
 
-        await this.sendPersonalizedPotentialAmounts(
-          streamId,
-          roundIdEmit,
-        );
+        await this.sendPersonalizedPotentialAmounts(streamId, roundIdEmit);
 
         // System chat notification for bet cancellation
         const systemMessage =
@@ -431,11 +430,7 @@ export class BettingGateway {
             amount: bet.amount,
             bettingOption: bettingVariable.name,
           });
-        await this.chatGateway.chatNotification(
-          user,
-          streamId,
-          systemMessage,
-        );
+        await this.chatGateway.chatNotification(user, streamId, systemMessage);
       }
     } catch (error) {
       client.emit('error', {
@@ -454,8 +449,11 @@ export class BettingGateway {
       const user = client.data.user;
 
       // Edit bet in service
-      const { betDetails: editedBet, oldBettingAmount, oldBettingOption } =
-        await this.bettingService.editBet(user.sub, editBetDto);
+      const {
+        betDetails: editedBet,
+        oldBettingAmount,
+        oldBettingOption,
+      } = await this.bettingService.editBet(user.sub, editBetDto);
 
       const [updatedWallet, bettingVariable] = await Promise.all([
         this.walletsService.findByUserId(user.sub),
@@ -479,7 +477,7 @@ export class BettingGateway {
       }
 
       // Prepare payload
-      let betEditedPayload: EditedBetPayload = {
+      const betEditedPayload: EditedBetPayload = {
         bet: editedBet,
         success: true,
         timestamp: new Date(),
@@ -545,9 +543,7 @@ export class BettingGateway {
 
         let betStat = {};
         if (user.role === UserRole.ADMIN) {
-          betStat = await this.bettingService.getBetStatsByStream(
-            streamId,
-          );
+          betStat = await this.bettingService.getBetStatsByStream(streamId);
         }
         void emitToStream(
           this.gatewayManager,
@@ -565,15 +561,12 @@ export class BettingGateway {
           },
         );
 
-        await this.sendPersonalizedPotentialAmounts(
-          streamId,
-          roundIdEmit,
-        );
+        await this.sendPersonalizedPotentialAmounts(streamId, roundIdEmit);
 
         // System chat notification for bet edit - only send if something actually changed
         const amountChanged = Number(oldBettingAmount) !== editedBet.amount;
         const optionChanged = oldBettingOption !== bettingVariable.name;
-        
+
         if (amountChanged || optionChanged) {
           const systemMessage =
             NOTIFICATION_TEMPLATE.EDIT_BET_CHAT_MESSAGE.MESSAGE({
@@ -637,7 +630,7 @@ export class BettingGateway {
     winnerName: string,
     winners: { userId: string; username: string }[],
     losers: { userId: string; username: string }[],
-    voided: { goldCoin: boolean; sweepCoin: boolean, cadeCoin: boolean } = {
+    voided: { goldCoin: boolean; sweepCoin: boolean; cadeCoin: boolean } = {
       goldCoin: false,
       sweepCoin: false,
       cadeCoin: false,
@@ -708,7 +701,7 @@ export class BettingGateway {
       message,
       timestamp: new Date(),
     };
-    
+
     // Emit to specific stream room
     await emitToStream(this.gatewayManager, streamId, event, payload);
     await emitToStream(
@@ -717,7 +710,7 @@ export class BettingGateway {
       SocketEventName.ChatMessage,
       chatMessage,
     );
-    
+
     // Emit to global streambet room (for home page stream cards)
     await emitToStreamBet(this.gatewayManager, event, payload);
   }

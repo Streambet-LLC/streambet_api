@@ -64,7 +64,7 @@ export class GatewayManager {
     if (!this.userIdToSocketIds.has(userId)) {
       this.userIdToSocketIds.set(userId, new Set());
     }
-    this.userIdToSocketIds.get(userId)!.add(socket.id);
+    this.userIdToSocketIds.get(userId).add(socket.id);
   }
 
   /** Remove mapping on disconnect */

@@ -34,4 +34,4 @@ import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.m
   providers: [BettingService, BettingGateway],
   exports: [BettingService, BettingGateway],
 })
-export class BettingModule { }
+export class BettingModule {}

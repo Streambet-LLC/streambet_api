@@ -29,7 +29,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User is no longer active');
     }
 
-    
     if ((user as any).deletedAt) {
       throw new UnauthorizedException({
         message: 'Your account has been deleted by Admin',

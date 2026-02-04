@@ -80,7 +80,10 @@ export class QueueService {
   async addCoinflowWebhookJob(webhook: WebhookDto) {
     try {
       const webhookData = JSON.stringify(webhook);
-      const job = await this.coinflowWebhookQueue.add(QUEUE_COINFLOW_WEBHOOK, webhookData);
+      const job = await this.coinflowWebhookQueue.add(
+        QUEUE_COINFLOW_WEBHOOK,
+        webhookData,
+      );
 
       this.logger.log(`Added coinflow webhook job: ${job.id}`);
       return job;

@@ -18,4 +18,4 @@ import { PrizeModule } from 'src/prize/prize.module';
   providers: [UsersService, ReferralService, FollowerService],
   exports: [UsersService],
 })
-export class UsersModule { }
+export class UsersModule {}

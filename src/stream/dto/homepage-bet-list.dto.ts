@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { StreamEventType, StreamStatus } from 'src/enums/stream.enum';
 import { BettingCategory } from 'src/enums/betting-category.enum';
 
@@ -14,7 +20,7 @@ export class HomepageBetListDto {
 
   @ApiPropertyOptional({
     type: String,
-    default: "",
+    default: '',
   })
   @IsOptional()
   @IsString()

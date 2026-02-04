@@ -35,7 +35,11 @@ export class PlaceBetDto {
   amount: number;
 
   @ApiProperty()
-  @IsIn([CurrencyType.GOLD_COINS, CurrencyType.SWEEP_COINS, CurrencyType.CADE_COINS])
+  @IsIn([
+    CurrencyType.GOLD_COINS,
+    CurrencyType.SWEEP_COINS,
+    CurrencyType.CADE_COINS,
+  ])
   currencyType: CurrencyType;
 }
 
@@ -73,9 +77,17 @@ export class EditBetDto {
   @ApiProperty({
     description: 'The new currency type to use for the bet',
     example: CurrencyType.SWEEP_COINS,
-    enum: [CurrencyType.GOLD_COINS, CurrencyType.SWEEP_COINS, CurrencyType.CADE_COINS],
+    enum: [
+      CurrencyType.GOLD_COINS,
+      CurrencyType.SWEEP_COINS,
+      CurrencyType.CADE_COINS,
+    ],
     enumName: 'CurrencyType',
   })
-  @IsIn([CurrencyType.GOLD_COINS, CurrencyType.SWEEP_COINS, CurrencyType.CADE_COINS])
+  @IsIn([
+    CurrencyType.GOLD_COINS,
+    CurrencyType.SWEEP_COINS,
+    CurrencyType.CADE_COINS,
+  ])
   newCurrencyType: CurrencyType;
 }

@@ -8,5 +8,5 @@ export class FollowerService {
   constructor(
     @InjectRepository(Follower)
     private readonly referralLinkRepository: Repository<Follower>,
-  ) { }
+  ) {}
 }

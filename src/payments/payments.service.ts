@@ -19,7 +19,10 @@ import { randomUUID } from 'crypto';
 import { CoinflowPayoutSpeed } from 'src/enums/coinflow-payout-speed.enum';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
-import { CoinflowWithdrawKycDto, CoinflowWithdrawKycUsDto } from './dto/coinflow-withdraw.dto';
+import {
+  CoinflowWithdrawKycDto,
+  CoinflowWithdrawKycUsDto,
+} from './dto/coinflow-withdraw.dto';
 import { get } from 'lodash-es';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
 import { WebhookDto } from 'src/webhook/dto/webhook.dto';
@@ -46,8 +49,10 @@ export class PaymentsService {
     private walletsService: WalletsService,
     private coinPackageService: CoinPackageService,
     private walletGateway: WalletGateway,
-    @Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService,
-    @InjectRepository(Transaction) private transactionsRepository: Repository<Transaction>,
+    @Inject(forwardRef(() => NotificationService))
+    private readonly notificationService: NotificationService,
+    @InjectRepository(Transaction)
+    private transactionsRepository: Repository<Transaction>,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -335,7 +340,7 @@ export class PaymentsService {
     try {
       const { data } = await this.coinflowClient.get('/api/withdraw', {
         params: {
-          redirectLink
+          redirectLink,
         },
         headers: {
           'x-coinflow-auth-user-id': userId,
@@ -344,10 +349,15 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+      if (
+        error.status === 451 &&
+        get(error, 'response.data.verificationLink')
+      ) {
         return {
           status: 451,
-          data: { verificationLink: get(error, "response.data.verificationLink") },
+          data: {
+            verificationLink: get(error, 'response.data.verificationLink'),
+          },
         };
       }
 
@@ -430,8 +440,8 @@ export class PaymentsService {
         while (queue.length > 0) {
           const current = queue.shift();
           if (current && typeof current === 'object') {
-            if (Array.isArray((current as any).bankAccounts)) {
-              return (current as any).bankAccounts as any[];
+            if (Array.isArray(current.bankAccounts)) {
+              return current.bankAccounts as any[];
             }
             for (const value of Object.values(current)) {
               if (value && typeof value === 'object') queue.push(value);
@@ -450,10 +460,10 @@ export class PaymentsService {
       const tokenExists = bankAccounts.some((acc: any) => {
         if (!acc || typeof acc !== 'object') return false;
         const candidates = [
-          (acc as any).token,
-          (acc as any).accountToken,
-          (acc as any).bankAccountToken,
-          (acc as any).id,
+          acc.token,
+          acc.accountToken,
+          acc.bankAccountToken,
+          acc.id,
         ];
         return candidates.some(
           (v) => typeof v === 'string' && v.trim() === normalizedToken,
@@ -494,17 +504,15 @@ export class PaymentsService {
     const status = axiosError.response?.status;
     const responseData = axiosError.response?.data;
     const safeDetail =
-      (responseData && typeof (responseData as any).message === 'string'
-        ? (responseData as any).message
+      (responseData && typeof responseData.message === 'string'
+        ? responseData.message
         : typeof responseData === 'string'
           ? responseData
           : axiosError.message) || 'Unknown Coinflow error';
 
     // If details exist, append them
     const details =
-      responseData && (responseData as any).details
-        ? `, ${(responseData as any).details}`
-        : '';
+      responseData && responseData.details ? `, ${responseData.details}` : '';
 
     const message = `${prefix}: ${safeDetail}${details}`;
     const httpStatus =
@@ -522,18 +530,24 @@ export class PaymentsService {
       const payload: CoinflowWebhookDto = JSON.parse(webhook.data);
       const { category } = payload;
 
-      if (category === "Purchase") {
+      if (category === 'Purchase') {
         this.handleCoinflowWebhookPurchase(webhook.webhookId, payload);
-      } else if (category === "Withdraw") {
+      } else if (category === 'Withdraw') {
         this.handleCoinflowWebhookWithdraw(webhook.webhookId, payload);
       }
     } catch (error) {
       if (error instanceof HttpException) {
-        Logger.error(`Failed to process Coinflow webhook ${webhook.webhookId}: ${error}`, PaymentsService.name);
+        Logger.error(
+          `Failed to process Coinflow webhook ${webhook.webhookId}: ${error}`,
+          PaymentsService.name,
+        );
         return;
       }
 
-      Logger.error(`Failed to process Coinflow webhook ${webhook.webhookId}: ${(error as Error)?.message}`, PaymentsService.name);
+      Logger.error(
+        `Failed to process Coinflow webhook ${webhook.webhookId}: ${(error as Error)?.message}`,
+        PaymentsService.name,
+      );
       return;
     }
   }
@@ -541,16 +555,21 @@ export class PaymentsService {
   /**
    * Handle Coinflow purchase webhook events
    */
-  async handleCoinflowWebhookPurchase(webhookId: string, payload: CoinflowWebhookDto) {
+  async handleCoinflowWebhookPurchase(
+    webhookId: string,
+    payload: CoinflowWebhookDto,
+  ) {
     try {
       const { eventType, category, data } = payload;
 
-      if (category !== "Purchase") return;
+      if (category !== 'Purchase') return;
 
-      if (eventType === "Settled") {
+      if (eventType === 'Settled') {
         const userId = data.rawCustomerId as string | undefined;
-        const coinPackageId = get(data, "webhookInfo.coin_package_id") as string | undefined;
-        const webhookEnv = get(data, "webhookInfo.env") as string | undefined;
+        const coinPackageId = get(data, 'webhookInfo.coin_package_id') as
+          | string
+          | undefined;
+        const webhookEnv = get(data, 'webhookInfo.env') as string | undefined;
         const relatedEntityId = data.id as string | undefined;
 
         if (!userId) {
@@ -558,26 +577,35 @@ export class PaymentsService {
         }
 
         if (!coinPackageId) {
-          throw new BadRequestException('Missing coinPackageId (webhookInfo.coin_package_id)');
+          throw new BadRequestException(
+            'Missing coinPackageId (webhookInfo.coin_package_id)',
+          );
         }
 
         if (!relatedEntityId) {
           throw new BadRequestException('Missing dataId (data.id)');
         }
 
-        const expectedEnv = (this.configService.get<string>('coinflow.webhookEnv') || 'dev').trim().toLowerCase();
+        const expectedEnv = (
+          this.configService.get<string>('coinflow.webhookEnv') || 'dev'
+        )
+          .trim()
+          .toLowerCase();
         const receivedEnv = webhookEnv.trim().toLowerCase();
 
         if (expectedEnv !== receivedEnv) {
-          throw new BadRequestException(`mismatch (received="${receivedEnv ?? 'undefined'}", expected="${expectedEnv}"'`);
+          throw new BadRequestException(
+            `mismatch (received="${receivedEnv ?? 'undefined'}", expected="${expectedEnv}"'`,
+          );
         }
 
-        const coinPackage = await this.coinPackageService.findById(coinPackageId);
+        const coinPackage =
+          await this.coinPackageService.findById(coinPackageId);
 
         if (!coinPackage) {
           throw new BadRequestException('Coin package provided was not found');
         }
-        
+
         const relatedEntityType = 'coinflow';
 
         // If we've already processed this purchase for a given currency, skip credit for that currency
@@ -598,7 +626,11 @@ export class PaymentsService {
               CurrencyType.GOLD_COINS,
               TransactionType.PURCHASE,
               `Purchase of ${coinPackage.name}: ${coinPackage.goldCoinCount} gold coins`,
-              { coinPackageId: coinPackage.id, source: 'coinflow', usdAmount: Number(coinPackage.totalAmount) },
+              {
+                coinPackageId: coinPackage.id,
+                source: 'coinflow',
+                usdAmount: Number(coinPackage.totalAmount),
+              },
               { relatedEntityId, relatedEntityType },
             );
           }
@@ -655,11 +687,17 @@ export class PaymentsService {
       }
     } catch (error) {
       if (error instanceof HttpException) {
-        Logger.error(`Failed to process Coinflow purchase webhook ${webhookId}: ${error}`, PaymentsService.name);
+        Logger.error(
+          `Failed to process Coinflow purchase webhook ${webhookId}: ${error}`,
+          PaymentsService.name,
+        );
         return;
       }
 
-      Logger.error(`Failed to process Coinflow purchase webhook ${webhookId}: ${(error as Error)?.message}`, PaymentsService.name);
+      Logger.error(
+        `Failed to process Coinflow purchase webhook ${webhookId}: ${(error as Error)?.message}`,
+        PaymentsService.name,
+      );
       return;
     }
   }
@@ -667,11 +705,18 @@ export class PaymentsService {
   /**
    * Handle Coinflow withdraw webhook events
    */
-  async handleCoinflowWebhookWithdraw(webhookId: string, payload: CoinflowWebhookDto) {
+  async handleCoinflowWebhookWithdraw(
+    webhookId: string,
+    payload: CoinflowWebhookDto,
+  ) {
     try {
       const { eventType, category, data } = payload;
 
-      if (category !== "Withdraw" || (eventType !== "Withdraw Success" && eventType !== "Withdraw Failure")) return;
+      if (
+        category !== 'Withdraw' ||
+        (eventType !== 'Withdraw Success' && eventType !== 'Withdraw Failure')
+      )
+        return;
 
       const relatedEntityId = data.signature as string | undefined;
       const relatedEntityType = 'coinflow';
@@ -683,8 +728,8 @@ export class PaymentsService {
       const clauses = [
         TransactionType.WITHDRAWAL_PENDING,
         TransactionType.WITHDRAWAL_SUCCESS,
-        TransactionType.WITHDRAWAL_FAILED
-      ].map((type) => ({ 
+        TransactionType.WITHDRAWAL_FAILED,
+      ].map((type) => ({
         relatedEntityId,
         type,
         relatedEntityType,
@@ -695,46 +740,59 @@ export class PaymentsService {
         where: clauses,
       });
 
-      const initialTransaction = withdrawals.find((withdrawal) => withdrawal.type === TransactionType.WITHDRAWAL_PENDING);
+      const initialTransaction = withdrawals.find(
+        (withdrawal) => withdrawal.type === TransactionType.WITHDRAWAL_PENDING,
+      );
 
       if (!initialTransaction) {
-        Logger.warn(`Ignoring coinflow webhook ${webhookId}: provided signature does not match any initial transaction`);
+        Logger.warn(
+          `Ignoring coinflow webhook ${webhookId}: provided signature does not match any initial transaction`,
+        );
         return;
       }
 
-      if (withdrawals.filter((withdrawal) => 
-        withdrawal.type === TransactionType.WITHDRAWAL_SUCCESS || 
-        withdrawal.type === TransactionType.WITHDRAWAL_FAILED).length > 0
+      if (
+        withdrawals.filter(
+          (withdrawal) =>
+            withdrawal.type === TransactionType.WITHDRAWAL_SUCCESS ||
+            withdrawal.type === TransactionType.WITHDRAWAL_FAILED,
+        ).length > 0
       ) {
-        Logger.warn(`Ignoring coinflow webhook ${webhookId}: provided signature has already been completed`);
+        Logger.warn(
+          `Ignoring coinflow webhook ${webhookId}: provided signature has already been completed`,
+        );
         return;
       }
 
       await this.walletsService.updateBalance(
         initialTransaction.userId,
-        eventType === "Withdraw Success" ? 0 : initialTransaction.metadata.sweepCoins,
+        eventType === 'Withdraw Success'
+          ? 0
+          : initialTransaction.metadata.sweepCoins,
         CurrencyType.SWEEP_COINS,
-        eventType === "Withdraw Success" ? TransactionType.WITHDRAWAL_SUCCESS : TransactionType.WITHDRAWAL_FAILED,
+        eventType === 'Withdraw Success'
+          ? TransactionType.WITHDRAWAL_SUCCESS
+          : TransactionType.WITHDRAWAL_FAILED,
         `Withdrawal of ${initialTransaction.metadata.sweepCoins} Stream Coins to $${initialTransaction.metadata.usdAmount} ${
-          eventType === "Withdraw Success" ? "was successful" : "failed"
+          eventType === 'Withdraw Success' ? 'was successful' : 'failed'
         }`,
         initialTransaction.metadata,
         { relatedEntityId, relatedEntityType },
       );
 
       // Emit socket notification to all of the user's active connections
-      if (eventType === "Withdraw Success") {
+      if (eventType === 'Withdraw Success') {
         this.walletGateway.emitWithdrawSuccess(initialTransaction.userId, {
           message: `Withdraw Success: ${initialTransaction.metadata.sweepCoins} Stream Coins`,
           sweepCoins: initialTransaction.metadata.sweepCoins,
         });
-      } else if (eventType === "Withdraw Failure") {
+      } else if (eventType === 'Withdraw Failure') {
         this.walletGateway.emitWithdrawFailed(initialTransaction.userId, {
           message: `Withdraw Failed: ${initialTransaction.metadata.sweepCoins} Stream Coins`,
           sweepCoins: initialTransaction.metadata.sweepCoins,
         });
       }
-      
+
       Logger.log(
         `Coinflow ${eventType} for user ${initialTransaction.userId} with ${initialTransaction.metadata.sweepCoins} Stream Coins to $${initialTransaction.metadata.usdAmount}`,
       );
@@ -747,11 +805,17 @@ export class PaymentsService {
       // );
     } catch (error) {
       if (error instanceof HttpException) {
-        Logger.error(`Failed to process Coinflow withdraw webhook ${webhookId}: ${error}`, PaymentsService.name);
+        Logger.error(
+          `Failed to process Coinflow withdraw webhook ${webhookId}: ${error}`,
+          PaymentsService.name,
+        );
         return;
       }
 
-      Logger.error(`Failed to process Coinflow withdraw webhook ${webhookId}: ${(error as Error)?.message}`, PaymentsService.name);
+      Logger.error(
+        `Failed to process Coinflow withdraw webhook ${webhookId}: ${(error as Error)?.message}`,
+        PaymentsService.name,
+      );
       return;
     }
   }
@@ -840,10 +904,15 @@ export class PaymentsService {
         coinflow: data,
       };
     } catch (error) {
-      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+      if (
+        error.status === 451 &&
+        get(error, 'response.data.verificationLink')
+      ) {
         return {
           status: 451,
-          data: { verificationLink: get(error, "response.data.verificationLink") },
+          data: {
+            verificationLink: get(error, 'response.data.verificationLink'),
+          },
         };
       }
       throw this.mapCoinflowError(error, 'Failed to initiate withdraw');
@@ -851,7 +920,11 @@ export class PaymentsService {
   }
 
   async registerUserKyc(userId: string, params: CoinflowWithdrawKycDto) {
-    if (!this.coinflowApiUrl || !this.coinflowApiKey || !this.coinflowMerchantId) {
+    if (
+      !this.coinflowApiUrl ||
+      !this.coinflowApiKey ||
+      !this.coinflowMerchantId
+    ) {
       throw new BadRequestException(
         'Coinflow configuration missing. Please set COINFLOW_API_URL, COINFLOW_API_KEY, and COINFLOW_MERCHANT_ID',
       );
@@ -875,10 +948,15 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+      if (
+        error.status === 451 &&
+        get(error, 'response.data.verificationLink')
+      ) {
         return {
           status: 451,
-          data: { verificationLink: get(error, "response.data.verificationLink") },
+          data: {
+            verificationLink: get(error, 'response.data.verificationLink'),
+          },
         };
       }
 
@@ -913,7 +991,7 @@ export class PaymentsService {
             country: params.country,
             dob: params.dob,
             ssn: params.ssn,
-          }
+          },
         },
         {
           headers: {
@@ -924,13 +1002,18 @@ export class PaymentsService {
 
       return data;
     } catch (error) {
-      if (error.status === 451 && get(error, "response.data.verificationLink")) {
+      if (
+        error.status === 451 &&
+        get(error, 'response.data.verificationLink')
+      ) {
         return {
           status: 451,
-          data: { verificationLink: get(error, "response.data.verificationLink") },
+          data: {
+            verificationLink: get(error, 'response.data.verificationLink'),
+          },
         };
       }
-      
+
       throw this.mapCoinflowError(
         error,
         'Failed to register user as withdrawer',
