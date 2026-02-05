@@ -9,12 +9,15 @@ interface BetNotificationData {
   roundName?: string;
   streamName?: string;
   username?: string;
+  mechanism?: string;
 }
 
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You put ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for '${data.roundName}'!`,
+      data.mechanism === 'sentiment'
+        ? `You picked ${data.bettingOption} on '${data.roundName}'!`
+        : `You put ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for '${data.roundName}'!`,
     TITLE: () => `Pick Placed Successfully`,
   },
   BET_EDIT: {

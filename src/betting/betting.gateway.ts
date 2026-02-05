@@ -151,6 +151,7 @@ export class BettingGateway {
           currencyType: placeBetDto.currencyType,
           bettingOption: bettingVariable?.name || '',
           roundName: bettingVariable.round.roundName || '',
+          mechanism: bettingVariable.round.mechanism,
         });
         betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
