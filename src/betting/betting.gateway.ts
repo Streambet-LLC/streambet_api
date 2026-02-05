@@ -151,6 +151,7 @@ export class BettingGateway {
           currencyType: placeBetDto.currencyType,
           bettingOption: bettingVariable?.name || '',
           roundName: bettingVariable.round.roundName || '',
+          mechanism: bettingVariable.round.mechanism,
         });
         betPlacePayload.title = NOTIFICATION_TEMPLATE.BET_PLACED.TITLE();
       }
@@ -501,7 +502,17 @@ export class BettingGateway {
       const receiverNotificationPermission =
         await this.notificationService.addNotificationPermision(user.sub);
       if (receiverNotificationPermission['inAppNotification']) {
-        if (Number(oldBettingAmount) < Number(editedBet.amount)) {
+        const isSentimentPick =
+          bettingVariable?.round?.mechanism === 'sentiment';
+
+        if (isSentimentPick) {
+          betEditedPayload.message = NOTIFICATION_TEMPLATE.BET_EDIT.MESSAGE({
+            bettingOption: bettingVariable?.name || '',
+            roundName: bettingVariable?.round?.roundName || '',
+            mechanism: 'sentiment',
+          });
+          betEditedPayload.title = NOTIFICATION_TEMPLATE.BET_EDIT.TITLE();
+        } else if (Number(oldBettingAmount) < Number(editedBet.amount)) {
           betEditedPayload.message =
             NOTIFICATION_TEMPLATE.BET_MODIFIED_INCREASE.MESSAGE({
               amount: editedBet.amount,

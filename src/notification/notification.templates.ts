@@ -9,22 +9,29 @@ interface BetNotificationData {
   roundName?: string;
   streamName?: string;
   username?: string;
+  mechanism?: string;
 }
 
 export const NOTIFICATION_TEMPLATE = {
   BET_PLACED: {
     MESSAGE: (data: BetNotificationData) =>
-      `You put ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for '${data.roundName}'!`,
+      data.mechanism === 'sentiment'
+        ? `You picked ${data.bettingOption} on '${data.roundName}'!`
+        : `You put ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for '${data.roundName}'!`,
     TITLE: () => `Pick Placed Successfully`,
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
-      `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for ${data.roundName}`,
+      data.mechanism === 'sentiment'
+        ? `You changed your Pick to ${data.bettingOption} on '${data.roundName}'`
+        : `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Pick Modified`,
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} were returned to your wallet`,
+      data.mechanism === 'sentiment'
+        ? `Your Pick on '${data.roundName}' has been cancelled.`
+        : `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} were returned to your wallet`,
     TITLE: () => `Pick Cancelled`,
   },
 

@@ -16,11 +16,10 @@ export class SentimentRevealService {
   ) {}
 
   /**
-   * Runs every 5 minutes (testing)
-   * TODO: Change back to '0 7 * * *' with timeZone 'America/Los_Angeles' for production (7 AM PST daily)
+   * Runs daily at 5 PM PST (17:00 America/Los_Angeles)
    * Reveals sentiment picks and transitions them from CREATED to OPEN status
    */
-  @Cron('*/5 * * * *')
+  @Cron('0 17 * * *', { timeZone: 'America/Los_Angeles' })
   async revealSentimentPicks() {
     this.logger.debug('Starting sentiment pick reveal process');
 
