@@ -11,6 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { Bet } from './entities/bet.entity';
+import { BetEditHistory } from './entities/bet-edit-history.entity';
 import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { BetStatus } from '../enums/bet-status.enum';
 import { WalletsService } from '../wallets/wallets.service';
@@ -48,6 +49,7 @@ import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.servic
 import { UserRole } from 'src/enums/user-role.enum';
 import { ViewBetDto } from './dto/view-bet.dto';
 import { BetRoundHistoryService } from 'src/bet-round-history/bet-round-history.service';
+import { BetEditType } from 'src/enums/bet-edit-type.enum';
 import { BetRoundHistoryEventType } from 'src/enums/bet-round-history-event-type.enum';
 
 @Injectable()
@@ -61,6 +63,8 @@ export class BettingService {
     private bettingRoundsRepository: Repository<BettingRound>,
     @InjectRepository(Bet)
     private betsRepository: Repository<Bet>,
+    @InjectRepository(BetEditHistory)
+    private betEditHistoryRepository: Repository<BetEditHistory>,
     private walletsService: WalletsService,
     private notificationService: NotificationService,
     private betRoundHistoryService: BetRoundHistoryService,
@@ -1410,6 +1414,33 @@ export class BettingService {
       await queryRunner.manager.save(betDetails);
       await queryRunner.manager.save(lockedOldBettingVariable);
       await queryRunner.manager.save(lockedNewBettingVariable);
+
+      // --- Record bet edit history ---
+      // Determine edit type
+      let editType: BetEditType;
+      if (oldBettingVariableId === newBettingVariableId && oldAmount !== newAmt) {
+        editType = BetEditType.AMOUNT_CHANGE;
+      } else if (oldBettingVariableId !== newBettingVariableId && oldAmount === newAmt) {
+        editType = BetEditType.OPTION_CHANGE;
+      } else {
+        editType = BetEditType.FULL_CHANGE;
+      }
+
+      // Create bet edit history record
+      const betEditHistory = queryRunner.manager.create(BetEditHistory, {
+        betId: betDetails.id,
+        userId,
+        roundId: bettingVariable.roundId,
+        streamId: bettingVariable.round.streamId,
+        oldBettingVariableId,
+        newBettingVariableId,
+        oldAmount,
+        newAmount: newAmt,
+        currency: newCurrency,
+        editType,
+        editedAt: new Date(),
+      });
+      await queryRunner.manager.save(betEditHistory);
 
       roundIdToUpdate = lockedNewBettingVariable.roundId;
 
@@ -3466,7 +3497,6 @@ export class BettingService {
    * 
    * This method retrieves the timeline of picks placed on a round, showing
    * how the pick pool distribution evolved over time between the two options.
-   * Data is bucketed into 5-minute intervals with cumulative totals for each option.
    * Only CadeCoin picks are included in the timeline.
    * 
    * @param roundId - The ID of the betting round
@@ -3504,23 +3534,36 @@ export class BettingService {
       .orderBy('bet.created_at', 'ASC')
       .getMany();
 
-    // Group betting variables by ID
-    const variables = round.bettingVariables.slice(0, 2); // Only first 2
-    const [variableA, variableB] = variables;
+    // Fetch all edit history for this round
+    const edits = await this.betEditHistoryRepository.find({
+      where: {
+        roundId: roundId,
+        currency: CurrencyType.CADE_COINS,
+      },
+      relations: ['bet', 'user', 'oldBettingVariable', 'newBettingVariable'],
+      order: { editedAt: 'ASC' },
+    });
 
-    // Build timeline with all placement and cancellation events
+    // Get all betting variables (support any number of options)
+    const variables = round.bettingVariables;
+
+    // Build timeline with all placement, edit, and cancellation events
     const events = [];
     
     bets.forEach((bet) => {
       const amount = Number(bet.amount);
       
-      // Add placement event (all bets were placed at some point)
+      // Check if this bet has edits to get original amount
+      const betEdits = edits.filter((edit) => edit.bet.id === bet.id);
+      const firstEdit = betEdits.length > 0 ? betEdits[0] : null;
+      
+      // Add placement event and use original amount/option from first edit if available
       events.push({
         timestamp: bet.created_at,
         type: 'place',
-        amount,
-        variableId: bet.bettingVariable.id,
-        userId: bet.user.id,
+        amount: firstEdit ? Number(firstEdit.oldAmount) : amount,
+        variableId: firstEdit ? firstEdit.oldBettingVariableId : bet.bettingVariable.id,
+        userId: bet.userId,
       });
       
       // Add cancellation event if bet was cancelled
@@ -3530,9 +3573,23 @@ export class BettingService {
           type: 'cancel',
           amount,
           variableId: bet.bettingVariable.id,
-          userId: bet.user.id,
+          userId: bet.userId,
         });
       }
+    });
+    
+    // Add edit events
+    edits.forEach((edit) => {
+      events.push({
+        timestamp: edit.editedAt,
+        type: 'edit',
+        oldAmount: Number(edit.oldAmount),
+        newAmount: Number(edit.newAmount),
+        oldVariableId: edit.oldBettingVariableId,
+        newVariableId: edit.newBettingVariableId,
+        userId: edit.userId,
+        editType: edit.editType,
+      });
     });
     
     // Sort all events chronologically
@@ -3540,52 +3597,87 @@ export class BettingService {
     
     // Build timeline from events
     const timeline = [];
-    let cumulativeA = 0;
-    let cumulativeB = 0;
-    const userSetA = new Set<string>();
-    const userSetB = new Set<string>();
+    const cumulativeAmounts = new Map<string, number>();
+    const userSets = new Map<string, Set<string>>();
+
+    // Initialize for each betting variable
+    variables.forEach((variable) => {
+      cumulativeAmounts.set(variable.id, 0);
+      userSets.set(variable.id, new Set<string>());
+    });
 
     events.forEach((event) => {
-      const isOptionA = event.variableId === variableA.id;
-      const isOptionB = variableB && event.variableId === variableB.id;
-
       if (event.type === 'place') {
         // Placement: ADD to cumulative and user set
-        if (isOptionA) {
-          cumulativeA += event.amount;
-          userSetA.add(event.userId);
-        } else if (isOptionB) {
-          cumulativeB += event.amount;
-          userSetB.add(event.userId);
+        const variableId = event.variableId;
+        if (cumulativeAmounts.has(variableId)) {
+          const current = cumulativeAmounts.get(variableId) || 0;
+          cumulativeAmounts.set(variableId, current + event.amount);
+          userSets.get(variableId)?.add(event.userId);
         }
       } else if (event.type === 'cancel') {
         // Cancellation: SUBTRACT from cumulative and remove user
-        if (isOptionA) {
-          cumulativeA -= event.amount;
-          userSetA.delete(event.userId);
-        } else if (isOptionB) {
-          cumulativeB -= event.amount;
-          userSetB.delete(event.userId);
+        const variableId = event.variableId;
+        if (cumulativeAmounts.has(variableId)) {
+          const current = cumulativeAmounts.get(variableId) || 0;
+          cumulativeAmounts.set(variableId, current - event.amount);
+          userSets.get(variableId)?.delete(event.userId);
+        }
+      } else if (event.type === 'edit') {
+        // Edit: adjust based on what changed
+        const oldVariableId = event.oldVariableId;
+        const newVariableId = event.newVariableId;
+
+        // If option changed, move user between sets
+        if (oldVariableId !== newVariableId) {
+          // Remove from old option
+          if (cumulativeAmounts.has(oldVariableId)) {
+            const current = cumulativeAmounts.get(oldVariableId) || 0;
+            cumulativeAmounts.set(oldVariableId, current - event.oldAmount);
+            userSets.get(oldVariableId)?.delete(event.userId);
+          }
+          
+          // Add to new option
+          if (cumulativeAmounts.has(newVariableId)) {
+            const current = cumulativeAmounts.get(newVariableId) || 0;
+            cumulativeAmounts.set(newVariableId, current + event.newAmount);
+            userSets.get(newVariableId)?.add(event.userId);
+          }
+        } else {
+          // Only amount changed
+          if (cumulativeAmounts.has(newVariableId)) {
+            const current = cumulativeAmounts.get(newVariableId) || 0;
+            cumulativeAmounts.set(newVariableId, current - event.oldAmount + event.newAmount);
+          }
         }
       }
 
       // Add data point at exact timestamp of this event
-      timeline.push({
+      const timelinePoint: any = {
         timestamp: event.timestamp,
-        [variableA.id]: Math.max(0, cumulativeA),
-        [variableB?.id || 'optionB']: Math.max(0, cumulativeB),
-        userCountA: userSetA.size,
-        userCountB: userSetB.size,
+      };
+
+      // Add each variable's data dynamically
+      variables.forEach((variable) => {
+        const amount = cumulativeAmounts.get(variable.id) || 0;
+        const userCount = userSets.get(variable.id)?.size || 0;
+        
+        timelinePoint[variable.id] = Math.max(0, amount);
+        timelinePoint[`userCount_${variable.id}`] = userCount;
       });
+
+      timeline.push(timelinePoint);
     });
 
     // Return metadata and timeline
     return {
-      options: [
-        { id: variableA.id, name: variableA.name, userCount: userSetA.size },
-        variableB ? { id: variableB.id, name: variableB.name, userCount: userSetB.size } : null,
-      ].filter(Boolean),
+      options: variables.map((variable) => ({
+        id: variable.id,
+        name: variable.name,
+        userCount: userSets.get(variable.id)?.size || 0,
+      })),
       timeline,
     };
   }
 }
+

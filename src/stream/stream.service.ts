@@ -742,7 +742,7 @@ END
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
           streamName: stream.name,
-          name: item.roundName,
+          roundName: item.roundName,
           type: stream.type,
           options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           status: item.status,

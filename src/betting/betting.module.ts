@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BettingVariable } from './entities/betting-variable.entity';
 import { BettingRound } from './entities/betting-round.entity';
 import { Bet } from './entities/bet.entity';
+import { BetEditHistory } from './entities/bet-edit-history.entity';
 import { BettingService } from './betting.service';
 import { BettingController } from './betting.controller';
 import { WalletsModule } from '../wallets/wallets.module';
@@ -19,7 +20,7 @@ import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.m
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BettingVariable, BettingRound, Bet, Stream]),
+    TypeOrmModule.forFeature([BettingVariable, BettingRound, Bet, BetEditHistory, Stream]),
     forwardRef(() => WalletsModule),
     UsersModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
