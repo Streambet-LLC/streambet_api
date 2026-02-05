@@ -787,6 +787,7 @@ END
           streamName: stream.name,
           name: item.roundName,
           type: stream.type,
+          mechanism: item.mechanism,
           options: options.sort(
             (a, b) => Number(b.percentage) - Number(a.percentage),
           ),
