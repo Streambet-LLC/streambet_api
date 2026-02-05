@@ -1281,7 +1281,9 @@ export class BettingService {
       const newCurrency = newCurrencyType;
 
       // Validate new bet amount and currency type
-      if (!Number.isFinite(newAmt) || newAmt <= 0) {
+      const isSentimentPick =
+        bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+      if (!Number.isFinite(newAmt) || (newAmt <= 0 && !isSentimentPick)) {
         throw new BadRequestException(
           'New amount must be a positive number greater than 0.',
         );

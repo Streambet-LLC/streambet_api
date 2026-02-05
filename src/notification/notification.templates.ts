@@ -22,7 +22,9 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_EDIT: {
     MESSAGE: (data: BetNotificationData) =>
-      `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for ${data.roundName}`,
+      data.mechanism === 'sentiment'
+        ? `You changed your Pick to ${data.bettingOption} on '${data.roundName}'`
+        : `You changed your Pick to ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} on ${data.bettingOption} for ${data.roundName}`,
     TITLE: () => `Pick Modified`,
   },
   BET_CANCELLED: {
