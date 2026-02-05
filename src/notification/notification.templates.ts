@@ -27,7 +27,9 @@ export const NOTIFICATION_TEMPLATE = {
   },
   BET_CANCELLED: {
     MESSAGE: (data: BetNotificationData) =>
-      `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} were returned to your wallet`,
+      data.mechanism === 'sentiment'
+        ? `Your Pick on '${data.roundName}' has been cancelled.`
+        : `Your Pick on '${data.roundName}' has been cancelled and ${data.amount.toLocaleString('en-US')} ${formatCurrencyType(data.currencyType)} were returned to your wallet`,
     TITLE: () => `Pick Cancelled`,
   },
 
