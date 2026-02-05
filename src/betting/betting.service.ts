@@ -976,7 +976,6 @@ export class BettingService {
     const isSentimentPick = bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
     const actualAmount = isSentimentPick ? 0 : amount;
     const actualCurrency = isSentimentPick ? CurrencyType.CADE_COINS : currencyType;
-    }
 
     // Ensure the round is open for betting
     if (bettingVariable?.round?.status !== BettingRoundStatus.OPEN) {
