@@ -262,7 +262,10 @@ export class NotificationService {
    * @param userIds - Array of user IDs who participated in betting on this stream
    * @returns Promise<void> - Resolves when all emails have been attempted and cleanup is complete
    */
-  async sendStreamBettingSummaryEmails(streamId: string, userIds: string[]): Promise<void> {
+  async sendStreamBettingSummaryEmails(
+    streamId: string,
+    userIds: string[],
+  ): Promise<void> {
     await Promise.allSettled(
       userIds.map((userId) => this.sendUserBettingSummary(streamId, userId)),
     );
@@ -280,19 +283,26 @@ export class NotificationService {
    * @returns Promise<void> - Resolves when email is queued or skipped
    * @throws Error if email queuing fails (preserves Redis data for retry)
    */
-  private async sendUserBettingSummary(streamId: string, userId: string): Promise<void> {
+  private async sendUserBettingSummary(
+    streamId: string,
+    userId: string,
+  ): Promise<void> {
     let summary;
     let receiver;
     let receiverNotificationPermission;
 
     try {
-      summary = await this.bettingSummaryService.getBettingSummary(streamId, userId);
+      summary = await this.bettingSummaryService.getBettingSummary(
+        streamId,
+        userId,
+      );
       if (!summary) return;
 
       receiver = await this.usersService.findUserByUserId(userId);
       if (!receiver?.email || receiver.email.includes('@example.com')) return;
 
-      receiverNotificationPermission = await this.addNotificationPermision(userId);
+      receiverNotificationPermission =
+        await this.addNotificationPermision(userId);
       if (!receiverNotificationPermission?.['emailNotification']) return;
     } catch (error) {
       Logger.error(
@@ -302,7 +312,8 @@ export class NotificationService {
       throw error;
     }
 
-    const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
+    const dashboardLink =
+      this.configService.get<string>('email.HOST_URL') || '';
     const subject = NOTIFICATION_TEMPLATE.EMAIL_BETTING_SUMMARY.TITLE({
       streamName: summary.streamName,
     });

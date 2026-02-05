@@ -1,10 +1,10 @@
 /**
  * Gamification system constants for prize rewards.
- * 
- * Prize configuration (amounts, names, images) is managed dynamically through the 
- * Prize module and stored in the database. Admins can configure prizes via the 
+ *
+ * Prize configuration (amounts, names, images) is managed dynamically through the
+ * Prize module and stored in the database. Admins can configure prizes via the
  * admin dashboard.
- * 
+ *
  * This file contains core currency constants used for lifetime coin tracking.
  */
 

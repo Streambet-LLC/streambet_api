@@ -82,7 +82,7 @@ export class RedisViewerService {
     await this.ensureScripts();
     const res = await this.evalshaOrEval(
       LUA_ADD,
-      this.shas.add!,
+      this.shas.add,
       1,
       keyFor(streamId),
       userId,
@@ -98,7 +98,7 @@ export class RedisViewerService {
     await this.ensureScripts();
     const res = await this.evalshaOrEval(
       LUA_REMOVE,
-      this.shas.remove!,
+      this.shas.remove,
       1,
       keyFor(streamId),
       userId,

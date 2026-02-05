@@ -19,9 +19,7 @@ import {
 import { UserResponseDto, PublicUserProfileDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
-import {
-  MAX_CADE_COINS_FOR_BETTING,
-} from 'src/common/constants/currency.constants';
+import { MAX_CADE_COINS_FOR_BETTING } from 'src/common/constants/currency.constants';
 import { UserRole } from 'src/enums/user-role.enum';
 import { Follower } from 'src/follower/follower.entity';
 import { PrizeService } from 'src/prize/prize.service';
@@ -37,7 +35,7 @@ export class UsersService {
     private readonly followerRepository: Repository<Follower>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly prizeService: PrizeService,
-  ) { }
+  ) {}
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find({
@@ -277,7 +275,10 @@ export class UsersService {
     }
   }
 
-  async unfollowUser(follower: string, followedUsername: string): Promise<void> {
+  async unfollowUser(
+    follower: string,
+    followedUsername: string,
+  ): Promise<void> {
     const followedUser = await this.usersRepository.findOne({
       where: {
         username: followedUsername,
@@ -352,19 +353,24 @@ export class UsersService {
         title: prizeData.title,
         badgeLevel: prizeData.badgeLevel,
         prizeProgress: prizeData.prizeProgress,
-        ...user.role === UserRole.CREATOR && {
+        ...(user.role === UserRole.CREATOR && {
           isCreator: true,
-        }
+        }),
       };
 
       return response;
     } catch (e) {
-      this.logger.error(`Error fetching profile for user with username ${username}:`, e);
+      this.logger.error(
+        `Error fetching profile for user with username ${username}:`,
+        e,
+      );
       throw new NotFoundException((e as Error).message);
     }
   }
 
-  async getCreators(): Promise<Pick<UserResponseDto, 'username' | 'name' | 'profileImageUrl'>[]> {
+  async getCreators(): Promise<
+    Pick<UserResponseDto, 'username' | 'name' | 'profileImageUrl'>[]
+  > {
     try {
       const creators = await this.usersRepository.find({
         where: {
@@ -373,7 +379,7 @@ export class UsersService {
           isBanned: Or(Not(true), IsNull()),
           isSuspended: Or(Not(true), IsNull()),
         },
-        select: ["username", "name", "profileImageUrl"]
+        select: ['username', 'name', 'profileImageUrl'],
       });
 
       return creators;
@@ -448,11 +454,12 @@ export class UsersService {
         revShare: item.revShare,
         wallet: item.wallet
           ? {
-            id: item.wallet.id,
-            goldCoins: item.wallet.goldCoins,
-            sweepCoins: item.wallet.sweepCoins,
-            cadeCoins: item.wallet.cadeCoins,
-          } : null,
+              id: item.wallet.id,
+              goldCoins: item.wallet.goldCoins,
+              sweepCoins: item.wallet.sweepCoins,
+              cadeCoins: item.wallet.cadeCoins,
+            }
+          : null,
       };
 
       return returnData;
@@ -588,7 +595,9 @@ export class UsersService {
    * Retrieves the top 20 users by gold coin balance for the leaderboard.
    * @returns Promise<Array<{username: string, goldCoins: number, profileImageUrl: string}>>
    */
-  async getLeaderboard(): Promise<Array<{ username: string; cadeCoins: number; profileImageUrl: string }>> {
+  async getLeaderboard(): Promise<
+    Array<{ username: string; cadeCoins: number; profileImageUrl: string }>
+  > {
     const users = await this.usersRepository
       .createQueryBuilder('u')
       .innerJoin('u.wallet', 'w')
@@ -602,7 +611,7 @@ export class UsersService {
       .limit(20)
       .getMany();
 
-    return users.map(u => ({
+    return users.map((u) => ({
       username: u.username,
       cadeCoins: Number(u.wallet?.cadeCoins || 0),
       profileImageUrl: u.profileImageUrl || '',

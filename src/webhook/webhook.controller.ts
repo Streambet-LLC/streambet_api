@@ -8,10 +8,7 @@ import {
   Logger,
   Res,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CoinflowWebhookGuard } from '../auth/guards/coinflow-webhook.guard';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
 import { WebhookService } from './webhook.service';

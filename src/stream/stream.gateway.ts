@@ -311,7 +311,7 @@ export class StreamGateway {
 
   /**
    * Emits a stream promotion update event to all connected clients.
-   * 
+   *
    * @param streamId - The unique identifier of the stream
    * @param isPromoted - Whether the stream is now promoted
    */
@@ -328,7 +328,9 @@ export class StreamGateway {
       );
 
       // Log success for debugging and tracking
-      this.logger.log(`Emitting stream promotion update for stream ${streamId}: promoted=${isPromoted}`);
+      this.logger.log(
+        `Emitting stream promotion update for stream ${streamId}: promoted=${isPromoted}`,
+      );
     } catch (error) {
       // Catch and log any unexpected errors during broadcasting
       this.logger.error(

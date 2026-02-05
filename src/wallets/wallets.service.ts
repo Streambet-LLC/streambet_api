@@ -17,9 +17,7 @@ import {
   SWEEP_COINS_PER_DOLLAR,
   MIN_WITHDRAWABLE_SWEEP_COINS,
 } from 'src/common/constants/currency.constants';
-import {
-  GAMIFICATION_CURRENCY,
-} from 'src/common/constants/gamification.constants';
+import { GAMIFICATION_CURRENCY } from 'src/common/constants/gamification.constants';
 import { WalletGateway } from './wallets.gateway';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
@@ -34,7 +32,7 @@ export class WalletsService {
     private transactionsRepository: Repository<Transaction>,
     private dataSource: DataSource,
     private walletGateway: WalletGateway,
-  ) { }
+  ) {}
 
   /**
    * Create a wallet for a user with initial balance.
@@ -331,17 +329,26 @@ export class WalletsService {
         }
         wallet.sweepCoins = Number(newBalance);
 
-        if ([
-          TransactionType.BET_WON,
-          TransactionType.WITHDRAWAL_PENDING,
-          TransactionType.WITHDRAWAL_FAILED,
-          TransactionType.WITHDRAWAL_SUCCESS
-        ].includes(transactionType)) {
-          wallet.withdrawableBalance = Number(wallet.withdrawableBalance) + Number(amount);
+        if (
+          [
+            TransactionType.BET_WON,
+            TransactionType.WITHDRAWAL_PENDING,
+            TransactionType.WITHDRAWAL_FAILED,
+            TransactionType.WITHDRAWAL_SUCCESS,
+          ].includes(transactionType)
+        ) {
+          wallet.withdrawableBalance =
+            Number(wallet.withdrawableBalance) + Number(amount);
         }
       }
 
-      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
+      this.updateLifetimeCoinsEarned(
+        wallet,
+        amount,
+        transactionType,
+        currencyType,
+        metadata,
+      );
 
       await manager.save(wallet);
 
@@ -418,17 +425,26 @@ export class WalletsService {
         }
         wallet.sweepCoins = Number(newBalance);
 
-        if ([
-          TransactionType.BET_WON,
-          TransactionType.WITHDRAWAL_PENDING,
-          TransactionType.WITHDRAWAL_FAILED,
-          TransactionType.WITHDRAWAL_SUCCESS
-        ].includes(transactionType)) {
-          wallet.withdrawableBalance = Number(wallet.withdrawableBalance) + Number(amount);
+        if (
+          [
+            TransactionType.BET_WON,
+            TransactionType.WITHDRAWAL_PENDING,
+            TransactionType.WITHDRAWAL_FAILED,
+            TransactionType.WITHDRAWAL_SUCCESS,
+          ].includes(transactionType)
+        ) {
+          wallet.withdrawableBalance =
+            Number(wallet.withdrawableBalance) + Number(amount);
         }
       }
 
-      this.updateLifetimeCoinsEarned(wallet, amount, transactionType, currencyType, metadata);
+      this.updateLifetimeCoinsEarned(
+        wallet,
+        amount,
+        transactionType,
+        currencyType,
+        metadata,
+      );
 
       await queryRunner.manager.save(wallet);
 
@@ -481,7 +497,7 @@ export class WalletsService {
     // Skip if not gamification currency
     if (currencyType !== GAMIFICATION_CURRENCY) {
       this.logger.debug(
-        `Skipping lifetime coins update for user ${wallet.userId}: currency is ${currencyType}, not ${GAMIFICATION_CURRENCY}`
+        `Skipping lifetime coins update for user ${wallet.userId}: currency is ${currencyType}, not ${GAMIFICATION_CURRENCY}`,
       );
       return;
     }
@@ -489,50 +505,50 @@ export class WalletsService {
     // Skip if amount is not positive
     if (amount <= 0) {
       this.logger.debug(
-        `Skipping lifetime coins update for user ${wallet.userId}: amount ${amount} is not positive`
+        `Skipping lifetime coins update for user ${wallet.userId}: amount ${amount} is not positive`,
       );
       return;
     }
 
     let lifetimeIncrement = amount;
-    
+
     // Handle bet winnings - only count net profit
     if (transactionType === TransactionType.BET_WON) {
       if (metadata?.originalBetAmount) {
         const originalBet = Number(metadata.originalBetAmount);
         lifetimeIncrement = amount - originalBet;
-        
+
         this.logger.log(
-          `Bet win for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net profit=${lifetimeIncrement}`
+          `Bet win for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net profit=${lifetimeIncrement}`,
         );
-        
+
         // Warn if net profit is negative (shouldn't happen)
         if (lifetimeIncrement < 0) {
           this.logger.warn(
-            `Negative net profit for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net=${lifetimeIncrement}`
+            `Negative net profit for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net=${lifetimeIncrement}`,
           );
         }
       } else {
         this.logger.warn(
-          `BET_WON transaction for user ${wallet.userId} missing originalBetAmount in metadata - skipping lifetime coins increment`
+          `BET_WON transaction for user ${wallet.userId} missing originalBetAmount in metadata - skipping lifetime coins increment`,
         );
         return; // Skip lifetime coins update if we can't calculate net profit
       }
     }
-    
+
     // Only increment if there's actual profit
     if (lifetimeIncrement > 0) {
       const previousTotal = Number(wallet.lifetimeCoinsEarned || 0);
       wallet.lifetimeCoinsEarned = previousTotal + Number(lifetimeIncrement);
-      
+
       this.logger.log(
         `Lifetime coins updated for user ${wallet.userId}: +${lifetimeIncrement} ${currencyType} ` +
-        `(${transactionType}) | Previous: ${previousTotal} → New: ${wallet.lifetimeCoinsEarned}`
+          `(${transactionType}) | Previous: ${previousTotal} → New: ${wallet.lifetimeCoinsEarned}`,
       );
     } else {
       this.logger.debug(
         `No lifetime coins increment for user ${wallet.userId}: ` +
-        `calculated increment=${lifetimeIncrement} (${transactionType})`
+          `calculated increment=${lifetimeIncrement} (${transactionType})`,
       );
     }
   }
@@ -723,12 +739,15 @@ export class WalletsService {
     }
 
     // Get the field name and current balance based on currency type
-    const { field, currentBalance } = this.getCurrencyField(wallet, currencyType);
-    
+    const { field, currentBalance } = this.getCurrencyField(
+      wallet,
+      currencyType,
+    );
+
     // Update the wallet
     await this.walletsRepository.update(wallet.id, { [field]: amount });
     const addedAmount = amount - currentBalance;
-      
+
     const trans = this.transactionsRepository.create({
       userId,
       type: transactionType,
@@ -744,7 +763,7 @@ export class WalletsService {
       .emitAdminAddedGoldCoin(userId)
       .catch((err) =>
         this.logger?.warn?.(
-          `emitAdminAddedCoin failed for ${userId}: ${err?.message ?? err}`
+          `emitAdminAddedCoin failed for ${userId}: ${err?.message ?? err}`,
         ),
       );
 
@@ -769,7 +788,13 @@ export class WalletsService {
     currencyType: CurrencyType,
     transactionType: TransactionType,
   ): Promise<Wallet> {
-    return this.updateCoinsByAdmin(userId, amount, description, currencyType, transactionType);
+    return this.updateCoinsByAdmin(
+      userId,
+      amount,
+      description,
+      currencyType,
+      transactionType,
+    );
   }
 
   /**
@@ -780,14 +805,26 @@ export class WalletsService {
    * @returns Object containing the field name and current balance
    * @throws BadRequestException if currency type is invalid
    */
-  private getCurrencyField(wallet: Wallet, currencyType: CurrencyType): { field: string; currentBalance: number } {
+  private getCurrencyField(
+    wallet: Wallet,
+    currencyType: CurrencyType,
+  ): { field: string; currentBalance: number } {
     switch (currencyType) {
       case CurrencyType.GOLD_COINS:
-        return { field: 'goldCoins', currentBalance: Number(wallet.goldCoins || 0) };
+        return {
+          field: 'goldCoins',
+          currentBalance: Number(wallet.goldCoins || 0),
+        };
       case CurrencyType.CADE_COINS:
-        return { field: 'cadeCoins', currentBalance: Number(wallet.cadeCoins || 0) };
+        return {
+          field: 'cadeCoins',
+          currentBalance: Number(wallet.cadeCoins || 0),
+        };
       case CurrencyType.SWEEP_COINS:
-        return { field: 'sweepCoins', currentBalance: Number(wallet.sweepCoins || 0) };
+        return {
+          field: 'sweepCoins',
+          currentBalance: Number(wallet.sweepCoins || 0),
+        };
       default:
         throw new BadRequestException('Invalid currency type');
     }
@@ -962,7 +999,10 @@ export class WalletsService {
     capUSD: number,
     manager?: EntityManager,
   ): Promise<{ spentUSD: number; remainingUSD: number; capUSD: number }> {
-    const spentUSD = await this.getLifetimeSpentUSDFromCoinflow(userId, manager);
+    const spentUSD = await this.getLifetimeSpentUSDFromCoinflow(
+      userId,
+      manager,
+    );
     const remainingUSD = Math.max(0, Number(capUSD) - Number(spentUSD));
     return { spentUSD, remainingUSD, capUSD: Number(capUSD) };
   }

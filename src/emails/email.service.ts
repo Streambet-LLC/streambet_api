@@ -15,16 +15,21 @@ export class EmailsService {
   constructor(private configService: ConfigService) {
     const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
     const nodeEnv = process.env.NODE_ENV;
-    
+
     if (useMailHog) {
-      const mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') || 'localhost';
-      const mailhogSmtpPort = Number(this.configService.get<number>('email.MAILHOG_PORT') || 1025);
+      const mailhogHost =
+        this.configService.get<string>('email.MAILHOG_HOST') || 'localhost';
+      const mailhogSmtpPort = Number(
+        this.configService.get<number>('email.MAILHOG_PORT') || 1025,
+      );
       // MailHog web UI is usually at 8025
       this.logger.log(
         `Email Service (NODE_ENV=${nodeEnv}) - Using MailHog SMTP at ${mailhogHost}:${mailhogSmtpPort} (Web UI: http://${mailhogHost}:8025)`,
       );
     } else {
-      this.logger.log(`Email Service (NODE_ENV=${nodeEnv}) - Emails will be sent via SMTP host`);
+      this.logger.log(
+        `Email Service (NODE_ENV=${nodeEnv}) - Emails will be sent via SMTP host`,
+      );
     }
   }
   /**
@@ -93,11 +98,16 @@ export class EmailsService {
 
       if (useMailHog) {
         // Development Mode: Use MailHog
-        mailhogHost = this.configService.get<string>('email.MAILHOG_HOST') ?? 'localhost';
-        mailhogPort = Number(this.configService.get<number>('email.MAILHOG_PORT') ?? 1025);
-        
-        this.logger.debug(`Development Mode: Using MailHog SMTP at ${mailhogHost}:${mailhogPort}`);
-        
+        mailhogHost =
+          this.configService.get<string>('email.MAILHOG_HOST') ?? 'localhost';
+        mailhogPort = Number(
+          this.configService.get<number>('email.MAILHOG_PORT') ?? 1025,
+        );
+
+        this.logger.debug(
+          `Development Mode: Using MailHog SMTP at ${mailhogHost}:${mailhogPort}`,
+        );
+
         transporter = nodemailer.createTransport({
           host: mailhogHost,
           port: mailhogPort,
@@ -132,7 +142,7 @@ export class EmailsService {
         await transporter.verify();
         this.logger.debug('SMTP transporter verified successfully');
       } catch (verifyErr) {
-        this.logger.error('Failed to verify SMTP transporter', verifyErr as any);
+        this.logger.error('Failed to verify SMTP transporter', verifyErr);
         throw new HttpException(
           `SMTP transport verification failed: ${verifyErr?.message ?? 'unknown error'}`,
           HttpStatus.BAD_REQUEST,
@@ -157,7 +167,9 @@ export class EmailsService {
 
       if (send) {
         if (useMailHog) {
-          this.logger.log(`Email sent to MailHog SMTP - View at http://${mailhogHost}:8025`);
+          this.logger.log(
+            `Email sent to MailHog SMTP - View at http://${mailhogHost}:8025`,
+          );
         } else {
           this.logger.log('Email sent successfully via SMTP');
         }

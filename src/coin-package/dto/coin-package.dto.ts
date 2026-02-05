@@ -19,7 +19,10 @@ export class CoinPackageDto {
   name: string;
 
   @Expose()
-  @ApiProperty({ example: '10.00', description: 'Total amount in USD as a string' })
+  @ApiProperty({
+    example: '10.00',
+    description: 'Total amount in USD as a string',
+  })
   totalAmount: string;
 
   @Expose()
@@ -27,7 +30,10 @@ export class CoinPackageDto {
   description: string | null;
 
   @Expose()
-  @ApiProperty({ example: '1000.00', description: 'Stream Coin count as a string' })
+  @ApiProperty({
+    example: '1000.00',
+    description: 'Stream Coin count as a string',
+  })
   sweepCoinCount: string;
 
   @Expose()
@@ -35,7 +41,10 @@ export class CoinPackageDto {
   goldCoinCount: string;
 
   @Expose()
-  @ApiProperty({ example: 'coin/2cf96dfd-ebb1-49d1-8414-c01372752772-coin.svg', nullable: true })
+  @ApiProperty({
+    example: 'coin/2cf96dfd-ebb1-49d1-8414-c01372752772-coin.svg',
+    nullable: true,
+  })
   imageUrl: string | null;
 
   @Expose()
@@ -43,7 +52,11 @@ export class CoinPackageDto {
   status: boolean;
 
   @Expose()
-  @ApiProperty({ example: true, description: 'Whether the authenticated user can purchase this package within their remaining lifetime limit' })
+  @ApiProperty({
+    example: true,
+    description:
+      'Whether the authenticated user can purchase this package within their remaining lifetime limit',
+  })
   canPurchase: boolean;
 }
 
@@ -57,14 +70,19 @@ export class CoinPackageListResponseDto {
   @ApiProperty({ type: [CoinPackageDto] })
   data: CoinPackageDto[];
 
-  @ApiProperty({ example: 100, description: 'Total USD amount the user has spent on Coinflow purchases' })
+  @ApiProperty({
+    example: 100,
+    description: 'Total USD amount the user has spent on Coinflow purchases',
+  })
   spentUSD: number;
 
-  @ApiProperty({ example: 400, description: 'USD amount the user can still spend before hitting the lifetime cap' })
+  @ApiProperty({
+    example: 400,
+    description:
+      'USD amount the user can still spend before hitting the lifetime cap',
+  })
   remainingUSD: number;
 
   @ApiProperty({ example: 500, description: 'Lifetime purchase cap in USD' })
   capUSD: number;
 }
-
-

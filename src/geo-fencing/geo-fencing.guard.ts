@@ -22,7 +22,6 @@ export class GeoFencingGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
     const ip = extractIpFromRequest(req);
     //is for debuging purpose will remove after checking
-  
 
     if (!ip) {
       this.logger.warn('Could not determine IP for request');

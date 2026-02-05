@@ -9,7 +9,7 @@ export class BetRoundHistoryService {
   constructor(
     @InjectRepository(BetRoundHistory)
     private readonly betRoundHistoryRepository: Repository<BetRoundHistory>,
-  ) { }
+  ) {}
 
   async recordBetRoundHistory(
     causerId: string,

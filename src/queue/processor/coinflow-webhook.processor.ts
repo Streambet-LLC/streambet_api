@@ -21,7 +21,6 @@ export class CoinflowWebhookProcessor extends WorkerHost {
     try {
       const webhook: WebhookDto = JSON.parse(jobString);
       await this.paymentService.handleCoinflowWebhookEvent(webhook);
-
     } catch (error) {
       this.logger.error(
         `Failed to process coinflow webhook data: ${jobString}`,

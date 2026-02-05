@@ -29,7 +29,6 @@ export class ChatMessagesFilterDto {
 }
 
 class UserDto {
-
   @ApiProperty({ example: '96332764-7e86-48de-88fe-c460b569558c' })
   id: string;
 
@@ -38,7 +37,6 @@ class UserDto {
 
   @ApiProperty({ example: 'username@streambet.com' })
   email: string;
-
 }
 
 export class ChatMessageDto {
@@ -80,4 +78,3 @@ export class GetMessagesResponseDto {
   @ApiProperty({ example: 1 })
   total: number;
 }
-

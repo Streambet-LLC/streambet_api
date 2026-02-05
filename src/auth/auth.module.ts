@@ -45,4 +45,4 @@ import { PromoCodeModule } from 'src/promo-code/promo-code.module';
   ],
   exports: [PassportModule, JwtModule, AuthService],
 })
-export class AuthModule { }
+export class AuthModule {}

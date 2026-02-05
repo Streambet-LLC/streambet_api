@@ -1,11 +1,11 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsString } from "class-validator";
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString } from 'class-validator';
 
 export class CreatorApplicationDto {
   @ApiProperty({ type: String, description: 'First Name' })
   @IsString()
   firstName: string;
-  
+
   @ApiProperty({ type: String, description: 'Last Name' })
   @IsString()
   lastName: string;

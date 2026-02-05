@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 
 export class WinnerDto {
   @ApiProperty({ example: 'streambetadmin' })
@@ -31,6 +32,9 @@ export class RoundDetailsDto {
 
   @ApiProperty({ example: '2025-08-19T08:32:34.174Z' })
   createdAt: string;
+
+  @ApiProperty({ enum: PickMechanism, example: PickMechanism.DEFAULT })
+  mechanism: PickMechanism;
 
   @ApiProperty({ type: [WinningOptionDto] })
   winningOption: WinningOptionDto[];

@@ -31,7 +31,11 @@ import { UsersService } from 'src/users/users.service';
 import { StreamService } from 'src/stream/stream.service';
 import { NotificationService } from 'src/notification/notification.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
-import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
+import {
+  StreamEventType,
+  StreamList,
+  StreamStatus,
+} from 'src/enums/stream.enum';
 import { StreamRoundsResponseDto } from './dto/stream-round-response.dto';
 import { BetHistoryFilterDto } from './dto/bet-history.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -51,6 +55,8 @@ import { ViewBetDto } from './dto/view-bet.dto';
 import { BetRoundHistoryService } from 'src/bet-round-history/bet-round-history.service';
 import { BetEditType } from 'src/enums/bet-edit-type.enum';
 import { BetRoundHistoryEventType } from 'src/enums/bet-round-history-event-type.enum';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
+import { SentimentPickVoteService } from './services/sentiment-pick-vote.service';
 
 @Injectable()
 export class BettingService {
@@ -71,13 +77,44 @@ export class BettingService {
     private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
     private platformPayoutService: PlatformPayoutService,
+    private sentimentPickVoteService: SentimentPickVoteService,
     private dataSource: DataSource,
     private readonly bettingGateway: BettingGateway,
     @Inject(forwardRef(() => StreamService))
     private readonly streamService: StreamService,
     @Inject(forwardRef(() => StreamGateway))
     private readonly streamGateway: StreamGateway,
-  ) { }
+  ) {}
+
+  /**
+   * Calculates the next 7 AM Pacific Standard Time.
+   * Returns a Date object representing the next occurrence of 7 AM PST.
+   * If current time is before 7 AM PST today, returns today at 7 AM PST.
+   * Otherwise, returns tomorrow at 7 AM PST.
+   */
+  private getNextRevealTime(): Date {
+    const now = new Date();
+
+    // Convert to PST/PDT (America/Los_Angeles timezone)
+    const pstTime = new Date(
+      now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }),
+    );
+
+    // Create next 5 PM PST (17:00)
+    const nextReveal = new Date(pstTime);
+    nextReveal.setHours(17, 0, 0, 0);
+
+    // If 5 PM has already passed today, move to tomorrow
+    if (pstTime >= nextReveal) {
+      nextReveal.setDate(nextReveal.getDate() + 1);
+    }
+
+    // Convert back to UTC for storage
+    const pstOffset = nextReveal.getTimezoneOffset();
+    const utcReveal = new Date(nextReveal.getTime() + pstOffset * 60000);
+
+    return utcReveal;
+  }
 
   /**
    * Detects the streaming platform from a given URL.
@@ -277,7 +314,10 @@ export class BettingService {
     return this.streamsRepository.save(stream);
   }
 
-  async updateBetRoundLandingVisibility(id: string, hidden: boolean): Promise<void> {
+  async updateBetRoundLandingVisibility(
+    id: string,
+    hidden: boolean,
+  ): Promise<void> {
     const round = await this.bettingRoundsRepository.findOne({
       where: { id },
     });
@@ -339,17 +379,40 @@ export class BettingService {
     for (let i = 0; i < rounds.length; i++) {
       const roundData = rounds[i];
 
-      console.log("Create", creator);
+      // Validate sentiment picks have max 5 options
+      if (
+        roundData.mechanism === PickMechanism.SENTIMENT &&
+        roundData.options.length > 5
+      ) {
+        throw new BadRequestException(
+          `Sentiment picks can have a maximum of 5 options. You provided ${roundData.options.length} options.`,
+        );
+      }
+
+      // Calculate next 5 PM PST for sentiment picks
+      let firstRevealTime: Date | null = null;
+      let roundStatus = BettingRoundStatus.OPEN;
+
+      if (roundData.mechanism === PickMechanism.SENTIMENT) {
+        firstRevealTime = this.getNextRevealTime();
+        roundStatus = BettingRoundStatus.CREATED; // Sentiment picks start as CREATED
+      }
+
+      console.log('Create', creator);
 
       // Create and save a new betting round
       const bettingRound = this.bettingRoundsRepository.create({
         roundName: roundData.roundName,
         stream: stream,
-        status: BettingRoundStatus.OPEN,
+        status: roundStatus,
         createdBy: creator,
-        lockDate: roundData.lockDate,
+        // Sentiment picks never lock - they stay OPEN for continuous voting with real-time results
+        lockDate: roundData.mechanism === PickMechanism.SENTIMENT ? null : roundData.lockDate,
         category: roundData.category,
         type: roundData.betRoundType,
+        mechanism: roundData.mechanism || PickMechanism.DEFAULT,
+        firstRevealTime: firstRevealTime,
+        isInitialRevealPeriod: roundData.mechanism === PickMechanism.SENTIMENT,
       });
 
       const savedRound = await this.bettingRoundsRepository.save(bettingRound);
@@ -393,7 +456,6 @@ export class BettingService {
           betCountSweepCoin: variable.betCountSweepCoin,
         })),
       });
-
     }
 
     // Return structured response
@@ -515,15 +577,17 @@ export class BettingService {
         .map((variable) => ({
           id: variable.id,
           option: variable.name,
+          is_winning_option: variable.is_winning_option,
           createdAt: variable.createdAt,
         }))
         .sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )
-        .map(({ id, option }) => ({
+        .map(({ id, option, is_winning_option }) => ({
           id,
           option,
+          is_winning_option
         }));
 
       // Identify winning and losing options
@@ -613,11 +677,17 @@ export class BettingService {
         betRoundType: round.type,
         category: round.category,
         createdBy: round.createdBy,
-        creator: round.creator ? {
-          id: round.creator.id,
-          username: round.creator.username,
-          profileImageUrl: round.creator.profileImageUrl,
-        } : null,
+        creator: round.creator
+          ? {
+              id: round.creator.id,
+              username: round.creator.username,
+              profileImageUrl: round.creator.profileImageUrl,
+            }
+          : null,
+        mechanism: round.mechanism,
+        firstRevealTime: round.firstRevealTime,
+        lastRevealTime: round.lastRevealTime,
+        isInitialRevealPeriod: round.isInitialRevealPeriod,
         winnerAmount,
         winners,
         options,
@@ -704,14 +774,16 @@ export class BettingService {
           bettingRound.category = roundData.category;
         }
         if (roundData.lockDate !== undefined) {
-          bettingRound.lockDate = roundData.lockDate ? new Date(roundData.lockDate) : null;
+          bettingRound.lockDate = roundData.lockDate
+            ? new Date(roundData.lockDate)
+            : null;
         }
         if (roundData.betRoundType !== undefined) {
           bettingRound.type = roundData.betRoundType;
         }
         await this.bettingRoundsRepository.save(bettingRound);
       } else {
-        console.log("Update", creator);
+        console.log('Update', creator);
 
         // Create new round
         bettingRound = this.bettingRoundsRepository.create({
@@ -910,6 +982,14 @@ export class BettingService {
       );
     }
 
+    // Sentiment picks are free - override amount and currency
+    const isSentimentPick =
+      bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+    const actualAmount = isSentimentPick ? 0 : amount;
+    const actualCurrency = isSentimentPick
+      ? CurrencyType.CADE_COINS
+      : currencyType;
+
     // Ensure the round is open for betting
     if (bettingVariable?.round?.status !== BettingRoundStatus.OPEN) {
       const message = await this.bettingRoundStatusMessage(
@@ -950,20 +1030,23 @@ export class BettingService {
 
     try {
       // Deduct bet amount from wallet (transactional)
-      await this.walletsService.deductForBet(
-        userId,
-        amount,
-        currencyType,
-        `Bet ${amount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
-        queryRunner.manager,
-      );
+      // Skip deduction for sentiment picks (free picks)
+      if (!isSentimentPick) {
+        await this.walletsService.deductForBet(
+          userId,
+          actualAmount,
+          actualCurrency,
+          `Bet ${actualAmount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
+          queryRunner.manager,
+        );
+      }
 
       // Create new bet entity
       const bet = this.betsRepository.create({
         userId,
         bettingVariableId,
-        amount,
-        currency: currencyType,
+        amount: actualAmount,
+        currency: actualCurrency,
         stream: { id: bettingVariable.streamId },
         roundId: bettingVariable.roundId,
       });
@@ -985,24 +1068,27 @@ export class BettingService {
       }
 
       // Update betting variable totals based on currency type
-      if (currencyType === CurrencyType.GOLD_COINS) {
-        lockedBettingVariable.totalBetsGoldCoinAmount =
-          Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountGoldCoin =
-          Number(lockedBettingVariable.betCountGoldCoin) + 1;
-      } else if (currencyType === CurrencyType.CADE_COINS) {
-        lockedBettingVariable.totalBetsCadeCoinAmount =
-          Number(lockedBettingVariable.totalBetsCadeCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountCadeCoin =
-          Number(lockedBettingVariable.betCountCadeCoin) + 1;
-      } else if (currencyType === CurrencyType.SWEEP_COINS) {
-        lockedBettingVariable.totalBetsSweepCoinAmount =
-          Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountSweepCoin =
-          Number(lockedBettingVariable.betCountSweepCoin) + 1;
+      // Skip updating totals for sentiment picks (no wager)
+      if (!isSentimentPick) {
+        if (actualCurrency === CurrencyType.GOLD_COINS) {
+          lockedBettingVariable.totalBetsGoldCoinAmount =
+            Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountGoldCoin =
+            Number(lockedBettingVariable.betCountGoldCoin) + 1;
+        } else if (actualCurrency === CurrencyType.CADE_COINS) {
+          lockedBettingVariable.totalBetsCadeCoinAmount =
+            Number(lockedBettingVariable.totalBetsCadeCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountCadeCoin =
+            Number(lockedBettingVariable.betCountCadeCoin) + 1;
+        } else if (actualCurrency === CurrencyType.SWEEP_COINS) {
+          lockedBettingVariable.totalBetsSweepCoinAmount =
+            Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountSweepCoin =
+            Number(lockedBettingVariable.betCountSweepCoin) + 1;
+        }
       }
 
       // Save updated betting variable
@@ -1010,6 +1096,27 @@ export class BettingService {
 
       // Capture roundId for response
       roundIdToUpdate = lockedBettingVariable.roundId;
+
+      // Award CadeCoins for sentiment picks
+      if (isSentimentPick) {
+        const cadeCoinsToAward = this.calculateSentimentCadeCoins(
+          bettingVariable.round.firstRevealTime,
+        );
+        if (cadeCoinsToAward > 0) {
+          await this.walletsService.addCadeCoins(
+            userId,
+            cadeCoinsToAward,
+            `Sentiment pick reward for "${bettingVariable.name}"`,
+            queryRunner.manager,
+          );
+        }
+
+        // Record sentiment pick vote for fraud prevention
+        await this.sentimentPickVoteService.recordSentimentVote(
+          userId,
+          bettingVariable.roundId,
+        );
+      }
 
       // Commit transaction
       await queryRunner.commitTransaction();
@@ -1024,6 +1131,34 @@ export class BettingService {
       await queryRunner.release();
     }
   }
+
+  /**
+   * Calculates CadeCoin rewards for sentiment picks based on timing.
+   * Returns 10 CadeCoins if pick is made within 2 hours of first reveal time.
+   * Returns 5 CadeCoins if pick is made after 2 hours of first reveal time.
+   * Returns 0 if firstRevealTime is null or hasn't occurred yet.
+   */
+  private calculateSentimentCadeCoins(firstRevealTime: Date | null): number {
+    if (!firstRevealTime) {
+      return 0;
+    }
+
+    const now = new Date();
+    const revealTime = new Date(firstRevealTime);
+
+    // If reveal hasn't happened yet, no reward
+    if (now < revealTime) {
+      return 0;
+    }
+
+    // Calculate hours since reveal
+    const hoursSinceReveal =
+      (now.getTime() - revealTime.getTime()) / (1000 * 60 * 60);
+
+    // 10 CadeCoins within first 2 hours, 5 after
+    return hoursSinceReveal <= 2 ? 10 : 5;
+  }
+
   /**
    * Ensures that the provided bet amount does not exceed the allowed maximum.
    *
@@ -1165,7 +1300,9 @@ export class BettingService {
       const newCurrency = newCurrencyType;
 
       // Validate new bet amount and currency type
-      if (!Number.isFinite(newAmt) || newAmt <= 0) {
+      const isSentimentPick =
+        bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+      if (!Number.isFinite(newAmt) || (newAmt <= 0 && !isSentimentPick)) {
         throw new BadRequestException(
           'New amount must be a positive number greater than 0.',
         );
@@ -1281,22 +1418,22 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           } else if (newCurrency === CurrencyType.CADE_COINS) {
             lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           }
           // counts remain unchanged
@@ -1306,7 +1443,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountGoldCoin = Math.max(
               0,
@@ -1316,7 +1453,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountCadeCoin = Math.max(
               0,
@@ -1326,7 +1463,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountSweepCoin = Math.max(
               0,
@@ -1359,7 +1496,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsGoldCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsGoldCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountGoldCoin = Math.max(
             0,
@@ -1369,7 +1506,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsCadeCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsCadeCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountCadeCoin = Math.max(
             0,
@@ -1379,7 +1516,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsSweepCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsSweepCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountSweepCoin = Math.max(
             0,
@@ -1445,6 +1582,14 @@ export class BettingService {
 
       roundIdToUpdate = lockedNewBettingVariable.roundId;
 
+      // Record sentiment pick vote for fraud prevention (for new sentiment picks)
+      if (isSentimentPick) {
+        await this.sentimentPickVoteService.recordSentimentVote(
+          userId,
+          bettingVariable.roundId,
+        );
+      }
+
       // Commit transaction
       await queryRunner.commitTransaction();
 
@@ -1462,7 +1607,7 @@ export class BettingService {
       return {
         betDetails,
         oldBettingAmount,
-        oldBettingOption: oldBettingVariable?.name
+        oldBettingOption: oldBettingVariable?.name,
       };
     } catch (error) {
       // Rollback transaction on failure
@@ -1521,6 +1666,20 @@ export class BettingService {
     // If the betting round is not open, the bet cannot be cancelled
     if (bettingRound.status !== BettingRoundStatus.OPEN) {
       throw new BadRequestException('This round is closed for betting.');
+    }
+
+    // Prevent cancelling sentiment picks after voting (fraud prevention)
+    if (bettingRound.mechanism === PickMechanism.SENTIMENT) {
+      const hasVoted =
+        await this.sentimentPickVoteService.hasUserVotedOnSentiment(
+          userId,
+          bettingRound.id,
+        );
+      if (hasVoted) {
+        throw new BadRequestException(
+          'You cannot cancel a sentiment pick after voting. Your vote is permanent.',
+        );
+      }
     }
 
     // Pass required data to handler for bet cancellation (refund, status update, etc.)
@@ -1708,7 +1867,11 @@ export class BettingService {
    *
    * @param variableId - ID of the betting variable that won
    */
-  async declareWinner(role: UserRole, creator: string, variableId: string): Promise<void> {
+  async declareWinner(
+    role: UserRole,
+    creator: string,
+    variableId: string,
+  ): Promise<void> {
     // Fetch the betting variable and associated round/stream
     const bettingVariable = await this.findBettingVariableById(variableId);
     const stream = await this.findStreamById(bettingVariable.streamId);
@@ -1757,8 +1920,10 @@ export class BettingService {
         bettingVariable.round.id,
       );
 
-      const refundAllCadeWinners = roundCalculation.cade.totalLosingBetCount == 0;
-      const refundAllSweepWinners = roundCalculation.sweep.totalLosingBetCount == 0;
+      const refundAllCadeWinners =
+        roundCalculation.cade.totalLosingBetCount == 0;
+      const refundAllSweepWinners =
+        roundCalculation.sweep.totalLosingBetCount == 0;
 
       const processedBets = [];
 
@@ -1809,9 +1974,14 @@ export class BettingService {
           betData.refundAmount = betAmount;
           betData.isFromNoWinners = true;
         } else if (isWon) {
-          betData.payoutAmount = (round(betAmount / variableData.totalBetAmount, 2) * variableData.totalPayout) + (variableData.isPayoutLessThanLimit ? betAmount : 0);
+          betData.payoutAmount =
+            round(betAmount / variableData.totalBetAmount, 2) *
+              variableData.totalPayout +
+            (variableData.isPayoutLessThanLimit ? betAmount : 0);
         } else {
-          betData.refundAmount = round(betAmount / variableData.totalBetAmount, 2) * variableData.totalRefundAmount;
+          betData.refundAmount =
+            round(betAmount / variableData.totalBetAmount, 2) *
+            variableData.totalRefundAmount;
         }
 
         processedBets.push(betData);
@@ -1852,7 +2022,7 @@ export class BettingService {
         where: {
           roundId: bettingVariable.roundId,
           status: BetStatus.Lost,
-          bettingVariableId: Not(variableId) // Only bets on non-winning options
+          bettingVariableId: Not(variableId), // Only bets on non-winning options
         },
         relations: ['user', 'bettingVariable', 'round'],
       });
@@ -1875,9 +2045,11 @@ export class BettingService {
         {
           goldCoin: false,
           cadeCoin:
-            roundCalculation.cade.totalWinningBetCount === 0 || roundCalculation.cade.totalLosingBetCount === 0,
+            roundCalculation.cade.totalWinningBetCount === 0 ||
+            roundCalculation.cade.totalLosingBetCount === 0,
           sweepCoin:
-            roundCalculation.sweep.totalWinningBetCount === 0 || roundCalculation.sweep.totalLosingBetCount === 0,
+            roundCalculation.sweep.totalWinningBetCount === 0 ||
+            roundCalculation.sweep.totalLosingBetCount === 0,
         },
       );
       this.streamGateway.emitStreamListEvent(StreamList.StreamBetUpdated);
@@ -1931,7 +2103,8 @@ export class BettingService {
           // Log any individual failures (bot notification or Redis storage)
           notificationResults.forEach((result, notifIndex) => {
             if (result.status === 'rejected') {
-              const notifType = notifIndex === 0 ? 'bot message' : 'Redis storage';
+              const notifType =
+                notifIndex === 0 ? 'bot message' : 'Redis storage';
               Logger.error(
                 `Failed to send ${notifType} to winner ${winner.userId} (${winner.username})`,
                 result.reason,
@@ -1955,7 +2128,10 @@ export class BettingService {
       });
 
       // Notify losers via bot and store results in Redis for summary email
-      if (roundCalculation.gold.totalWinningBetCount > 0 || roundCalculation.sweep.totalWinningBetCount > 0) {
+      if (
+        roundCalculation.gold.totalWinningBetCount > 0 ||
+        roundCalculation.sweep.totalWinningBetCount > 0
+      ) {
         const loserNotificationResults = await Promise.allSettled(
           losingBetsWithUserInfo.map(async (bet) => {
             const notificationResults = await Promise.allSettled([
@@ -1978,7 +2154,8 @@ export class BettingService {
             // Log any individual notification failures for this user
             notificationResults.forEach((result, notifIndex) => {
               if (result.status === 'rejected') {
-                const notifType = notifIndex === 0 ? 'bot message' : 'Redis storage';
+                const notifType =
+                  notifIndex === 0 ? 'bot message' : 'Redis storage';
                 Logger.error(
                   `Failed to send ${notifType} to loser ${bet.userId} (${bet.user?.username})`,
                   result.reason,
@@ -2029,33 +2206,57 @@ export class BettingService {
     }
   }
 
-  private calculatePerCurrencyRoundPayout(currency, winningOptions, losingOptions) {
+  private calculatePerCurrencyRoundPayout(
+    currency,
+    winningOptions,
+    losingOptions,
+  ) {
     const MAX_PAYOUT = 4;
 
-    const betAmountVariable = currency == "sweep" ? "totalBetsSweepCoinAmount" : currency === "cade" ? "totalBetsCadeCoinAmount" : "totalBetsGoldCoinAmount";
-    const betCountVariable = currency == "sweep" ? "betCountSweepCoin" : currency === "cade" ? "betCountCadeCoin" : "betCountGoldCoin";
+    const betAmountVariable =
+      currency == 'sweep'
+        ? 'totalBetsSweepCoinAmount'
+        : currency === 'cade'
+          ? 'totalBetsCadeCoinAmount'
+          : 'totalBetsGoldCoinAmount';
+    const betCountVariable =
+      currency == 'sweep'
+        ? 'betCountSweepCoin'
+        : currency === 'cade'
+          ? 'betCountCadeCoin'
+          : 'betCountGoldCoin';
 
     const totalWinningBetAmount = Number(winningOptions[betAmountVariable]);
-    const totalLosingBetAmount = losingOptions.reduce((sum, item) => sum += Number(item[betAmountVariable]), 0);
+    const totalLosingBetAmount = losingOptions.reduce(
+      (sum, item) => (sum += Number(item[betAmountVariable])),
+      0,
+    );
 
     const totalWinningBetCount = Number(winningOptions[betCountVariable]);
-    const totalLosingBetCount = losingOptions.reduce((sum, item) => sum += Number(item[betCountVariable]), 0);
+    const totalLosingBetCount = losingOptions.reduce(
+      (sum, item) => (sum += Number(item[betCountVariable])),
+      0,
+    );
 
     const potentialPayout = totalWinningBetAmount * MAX_PAYOUT;
-    const totalWinningPayout = potentialPayout <= totalLosingBetAmount
-      ? potentialPayout
-      : totalLosingBetAmount;
+    const totalWinningPayout =
+      potentialPayout <= totalLosingBetAmount
+        ? potentialPayout
+        : totalLosingBetAmount;
 
-    const totalPlatformSplit = totalWinningPayout * (currency == "sweep" ? 0.15 : 0);
+    const totalPlatformSplit =
+      totalWinningPayout * (currency == 'sweep' ? 0.15 : 0);
 
-    let perRoundData = [{
-      id: winningOptions.id,
-      totalBetAmount: Number(winningOptions[betAmountVariable]),
-      totalPayout: totalWinningPayout - totalPlatformSplit,
-      totalPlatformSplit: totalPlatformSplit,
-      totalRefundAmount: 0,
-      isPayoutLessThanLimit: potentialPayout > totalWinningPayout
-    }];
+    let perRoundData = [
+      {
+        id: winningOptions.id,
+        totalBetAmount: Number(winningOptions[betAmountVariable]),
+        totalPayout: totalWinningPayout - totalPlatformSplit,
+        totalPlatformSplit: totalPlatformSplit,
+        totalRefundAmount: 0,
+        isPayoutLessThanLimit: potentialPayout > totalWinningPayout,
+      },
+    ];
 
     losingOptions.forEach((item) => {
       perRoundData.push({
@@ -2064,9 +2265,9 @@ export class BettingService {
         totalPayout: 0,
         totalPlatformSplit: 0,
         totalRefundAmount: 0,
-        isPayoutLessThanLimit: false
-      })
-    })
+        isPayoutLessThanLimit: false,
+      });
+    });
 
     if (potentialPayout < totalLosingBetAmount) {
       const totalPayout = totalWinningPayout - totalWinningBetAmount;
@@ -2074,47 +2275,63 @@ export class BettingService {
 
       perRoundData = perRoundData.map((item) => {
         if (item.id !== winningOptions.id) {
-          item.totalRefundAmount = (round(item.totalBetAmount / totalLosingBetAmount, 2) * totalAmountToSplit);
+          item.totalRefundAmount =
+            round(item.totalBetAmount / totalLosingBetAmount, 2) *
+            totalAmountToSplit;
         }
 
         return item;
-      })
+      });
     }
 
     const summarizedRoundData = {};
 
     perRoundData.forEach((item) => {
       summarizedRoundData[item.id] = item;
-    })
+    });
 
     return {
       round: summarizedRoundData,
       totalWinningBetAmount,
       totalLosingBetAmount,
       totalWinningBetCount,
-      totalLosingBetCount
+      totalLosingBetCount,
     };
   }
 
   private async calculateRoundPayouts(winningOption, betRound) {
     const variables = await this.bettingVariablesRepository.find({
       where: {
-        roundId: betRound
-      }
+        roundId: betRound,
+      },
     });
 
-    const winningOptions = variables.filter((item) => item.id == winningOption).at(0);
+    const winningOptions = variables
+      .filter((item) => item.id == winningOption)
+      .at(0);
     const losingOptions = variables.filter((item) => item.id != winningOption);
 
-    const sweepCalculation = this.calculatePerCurrencyRoundPayout("sweep", winningOptions, losingOptions);
-    const goldCalculation = this.calculatePerCurrencyRoundPayout("gold", winningOptions, losingOptions);
-    const cadeCalculation = this.calculatePerCurrencyRoundPayout("cade", winningOptions, losingOptions);
+    const sweepCalculation = this.calculatePerCurrencyRoundPayout(
+      'sweep',
+      winningOptions,
+      losingOptions,
+    );
+    const goldCalculation = this.calculatePerCurrencyRoundPayout(
+      'gold',
+      winningOptions,
+      losingOptions,
+    );
+    const cadeCalculation = this.calculatePerCurrencyRoundPayout(
+      'cade',
+      winningOptions,
+      losingOptions,
+    );
 
     return {
       sweep: sweepCalculation,
       gold: goldCalculation,
       cade: cadeCalculation,
-    }
+    };
   }
 
   /**
@@ -2227,7 +2444,12 @@ export class BettingService {
     }
   }
 
-  private async processRefund(queryRunner, betData, description, bettingVariableName) {
+  private async processRefund(
+    queryRunner,
+    betData,
+    description,
+    bettingVariableName,
+  ) {
     await this.walletsService.updateBalance(
       betData.userId,
       betData.refundAmount,
@@ -2245,14 +2467,10 @@ export class BettingService {
       betData.userId,
       userObj.username,
       bettingVariableName,
-    )
+    );
   }
 
-  private async processClosingBets(
-    queryRunner,
-    betData,
-    bettingVariableName
-  ) {
+  private async processClosingBets(queryRunner, betData, bettingVariableName) {
     for (const bet of betData) {
       const originalBet = bet.originalBet;
 
@@ -2271,8 +2489,8 @@ export class BettingService {
           queryRunner,
           bet,
           `${bet.refundAmount} ${bet.currency} refunded - bet round closed with no winners.`,
-          bettingVariableName
-        )
+          bettingVariableName,
+        );
       } else {
         if (bet.status === BetStatus.Won) {
           if (bet.payoutAmount > 0) {
@@ -2291,11 +2509,10 @@ export class BettingService {
               queryRunner,
               bet,
               `${bet.refundAmount} ${bet.currency} refunded - refunded due to 4:1 odds limit.`,
-              bettingVariableName
-            )
+              bettingVariableName,
+            );
           }
         } else if (bet.status === BetStatus.Lost) {
-
           await this.walletsService.createTransactionData(
             bet.userId,
             TransactionType.BET_LOST,
@@ -2310,8 +2527,8 @@ export class BettingService {
               queryRunner,
               bet,
               `${bet.refundAmount} ${bet.currency} refunded - refunded due to 4:1 odds limit.`,
-              bettingVariableName
-            )
+              bettingVariableName,
+            );
           }
         }
       }
@@ -2325,7 +2542,11 @@ export class BettingService {
    * @param queryRunner - TypeORM QueryRunner to handle the database transaction
    * @param bettingVariable - The betting variable whose round needs to be closed
    */
-  private async closeRound(queryRunner, bettingVariable: BettingVariable, creator: string) {
+  private async closeRound(
+    queryRunner,
+    bettingVariable: BettingVariable,
+    creator: string,
+  ) {
     // Retrieve the round from the betting variable if available
     let round = bettingVariable.round;
 
@@ -2524,17 +2745,17 @@ export class BettingService {
       // Fetch the betting round along with its betting variables
       const bettingRound = await this.bettingRoundsRepository
         .createQueryBuilder('br')
-        .where("br.id = :roundId", {
-          roundId
+        .where('br.id = :roundId', {
+          roundId,
         })
-        .leftJoinAndSelect("br.stream", "s")
-        .leftJoinAndSelect("s.creator", "c")
+        .leftJoinAndSelect('br.stream', 's')
+        .leftJoinAndSelect('s.creator', 'c')
         .getOne();
 
       const variables = await this.bettingVariablesRepository
-        .createQueryBuilder("bv")
-        .where("bv.roundId = :roundId", {
-          roundId: bettingRound.id
+        .createQueryBuilder('bv')
+        .where('bv.roundId = :roundId', {
+          roundId: bettingRound.id,
         })
         .getRawMany();
 
@@ -2544,22 +2765,34 @@ export class BettingService {
       let totalCadeCoins = 0;
 
       variables.forEach((bv) => {
-        totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
+        totalVotes +=
+          Number(bv.bv_bet_count_gold_coin) +
+          Number(bv.bv_bet_count_sweep_coin) +
+          Number(bv.bv_bet_count_cade_coin);
 
-        totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
-        totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
-        totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
+        totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
+        totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
+        totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
       });
 
       const options = variables.map((v) => {
-        const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+        const votes =
+          Number(v.bv_bet_count_gold_coin) +
+          Number(v.bv_bet_count_sweep_coin) +
+          Number(v.bv_bet_count_cade_coin);
 
         return {
           id: v.bv_id,
           option: v.bv_name,
-          percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
+          percentage:
+            totalCadeCoins > 0
+              ? (
+                  (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins) *
+                  100
+                ).toFixed(2)
+              : 0,
           isWinner: v.bv_is_winning_option,
-        }
+        };
       });
 
       // Get user count of cade coin bettors
@@ -2567,17 +2800,19 @@ export class BettingService {
         .createQueryBuilder('bet')
         .innerJoin('bet.bettingVariable', 'bv')
         .where('bv.roundId = :roundId', { roundId: bettingRound.id })
-        .andWhere('bet.currency = :currency', { currency: CurrencyType.CADE_COINS })
+        .andWhere('bet.currency = :currency', {
+          currency: CurrencyType.CADE_COINS,
+        })
         .andWhere('bet.status = :status', { status: BetStatus.Active })
         .select('COUNT(DISTINCT bet.userId)', 'count')
         .getRawOne();
-      
+
       const cadeCoinUsersCount = Number(cadeCoinUsersCountResult?.count || 0);
 
       const itemData = {
         streamId: bettingRound.streamId,
         roundId: bettingRound.id,
-        thumbnail: bettingRound.stream.thumbnailUrl ?? "",
+        thumbnail: bettingRound.stream.thumbnailUrl ?? '',
         status: bettingRound.status,
         lockDate: bettingRound.lockDate,
         creator: bettingRound.stream.creator.username,
@@ -2588,20 +2823,22 @@ export class BettingService {
         streamStatus: bettingRound.stream.status,
         scheduledStartTime: bettingRound.stream.scheduledStartTime,
         category: bettingRound.category,
-        options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+        mechanism: bettingRound.mechanism,
+        options: options.sort(
+          (a, b) => Number(b.percentage) - Number(a.percentage),
+        ),
         totalPot: {
           streamCoins: totalStreamCoins,
           goldCoins: totalGoldCoins,
-          cadeCoins: totalCadeCoins
+          cadeCoins: totalCadeCoins,
         },
         cadeCoinUsersCount: cadeCoinUsersCount,
         description: bettingRound.stream.description,
-      }
-
+      };
 
       // Return structured response
       return {
-        data: itemData
+        data: itemData,
       };
     } catch (e) {
       console.error('Error fetching round data:', e.message);
@@ -2776,10 +3013,10 @@ export class BettingService {
       const sweepPotPerBettor =
         userOptionSweepCoinCount > 0
           ? round(
-            opposingPotSweepCoinAmountAfterPlatformFee /
-            userOptionSweepCoinCount,
-            2,
-          )
+              opposingPotSweepCoinAmountAfterPlatformFee /
+                userOptionSweepCoinCount,
+              2,
+            )
           : 0;
 
       // --- MAIN LOGIC: always calculate from scratch ---
@@ -3408,17 +3645,23 @@ export class BettingService {
         const item = result[i];
         let status = item.status;
 
-        if (status === "lost") {
-          const winningVariable = await this.bettingVariablesRepository.findOne({
-            where: {
-              roundId: item.roundId,
-              is_winning_option: true
-            }
-          });
+        if (status === 'lost') {
+          const winningVariable = await this.bettingVariablesRepository.findOne(
+            {
+              where: {
+                roundId: item.roundId,
+                is_winning_option: true,
+              },
+            },
+          );
 
           if (winningVariable) {
-            if (winningVariable.betCountGoldCoin + winningVariable.betCountSweepCoin === 0) {
-              status = "void";
+            if (
+              winningVariable.betCountGoldCoin +
+                winningVariable.betCountSweepCoin ===
+              0
+            ) {
+              status = 'void';
             }
           }
         }
@@ -3465,7 +3708,7 @@ export class BettingService {
         `(LOWER(user.username) ILIKE LOWER(:q) OR LOWER(user.email) ILIKE LOWER(:q))`,
         {
           q: `%${searchFilter}%`,
-        }
+        },
       );
     }
 

@@ -31,9 +31,14 @@ export class StreamLiveProcessor extends WorkerHost {
 
       await this.streamService.updateStreamStatus(streamId);
 
-      this.logger.log(`Successfully processed stream live job for streamId: ${streamId}`);
+      this.logger.log(
+        `Successfully processed stream live job for streamId: ${streamId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to process stream live job for streamId: ${streamId}`, error.stack);
+      this.logger.error(
+        `Failed to process stream live job for streamId: ${streamId}`,
+        error.stack,
+      );
       throw error;
     }
   }

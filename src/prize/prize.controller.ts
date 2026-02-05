@@ -166,7 +166,8 @@ export class AdminPrizeController {
   @ApiParam({ name: 'id', description: 'Prize tier ID' })
   @ApiResponse({
     status: 200,
-    description: 'Prize tier updated successfully (old tier deactivated, new one created)',
+    description:
+      'Prize tier updated successfully (old tier deactivated, new one created)',
     type: PrizeConfigurationDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid prize tier data' })
@@ -209,7 +210,9 @@ export class AdminPrizeController {
    * Admin endpoint: Get all prize tiers (including inactive, for history/audit)
    */
   @Get('history')
-  @ApiOperation({ summary: 'Get all prize tiers including inactive (admin only)' })
+  @ApiOperation({
+    summary: 'Get all prize tiers including inactive (admin only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns all prize tiers',
@@ -228,9 +231,10 @@ export class AdminPrizeController {
    * Admin endpoint: Get all prize redemptions with filters
    */
   @Get('redemptions')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get all prize redemptions with optional filters (admin only)',
-    description: 'Returns paginated list of prize redemptions with filtering support'
+    description:
+      'Returns paginated list of prize redemptions with filtering support',
   })
   @ApiResponse({
     status: 200,
@@ -282,14 +286,19 @@ export class AdminPrizeController {
    * Admin endpoint: Update redemption status and tracking information
    */
   @Patch('redemptions/:id/status')
-  @ApiOperation({ summary: 'Update redemption status and tracking info (admin only)' })
+  @ApiOperation({
+    summary: 'Update redemption status and tracking info (admin only)',
+  })
   @ApiParam({ name: 'id', description: 'Redemption ID' })
   @ApiResponse({
     status: 200,
     description: 'Redemption status updated successfully',
     type: AdminRedemptionResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid status or missing tracking info' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid status or missing tracking info',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Admin access required' })
   @ApiResponse({ status: 404, description: 'Redemption not found' })
