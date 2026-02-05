@@ -432,6 +432,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          mechanism: item.br_mechanism,
           options: options.sort(
             (a, b) => Number(b.percentage) - Number(a.percentage),
           ),
@@ -2099,6 +2100,7 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          mechanism: item.br_mechanism,
           options: options.sort(
             (a, b) => Number(b.percentage) - Number(a.percentage),
           ),
@@ -2242,6 +2244,7 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          mechanism: item.br_mechanism,
           options: options.sort(
             (a, b) => Number(b.percentage) - Number(a.percentage),
           ),
