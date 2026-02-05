@@ -491,7 +491,6 @@ export class BettingController {
    * -------------------
    * This endpoint retrieves the timeline of picks placed on a round, showing
    * how the pick pool distribution evolved over time between the two options.
-   * Data is bucketed into 5-minute intervals with cumulative totals for each option.
    * Only CadeCoin picks are included in the timeline.
    * 
    * Swagger Responses:
