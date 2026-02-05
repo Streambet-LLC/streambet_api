@@ -76,7 +76,12 @@ import { PaymentsModule } from 'src/payments/payments.module';
     ),
     EmailsModule,
   ],
-  providers: [StreamLiveProcessor, QueueService, EmailProcessor, CoinflowWebhookProcessor],
+  providers: [
+    StreamLiveProcessor,
+    QueueService,
+    EmailProcessor,
+    CoinflowWebhookProcessor,
+  ],
   exports: [QueueService],
 })
-export class QueueModule { }
+export class QueueModule {}

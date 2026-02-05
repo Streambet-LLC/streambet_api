@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsDefined, IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { ApiProperty } from '@nestjs/swagger';
+import { IsDefined, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class StreamIdDto {
   @ApiProperty({
@@ -28,4 +28,3 @@ export class BetRoundDetailsDto {
   @IsString()
   userId?: string;
 }
-

@@ -13,6 +13,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BettingCategory } from 'src/enums/betting-category.enum';
 import { BetRoundType } from 'src/enums/bet-round-type';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 
 export class OptionDto {
   @ApiProperty({
@@ -75,7 +76,6 @@ export class RoundDto {
   @IsEnum(BettingCategory)
   category?: BettingCategory;
 
-
   @ApiProperty({
     description: 'Type of the Pick round',
     enum: BetRoundType,
@@ -85,6 +85,16 @@ export class RoundDto {
   @IsOptional()
   @IsEnum(BetRoundType)
   betRoundType?: BetRoundType;
+
+  @ApiProperty({
+    description: 'Mechanism of the Pick (default or sentiment)',
+    enum: PickMechanism,
+    example: PickMechanism.DEFAULT,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PickMechanism)
+  mechanism?: PickMechanism;
 
   @ApiProperty({
     description: 'Array of betting options for this round',
@@ -149,6 +159,16 @@ export class EditRoundDto {
   @IsOptional()
   @IsEnum(BetRoundType)
   betRoundType?: BetRoundType;
+
+  @ApiProperty({
+    description: 'Mechanism of the Pick (default or sentiment)',
+    enum: PickMechanism,
+    example: PickMechanism.DEFAULT,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PickMechanism)
+  mechanism?: PickMechanism;
 
   @ApiProperty({
     description:

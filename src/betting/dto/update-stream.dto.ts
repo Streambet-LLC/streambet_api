@@ -31,7 +31,7 @@ export class UpdateStreamDto {
   @IsOptional()
   description?: string;
 
-  @ValidateIf(o => o.type === StreamEventType.STREAM)
+  @ValidateIf((o) => o.type === StreamEventType.STREAM)
   @ApiProperty({
     description: 'The embedded URL for the stream (YouTube, Twitch, etc.)',
     example: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
@@ -82,7 +82,8 @@ export class UpdateStreamDto {
   creatorId?: string;
 
   @ApiProperty({
-    description: 'Whether the stream is promoted (featured in carousel and prioritized in listings)',
+    description:
+      'Whether the stream is promoted (featured in carousel and prioritized in listings)',
     example: false,
     type: 'boolean',
     required: false,

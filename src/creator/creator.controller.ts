@@ -67,7 +67,7 @@ export class CreatorController {
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
-  ) { }
+  ) {}
 
   // Helper method to check if user is creator
   private ensureCreator(user: User) {
@@ -90,7 +90,7 @@ export class CreatorController {
   @Post('streams')
   async createStream(
     @Request() req: RequestWithUser,
-    @Body() createStreamDto: Omit<CreateStreamDto, "creatorId">,
+    @Body() createStreamDto: Omit<CreateStreamDto, 'creatorId'>,
   ): Promise<ApiResponse> {
     this.ensureCreator(req.user);
     const stream = await this.bettingService.createStream({
@@ -175,7 +175,6 @@ export class CreatorController {
     };
   }
 
-
   /**
    * Retrieves a paginated and filtered list of streams for the admin view.
    * Supports optional text search, status-based filtering, sorting, and pagination.
@@ -200,8 +199,11 @@ export class CreatorController {
     @Query() streamFilterDto: StreamFilterDto,
   ) {
     this.ensureCreator(req.user);
-    const { total, data } =
-      await this.streamService.allStreamsForAdmin(req.user.role, req.user.id, streamFilterDto);
+    const { total, data } = await this.streamService.allStreamsForAdmin(
+      req.user.role,
+      req.user.id,
+      streamFilterDto,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
@@ -228,7 +230,11 @@ export class CreatorController {
     @Param('id') id: string,
   ): Promise<ApiResponse> {
     this.ensureCreator(req.user);
-    const data = await this.streamService.findStreamDetailsForAdmin(req.user.role, req.user.id, id);
+    const data = await this.streamService.findStreamDetailsForAdmin(
+      req.user.role,
+      req.user.id,
+      id,
+    );
     return {
       message: 'Successfully fetch Stream details',
       status: HttpStatus.OK,
@@ -278,19 +284,22 @@ export class CreatorController {
   async getAnalyticsSummary(@Request() req: RequestWithUser) {
     this.ensureCreator(req.user);
 
-    const data = await this.creatorService.getAnalyticsSummary({ creatorId: req.user.id });
+    const data = await this.creatorService.getAnalyticsSummary({
+      creatorId: req.user.id,
+    });
 
     return {
       statusCode: HttpStatus.OK,
       message: 'Analytics summary fetched successfully',
-      data: data
+      data: data,
     };
   }
 
   @Get('payoutsHistory')
   async getCreatorPayoutsHistory(
     @Request() req: RequestWithUser,
-    @Query() query: {
+    @Query()
+    query: {
       page?: number;
       limit?: number;
     },
@@ -299,13 +308,13 @@ export class CreatorController {
 
     const results = await this.platformPayoutService.getPayoutsByUserId({
       userId: req.user.id,
-      pagination: { page: query.page, limit: query.limit }
+      pagination: { page: query.page, limit: query.limit },
     });
 
     return {
       statusCode: HttpStatus.OK,
       message: 'Creator payout history fetched successfully',
-      data: results
+      data: results,
     };
   }
 
@@ -337,7 +346,11 @@ export class CreatorController {
 
     // Get stream details (including betting rounds and variables)
     const { totalUsers, totalStreamTime } =
-      await this.streamService.getStreamAnalytics(req.user.role, req.user.id, streamId);
+      await this.streamService.getStreamAnalytics(
+        req.user.role,
+        req.user.id,
+        streamId,
+      );
 
     // Get total bet value for the stream
     const totalBetValue =
@@ -370,7 +383,6 @@ export class CreatorController {
     @Request() req: RequestWithUser,
     @Body() applicationDto: CreatorApplicationDto,
   ): Promise<ApiResponse> {
-
     await this.creatorService.upsertCreatorApplication({
       userId: req.user.id,
       applicationDto,
@@ -394,7 +406,6 @@ export class CreatorController {
     @Request() req: RequestWithUser,
     @Body() applicationDto: CreatorApplicationDto,
   ): Promise<ApiResponse> {
-
     await this.creatorService.upsertCreatorApplication({
       userId: req.user.id,
       applicationDto,
@@ -407,7 +418,9 @@ export class CreatorController {
     };
   }
 
-  @ApiOperation({ summary: 'Get the creator application of the logged in user' })
+  @ApiOperation({
+    summary: 'Get the creator application of the logged in user',
+  })
   @SwaggerApiResponse({
     status: 200,
     description: 'Creator application fetched successfully',
@@ -417,7 +430,9 @@ export class CreatorController {
   async getCreatorApplication(
     @Request() req: RequestWithUser,
   ): Promise<ApiResponse> {
-    const application = await this.creatorService.getCreatorApplication({ userId: req.user.id });
+    const application = await this.creatorService.getCreatorApplication({
+      userId: req.user.id,
+    });
 
     return {
       status: HttpStatus.OK,
@@ -426,7 +441,9 @@ export class CreatorController {
     };
   }
 
-  @ApiOperation({ summary: 'Cancel the creator application of the logged in user' })
+  @ApiOperation({
+    summary: 'Cancel the creator application of the logged in user',
+  })
   @SwaggerApiResponse({
     status: 200,
     description: 'Creator application cancelled successfully',

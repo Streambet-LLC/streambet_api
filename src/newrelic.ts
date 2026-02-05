@@ -16,61 +16,61 @@ if (!NEW_RELIC_APP_NAME || !NEW_RELIC_LICENSE_KEY) {
 }
 
 exports.config = {
+  /**
+   * Array of application names.
+   */
+  app_name: NEW_RELIC_APP_NAME ? [NEW_RELIC_APP_NAME] : [],
+  /**
+   * Your New Relic license key.
+   */
+  license_key: NEW_RELIC_LICENSE_KEY || '',
+  logging: {
     /**
-     * Array of application names.
+     * Level at which to log. 'trace' is most useful to New Relic when diagnosing
+     * issues with the agent, 'info' and higher will impose the least overhead on
+     * production applications.
      */
-    app_name: NEW_RELIC_APP_NAME ? [NEW_RELIC_APP_NAME] : [],
+    level: 'info',
+    // level: "debug",
+  },
+  /**
+   * When true, all request headers except for those listed in attributes.exclude
+   * will be captured for all traces, unless otherwise specified in a destination's
+   * attributes include/exclude lists.
+   */
+  allow_all_headers: true,
+  error_collector: {
+    enabled: true,
+    // ignore_status_codes: [404], // Customize as needed
+  },
+  application_logging: {
+    forwarding: {
+      /**
+       * Toggles whether the agent gathers log records for sending to New Relic.
+       */
+      enabled: true,
+    },
+  },
+  attributes: {
     /**
-     * Your New Relic license key.
+     * Prefix of attributes to exclude from all destinations. Allows * as wildcard
+     * at end.
+     *
+     * NOTE: If excluding headers, they must be in camelCase form to be filtered.
+     *
+     * @env NEW_RELIC_ATTRIBUTES_EXCLUDE
      */
-    license_key: NEW_RELIC_LICENSE_KEY || '',
-    logging: {
-        /**
-         * Level at which to log. 'trace' is most useful to New Relic when diagnosing
-         * issues with the agent, 'info' and higher will impose the least overhead on
-         * production applications.
-         */
-        level: 'info',
-        // level: "debug",
-    },
-    /**
-     * When true, all request headers except for those listed in attributes.exclude
-     * will be captured for all traces, unless otherwise specified in a destination's
-     * attributes include/exclude lists.
-     */
-    allow_all_headers: true,
-    error_collector: {
-        enabled: true,
-        // ignore_status_codes: [404], // Customize as needed
-    },
-    application_logging: {
-        forwarding: {
-            /**
-             * Toggles whether the agent gathers log records for sending to New Relic.
-             */
-            enabled: true,
-        },
-    },
-    attributes: {
-        /**
-         * Prefix of attributes to exclude from all destinations. Allows * as wildcard
-         * at end.
-         *
-         * NOTE: If excluding headers, they must be in camelCase form to be filtered.
-         *
-         * @env NEW_RELIC_ATTRIBUTES_EXCLUDE
-         */
-        exclude: [
-            'request.headers.cookie',
-            'request.headers.authorization',
-            'request.headers.proxyAuthorization',
-            'request.headers.setCookie*',
-            'request.headers.x*',
-            'response.headers.cookie',
-            'response.headers.authorization',
-            'response.headers.proxyAuthorization',
-            'response.headers.setCookie*',
-            'response.headers.x*',
-        ],
-    },
+    exclude: [
+      'request.headers.cookie',
+      'request.headers.authorization',
+      'request.headers.proxyAuthorization',
+      'request.headers.setCookie*',
+      'request.headers.x*',
+      'response.headers.cookie',
+      'response.headers.authorization',
+      'response.headers.proxyAuthorization',
+      'response.headers.setCookie*',
+      'response.headers.x*',
+    ],
+  },
 };

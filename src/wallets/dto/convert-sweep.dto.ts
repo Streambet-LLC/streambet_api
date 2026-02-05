@@ -11,10 +11,10 @@ export class ConvertSweepQueryDto {
     description: 'Stream Coin amount to convert to USD',
     example: 40,
   })
-  @Transform(({ value }: TransformFnParams) => (value !== undefined ? parseFloat(value as any) : undefined))
+  @Transform(({ value }: TransformFnParams) =>
+    value !== undefined ? parseFloat(value) : undefined,
+  )
   @IsNumber()
   @Min(0)
   coins: number;
 }
-
-

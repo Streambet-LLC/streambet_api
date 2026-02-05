@@ -30,7 +30,11 @@ import {
 } from '@nestjs/swagger';
 import { CoinflowWebhookGuard } from '../auth/guards/coinflow-webhook.guard';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
-import { CoinflowWithdrawDto, CoinflowWithdrawKycDto, CoinflowWithdrawKycUsDto } from './dto/coinflow-withdraw.dto';
+import {
+  CoinflowWithdrawDto,
+  CoinflowWithdrawKycDto,
+  CoinflowWithdrawKycUsDto,
+} from './dto/coinflow-withdraw.dto';
 import { Response } from 'express';
 
 // Define the request type with user property
@@ -165,8 +169,14 @@ export class PaymentsController {
     description: 'Coinflow withdraw payload fetched',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 402, description: 'User not registered as withdrawer in coinflow' })
-  @ApiResponse({ status: 451, description: 'User must complete additional verification' })
+  @ApiResponse({
+    status: 402,
+    description: 'User not registered as withdrawer in coinflow',
+  })
+  @ApiResponse({
+    status: 451,
+    description: 'User must complete additional verification',
+  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('coinflow/withdrawer')
@@ -175,7 +185,10 @@ export class PaymentsController {
     @Res({ passthrough: true }) res: Response,
     @Query('redirectLink') redirectLink: string,
   ) {
-    const result = await this.paymentsService.getCoinflowWithdraw(req.user.id, redirectLink);
+    const result = await this.paymentsService.getCoinflowWithdraw(
+      req.user.id,
+      redirectLink,
+    );
 
     if (result.status === 451) {
       res.status(451);
@@ -210,7 +223,10 @@ export class PaymentsController {
 
   /** Deletes a Coinflow withdrawer bank account for the authenticated user. */
   @ApiOperation({ summary: 'Delete Coinflow withdrawer bank account' })
-  @ApiResponse({ status: 200, description: 'Coinflow withdrawer account deleted' })
+  @ApiResponse({
+    status: 200,
+    description: 'Coinflow withdrawer account deleted',
+  })
   @ApiResponse({ status: 400, description: 'Bad request - Invalid token' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiQuery({ name: 'token', type: String, required: true })
@@ -233,7 +249,10 @@ export class PaymentsController {
   /** Initiates a delegated payout (withdrawal) to the authenticated user's account via Coinflow. */
   @ApiOperation({ summary: 'Initiate Coinflow delegated payout (withdrawal)' })
   @ApiResponse({ status: 201, description: 'Withdrawal initiated' })
-  @ApiResponse({ status: 400, description: 'Bad request - Invalid amount/coins' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid amount/coins',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
@@ -243,11 +262,14 @@ export class PaymentsController {
     @Body() body: CoinflowWithdrawDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.paymentsService.initiateCoinflowDelegatedPayout(req.user.id, {
-      coins: body.coins,
-      account: body.account,
-      speed: body.speed,
-    });
+    const result = await this.paymentsService.initiateCoinflowDelegatedPayout(
+      req.user.id,
+      {
+        coins: body.coins,
+        account: body.account,
+        speed: body.speed,
+      },
+    );
 
     if (result.status === 451) {
       res.status(451);
@@ -258,10 +280,15 @@ export class PaymentsController {
   }
 
   /** Registers non-US user in Coinflow as a withdrawer for payout. */
-  @ApiOperation({ summary: 'Registers non-US user in Coinflow as a withdrawer for payout.' })
+  @ApiOperation({
+    summary: 'Registers non-US user in Coinflow as a withdrawer for payout.',
+  })
   @ApiResponse({ status: 200, description: 'User registered as withdrawer' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 451, description: 'User must complete additional verification' })
+  @ApiResponse({
+    status: 451,
+    description: 'User must complete additional verification',
+  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('coinflow/withdraw/kyc')
@@ -270,7 +297,10 @@ export class PaymentsController {
     @Body() body: CoinflowWithdrawKycDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.paymentsService.registerUserKyc(req.user.id, body);
+    const result = await this.paymentsService.registerUserKyc(
+      req.user.id,
+      body,
+    );
 
     if (result.status === 451) {
       res.status(451);
@@ -281,10 +311,15 @@ export class PaymentsController {
   }
 
   /** Registers US-based user in Coinflow as a withdrawer for payout. */
-  @ApiOperation({ summary: 'Registers US-based user in Coinflow as a withdrawer for payout.' })
+  @ApiOperation({
+    summary: 'Registers US-based user in Coinflow as a withdrawer for payout.',
+  })
   @ApiResponse({ status: 200, description: 'User registered as withdrawer' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 451, description: 'User must complete additional verification' })
+  @ApiResponse({
+    status: 451,
+    description: 'User must complete additional verification',
+  })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('coinflow/withdraw/kyc-us')
@@ -293,7 +328,10 @@ export class PaymentsController {
     @Body() body: CoinflowWithdrawKycUsDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.paymentsService.registerUserKycUs(req.user.id, body);
+    const result = await this.paymentsService.registerUserKycUs(
+      req.user.id,
+      body,
+    );
 
     if (result.status === 451) {
       res.status(451);

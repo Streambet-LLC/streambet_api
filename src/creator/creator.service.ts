@@ -23,7 +23,11 @@ import { PlatformName } from 'src/enums/platform-name.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
-import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
+import {
+  StreamEventType,
+  StreamList,
+  StreamStatus,
+} from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { User } from 'src/users/entities/user.entity';
@@ -63,23 +67,19 @@ export class CreatorService {
   }
 
   async getAnalyticsSummary({
-    creatorId
-  } : {
+    creatorId,
+  }: {
     creatorId: string;
   }): Promise<AnalyticsSummaryResponseDto> {
     try {
-
-      const totalViews = await this.streamsRepository.sum(
-        "viewerCount", 
-        {
-          creatorId, 
-        },
-      );
+      const totalViews = await this.streamsRepository.sum('viewerCount', {
+        creatorId,
+      });
 
       const totalStreams = await this.streamsRepository.count({
         where: {
           creatorId,
-        }
+        },
       });
 
       const result = await this.dataSource.query(`
@@ -96,8 +96,7 @@ export class CreatorService {
         totalViews,
         totalStreams,
         totalLiveTime,
-      }
-
+      };
     } catch (e) {
       Logger.error('Unable to retrieve top live streams', e);
       throw new HttpException(
@@ -110,12 +109,12 @@ export class CreatorService {
   async upsertCreatorApplication({
     userId,
     applicationDto,
-  } : {
+  }: {
     userId: string;
     applicationDto: CreatorApplicationDto;
   }) {
-    const user = await this.userRepository.findOne({ 
-      where: { id: userId }
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
     });
 
     if (!user) {
@@ -126,27 +125,30 @@ export class CreatorService {
     }
 
     if (user.role === UserRole.CREATOR) {
-      throw new ConflictException("User is already a creator")
+      throw new ConflictException('User is already a creator');
     }
 
     try {
-      let existing = await this.creatorApplicationsRepository.findOne({
+      const existing = await this.creatorApplicationsRepository.findOne({
         where: { userId, isDeleted: false },
       });
 
       let application;
 
       if (existing) {
-        application = await this.creatorApplicationsRepository.update(existing.id, {
-          firstName: applicationDto.firstName,
-          lastName: applicationDto.lastName,
-          email: applicationDto.email,
-          socials: applicationDto.socials,
-          message: applicationDto.message,
-        });
+        application = await this.creatorApplicationsRepository.update(
+          existing.id,
+          {
+            firstName: applicationDto.firstName,
+            lastName: applicationDto.lastName,
+            email: applicationDto.email,
+            socials: applicationDto.socials,
+            message: applicationDto.message,
+          },
+        );
 
         return;
-      } 
+      }
 
       application = this.creatorApplicationsRepository.create({
         userId,
@@ -169,11 +171,7 @@ export class CreatorService {
     }
   }
 
-  async getCreatorApplication({
-    userId,
-  } : {
-    userId: string;
-  }) {
+  async getCreatorApplication({ userId }: { userId: string }) {
     try {
       const application = await this.creatorApplicationsRepository.findOne({
         where: { userId, isDeleted: false },
@@ -189,11 +187,7 @@ export class CreatorService {
     }
   }
 
-  async cancelCreatorApplication({
-    userId,
-  } : {
-    userId: string;
-  }) {
+  async cancelCreatorApplication({ userId }: { userId: string }) {
     try {
       const application = await this.creatorApplicationsRepository.findOne({
         where: { userId, isDeleted: false },
@@ -202,8 +196,8 @@ export class CreatorService {
       if (!application) return;
 
       await this.creatorApplicationsRepository.update(application.id, {
-        isDeleted: true
-      });      
+        isDeleted: true,
+      });
 
       return;
     } catch (e) {
