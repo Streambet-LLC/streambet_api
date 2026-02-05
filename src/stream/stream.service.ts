@@ -1971,6 +1971,7 @@ END
           name: item.br_roundName,
           type: item.s_type,
           betRoundType: item.br_type,
+          mechanism: item.br_mechanism,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           category: item.br_category,
