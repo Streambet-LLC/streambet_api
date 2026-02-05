@@ -96,11 +96,11 @@ export class BettingService {
       now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }),
     );
 
-    // Create next 7 AM PST
+    // Create next 5 PM PST (17:00)
     const nextReveal = new Date(pstTime);
-    nextReveal.setHours(7, 0, 0, 0);
+    nextReveal.setHours(17, 0, 0, 0);
 
-    // If 7 AM has already passed today, move to tomorrow
+    // If 5 PM has already passed today, move to tomorrow
     if (pstTime >= nextReveal) {
       nextReveal.setDate(nextReveal.getDate() + 1);
     }
@@ -385,7 +385,7 @@ export class BettingService {
         );
       }
 
-      // Calculate next 7 AM PST for sentiment picks
+      // Calculate next 5 PM PST for sentiment picks
       let firstRevealTime: Date | null = null;
       let roundStatus = BettingRoundStatus.OPEN;
 
