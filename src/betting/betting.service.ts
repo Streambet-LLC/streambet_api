@@ -2753,6 +2753,7 @@ export class BettingService {
         streamStatus: bettingRound.stream.status,
         scheduledStartTime: bettingRound.stream.scheduledStartTime,
         category: bettingRound.category,
+        mechanism: bettingRound.mechanism,
         options: options.sort(
           (a, b) => Number(b.percentage) - Number(a.percentage),
         ),
