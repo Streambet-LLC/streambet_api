@@ -54,6 +54,7 @@ import { ViewBetDto } from './dto/view-bet.dto';
 import { BetRoundHistoryService } from 'src/bet-round-history/bet-round-history.service';
 import { BetRoundHistoryEventType } from 'src/enums/bet-round-history-event-type.enum';
 import { PickMechanism } from 'src/enums/pick-mechanism.enum';
+import { SentimentPickVoteService } from './services/sentiment-pick-vote.service';
 
 @Injectable()
 export class BettingService {
@@ -72,6 +73,7 @@ export class BettingService {
     private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
     private platformPayoutService: PlatformPayoutService,
+    private sentimentPickVoteService: SentimentPickVoteService,
     private dataSource: DataSource,
     private readonly bettingGateway: BettingGateway,
     @Inject(forwardRef(() => StreamService))
@@ -973,9 +975,12 @@ export class BettingService {
     }
 
     // Sentiment picks are free - override amount and currency
-    const isSentimentPick = bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+    const isSentimentPick =
+      bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
     const actualAmount = isSentimentPick ? 0 : amount;
-    const actualCurrency = isSentimentPick ? CurrencyType.CADE_COINS : currencyType;
+    const actualCurrency = isSentimentPick
+      ? CurrencyType.CADE_COINS
+      : currencyType;
 
     // Ensure the round is open for betting
     if (bettingVariable?.round?.status !== BettingRoundStatus.OPEN) {
@@ -1097,6 +1102,12 @@ export class BettingService {
             queryRunner.manager,
           );
         }
+
+        // Record sentiment pick vote for fraud prevention
+        await this.sentimentPickVoteService.recordSentimentVote(
+          userId,
+          bettingVariable.roundId,
+        );
       }
 
       // Commit transaction
@@ -1536,6 +1547,14 @@ export class BettingService {
 
       roundIdToUpdate = lockedNewBettingVariable.roundId;
 
+      // Record sentiment pick vote for fraud prevention (for new sentiment picks)
+      if (isSentimentPick) {
+        await this.sentimentPickVoteService.recordSentimentVote(
+          userId,
+          bettingVariable.roundId,
+        );
+      }
+
       // Commit transaction
       await queryRunner.commitTransaction();
 
@@ -1612,6 +1631,20 @@ export class BettingService {
     // If the betting round is not open, the bet cannot be cancelled
     if (bettingRound.status !== BettingRoundStatus.OPEN) {
       throw new BadRequestException('This round is closed for betting.');
+    }
+
+    // Prevent cancelling sentiment picks after voting (fraud prevention)
+    if (bettingRound.mechanism === PickMechanism.SENTIMENT) {
+      const hasVoted =
+        await this.sentimentPickVoteService.hasUserVotedOnSentiment(
+          userId,
+          bettingRound.id,
+        );
+      if (hasVoted) {
+        throw new BadRequestException(
+          'You cannot cancel a sentiment pick after voting. Your vote is permanent.',
+        );
+      }
     }
 
     // Pass required data to handler for bet cancellation (refund, status update, etc.)
