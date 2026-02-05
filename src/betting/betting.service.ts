@@ -402,7 +402,8 @@ export class BettingService {
         stream: stream,
         status: roundStatus,
         createdBy: creator,
-        lockDate: roundData.lockDate,
+        // Sentiment picks never lock - they stay OPEN for continuous voting with real-time results
+        lockDate: roundData.mechanism === PickMechanism.SENTIMENT ? null : roundData.lockDate,
         category: roundData.category,
         type: roundData.betRoundType,
         mechanism: roundData.mechanism || PickMechanism.DEFAULT,

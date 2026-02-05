@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { now } from 'lodash-es';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -23,10 +24,11 @@ export class AutoLockerService {
       .createQueryBuilder()
       .update(BettingRound)
       .where(
-        'lockDate IS NOT NULL AND lockDate < :now AND status IN (:...statuses)',
+        'lockDate IS NOT NULL AND lockDate < :now AND status IN (:...statuses) AND (mechanism IS NULL OR mechanism != :sentimentMechanism)',
         {
           statuses: [BettingRoundStatus.CREATED, BettingRoundStatus.OPEN],
           now: new Date(),
+          sentimentMechanism: PickMechanism.SENTIMENT,
         },
       )
       .set({
