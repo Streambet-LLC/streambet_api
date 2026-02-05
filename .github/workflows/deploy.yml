@@ -2,7 +2,7 @@ name: Build and Deploy to ECS
 
 on:
   push:
-    branches: [non_pro_prod]
+    branches: [non_pro_prod, non_pro_stag]
 
 jobs:
   build:

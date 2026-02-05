@@ -610,6 +610,7 @@ export class BettingService {
         roundName: round.roundName,
         status: round.status,
         lockDate: round.lockDate,
+        betRoundType: round.type,
         category: round.category,
         createdBy: round.createdBy,
         creator: round.creator ? {
@@ -2552,7 +2553,7 @@ export class BettingService {
 
       const options = variables.map((v) => {
         const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
-        
+
         return {
           id: v.bv_id,
           option: v.bv_name,
