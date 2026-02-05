@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RenameBettingVariableColumn1755611115298 implements MigrationInterface {
+export class RenameBettingVariableColumn1755611115298
+  implements MigrationInterface
+{
   name = 'RenameBettingVariableColumn1755611115298';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

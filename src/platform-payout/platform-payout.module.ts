@@ -9,16 +9,17 @@ import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { WalletsModule } from 'src/wallets/wallets.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([
-    PlatformPayout,
-    Stream,
-    User,
-    Bet,
-    BettingVariable,
-  ]),
-  forwardRef(() => WalletsModule),
+  imports: [
+    TypeOrmModule.forFeature([
+      PlatformPayout,
+      Stream,
+      User,
+      Bet,
+      BettingVariable,
+    ]),
+    forwardRef(() => WalletsModule),
   ],
   providers: [PlatformPayoutService],
   exports: [PlatformPayoutService],
 })
-export class PlatformPayoutModule { }
+export class PlatformPayoutModule {}

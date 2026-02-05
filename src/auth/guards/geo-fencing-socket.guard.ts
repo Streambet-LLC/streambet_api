@@ -88,7 +88,7 @@ export class GeoFencingSocketGuard implements CanActivate {
     const loc = await this.geoFencingService.lookup(ip);
     client.geo = loc ?? null; // attach geo info to socket
 
-    // --- Blocked regions check ---    
+    // --- Blocked regions check ---
     const blockedRegion = this.config.get<string>('geo.blockedRegion') ?? '';
     const blocked = blockedRegion
       .split(',')

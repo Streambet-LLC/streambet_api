@@ -1,11 +1,16 @@
 import { BullModule } from '@nestjs/bullmq';
 import { DynamicModule, Module } from '@nestjs/common';
-import { ConfigurableModuleClass, OPTIONS_TYPE } from './queue-board.module-definition';
+import {
+  ConfigurableModuleClass,
+  OPTIONS_TYPE,
+} from './queue-board.module-definition';
 
 @Module({})
 export class QueueBoardModule extends ConfigurableModuleClass {
   static register(options: typeof OPTIONS_TYPE): DynamicModule {
-    const bullModules = options.queues.map((name) => BullModule.registerQueue({ name }));
+    const bullModules = options.queues.map((name) =>
+      BullModule.registerQueue({ name }),
+    );
     const flowProducers = (options.flows || []).map((flow) =>
       BullModule.registerFlowProducer({ name: flow }),
     );

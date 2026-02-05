@@ -8,4 +8,4 @@ import { BetRoundHistoryService } from './bet-round-history.service';
   providers: [BetRoundHistoryService],
   exports: [BetRoundHistoryService],
 })
-export class BetRoundHistoryModule { }
+export class BetRoundHistoryModule {}

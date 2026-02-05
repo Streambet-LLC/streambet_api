@@ -8,7 +8,7 @@ export class ReferralService {
   constructor(
     @InjectRepository(ReferralLink)
     private readonly referralLinkRepository: Repository<ReferralLink>,
-  ) { }
+  ) {}
 
   async createReferralLink(
     userUuid: string,

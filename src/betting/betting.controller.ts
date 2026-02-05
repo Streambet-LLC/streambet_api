@@ -45,7 +45,7 @@ interface RequestWithUser extends Request {
 @ApiTags('betting')
 @Controller('betting')
 export class BettingController {
-  constructor(private readonly bettingService: BettingService) { }
+  constructor(private readonly bettingService: BettingService) {}
 
   /**
    * Controller method to fetch all streams (active by default).
@@ -367,7 +367,7 @@ export class BettingController {
     @Param('roundId') roundId: string, // Round ID from URL
   ): Promise<ApiResponse> {
     // Service call: fetch potential amount for user's bet in the round
-    const data = await this.bettingService.getRoundData(roundId);
+    const { data } = await this.bettingService.getRoundData(roundId);
 
     return {
       message: 'Round Data retrieved successfully',

@@ -20,13 +20,13 @@ export interface BettingSummary {
 
 /**
  * Service for managing betting result summaries stored in Redis.
- * 
+ *
  * Architecture:
  * - Individual bet results (wins/losses) are stored in Redis during round calculations
  * - Data is aggregated per user per stream
  * - When a stream ends, summary emails are sent and Redis data is cleaned up
  * - TTL of 7 days ensures data doesn't persist indefinitely if email sending fails
- * 
+ *
  * This replaces the previous approach of sending individual emails for each bet result.
  */
 @Injectable()
@@ -59,7 +59,10 @@ export class BettingSummaryService {
       await redis.sadd(key, ...userIds);
       await redis.expire(key, this.getBettingSummaryTTL());
     } catch (error) {
-      this.logger.error(`Failed to add stream participants for stream ${streamId}`, error);
+      this.logger.error(
+        `Failed to add stream participants for stream ${streamId}`,
+        error,
+      );
       throw error;
     }
   }
@@ -75,7 +78,10 @@ export class BettingSummaryService {
       const key = `${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`;
       return redis.smembers(key);
     } catch (error) {
-      this.logger.error(`Failed to get stream participants for stream ${streamId}`, error);
+      this.logger.error(
+        `Failed to get stream participants for stream ${streamId}`,
+        error,
+      );
       throw error;
     }
   }
@@ -90,7 +96,10 @@ export class BettingSummaryService {
       const redis = this.redisService.getClient();
       await redis.del(`${this.BETTING_PARTICIPANTS_PREFIX}:${streamId}`);
     } catch (error) {
-      this.logger.error(`Failed to clear stream participants for stream ${streamId}`, error);
+      this.logger.error(
+        `Failed to clear stream participants for stream ${streamId}`,
+        error,
+      );
       // Don't rethrow - this is cleanup operation
     }
   }
@@ -119,18 +128,24 @@ export class BettingSummaryService {
     if (status === 'won' || status === 'lost') {
       // Check that amount is present before converting to Number
       if (amount === undefined || amount === null) {
-        this.logger.warn(`Missing amount for user ${userId} with status ${status}`);
+        this.logger.warn(
+          `Missing amount for user ${userId} with status ${status}`,
+        );
         return;
       }
 
       const numAmount = Number(amount);
       if (isNaN(numAmount) || !Number.isFinite(numAmount) || numAmount <= 0) {
-        this.logger.warn(`Invalid amount for user ${userId} with status ${status}: ${amount}`);
+        this.logger.warn(
+          `Invalid amount for user ${userId} with status ${status}: ${amount}`,
+        );
         return;
       }
 
       if (!currencyType?.trim()) {
-        this.logger.warn(`Missing currencyType for user ${userId} with status ${status}`);
+        this.logger.warn(
+          `Missing currencyType for user ${userId} with status ${status}`,
+        );
         return;
       }
     }
@@ -142,7 +157,13 @@ export class BettingSummaryService {
       const roundsKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
 
       // Store metadata
-      await redis.set(metadataKey, JSON.stringify({ streamId, streamName, userId }), 'EX', ttl, 'NX');
+      await redis.set(
+        metadataKey,
+        JSON.stringify({ streamId, streamName, userId }),
+        'EX',
+        ttl,
+        'NX',
+      );
 
       // Store round data
       const round: BettingRound = {
@@ -172,7 +193,10 @@ export class BettingSummaryService {
    * @param userId - The user ID
    * @returns Betting summary with formatted currency types, or null if no data exists
    */
-  async getBettingSummary(streamId: string, userId: string): Promise<BettingSummary | null> {
+  async getBettingSummary(
+    streamId: string,
+    userId: string,
+  ): Promise<BettingSummary | null> {
     const redis = this.redisService.getClient();
     const metadataKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}:metadata`;
     const roundsKey = `${this.BETTING_SUMMARY_PREFIX}:${streamId}:${userId}`;
@@ -188,19 +212,19 @@ export class BettingSummaryService {
     try {
       const metadata = JSON.parse(metadataStr);
       const rounds = roundsStr.map((r) => JSON.parse(r));
-      
+
       // Format currency types for display
       const formattedRounds = rounds.map((round, index) => {
         // Format and validate currency type - handles missing, empty, and invalid enum values
         const formattedCurrency = formatCurrencyType(round.currencyType || '');
-        
+
         if (formattedCurrency === CurrencyTypeText.UNKNOWN_CURRENCY) {
           this.logger.warn(
             `Invalid or missing currencyType in Pick round: "${round.currencyType}" for user ${userId} in stream ${streamId} ` +
-            `(round index: ${index}, roundName: ${round.roundName || 'UNKNOWN'}, status: ${round.status || 'UNKNOWN'})`,
+              `(round index: ${index}, roundName: ${round.roundName || 'UNKNOWN'}, status: ${round.status || 'UNKNOWN'})`,
           );
         }
-        
+
         return {
           ...round,
           currencyType: formattedCurrency,
@@ -217,8 +241,12 @@ export class BettingSummaryService {
         error,
       );
       // Clean up corrupted data
-      await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]).catch((delError) =>
-        this.logger.error(`Failed to delete corrupted data for user ${userId} in stream ${streamId}`, delError),
+      await Promise.all([redis.del(metadataKey), redis.del(roundsKey)]).catch(
+        (delError) =>
+          this.logger.error(
+            `Failed to delete corrupted data for user ${userId} in stream ${streamId}`,
+            delError,
+          ),
       );
       return null;
     }

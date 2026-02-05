@@ -42,10 +42,9 @@ export const configValidationSchema = Joi.object({
   COINFLOW_MAX_RETRIES: Joi.number().integer().min(0).max(5).optional(),
   COINFLOW_RETRY_DELAY_MS: Joi.number().integer().min(0).optional(),
   COINFLOW_WEBHOOK_ENV: Joi.string()
-  .lowercase()
-  .valid('dev', 'qa', 'stag', 'prod')
-  .required(),
-
+    .lowercase()
+    .valid('dev', 'qa', 'stag', 'prod')
+    .required(),
 
   // Redis
   REDIS_HOST: Joi.string().default('localhost'),

@@ -1,9 +1,4 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { QueueService } from 'src/queue/queue.service';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -16,7 +11,8 @@ export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
   constructor(
-    @Inject(forwardRef(() => QueueService)) private readonly queueService: QueueService,
+    @Inject(forwardRef(() => QueueService))
+    private readonly queueService: QueueService,
     @InjectRepository(Webhook) private webhookRepository: Repository<Webhook>,
     private readonly n8nIntegrationService: N8nIntegrationService,
   ) {}
@@ -32,16 +28,18 @@ export class WebhookService {
     });
 
     // Send to n8n integration (non-blocking)
-    this.n8nIntegrationService.handleCoinflowWebhook({
-      payload,
-      webhookId: webhook.id,
-    }).catch(error => {
-      // Log but don't fail the webhook processing
-      this.logger.error('n8n integration error', error?.stack);
-    });
+    this.n8nIntegrationService
+      .handleCoinflowWebhook({
+        payload,
+        webhookId: webhook.id,
+      })
+      .catch((error) => {
+        // Log but don't fail the webhook processing
+        this.logger.error('n8n integration error', error?.stack);
+      });
 
     return { received: true };
-  };
+  }
 
   async storeWebhook(provider: string, data: string) {
     if (!provider || !data) {
@@ -49,5 +47,5 @@ export class WebhookService {
     }
 
     return await this.webhookRepository.save({ provider, data });
-  };
+  }
 }

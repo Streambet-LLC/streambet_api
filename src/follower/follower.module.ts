@@ -8,4 +8,4 @@ import { FollowerService } from './follower.service';
   providers: [FollowerService],
   exports: [Follower],
 })
-export class FollowerModule { }
+export class FollowerModule {}

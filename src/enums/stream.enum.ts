@@ -18,5 +18,5 @@ export enum StreamStatus {
 export enum StreamEventType {
   STREAM = 'stream',
   NON_VIDEO = 'non-video',
-  PROMO = 'promo'
+  PROMO = 'promo',
 }

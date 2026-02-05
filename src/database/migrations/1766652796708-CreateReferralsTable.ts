@@ -1,9 +1,8 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateReferralsTable1766652796708 implements MigrationInterface {
-
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS referral_links (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_uuid uuid NOT NULL,
@@ -13,10 +12,9 @@ export class CreateReferralsTable1766652796708 implements MigrationInterface {
                 "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
             )
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE IF EXISTS referral_links`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS referral_links`);
+  }
 }

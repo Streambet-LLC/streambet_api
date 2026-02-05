@@ -3,7 +3,7 @@ import { CurrencyType } from 'src/enums/currency.enum';
 
 export interface EditedBetPayload {
   bet: Bet;
-  success: Boolean;
+  success: boolean;
   timestamp: Date;
   currencyType: CurrencyType;
   potentialSweepCoinWinningAmount: number;

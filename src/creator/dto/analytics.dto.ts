@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class AnalyticsSummaryResponseDto {
   @ApiProperty({ type: Number, description: 'Total views' })
@@ -7,7 +7,10 @@ export class AnalyticsSummaryResponseDto {
   @ApiProperty({ type: Number, description: 'Total number of streams' })
   totalStreams: number;
 
-  @ApiProperty({ type: String, description: 'Total live time in HH:mm:ss format' })
+  @ApiProperty({
+    type: String,
+    description: 'Total live time in HH:mm:ss format',
+  })
   totalLiveTime: string;
 }
 

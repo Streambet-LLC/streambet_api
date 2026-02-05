@@ -29,4 +29,4 @@ import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
   providers: [StreamService, StreamGateway],
   exports: [StreamService, StreamGateway],
 })
-export class StreamModule { }
+export class StreamModule {}

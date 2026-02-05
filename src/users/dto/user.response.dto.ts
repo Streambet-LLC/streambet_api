@@ -20,17 +20,20 @@ export class PublicUserProfileDto {
   @ApiProperty({ example: 'https://example.com/avatar.png' })
   profileImageUrl: string;
 
-  @ApiProperty({ 
-    example: { twitter: '@johndoe', youtube: 'johndoe123' }, 
+  @ApiProperty({
+    example: { twitter: '@johndoe', youtube: 'johndoe123' },
     nullable: true,
-    description: 'Social media links' 
+    description: 'Social media links',
   })
   socials: { [social: string]: string } | null;
 
   @ApiProperty({ enum: UserRole, example: UserRole.USER })
   role: UserRole;
 
-  @ApiProperty({ example: true, description: 'Whether the requesting user follows this profile' })
+  @ApiProperty({
+    example: true,
+    description: 'Whether the requesting user follows this profile',
+  })
   isFollowed: boolean;
 
   @ApiProperty({ example: 1250, description: 'Total follower count' })
@@ -48,10 +51,17 @@ export class PublicUserProfileDto {
   @ApiProperty({ example: 'Dealer', description: 'Current badge level' })
   badgeLevel: string;
 
-  @ApiProperty({ type: PrizeProgressDto, description: 'Prize progression details' })
+  @ApiProperty({
+    type: PrizeProgressDto,
+    description: 'Prize progression details',
+  })
   prizeProgress: PrizeProgressDto;
 
-  @ApiProperty({ required: false, example: true, description: 'Whether user is a creator' })
+  @ApiProperty({
+    required: false,
+    example: true,
+    description: 'Whether user is a creator',
+  })
   isCreator?: boolean;
 }
 
@@ -77,7 +87,11 @@ export class UserProfileResponseDto {
   @ApiProperty()
   isActive?: boolean;
 
-  @ApiProperty({ type: Number, example: 1000, description: 'Maximum allowed bet amount for CadeCoins' })
+  @ApiProperty({
+    type: Number,
+    example: 1000,
+    description: 'Maximum allowed bet amount for CadeCoins',
+  })
   maxCadeCoinsBet: number;
 }
 

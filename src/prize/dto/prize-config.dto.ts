@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsInt,
-  Min,
-  IsString,
-  IsNumber,
-  IsOptional,
-} from 'class-validator';
+import { IsInt, Min, IsString, IsNumber, IsOptional } from 'class-validator';
 
 /**
  * DTO for individual prize tier information

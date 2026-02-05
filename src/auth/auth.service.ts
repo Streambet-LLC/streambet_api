@@ -46,8 +46,8 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private notificationService: NotificationService,
-    private promoCodeService: PromoCodeService
-  ) { }
+    private promoCodeService: PromoCodeService,
+  ) {}
 
   private calculateAge(birthDate: Date): number {
     const today = new Date();
@@ -502,7 +502,7 @@ export class AuthService {
   }
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { identifier } = forgotPasswordDto;
-    let { redirect } = forgotPasswordDto;
+    const { redirect } = forgotPasswordDto;
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier);
 
