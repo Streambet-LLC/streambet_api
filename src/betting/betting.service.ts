@@ -972,6 +972,12 @@ export class BettingService {
       );
     }
 
+    // Sentiment picks are free - override amount and currency
+    const isSentimentPick = bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+    const actualAmount = isSentimentPick ? 0 : amount;
+    const actualCurrency = isSentimentPick ? CurrencyType.CADE_COINS : currencyType;
+    }
+
     // Ensure the round is open for betting
     if (bettingVariable?.round?.status !== BettingRoundStatus.OPEN) {
       const message = await this.bettingRoundStatusMessage(
@@ -1012,20 +1018,23 @@ export class BettingService {
 
     try {
       // Deduct bet amount from wallet (transactional)
-      await this.walletsService.deductForBet(
-        userId,
-        amount,
-        currencyType,
-        `Bet ${amount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
-        queryRunner.manager,
-      );
+      // Skip deduction for sentiment picks (free picks)
+      if (!isSentimentPick) {
+        await this.walletsService.deductForBet(
+          userId,
+          actualAmount,
+          actualCurrency,
+          `Bet ${actualAmount} on "${bettingVariable.name}" for stream "${bettingVariable.round.stream.name}" (Round ${bettingVariable.round.roundName})`,
+          queryRunner.manager,
+        );
+      }
 
       // Create new bet entity
       const bet = this.betsRepository.create({
         userId,
         bettingVariableId,
-        amount,
-        currency: currencyType,
+        amount: actualAmount,
+        currency: actualCurrency,
         stream: { id: bettingVariable.streamId },
         roundId: bettingVariable.roundId,
       });
@@ -1047,24 +1056,27 @@ export class BettingService {
       }
 
       // Update betting variable totals based on currency type
-      if (currencyType === CurrencyType.GOLD_COINS) {
-        lockedBettingVariable.totalBetsGoldCoinAmount =
-          Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountGoldCoin =
-          Number(lockedBettingVariable.betCountGoldCoin) + 1;
-      } else if (currencyType === CurrencyType.CADE_COINS) {
-        lockedBettingVariable.totalBetsCadeCoinAmount =
-          Number(lockedBettingVariable.totalBetsCadeCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountCadeCoin =
-          Number(lockedBettingVariable.betCountCadeCoin) + 1;
-      } else if (currencyType === CurrencyType.SWEEP_COINS) {
-        lockedBettingVariable.totalBetsSweepCoinAmount =
-          Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
-          Number(amount);
-        lockedBettingVariable.betCountSweepCoin =
-          Number(lockedBettingVariable.betCountSweepCoin) + 1;
+      // Skip updating totals for sentiment picks (no wager)
+      if (!isSentimentPick) {
+        if (actualCurrency === CurrencyType.GOLD_COINS) {
+          lockedBettingVariable.totalBetsGoldCoinAmount =
+            Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountGoldCoin =
+            Number(lockedBettingVariable.betCountGoldCoin) + 1;
+        } else if (actualCurrency === CurrencyType.CADE_COINS) {
+          lockedBettingVariable.totalBetsCadeCoinAmount =
+            Number(lockedBettingVariable.totalBetsCadeCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountCadeCoin =
+            Number(lockedBettingVariable.betCountCadeCoin) + 1;
+        } else if (actualCurrency === CurrencyType.SWEEP_COINS) {
+          lockedBettingVariable.totalBetsSweepCoinAmount =
+            Number(lockedBettingVariable.totalBetsSweepCoinAmount) +
+            Number(actualAmount);
+          lockedBettingVariable.betCountSweepCoin =
+            Number(lockedBettingVariable.betCountSweepCoin) + 1;
+        }
       }
 
       // Save updated betting variable
@@ -1074,7 +1086,7 @@ export class BettingService {
       roundIdToUpdate = lockedBettingVariable.roundId;
 
       // Award CadeCoins for sentiment picks
-      if (bettingVariable.round.mechanism === PickMechanism.SENTIMENT) {
+      if (isSentimentPick) {
         const cadeCoinsToAward = this.calculateSentimentCadeCoins(
           bettingVariable.round.firstRevealTime,
         );
