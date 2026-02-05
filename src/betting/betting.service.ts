@@ -573,15 +573,17 @@ export class BettingService {
         .map((variable) => ({
           id: variable.id,
           option: variable.name,
+          is_winning_option: variable.is_winning_option,
           createdAt: variable.createdAt,
         }))
         .sort(
           (a, b) =>
             new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         )
-        .map(({ id, option }) => ({
+        .map(({ id, option, is_winning_option }) => ({
           id,
           option,
+          is_winning_option
         }));
 
       // Identify winning and losing options
@@ -2742,10 +2744,14 @@ export class BettingService {
       });
 
       const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+        const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
         const votes =
           Number(v.bv_bet_count_gold_coin) +
           Number(v.bv_bet_count_sweep_coin) +
           Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
         return {
           id: v.bv_id,

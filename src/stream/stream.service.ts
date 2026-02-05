@@ -332,7 +332,11 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .where('s.type = :type', { type: StreamEventType.PROMO })
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
         .andWhere('s.status IN (:...statuses)', {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
+=======
           statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
+>>>>>>> non_pro_stag
         })
         .orderBy('s.updatedAt', 'DESC')
         .limit(10)
@@ -400,10 +404,14 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         });
 
         const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
           const votes =
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
           return {
             id: v.bv_id,
@@ -535,6 +543,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
             option: variable.name,
+            is_winning_option: variable.is_winning_option
           })),
         })),
     };
@@ -759,10 +768,14 @@ END
         });
 
         const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
           const votes =
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
           return {
             id: v.bv_id,
@@ -1934,10 +1947,14 @@ END
         });
 
         const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
           const votes =
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
           return {
             id: v.bv_id,
@@ -2070,10 +2087,14 @@ END
         });
 
         const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
           const votes =
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
           return {
             id: v.bv_id,
@@ -2215,10 +2236,14 @@ END
         });
 
         const options = variables.map((v) => {
+<<<<<<< feat/STR-193/add-winning-bet-var-to-admin-round-cards
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+=======
           const votes =
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
+>>>>>>> non_pro_stag
 
           return {
             id: v.bv_id,
