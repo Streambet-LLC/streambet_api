@@ -1917,8 +1917,7 @@ END
             StreamStatus.SCHEDULED
           ]
         })
-        .andWhere("s.type = 'non-video'")
-        .andWhere("s.app = 'non-video'");
+        .andWhere("s.type = 'non-video'");
 
       const count = await betRoundsQB.getCount();
       const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
