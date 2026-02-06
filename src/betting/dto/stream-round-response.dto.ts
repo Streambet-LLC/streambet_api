@@ -15,6 +15,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PickMechanism } from 'src/enums/pick-mechanism.enum';
+import { BetRoundType } from 'src/enums/bet-round-type';
 
 export class WinnerAmountDto {
   @ApiProperty({ description: 'Type of coin (e.g., goldCoin, sweepCoin)' })
@@ -98,6 +99,23 @@ export class RoundDto {
   })
   @IsString()
   status: string;
+
+  @ApiProperty({
+    description: 'Type of the round (auction, future, opinion, pick)',
+    enum: BetRoundType,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BetRoundType)
+  type?: BetRoundType;
+
+  @ApiProperty({
+    description: 'Category of the bet round',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
 
   @ApiProperty({
     description: 'Pick mechanism (default or sentiment)',
