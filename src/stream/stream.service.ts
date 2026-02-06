@@ -24,6 +24,7 @@ import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
@@ -402,6 +403,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
         });
 
+        const hideSentimentResults =
+          item.mechanism === PickMechanism.SENTIMENT &&
+          item.isInitialRevealPeriod;
+
         const options = variables.map((v) => {
           const votes =
             Number(v.bv_bet_count_gold_coin) +
@@ -411,8 +416,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage:
-              totalCadeCoins > 0
+            percentage: hideSentimentResults
+              ? 0
+              : totalCadeCoins > 0
                 ? (
                     (Number(v.bv_total_bets_cade_coin_amount) /
                       totalCadeCoins) *
@@ -542,7 +548,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
             option: variable.name,
-            is_winning_option: variable.is_winning_option
+            is_winning_option: variable.is_winning_option,
           })),
         })),
     };
@@ -932,6 +938,21 @@ END
             delete variable?.bets;
           }
         });
+
+        const hideSentimentResults =
+          round.mechanism === PickMechanism.SENTIMENT &&
+          round.isInitialRevealPeriod;
+
+        if (hideSentimentResults) {
+          round.bettingVariables.forEach((variable) => {
+            variable.totalBetsGoldCoinAmount = 0;
+            variable.totalBetsSweepCoinAmount = 0;
+            variable.totalBetsCadeCoinAmount = 0;
+            variable.betCountGoldCoin = 0;
+            variable.betCountSweepCoin = 0;
+            variable.betCountCadeCoin = 0;
+          });
+        }
       });
 
       const bettingRoundsWithVariablePercentages = stream.bettingRounds.map(
@@ -944,12 +965,15 @@ END
 
           const variables = round.bettingVariables.map((bv) => ({
             percentage:
-              totalCadeCoins > 0
-                ? (
-                    (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0,
+              round.mechanism === PickMechanism.SENTIMENT &&
+              round.isInitialRevealPeriod
+                ? 0
+                : totalCadeCoins > 0
+                  ? (
+                      (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
+                      100
+                    ).toFixed(2)
+                  : 0,
           }));
 
           return {
@@ -2242,7 +2266,7 @@ END
             Number(v.bv_bet_count_gold_coin) +
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
-          
+
           return {
             id: v.bv_id,
             option: v.bv_name,
