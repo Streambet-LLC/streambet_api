@@ -443,6 +443,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           },
           cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
         };
 
         resultList.push(itemData);
@@ -1987,6 +1990,9 @@ END
           },
           cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
         };
 
         resultList.push(itemData);
@@ -2114,6 +2120,9 @@ END
           },
           cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
         };
 
         resultList.push(itemData);
@@ -2258,6 +2267,9 @@ END
           },
           cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
         };
 
         resultList.push(itemData);
