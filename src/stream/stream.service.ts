@@ -2069,8 +2069,7 @@ END
         .andWhere('s.status IN (:...streamStatuses)', {
           streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
         })
-        .andWhere("s.type = 'non-video'")
-        .andWhere("s.app = 'non-video'");
+        .andWhere("s.type = 'non-video'");
 
       const count = await betRoundsQB.getCount();
       const allRounds = await betRoundsQB
