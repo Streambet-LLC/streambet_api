@@ -794,7 +794,7 @@ END
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
           streamName: stream.name,
-          name: item.roundName,
+          roundName: item.roundName,
           type: stream.type,
           mechanism: item.mechanism,
           options: options.sort(
