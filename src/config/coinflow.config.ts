@@ -20,5 +20,3 @@ export default registerAs('coinflow', () => ({
     timeoutMs: Number(process.env.N8N_TIMEOUT_MS || 5000),
   },
 }));
-
-

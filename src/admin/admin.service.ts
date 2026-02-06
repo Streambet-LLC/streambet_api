@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { WalletsService } from '../wallets/wallets.service';
 
 import { Wallet } from 'src/wallets/entities/wallet.entity';
@@ -35,15 +40,13 @@ export class AdminService {
     };
   }
 
-  async updateCoinsByAdmin(
-    updateCoinDto: UpdateCoinDto,
-  ): Promise<Wallet> {
+  async updateCoinsByAdmin(updateCoinDto: UpdateCoinDto): Promise<Wallet> {
     const { userId, amount, currencyType } = updateCoinDto;
     // Ensure amount is not negative
     if (amount < 0) {
       throw new BadRequestException('Amount cannot be negative');
     }
-    
+
     // Get current wallet to determine if this is a credit or debit
     const currentWallet = await this.walletsService.findByUserId(userId);
     let currentBalance = 0;
@@ -61,29 +64,30 @@ export class AdminService {
         this.logger.error(`Unhandled CurrencyType: ${currencyType}`);
         throw new BadRequestException(
           `Unhandled CurrencyType: ${currencyType}. ` +
-          `Please update the switch statement in admin.service.ts to handle this currency type.`
+            `Please update the switch statement in admin.service.ts to handle this currency type.`,
         );
     }
-    
+
     // Skip transaction if there's no balance change (no-op update)
     // Round to 3 decimals to match database precision and avoid floating-point comparison issues
     const roundToThreeDecimals = (n: number) => Math.round(n * 1000) / 1000;
     if (roundToThreeDecimals(amount) === roundToThreeDecimals(currentBalance)) {
       this.logger.log(
         `No balance change detected for user ${userId}: ` +
-        `amount (${amount}) equals currentBalance (${currentBalance}) for ${currencyType}`
+          `amount (${amount}) equals currentBalance (${currentBalance}) for ${currencyType}`,
       );
       return currentWallet;
     }
-    
+
     // Determine transaction type based on whether balance increases or decreases
-    const transactionType = amount > currentBalance
-      ? TransactionType.ADMIN_CREDIT
-      : TransactionType.ADMIN_DEBITED;
-    
+    const transactionType =
+      amount > currentBalance
+        ? TransactionType.ADMIN_CREDIT
+        : TransactionType.ADMIN_DEBITED;
+
     const currencyName = formatCurrencyType(currencyType);
     const description = `Admin adjustment: ${amount} ${currencyName} for user ${userId}`;
-    
+
     return await this.walletsService.updateCoinsByAdmin(
       userId,
       amount,
@@ -106,7 +110,18 @@ export class AdminService {
 
   async getUserProfile(
     userId: string,
-  ): Promise<Pick<UserResponseDto, 'id' | 'username' | 'email' | 'name' | 'profileImageUrl' | 'socials' | 'state'>> {
+  ): Promise<
+    Pick<
+      UserResponseDto,
+      | 'id'
+      | 'username'
+      | 'email'
+      | 'name'
+      | 'profileImageUrl'
+      | 'socials'
+      | 'state'
+    >
+  > {
     try {
       const user = await this.usersRepository.findOne({
         where: {
@@ -128,7 +143,10 @@ export class AdminService {
         state: user.state,
       };
     } catch (e) {
-      this.logger.error(`Error fetching profile for user with userId ${userId}:`, e);
+      this.logger.error(
+        `Error fetching profile for user with userId ${userId}:`,
+        e,
+      );
       throw new NotFoundException((e as Error).message);
     }
   }

@@ -35,4 +35,4 @@ export class Chat extends BaseEntity {
     default: () => 'CURRENT_TIMESTAMP',
   })
   timestamp: Date;
-} 
+}

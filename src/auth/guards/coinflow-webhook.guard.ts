@@ -30,5 +30,3 @@ export class CoinflowWebhookGuard implements CanActivate {
     return true;
   }
 }
-
-

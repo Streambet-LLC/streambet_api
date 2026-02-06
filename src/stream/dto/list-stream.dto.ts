@@ -23,8 +23,7 @@ export class LiveScheduledStreamListDto extends AdminFilterDto {
   @ApiPropertyOptional({
     type: String,
     default: '',
-    description:
-      'If you want to get streams from a certain username',
+    description: 'If you want to get streams from a certain username',
   })
   @IsOptional()
   @IsString()

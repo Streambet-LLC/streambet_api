@@ -9,6 +9,7 @@ import {
   Request,
   Query,
   ParseBoolPipe,
+  ParseUUIDPipe,
   DefaultValuePipe,
   HttpStatus,
   Patch,
@@ -45,7 +46,7 @@ interface RequestWithUser extends Request {
 @ApiTags('betting')
 @Controller('betting')
 export class BettingController {
-  constructor(private readonly bettingService: BettingService) { }
+  constructor(private readonly bettingService: BettingService) {}
 
   /**
    * Controller method to fetch all streams (active by default).
@@ -367,7 +368,7 @@ export class BettingController {
     @Param('roundId') roundId: string, // Round ID from URL
   ): Promise<ApiResponse> {
     // Service call: fetch potential amount for user's bet in the round
-    const data = await this.bettingService.getRoundData(roundId);
+    const { data } = await this.bettingService.getRoundData(roundId);
 
     return {
       message: 'Round Data retrieved successfully',
@@ -481,6 +482,36 @@ export class BettingController {
       message: 'Bet edited successfully',
       status: HttpStatus.OK,
       data: bet,
+    };
+  }
+
+  /**
+   * Get pick timeline for a specific round
+   * 
+   * Functional Comment:
+   * -------------------
+   * This endpoint retrieves the timeline of picks placed on a round, showing
+   * how the pick pool distribution evolved over time between the two options.
+   * Only CadeCoin picks are included in the timeline.
+   * 
+   * Swagger Responses:
+   * - 200: Timeline retrieved successfully
+   * - 404: Round not found
+   */
+  @ApiOperation({ summary: 'Get pick timeline for a round' })
+  @ApiParam({ name: 'roundId', description: 'Pick Round ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Round pick timeline retrieved successfully',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'Round not found' })
+  @Get('round/:roundId/pick-timeline')
+  async getRoundPickTimeline(@Param('roundId', ParseUUIDPipe) roundId: string): Promise<ApiResponse> {
+    const timeline = await this.bettingService.getRoundPickTimeline(roundId);
+    return {
+      message: 'Round pick timeline retrieved successfully',
+      status: HttpStatus.OK,
+      data: timeline,
     };
   }
 }

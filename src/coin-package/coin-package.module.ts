@@ -7,8 +7,8 @@ import { WalletsModule } from '../wallets/wallets.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CoinPackage]), 
-    forwardRef(() => WalletsModule)
+    TypeOrmModule.forFeature([CoinPackage]),
+    forwardRef(() => WalletsModule),
   ],
   controllers: [CoinPackageController],
   providers: [CoinPackageService],

@@ -7,9 +7,11 @@ import { PrizeService } from './prize.service';
 import { PrizeController, AdminPrizeController } from './prize.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([PrizeConfiguration, PrizeRedemption, User])],
+  imports: [
+    TypeOrmModule.forFeature([PrizeConfiguration, PrizeRedemption, User]),
+  ],
   controllers: [PrizeController, AdminPrizeController],
   providers: [PrizeService],
-  exports: [PrizeService], 
+  exports: [PrizeService],
 })
 export class PrizeModule {}

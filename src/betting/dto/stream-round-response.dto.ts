@@ -9,8 +9,13 @@ import {
   IsUUID,
   Min,
   ValidateNested,
+  IsBoolean,
+  IsEnum,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
+import { BetRoundType } from 'src/enums/bet-round-type';
 
 export class WinnerAmountDto {
   @ApiProperty({ description: 'Type of coin (e.g., goldCoin, sweepCoin)' })
@@ -94,6 +99,58 @@ export class RoundDto {
   })
   @IsString()
   status: string;
+
+  @ApiProperty({
+    description: 'Type of the round (auction, future, opinion, pick)',
+    enum: BetRoundType,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(BetRoundType)
+  type?: BetRoundType;
+
+  @ApiProperty({
+    description: 'Category of the bet round',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiProperty({
+    description: 'Pick mechanism (default or sentiment)',
+    enum: PickMechanism,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PickMechanism)
+  mechanism?: PickMechanism;
+
+  @ApiProperty({
+    description: 'First reveal time for sentiment picks (7 AM PST)',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  firstRevealTime?: string | null;
+
+  @ApiProperty({
+    description: 'Last reveal time when pick transitioned to real-time',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  lastRevealTime?: string | null;
+
+  @ApiProperty({
+    description: 'Whether pick is in initial 24-hour reveal period',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isInitialRevealPeriod?: boolean;
 
   @ApiProperty({
     description: 'Total winning amounts',

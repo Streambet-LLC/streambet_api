@@ -1,14 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { 
-  IsString, 
-  IsNotEmpty, 
-  IsUUID, 
+import {
+  IsString,
+  IsNotEmpty,
+  IsUUID,
   IsNumber,
   Min,
   ValidateNested,
   IsEnum,
   IsOptional,
-  ValidateIf
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrizeCategory } from '../enums/prize-category.enum';
@@ -45,10 +45,10 @@ export class ShippingAddressDto {
   @IsNotEmpty()
   addressLine1: string;
 
-  @ApiProperty({ 
-    example: 'Apt 4B', 
+  @ApiProperty({
+    example: 'Apt 4B',
     description: 'Apartment, suite, unit, etc. (optional)',
-    required: false 
+    required: false,
   })
   @IsString()
   @IsOptional()
@@ -79,33 +79,33 @@ export class ShippingAddressDto {
  * DTO for submitting a prize redemption
  */
 export class SubmitPrizeRedemptionDto {
-  @ApiProperty({ 
-    example: 'uuid', 
-    description: 'Prize configuration ID (UUID of the tier)'
+  @ApiProperty({
+    example: 'uuid',
+    description: 'Prize configuration ID (UUID of the tier)',
   })
   @IsUUID()
   prizeConfigId: string;
 
-  @ApiProperty({ 
-    example: 1, 
-    description: 'Prize tier number (1, 2, 3, etc.)'
+  @ApiProperty({
+    example: 1,
+    description: 'Prize tier number (1, 2, 3, etc.)',
   })
   @IsNumber()
   @Min(1)
   prizeLevel: number;
 
-  @ApiProperty({ 
-    example: PrizeCategory.POKEMON, 
+  @ApiProperty({
+    example: PrizeCategory.POKEMON,
     description: 'Selected prize category',
-    enum: PrizeCategory
+    enum: PrizeCategory,
   })
   @IsEnum(PrizeCategory, { message: 'Invalid prize category' })
   @IsNotEmpty()
   prizeCategory: PrizeCategory;
 
-  @ApiProperty({ 
+  @ApiProperty({
     type: ShippingAddressDto,
-    description: 'Shipping address for prize delivery'
+    description: 'Shipping address for prize delivery',
   })
   @ValidateNested()
   @Type(() => ShippingAddressDto)
@@ -118,42 +118,46 @@ export class SubmitPrizeRedemptionDto {
 export enum ShippingStatus {
   OPEN = 'open',
   SHIPPED = 'shipped',
-  COMPLETE = 'complete'
+  COMPLETE = 'complete',
 }
 
 /**
  * DTO for updating redemption shipping status (admin only)
  */
 export class UpdateRedemptionStatusDto {
-  @ApiProperty({ 
+  @ApiProperty({
     enum: ShippingStatus,
     example: ShippingStatus.SHIPPED,
-    description: 'New shipping status'
+    description: 'New shipping status',
   })
   @IsEnum(ShippingStatus)
   shippingStatus: ShippingStatus;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '1Z999AA10123456784',
     description: 'Tracking number (required when marking as shipped)',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
-  @ValidateIf(o => o.shippingStatus === ShippingStatus.SHIPPED)
-  @IsNotEmpty({ message: 'Tracking number is required when marking as shipped' })
+  @ValidateIf((o) => o.shippingStatus === ShippingStatus.SHIPPED)
+  @IsNotEmpty({
+    message: 'Tracking number is required when marking as shipped',
+  })
   trackingNumber?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'UPS',
     description: 'Shipping carrier (required when marking as shipped)',
     enum: ['USPS', 'UPS', 'FedEx', 'DHL', 'Amazon Logistics', 'Other'],
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
-  @ValidateIf(o => o.shippingStatus === ShippingStatus.SHIPPED)
-  @IsNotEmpty({ message: 'Shipping carrier is required when marking as shipped' })
+  @ValidateIf((o) => o.shippingStatus === ShippingStatus.SHIPPED)
+  @IsNotEmpty({
+    message: 'Shipping carrier is required when marking as shipped',
+  })
   shippingCarrier?: string;
 }
 
@@ -199,31 +203,37 @@ export class UserRedemptionResponseDto {
   @ApiProperty({ example: 'pokemon', description: 'Selected prize category' })
   prizeCategory: string;
 
-  @ApiProperty({ example: '2025-01-01T00:00:00Z', description: 'Date redeemed' })
+  @ApiProperty({
+    example: '2025-01-01T00:00:00Z',
+    description: 'Date redeemed',
+  })
   dateRedeemed: Date;
 
-  @ApiProperty({ 
+  @ApiProperty({
     enum: ShippingStatus,
     example: ShippingStatus.OPEN,
-    description: 'Current shipping status'
+    description: 'Current shipping status',
   })
   shippingStatus: ShippingStatus;
 
-  @ApiProperty({ 
-    example: '1Z999AA10123456784', 
+  @ApiProperty({
+    example: '1Z999AA10123456784',
     nullable: true,
-    description: 'Tracking number' 
+    description: 'Tracking number',
   })
   trackingNumber: string | null;
 
-  @ApiProperty({ 
-    example: 'UPS', 
+  @ApiProperty({
+    example: 'UPS',
     nullable: true,
-    description: 'Shipping carrier' 
+    description: 'Shipping carrier',
   })
   shippingCarrier: string | null;
 
-  @ApiProperty({ example: false, description: 'Whether redemption is fulfilled' })
+  @ApiProperty({
+    example: false,
+    description: 'Whether redemption is fulfilled',
+  })
   fulfilled: boolean;
 
   @ApiProperty({ example: '2025-01-01T00:00:00Z' })
@@ -232,10 +242,10 @@ export class UserRedemptionResponseDto {
   @ApiProperty({ example: '2025-01-01T00:00:00Z' })
   updatedAt: Date;
 
-  @ApiProperty({ 
+  @ApiProperty({
     type: RedemptionPrizeConfigDto,
     required: false,
-    description: 'Prize configuration details'
+    description: 'Prize configuration details',
   })
   prizeConfiguration?: RedemptionPrizeConfigDto;
 }
@@ -294,26 +304,29 @@ export class AdminRedemptionResponseDto {
   @ApiProperty({ example: 'pokemon', description: 'Selected prize category' })
   prizeCategory: string;
 
-  @ApiProperty({ example: '2025-01-01T00:00:00Z', description: 'Date redeemed' })
+  @ApiProperty({
+    example: '2025-01-01T00:00:00Z',
+    description: 'Date redeemed',
+  })
   dateRedeemed: Date;
 
-  @ApiProperty({ 
+  @ApiProperty({
     enum: ShippingStatus,
-    example: ShippingStatus.OPEN
+    example: ShippingStatus.OPEN,
   })
   shippingStatus: ShippingStatus;
 
-  @ApiProperty({ 
-    example: '1Z999AA10123456784', 
+  @ApiProperty({
+    example: '1Z999AA10123456784',
     nullable: true,
-    description: 'Tracking number' 
+    description: 'Tracking number',
   })
   trackingNumber: string | null;
 
-  @ApiProperty({ 
-    example: 'UPS', 
+  @ApiProperty({
+    example: 'UPS',
     nullable: true,
-    description: 'Shipping carrier' 
+    description: 'Shipping carrier',
   })
   shippingCarrier: string | null;
 
@@ -326,17 +339,17 @@ export class AdminRedemptionResponseDto {
   @ApiProperty({ example: '2025-01-01T00:00:00Z' })
   updatedAt: Date;
 
-  @ApiProperty({ 
+  @ApiProperty({
     type: RedemptionUserDto,
     required: false,
-    description: 'User information with current address'
+    description: 'User information with current address',
   })
   user?: RedemptionUserDto;
 
-  @ApiProperty({ 
+  @ApiProperty({
     type: RedemptionPrizeConfigDto,
     required: false,
-    description: 'Prize configuration details'
+    description: 'Prize configuration details',
   })
   prizeConfiguration?: RedemptionPrizeConfigDto;
 }

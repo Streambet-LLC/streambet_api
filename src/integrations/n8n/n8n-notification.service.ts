@@ -14,12 +14,27 @@ export class N8nNotificationService {
   private readonly timeoutMs: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.webhookUrl = this.configService.get<string>('coinflow.n8n.webhookUrl', '');
-    this.webhookSecret = this.configService.get<string>('coinflow.n8n.webhookSecret', '');
-    this.enabled = this.configService.get<boolean>('coinflow.n8n.enabled', false);
+    this.webhookUrl = this.configService.get<string>(
+      'coinflow.n8n.webhookUrl',
+      '',
+    );
+    this.webhookSecret = this.configService.get<string>(
+      'coinflow.n8n.webhookSecret',
+      '',
+    );
+    this.enabled = this.configService.get<boolean>(
+      'coinflow.n8n.enabled',
+      false,
+    );
     this.maxRetries = this.configService.get<number>('coinflow.n8n.retries', 3);
-    this.retryDelayMs = this.configService.get<number>('coinflow.n8n.retryDelayMs', 1000);
-    this.timeoutMs = this.configService.get<number>('coinflow.n8n.timeoutMs', 5000);
+    this.retryDelayMs = this.configService.get<number>(
+      'coinflow.n8n.retryDelayMs',
+      1000,
+    );
+    this.timeoutMs = this.configService.get<number>(
+      'coinflow.n8n.timeoutMs',
+      5000,
+    );
   }
 
   async sendToN8n(payload: N8nPayloadDto): Promise<void> {
@@ -37,8 +52,9 @@ export class N8nNotificationService {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const delay = attempt > 0 ? this.retryDelayMs * Math.pow(2, attempt - 1) : 0;
-        
+        const delay =
+          attempt > 0 ? this.retryDelayMs * Math.pow(2, attempt - 1) : 0;
+
         if (delay > 0) {
           this.logger.debug(`Retry attempt ${attempt} after ${delay}ms delay`);
           await this.sleep(delay);
@@ -58,11 +74,13 @@ export class N8nNotificationService {
           headers,
         });
 
-        this.logger.log(`Successfully sent webhook to n8n (attempt ${attempt + 1})`);
+        this.logger.log(
+          `Successfully sent webhook to n8n (attempt ${attempt + 1})`,
+        );
         return;
       } catch (error) {
         lastError = error as Error;
-        
+
         if (axios.isAxiosError(error)) {
           const axiosError = error as AxiosError;
           const status = axiosError.response?.status;
@@ -97,6 +115,6 @@ export class N8nNotificationService {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

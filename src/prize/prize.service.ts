@@ -327,8 +327,8 @@ export class PrizeService {
     const currentPrize = this.findCurrentAchievement(prizes, lifetimeCoins);
 
     // Get the index of the current prize
-    const prizeIndex = currentPrize 
-      ? prizes.findIndex(p => p.amount === currentPrize.amount)
+    const prizeIndex = currentPrize
+      ? prizes.findIndex((p) => p.amount === currentPrize.amount)
       : -1;
 
     // Calculate progress
@@ -399,14 +399,18 @@ export class PrizeService {
   /**
    * Get redemption history for a user (without address).
    */
-  async getUserRedemptions(userId: string): Promise<UserRedemptionResponseDto[]> {
+  async getUserRedemptions(
+    userId: string,
+  ): Promise<UserRedemptionResponseDto[]> {
     const redemptions = await this.prizeRedemptionRepository.find({
       where: { userId },
       relations: ['prizeConfiguration'],
       order: { dateRedeemed: 'DESC' },
     });
 
-    return redemptions.map((r) => this.mapToUserRedemptionDto(r, r.prizeConfiguration));
+    return redemptions.map((r) =>
+      this.mapToUserRedemptionDto(r, r.prizeConfiguration),
+    );
   }
 
   /**
@@ -426,14 +430,16 @@ export class PrizeService {
       .leftJoinAndSelect('redemption.prizeConfiguration', 'prizeConfig');
 
     if (filterDto.status) {
-      query.andWhere('redemption.shippingStatus = :status', { status: filterDto.status });
+      query.andWhere('redemption.shippingStatus = :status', {
+        status: filterDto.status,
+      });
     }
 
     query.orderBy('redemption.dateRedeemed', 'DESC');
 
     const totalCount = await query.getCount();
     const [offset, limit] = range;
-    
+
     // Calculate total pages
     const total = Math.ceil(totalCount / limit);
 
@@ -448,7 +454,9 @@ export class PrizeService {
   /**
    * Get a single redemption for admin with full details.
    */
-  async getAdminRedemptionById(id: string): Promise<AdminRedemptionResponseDto> {
+  async getAdminRedemptionById(
+    id: string,
+  ): Promise<AdminRedemptionResponseDto> {
     const redemption = await this.prizeRedemptionRepository.findOne({
       where: { id },
       relations: ['user', 'prizeConfiguration'],
@@ -479,11 +487,11 @@ export class PrizeService {
 
     // Update fields
     redemption.shippingStatus = dto.shippingStatus;
-    
+
     if (dto.trackingNumber) {
       redemption.trackingNumber = dto.trackingNumber;
     }
-    
+
     if (dto.shippingCarrier) {
       redemption.shippingCarrier = dto.shippingCarrier;
     }
@@ -494,7 +502,9 @@ export class PrizeService {
     }
 
     const saved = await this.prizeRedemptionRepository.save(redemption);
-    this.logger.log(`Redemption ${id} updated to status: ${dto.shippingStatus}`);
+    this.logger.log(
+      `Redemption ${id} updated to status: ${dto.shippingStatus}`,
+    );
 
     return this.mapToAdminRedemptionDto(saved);
   }
@@ -542,7 +552,9 @@ export class PrizeService {
   ): UserRedemptionResponseDto {
     return {
       ...this.mapRedemptionBaseFields(redemption),
-      prizeConfiguration: prizeConfig ? this.mapPrizeConfigToSummary(prizeConfig) : undefined,
+      prizeConfiguration: prizeConfig
+        ? this.mapPrizeConfigToSummary(prizeConfig)
+        : undefined,
     };
   }
 
@@ -568,13 +580,18 @@ export class PrizeService {
    * Map redemption to admin response (with address).
    */
   private mapToAdminRedemptionDto(
-    redemption: PrizeRedemption & { user?: User; prizeConfiguration?: PrizeConfiguration },
+    redemption: PrizeRedemption & {
+      user?: User;
+      prizeConfiguration?: PrizeConfiguration;
+    },
   ): AdminRedemptionResponseDto {
     return {
       ...this.mapRedemptionBaseFields(redemption),
-      user: redemption.user ? this.mapUserWithAddress(redemption.user) : undefined,
-      prizeConfiguration: redemption.prizeConfiguration 
-        ? this.mapPrizeConfigToSummary(redemption.prizeConfiguration) 
+      user: redemption.user
+        ? this.mapUserWithAddress(redemption.user)
+        : undefined,
+      prizeConfiguration: redemption.prizeConfiguration
+        ? this.mapPrizeConfigToSummary(redemption.prizeConfiguration)
         : undefined,
     };
   }

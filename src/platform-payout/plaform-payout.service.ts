@@ -26,7 +26,7 @@ export class PlatformPayoutService {
     @InjectRepository(BettingVariable)
     private readonly bettingVariableRepository: Repository<BettingVariable>,
     private readonly walletsService: WalletsService,
-  ) { }
+  ) {}
 
   async generatePayoutReport(
     payoutReportFilterDto: PayoutReportFilterDto,
@@ -52,15 +52,13 @@ export class PlatformPayoutService {
         `(LOWER(bettingRound.roundName) ILIKE LOWER(:q) OR LOWER(stream.name) ILIKE LOWER(:q))`,
         {
           q: `%${searchFilter}%`,
-        }
+        },
       );
     }
 
     const [offset, limit] = range;
 
-    total = Math.ceil(
-      await reportQb.getCount() / limit
-    );
+    total = Math.ceil((await reportQb.getCount()) / limit);
 
     reportQb.skip(offset).take(limit);
     const result = await reportQb.getMany();
@@ -109,8 +107,8 @@ export class PlatformPayoutService {
 
     const creatorAssigned = stream.creatorId
       ? await this.userRepository.findOne({
-        where: { id: stream.creatorId },
-      })
+          where: { id: stream.creatorId },
+        })
       : null;
 
     let platformPayout = payoutAmount;
@@ -145,7 +143,10 @@ export class PlatformPayoutService {
     await this.platformPayoutRepository.save(record);
   }
 
-  async getPayoutsByUserId(props: { userId: string, pagination?: { page?: number, limit?: number }}): Promise<{
+  async getPayoutsByUserId(props: {
+    userId: string;
+    pagination?: { page?: number; limit?: number };
+  }): Promise<{
     data: {
       id: string;
       createdAt: string;
@@ -154,7 +155,7 @@ export class PlatformPayoutService {
       streamId: string;
       amount: number;
     }[];
-    pagination: { page: number, limit: number, totalPages: number }
+    pagination: { page: number; limit: number; totalPages: number };
   }> {
     const { userId, pagination } = props;
     const page = pagination?.page || 1;
@@ -173,16 +174,16 @@ export class PlatformPayoutService {
       .offset((page - 1) * limit)
       .limit(limit);
 
-    const results = await qb.getRawMany<PlatformPayout>(); 
+    const results = await qb.getRawMany<PlatformPayout>();
     const count = await qb.getCount();
 
     const payouts = results.map((payout) => ({
-      id: payout["pp_id"],
-      createdAt: payout["pp_createdAt"],
-      amount: payout["pp_creator_split_amount"],
-      bettingRoundName: payout["round_roundName"],
-      bettingRoundId: payout["pp_betting_round"],
-      streamId: payout["round_stream_id"],
+      id: payout['pp_id'],
+      createdAt: payout['pp_createdAt'],
+      amount: payout['pp_creator_split_amount'],
+      bettingRoundName: payout['round_roundName'],
+      bettingRoundId: payout['pp_betting_round'],
+      streamId: payout['round_stream_id'],
     }));
 
     return {
@@ -191,7 +192,7 @@ export class PlatformPayoutService {
         page,
         limit,
         totalPages: Math.ceil(count / limit),
-      }
+      },
     };
   }
 }

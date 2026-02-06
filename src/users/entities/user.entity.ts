@@ -157,6 +157,12 @@ export class User extends BaseEntity {
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;
 
-  @Column({ length: 255, type: 'varchar', nullable: true, name: 'ref_link', unique: true })
+  @Column({
+    length: 255,
+    type: 'varchar',
+    nullable: true,
+    name: 'ref_link',
+    unique: true,
+  })
   refLink: string;
 }

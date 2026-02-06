@@ -16,4 +16,4 @@ export class CreateChatDto {
   @IsString()
   @IsOptional()
   imageURL?: string;
-} 
+}
