@@ -2803,6 +2803,9 @@ export class BettingService {
         },
         cadeCoinUsersCount: cadeCoinUsersCount,
         description: bettingRound.stream.description,
+        firstRevealTime: bettingRound.firstRevealTime,
+        lastRevealTime: bettingRound.lastRevealTime,
+        isInitialRevealPeriod: bettingRound.isInitialRevealPeriod,
       };
 
       // Return structured response
