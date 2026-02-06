@@ -3913,6 +3913,10 @@ export class BettingService {
       timeline.push(timelinePoint);
     });
 
+    Logger.log(
+      `Pick timeline fetched for round ${roundId}: ${variables.length} options, ${bets.length} bets, ${edits.length} edits, ${timeline.length} timeline points`
+    );
+
     // Return metadata and timeline
     return {
       options: variables.map((variable) => ({

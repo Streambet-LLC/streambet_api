@@ -9,6 +9,7 @@ import {
   Request,
   Query,
   ParseBoolPipe,
+  ParseUUIDPipe,
   DefaultValuePipe,
   HttpStatus,
   Patch,
@@ -505,7 +506,7 @@ export class BettingController {
   })
   @SwaggerApiResponse({ status: 404, description: 'Round not found' })
   @Get('round/:roundId/pick-timeline')
-  async getRoundPickTimeline(@Param('roundId') roundId: string): Promise<ApiResponse> {
+  async getRoundPickTimeline(@Param('roundId', ParseUUIDPipe) roundId: string): Promise<ApiResponse> {
     const timeline = await this.bettingService.getRoundPickTimeline(roundId);
     return {
       message: 'Round pick timeline retrieved successfully',
