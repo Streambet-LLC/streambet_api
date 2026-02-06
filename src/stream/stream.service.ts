@@ -349,6 +349,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         })
         .leftJoinAndSelect('br.stream', 's')
         .leftJoinAndSelect('s.creator', 'c')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .andWhere('s.status IN (:...streamStatuses)', {
           streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
         })
@@ -1845,6 +1848,9 @@ END
         .andWhere('br.is_landing_hidden = false')
         .leftJoinAndSelect('br.stream', 's')
         .leftJoinAndSelect('s.creator', 'c')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .andWhere('s.status IN (:...streamStatuses)', {
           streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
         })
@@ -2032,6 +2038,9 @@ END
         })
         .leftJoinAndSelect('br.stream', 's')
         .innerJoinAndSelect('s.creator', 'c', 'c.username = :username')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .setParameter('username', username)
         .andWhere('s.status IN (:...streamStatuses)', {
           streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
@@ -2161,6 +2170,9 @@ END
         })
         .leftJoinAndSelect('br.stream', 's')
         .leftJoinAndSelect('s.creator', 'c')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .andWhere('s.status = :status', {
           status: StreamStatus.SCHEDULED,
         });
