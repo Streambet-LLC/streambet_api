@@ -957,23 +957,32 @@ END
 
       const bettingRoundsWithVariablePercentages = stream.bettingRounds.map(
         (round) => {
+          const isSentiment = round.mechanism === PickMechanism.SENTIMENT;
           let totalCadeCoins = 0;
+          let totalSentimentVotes = 0;
 
           round.bettingVariables.forEach((bv) => {
             totalCadeCoins += Number(bv.totalBetsCadeCoinAmount);
+            totalSentimentVotes += Number(bv.betCountCadeCoin);
           });
 
           const variables = round.bettingVariables.map((bv) => ({
             percentage:
-              round.mechanism === PickMechanism.SENTIMENT &&
-              round.isInitialRevealPeriod
+              isSentiment && round.isInitialRevealPeriod
                 ? 0
-                : totalCadeCoins > 0
-                  ? (
-                      (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
-                      100
-                    ).toFixed(2)
-                  : 0,
+                : isSentiment
+                  ? totalSentimentVotes > 0
+                    ? (
+                        (Number(bv.betCountCadeCoin) / totalSentimentVotes) *
+                        100
+                      ).toFixed(2)
+                    : 0
+                  : totalCadeCoins > 0
+                    ? (
+                        (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
+                        100
+                      ).toFixed(2)
+                    : 0,
           }));
 
           return {
