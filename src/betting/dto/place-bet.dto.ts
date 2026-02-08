@@ -5,6 +5,7 @@ import {
   IsPositive,
   IsIn,
   IsOptional,
+  Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { CurrencyType } from 'src/enums/currency.enum';
@@ -31,7 +32,7 @@ export class PlaceBetDto {
   bettingVariableId: string;
   @ApiProperty()
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   amount: number;
 
   @ApiProperty()
@@ -68,10 +69,10 @@ export class EditBetDto {
     description: 'The new amount to bet',
     example: 1500,
     type: 'number',
-    minimum: 1,
+    minimum: 0,
   })
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   newAmount: number;
 
   @ApiProperty({

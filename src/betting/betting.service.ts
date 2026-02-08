@@ -968,7 +968,7 @@ export class BettingService {
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
-    this.enforceMax(amount, currencyType);
+    
     // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -985,6 +985,26 @@ export class BettingService {
     // Sentiment picks are free - override amount and currency
     const isSentimentPick =
       bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+    
+    // Validate that 0 amounts are only allowed for sentiment picks
+    if (amount === 0 && !isSentimentPick) {
+      throw new BadRequestException(
+        'You can only place bets with 0 CadeCoins on sentiment mechanism bets. Please enter a positive amount for this bet.',
+      );
+    }
+    
+    // Validate that non-zero amounts are not placed on sentiment picks via this endpoint
+    if (amount > 0 && isSentimentPick) {
+      throw new BadRequestException(
+        'Sentiment picks are free. The bet amount will be set to 0.',
+      );
+    }
+    
+    // Enforce maximum bet amounts (only for non-zero amounts)
+    if (amount > 0) {
+      this.enforceMax(amount, currencyType);
+    }
+    
     const actualAmount = isSentimentPick ? 0 : amount;
     const actualCurrency = isSentimentPick
       ? CurrencyType.CADE_COINS
@@ -1233,7 +1253,6 @@ export class BettingService {
   async editBet(userId: string, editBetDto: EditBetDto) {
     const { newCurrencyType, newAmount, newBettingVariableId, betId } =
       editBetDto;
-    this.enforceMax(newAmount, newCurrencyType);
 
     // Fetch the bet and verify ownership
     const betDetails = await this.betsRepository.findOne({
@@ -1284,6 +1303,29 @@ export class BettingService {
         `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
+    
+    // Check if this is a sentiment pick
+    const isSentimentPick =
+      bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
+    
+    // Validate that 0 amounts are only allowed for sentiment picks
+    if (newAmount === 0 && !isSentimentPick) {
+      throw new BadRequestException(
+        'You can only place bets with 0 CadeCoins on sentiment mechanism bets. Please enter a positive amount for this bet.',
+      );
+    }
+    
+    // Validate that non-zero amounts are not placed on sentiment picks
+    if (newAmount > 0 && isSentimentPick) {
+      throw new BadRequestException(
+        'Sentiment picks are free. The bet amount must be 0.',
+      );
+    }
+    
+    // Enforce maximum bet amounts (only for non-zero amounts)
+    if (newAmount > 0) {
+      this.enforceMax(newAmount, newCurrencyType);
+    }
 
     // Start transaction
     const queryRunner = this.dataSource.createQueryRunner();
@@ -1300,11 +1342,9 @@ export class BettingService {
       const newCurrency = newCurrencyType;
 
       // Validate new bet amount and currency type
-      const isSentimentPick =
-        bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
-      if (!Number.isFinite(newAmt) || (newAmt <= 0 && !isSentimentPick)) {
+      if (!Number.isFinite(newAmt) || newAmt < 0) {
         throw new BadRequestException(
-          'New amount must be a positive number greater than 0.',
+          'New amount must be a non-negative number.',
         );
       }
       if (!Object.values(CurrencyType).includes(newCurrency)) {
@@ -3278,6 +3318,18 @@ export class BettingService {
             );
             variable.totalBetsGoldCoinAmount -= Number(bet.amount);
             variable.betCountGoldCoin -= 1;
+          } else if (bet.currency === CurrencyType.CADE_COINS) {
+            // Skip refunding sentiment picks (0 amount, free picks)
+            if (round.mechanism !== PickMechanism.SENTIMENT && bet.amount > 0) {
+              await this.walletsService.addCadeCoins(
+                bet.userId,
+                bet.amount,
+                `Refund for cancelled round ${round.roundName}`,
+                queryRunner.manager,
+              );
+            }
+            variable.totalBetsCadeCoinAmount -= Number(bet.amount);
+            variable.betCountCadeCoin -= 1;
           } else if (bet.currency === CurrencyType.SWEEP_COINS) {
             await this.walletsService.addSweepCoins(
               bet.userId,

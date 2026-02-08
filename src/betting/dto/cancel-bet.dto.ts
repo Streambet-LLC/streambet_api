@@ -10,6 +10,10 @@ export class CancelBetDto {
   betId: string;
 
   @ApiProperty()
-  @IsIn([CurrencyType.GOLD_COINS, CurrencyType.SWEEP_COINS])
+  @IsIn([
+    CurrencyType.GOLD_COINS,
+    CurrencyType.SWEEP_COINS,
+    CurrencyType.CADE_COINS,
+  ])
   currencyType: CurrencyType;
 }
