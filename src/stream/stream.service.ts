@@ -1974,17 +1974,40 @@ END
             Number(v.bv_bet_count_sweep_coin) +
             Number(v.bv_bet_count_cade_coin);
 
-          return {
-            id: v.bv_id,
-            option: v.bv_name,
-            percentage:
+          // For sentiment picks, calculate percentage based on vote count (betCountCadeCoin)
+          // For regular picks, calculate based on cadecoin amounts
+          const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
+          let percentage: string | number;
+
+          if (isSentimentPick) {
+            // Use only cadecoin vote count for sentiment picks
+            const sentimentVotes = variables.reduce(
+              (sum, bv) => sum + Number(bv.bv_bet_count_cade_coin),
+              0,
+            );
+            percentage =
+              sentimentVotes > 0
+                ? (
+                    (Number(v.bv_bet_count_cade_coin) / sentimentVotes) *
+                    100
+                  ).toFixed(2)
+                : 0;
+          } else {
+            // Use cadecoin amounts for regular picks
+            percentage =
               totalCadeCoins > 0
                 ? (
                     (Number(v.bv_total_bets_cade_coin_amount) /
                       totalCadeCoins) *
                     100
                   ).toFixed(2)
-                : 0,
+                : 0;
+          }
+
+          return {
+            id: v.bv_id,
+            option: v.bv_name,
+            percentage,
             isWinner: v.bv_is_winning_option,
             userBet:
               !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS
