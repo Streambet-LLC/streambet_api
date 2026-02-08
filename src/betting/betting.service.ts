@@ -87,33 +87,52 @@ export class BettingService {
   ) {}
 
   /**
-   * Calculates the next 7 AM Pacific Standard Time.
-   * Returns a Date object representing the next occurrence of 7 AM PST.
-   * If current time is before 7 AM PST today, returns today at 7 AM PST.
-   * Otherwise, returns tomorrow at 7 AM PST.
+   * Calculates the next 5 PM Pacific Standard Time.
+   * Returns a Date object representing the next occurrence of 5 PM PST/PDT.
+   * If current time is before 5 PM PST today, returns today at 5 PM PST.
+   * Otherwise, returns tomorrow at 5 PM PST.
    */
   private getNextRevealTime(): Date {
-    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: false,
+    });
 
-    // Convert to PST/PDT (America/Los_Angeles timezone)
-    const pstTime = new Date(
-      now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }),
+    const now = new Date();
+    const pstParts = formatter.formatToParts(now);
+
+    const pstYear = parseInt(
+      pstParts.find((p) => p.type === 'year')?.value || '0',
+    );
+    const pstMonth =
+      parseInt(pstParts.find((p) => p.type === 'month')?.value || '0') - 1;
+    const pstDay = parseInt(
+      pstParts.find((p) => p.type === 'day')?.value || '0',
+    );
+    const pstHour = parseInt(
+      pstParts.find((p) => p.type === 'hour')?.value || '0',
     );
 
-    // Create next 5 PM PST (17:00)
-    const nextReveal = new Date(pstTime);
-    nextReveal.setHours(17, 0, 0, 0);
+    let targetDate: Date;
 
-    // If 5 PM has already passed today, move to tomorrow
-    if (pstTime >= nextReveal) {
-      nextReveal.setDate(nextReveal.getDate() + 1);
+    if (pstHour < 17) {
+      // 5 PM hasn't happened yet today, use today at 5 PM
+      targetDate = new Date(pstYear, pstMonth, pstDay, 17, 0, 0);
+    } else {
+      // 5 PM has already passed, use tomorrow at 5 PM
+      targetDate = new Date(pstYear, pstMonth, pstDay + 1, 17, 0, 0);
     }
 
-    // Convert back to UTC for storage
-    const pstOffset = nextReveal.getTimezoneOffset();
-    const utcReveal = new Date(nextReveal.getTime() + pstOffset * 60000);
+    // Now we need to find the UTC time that corresponds to this PST 5 PM
+    // We do this by calculating the offset between local time and PST interpretation
+    const localPSTStr = formatter.format(targetDate);
+    const offset = targetDate.getTime() - new Date(localPSTStr).getTime();
 
-    return utcReveal;
+    return new Date(targetDate.getTime() - offset);
   }
 
   /**
@@ -407,7 +426,10 @@ export class BettingService {
         status: roundStatus,
         createdBy: creator,
         // Sentiment picks never lock - they stay OPEN for continuous voting with real-time results
-        lockDate: roundData.mechanism === PickMechanism.SENTIMENT ? null : roundData.lockDate,
+        lockDate:
+          roundData.mechanism === PickMechanism.SENTIMENT
+            ? null
+            : roundData.lockDate,
         category: roundData.category,
         type: roundData.betRoundType,
         mechanism: roundData.mechanism || PickMechanism.DEFAULT,
@@ -452,8 +474,10 @@ export class BettingService {
           status: variable.status,
           totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
           totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
+          totalBetsCadeCoinAmount: variable.totalBetsCadeCoinAmount,
           betCountGoldCoin: variable.betCountGoldCoin,
           betCountSweepCoin: variable.betCountSweepCoin,
+          betCountCadeCoin: variable.betCountCadeCoin,
         })),
       });
     }
@@ -587,7 +611,7 @@ export class BettingService {
         .map(({ id, option, is_winning_option }) => ({
           id,
           option,
-          is_winning_option
+          is_winning_option,
         }));
 
       // Identify winning and losing options
@@ -938,8 +962,10 @@ export class BettingService {
         status: variable.status,
         totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
         totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
+        totalBetsCadeCoinAmount: variable.totalBetsCadeCoinAmount,
         betCountSweepCoin: variable.betCountSweepCoin,
         betCountGoldCoin: variable.betCountGoldCoin,
+        betCountCadeCoin: variable.betCountCadeCoin,
       })),
     };
   }
@@ -968,7 +994,7 @@ export class BettingService {
     placeBetDto: PlaceBetDto,
   ): Promise<{ bet: Bet; roundId: string }> {
     const { bettingVariableId, amount, currencyType } = placeBetDto;
-    
+
     // Fetch betting variable along with round and stream
     const bettingVariable = await this.bettingVariablesRepository.findOne({
       where: { id: bettingVariableId },
@@ -985,26 +1011,26 @@ export class BettingService {
     // Sentiment picks are free - override amount and currency
     const isSentimentPick =
       bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
-    
+
     // Validate that 0 amounts are only allowed for sentiment picks
     if (amount === 0 && !isSentimentPick) {
       throw new BadRequestException(
         'You can only place bets with 0 CadeCoins on sentiment mechanism bets. Please enter a positive amount for this bet.',
       );
     }
-    
+
     // Validate that non-zero amounts are not placed on sentiment picks via this endpoint
     if (amount > 0 && isSentimentPick) {
       throw new BadRequestException(
         'Sentiment picks are free. The bet amount will be set to 0.',
       );
     }
-    
+
     // Enforce maximum bet amounts (only for non-zero amounts)
     if (amount > 0) {
       this.enforceMax(amount, currencyType);
     }
-    
+
     const actualAmount = isSentimentPick ? 0 : amount;
     const actualCurrency = isSentimentPick
       ? CurrencyType.CADE_COINS
@@ -1088,8 +1114,11 @@ export class BettingService {
       }
 
       // Update betting variable totals based on currency type
-      // Skip updating totals for sentiment picks (no wager)
-      if (!isSentimentPick) {
+      // For sentiment picks, only increment the vote count (betCountCadeCoin)
+      if (isSentimentPick) {
+        lockedBettingVariable.betCountCadeCoin =
+          Number(lockedBettingVariable.betCountCadeCoin) + 1;
+      } else {
         if (actualCurrency === CurrencyType.GOLD_COINS) {
           lockedBettingVariable.totalBetsGoldCoinAmount =
             Number(lockedBettingVariable.totalBetsGoldCoinAmount) +
@@ -1303,25 +1332,25 @@ export class BettingService {
         `This stream is ended. You can only place bets during live or scheduled streams.`,
       );
     }
-    
+
     // Check if this is a sentiment pick
     const isSentimentPick =
       bettingVariable.round.mechanism === PickMechanism.SENTIMENT;
-    
+
     // Validate that 0 amounts are only allowed for sentiment picks
     if (newAmount === 0 && !isSentimentPick) {
       throw new BadRequestException(
         'You can only place bets with 0 CadeCoins on sentiment mechanism bets. Please enter a positive amount for this bet.',
       );
     }
-    
+
     // Validate that non-zero amounts are not placed on sentiment picks
     if (newAmount > 0 && isSentimentPick) {
       throw new BadRequestException(
         'Sentiment picks are free. The bet amount must be 0.',
       );
     }
-    
+
     // Enforce maximum bet amounts (only for non-zero amounts)
     if (newAmount > 0) {
       this.enforceMax(newAmount, newCurrencyType);
@@ -1596,9 +1625,15 @@ export class BettingService {
       // --- Record bet edit history ---
       // Determine edit type
       let editType: BetEditType;
-      if (oldBettingVariableId === newBettingVariableId && oldAmount !== newAmt) {
+      if (
+        oldBettingVariableId === newBettingVariableId &&
+        oldAmount !== newAmt
+      ) {
         editType = BetEditType.AMOUNT_CHANGE;
-      } else if (oldBettingVariableId !== newBettingVariableId && oldAmount === newAmt) {
+      } else if (
+        oldBettingVariableId !== newBettingVariableId &&
+        oldAmount === newAmt
+      ) {
         editType = BetEditType.OPTION_CHANGE;
       } else {
         editType = BetEditType.FULL_CHANGE;
@@ -2821,16 +2856,40 @@ export class BettingService {
           Number(v.bv_bet_count_sweep_coin) +
           Number(v.bv_bet_count_cade_coin);
 
-        return {
-          id: v.bv_id,
-          option: v.bv_name,
-          percentage:
+        // For sentiment picks, calculate percentage based on vote count (betCountCadeCoin)
+        // For regular picks, calculate based on cadecoin amounts
+        const isSentimentPick =
+          bettingRound.mechanism === PickMechanism.SENTIMENT;
+        let percentage: string | number;
+
+        if (isSentimentPick) {
+          // Use only cadecoin vote count for sentiment picks
+          const sentimentVotes = variables.reduce(
+            (sum, bv) => sum + Number(bv.bv_bet_count_cade_coin),
+            0,
+          );
+          percentage =
+            sentimentVotes > 0
+              ? (
+                  (Number(v.bv_bet_count_cade_coin) / sentimentVotes) *
+                  100
+                ).toFixed(2)
+              : 0;
+        } else {
+          // Use cadecoin amounts for regular picks
+          percentage =
             totalCadeCoins > 0
               ? (
                   (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins) *
                   100
                 ).toFixed(2)
-              : 0,
+              : 0;
+        }
+
+        return {
+          id: v.bv_id,
+          option: v.bv_name,
+          percentage,
           isWinner: v.bv_is_winning_option,
         };
       });
@@ -3793,11 +3852,11 @@ export class BettingService {
 
   /**
    * Get pick timeline for a specific round
-   * 
+   *
    * This method retrieves the timeline of picks placed on a round, showing
    * how the pick pool distribution evolved over time between the two options.
    * Only CadeCoin picks are included in the timeline.
-   * 
+   *
    * @param roundId - The ID of the betting round
    * @returns Object containing options metadata and timeline data points
    */
@@ -3818,8 +3877,12 @@ export class BettingService {
       .leftJoin('bet.bettingVariable', 'bettingVariable')
       .leftJoin('bet.user', 'user')
       .where('bet.roundId = :roundId', { roundId })
-      .andWhere('bet.currency = :currency', { currency: CurrencyType.CADE_COINS })
-      .andWhere('bet.status IN (:...statuses)', { statuses: [BetStatus.Active, BetStatus.Cancelled] })
+      .andWhere('bet.currency = :currency', {
+        currency: CurrencyType.CADE_COINS,
+      })
+      .andWhere('bet.status IN (:...statuses)', {
+        statuses: [BetStatus.Active, BetStatus.Cancelled],
+      })
       .select([
         'bet.id',
         'bet.amount',
@@ -3848,23 +3911,25 @@ export class BettingService {
 
     // Build timeline with all placement, edit, and cancellation events
     const events = [];
-    
+
     bets.forEach((bet) => {
       const amount = Number(bet.amount);
-      
+
       // Check if this bet has edits to get original amount
       const betEdits = edits.filter((edit) => edit.bet.id === bet.id);
       const firstEdit = betEdits.length > 0 ? betEdits[0] : null;
-      
+
       // Add placement event and use original amount/option from first edit if available
       events.push({
         timestamp: bet.created_at,
         type: 'place',
         amount: firstEdit ? Number(firstEdit.oldAmount) : amount,
-        variableId: firstEdit ? firstEdit.oldBettingVariableId : bet.bettingVariable.id,
+        variableId: firstEdit
+          ? firstEdit.oldBettingVariableId
+          : bet.bettingVariable.id,
         userId: bet.userId,
       });
-      
+
       // Add cancellation event if bet was cancelled
       if (bet.status === BetStatus.Cancelled) {
         events.push({
@@ -3876,7 +3941,7 @@ export class BettingService {
         });
       }
     });
-    
+
     // Add edit events
     edits.forEach((edit) => {
       events.push({
@@ -3890,10 +3955,10 @@ export class BettingService {
         editType: edit.editType,
       });
     });
-    
+
     // Sort all events chronologically
     events.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    
+
     // Build timeline from events
     const timeline = [];
     const cumulativeAmounts = new Map<string, number>();
@@ -3935,7 +4000,7 @@ export class BettingService {
             cumulativeAmounts.set(oldVariableId, current - event.oldAmount);
             userSets.get(oldVariableId)?.delete(event.userId);
           }
-          
+
           // Add to new option
           if (cumulativeAmounts.has(newVariableId)) {
             const current = cumulativeAmounts.get(newVariableId) || 0;
@@ -3946,7 +4011,10 @@ export class BettingService {
           // Only amount changed
           if (cumulativeAmounts.has(newVariableId)) {
             const current = cumulativeAmounts.get(newVariableId) || 0;
-            cumulativeAmounts.set(newVariableId, current - event.oldAmount + event.newAmount);
+            cumulativeAmounts.set(
+              newVariableId,
+              current - event.oldAmount + event.newAmount,
+            );
           }
         }
       }
@@ -3960,7 +4028,7 @@ export class BettingService {
       variables.forEach((variable) => {
         const amount = cumulativeAmounts.get(variable.id) || 0;
         const userCount = userSets.get(variable.id)?.size || 0;
-        
+
         timelinePoint[variable.id] = Math.max(0, amount);
         timelinePoint[`userCount_${variable.id}`] = userCount;
       });
@@ -3969,7 +4037,7 @@ export class BettingService {
     });
 
     Logger.log(
-      `Pick timeline fetched for round ${roundId}: ${variables.length} options, ${bets.length} bets, ${edits.length} edits, ${timeline.length} timeline points`
+      `Pick timeline fetched for round ${roundId}: ${variables.length} options, ${bets.length} bets, ${edits.length} edits, ${timeline.length} timeline points`,
     );
 
     // Return metadata and timeline
