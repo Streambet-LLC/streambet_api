@@ -83,6 +83,15 @@ export class OptionDto {
   @IsInt()
   @Min(0)
   betCountGoldCoin: number;
+
+  @ApiProperty({ description: 'Total CadeCoins bet amount', example: '0' })
+  @IsNumberString()
+  totalBetsCadeCoinAmount: string;
+
+  @ApiProperty({ description: 'Number of CadeCoins bets placed', example: 0 })
+  @IsInt()
+  @Min(0)
+  betCountCadeCoin: number;
 }
 
 export class RoundDto {
