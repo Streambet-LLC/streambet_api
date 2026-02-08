@@ -3318,6 +3318,18 @@ export class BettingService {
             );
             variable.totalBetsGoldCoinAmount -= Number(bet.amount);
             variable.betCountGoldCoin -= 1;
+          } else if (bet.currency === CurrencyType.CADE_COINS) {
+            // Skip refunding sentiment picks (0 amount, free picks)
+            if (round.mechanism !== PickMechanism.SENTIMENT && bet.amount > 0) {
+              await this.walletsService.addCadeCoins(
+                bet.userId,
+                bet.amount,
+                `Refund for cancelled round ${round.roundName}`,
+                queryRunner.manager,
+              );
+            }
+            variable.totalBetsCadeCoinAmount -= Number(bet.amount);
+            variable.betCountCadeCoin -= 1;
           } else if (bet.currency === CurrencyType.SWEEP_COINS) {
             await this.walletsService.addSweepCoins(
               bet.userId,

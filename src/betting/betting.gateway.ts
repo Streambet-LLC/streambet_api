@@ -364,7 +364,7 @@ export class BettingGateway {
         updatedWalletBalance: {
           goldCoins: updatedWallet.goldCoins,
           sweepCoins: updatedWallet.sweepCoins,
-          cadeCoins: updatedWallet.sweepCoins,
+          cadeCoins: updatedWallet.cadeCoins,
         },
       };
 
