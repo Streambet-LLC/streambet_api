@@ -58,6 +58,15 @@ export class SentimentRevealService {
   }
 
   /**
+   * Runs every minute to check if any sentiment picks should transition to real-time
+   * This ensures picks transition exactly 24 hours after firstRevealTime
+   */
+  @Cron('* * * * *') // Every minute
+  async checkAndTransitionToRealTime() {
+    await this.transitionToRealTime();
+  }
+
+  /**
    * Transitions sentiment picks from initial 24-hour reveal period to real-time updates
    * This happens when firstRevealTime + 24 hours has passed
    */
@@ -75,9 +84,11 @@ export class SentimentRevealService {
         },
       });
 
-      this.logger.debug(
-        `Found ${picksToTransition.length} sentiment picks to transition to real-time`,
-      );
+      if (picksToTransition.length > 0) {
+        this.logger.debug(
+          `Found ${picksToTransition.length} sentiment picks to transition to real-time`,
+        );
+      }
 
       for (const pick of picksToTransition) {
         pick.isInitialRevealPeriod = false;
