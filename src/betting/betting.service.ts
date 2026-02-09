@@ -411,8 +411,25 @@ export class BettingService {
     creator: string,
     createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<any> {
-    const { streamId, rounds } = createBettingVariableDto;
-    console.log('[createBettingVariable] Starting with streamId:', streamId, 'rounds count:', rounds.length);
+    const { streamId, rounds } =
+      createBettingVariableDto || ({} as CreateBettingVariableDto);
+
+    if (!streamId || !Array.isArray(rounds)) {
+      throw new BadRequestException(
+        'Invalid payload. Expected { streamId: string, rounds: RoundDto[] }.',
+      );
+    }
+
+    if (rounds.length === 0) {
+      throw new BadRequestException('At least one round is required.');
+    }
+
+    console.log(
+      '[createBettingVariable] Starting with streamId:',
+      streamId,
+      'rounds count:',
+      rounds.length,
+    );
 
     try {
       // Validate stream existence
@@ -441,6 +458,18 @@ export class BettingService {
 
       for (let i = 0; i < rounds.length; i++) {
         const roundData = rounds[i];
+
+        if (!roundData?.roundName || !Array.isArray(roundData.options)) {
+          throw new BadRequestException(
+            `Invalid round at index ${i}. Each round must include roundName and options array.`,
+          );
+        }
+
+        if (roundData.options.length === 0) {
+          throw new BadRequestException(
+            `Round "${roundData.roundName}" must include at least one option.`,
+          );
+        }
 
         // Validate sentiment picks have max 5 options
         if (
