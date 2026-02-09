@@ -138,6 +138,7 @@ export class BettingService {
 
       return new Date(targetDate.getTime() - offset);
     } catch (error) {
+      console.warn('[getNextRevealTime] Intl.DateTimeFormat failed, using fallback:', error.message);
       // Fallback: compute next 5 PM PST using a fixed -08:00 offset
       const now = new Date();
       const nowUtc = new Date(
@@ -411,117 +412,163 @@ export class BettingService {
     createBettingVariableDto: CreateBettingVariableDto,
   ): Promise<any> {
     const { streamId, rounds } = createBettingVariableDto;
+    console.log('[createBettingVariable] Starting with streamId:', streamId, 'rounds count:', rounds.length);
 
-    // Validate stream existence
-    const stream = await this.findStreamById(streamId);
-
-    if (role === UserRole.CREATOR) {
-      if (stream.creatorId !== creator) {
-        throw new NotFoundException(`Betting variable not found`);
-      }
-    }
-
-    // Prevent adding betting variables to ended streams
-    if (stream.status === StreamStatus.ENDED) {
-      throw new BadRequestException(
-        'Cannot add betting variables to ended streams',
+    try {
+      // Validate stream existence
+      const stream = await this.findStreamById(streamId);
+      console.log(
+        '[createBettingVariable] Stream found:',
+        stream.id,
+        'status:',
+        stream.status,
       );
-    }
 
-    const allRounds = [];
+      if (role === UserRole.CREATOR) {
+        if (stream.creatorId !== creator) {
+          throw new NotFoundException(`Betting variable not found`);
+        }
+      }
 
-    for (let i = 0; i < rounds.length; i++) {
-      const roundData = rounds[i];
-
-      // Validate sentiment picks have max 5 options
-      if (
-        roundData.mechanism === PickMechanism.SENTIMENT &&
-        roundData.options.length > 5
-      ) {
+      // Prevent adding betting variables to ended streams
+      if (stream.status === StreamStatus.ENDED) {
         throw new BadRequestException(
-          `Sentiment picks can have a maximum of 5 options. You provided ${roundData.options.length} options.`,
+          'Cannot add betting variables to ended streams',
         );
       }
 
-      // Calculate next 5 PM PST for sentiment picks
-      let firstRevealTime: Date | null = null;
-      let roundStatus = BettingRoundStatus.OPEN;
+      const allRounds = [];
 
-      if (roundData.mechanism === PickMechanism.SENTIMENT) {
-        firstRevealTime = this.getNextRevealTime();
-        roundStatus = BettingRoundStatus.CREATED; // Sentiment picks start as CREATED
-      }
+      for (let i = 0; i < rounds.length; i++) {
+        const roundData = rounds[i];
 
-      console.log('Create', creator);
+        // Validate sentiment picks have max 5 options
+        if (
+          roundData.mechanism === PickMechanism.SENTIMENT &&
+          roundData.options.length > 5
+        ) {
+          throw new BadRequestException(
+            `Sentiment picks can have a maximum of 5 options. You provided ${roundData.options.length} options.`,
+          );
+        }
 
-      // Create and save a new betting round
-      const bettingRound = this.bettingRoundsRepository.create({
-        roundName: roundData.roundName,
-        stream: stream,
-        status: roundStatus,
-        createdBy: creator,
-        // Sentiment picks never lock - they stay OPEN for continuous voting with real-time results
-        lockDate:
-          roundData.mechanism === PickMechanism.SENTIMENT
-            ? null
-            : roundData.lockDate,
-        category: roundData.category,
-        type: roundData.betRoundType,
-        mechanism: roundData.mechanism || PickMechanism.DEFAULT,
-        firstRevealTime: firstRevealTime,
-        isInitialRevealPeriod: roundData.mechanism === PickMechanism.SENTIMENT,
-      });
+        // Calculate next 5 PM PST for sentiment picks
+        let firstRevealTime: Date | null = null;
+        let roundStatus = BettingRoundStatus.OPEN;
 
-      const savedRound = await this.bettingRoundsRepository.save(bettingRound);
+        if (roundData.mechanism === PickMechanism.SENTIMENT) {
+          console.log(
+            '[createBettingVariable] Calculating nextRevealTime for sentiment pick',
+          );
+          firstRevealTime = this.getNextRevealTime();
+          console.log(
+            '[createBettingVariable] nextRevealTime calculated:',
+            firstRevealTime,
+          );
+          roundStatus = BettingRoundStatus.CREATED; // Sentiment picks start as CREATED
+        }
 
-      await this.betRoundHistoryService.recordBetRoundHistory(
-        creator,
-        bettingRound.id,
-        BetRoundHistoryEventType.OPEN,
-        '',
-      );
+        console.log(
+          '[createBettingVariable] Creating round with creator:',
+          creator,
+        );
 
-      const createdVariables: BettingVariable[] = [];
-
-      // Create betting variables (options) for this round
-      for (const option of roundData.options) {
-        const bettingVariable = this.bettingVariablesRepository.create({
-          name: option.option,
-          round: savedRound,
+        // Create and save a new betting round
+        const bettingRound = this.bettingRoundsRepository.create({
+          roundName: roundData.roundName,
           stream: stream,
+          status: roundStatus,
+          createdBy: creator,
+          // Sentiment picks never lock - they stay OPEN for continuous voting with real-time results
+          lockDate:
+            roundData.mechanism === PickMechanism.SENTIMENT
+              ? null
+              : roundData.lockDate,
+          category: roundData.category,
+          type: roundData.betRoundType,
+          mechanism: roundData.mechanism || PickMechanism.DEFAULT,
+          firstRevealTime: firstRevealTime,
+          isInitialRevealPeriod:
+            roundData.mechanism === PickMechanism.SENTIMENT,
         });
-        const saved =
-          await this.bettingVariablesRepository.save(bettingVariable);
-        createdVariables.push(saved);
+
+        const savedRound =
+          await this.bettingRoundsRepository.save(bettingRound);
+        console.log(
+          '[createBettingVariable] Betting round saved with id:',
+          savedRound.id,
+        );
+
+        await this.betRoundHistoryService.recordBetRoundHistory(
+          creator,
+          bettingRound.id,
+          BetRoundHistoryEventType.OPEN,
+          '',
+        );
+
+        const createdVariables: BettingVariable[] = [];
+
+        // Create betting variables (options) for this round
+        console.log(
+          '[createBettingVariable] Creating',
+          roundData.options.length,
+          'betting variables',
+        );
+        for (const option of roundData.options) {
+          const bettingVariable = this.bettingVariablesRepository.create({
+            name: option.option,
+            round: savedRound,
+            stream: stream,
+          });
+          const saved =
+            await this.bettingVariablesRepository.save(bettingVariable);
+          createdVariables.push(saved);
+        }
+        console.log(
+          '[createBettingVariable] All betting variables created for round:',
+          savedRound.id,
+        );
+
+        // Push structured round response with betting variables
+        allRounds.push({
+          roundId: savedRound.id,
+          roundName: savedRound.roundName,
+          status: savedRound.status,
+          category: savedRound.category,
+          betRoundType: savedRound.type,
+          options: createdVariables.map((variable) => ({
+            id: variable.id,
+            name: variable.name,
+            is_winning_option: variable.is_winning_option,
+            status: variable.status,
+            totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
+            totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
+            totalBetsCadeCoinAmount: variable.totalBetsCadeCoinAmount,
+            betCountGoldCoin: variable.betCountGoldCoin,
+            betCountSweepCoin: variable.betCountSweepCoin,
+            betCountCadeCoin: variable.betCountCadeCoin,
+          })),
+        });
       }
 
-      // Push structured round response with betting variables
-      allRounds.push({
-        roundId: savedRound.id,
-        roundName: savedRound.roundName,
-        status: savedRound.status,
-        category: savedRound.category,
-        betRoundType: savedRound.type,
-        options: createdVariables.map((variable) => ({
-          id: variable.id,
-          name: variable.name,
-          is_winning_option: variable.is_winning_option,
-          status: variable.status,
-          totalBetsGoldCoinAmount: variable.totalBetsGoldCoinAmount,
-          totalBetsSweepCoinAmount: variable.totalBetsSweepCoinAmount,
-          totalBetsCadeCoinAmount: variable.totalBetsCadeCoinAmount,
-          betCountGoldCoin: variable.betCountGoldCoin,
-          betCountSweepCoin: variable.betCountSweepCoin,
-          betCountCadeCoin: variable.betCountCadeCoin,
-        })),
-      });
+      // Return structured response
+      console.log(
+        '[createBettingVariable] Successfully created',
+        allRounds.length,
+        'rounds',
+      );
+      return {
+        streamId,
+        rounds: allRounds,
+      };
+    } catch (error) {
+      console.error(
+        '[createBettingVariable] ERROR:',
+        error.message,
+        error.stack,
+      );
+      throw error;
     }
-
-    // Return structured response
-    return {
-      streamId,
-      rounds: allRounds,
-    };
   }
 
   /**
