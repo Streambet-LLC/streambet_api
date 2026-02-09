@@ -3066,7 +3066,7 @@ export class BettingService {
         thumbnail: bettingRound.stream.thumbnailUrl ?? '',
         status: bettingRound.status,
         lockDate: bettingRound.lockDate,
-        creator: bettingRound.stream.creator.username,
+        creator: bettingRound.stream?.creator?.username ?? null,
         streamName: bettingRound.stream.name,
         name: bettingRound.roundName,
         type: bettingRound.stream.type,
