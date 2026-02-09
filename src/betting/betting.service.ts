@@ -122,6 +122,11 @@ export class BettingService {
         pstParts.find((p) => p.type === 'hour')?.value || '0',
       );
 
+      // Validate parsed values
+      if (isNaN(pstYear) || isNaN(pstMonth) || isNaN(pstDay) || isNaN(pstHour)) {
+        throw new Error('Failed to parse PST time components');
+      }
+
       let targetDate: Date;
 
       if (pstHour < 17) {
@@ -132,11 +137,23 @@ export class BettingService {
         targetDate = new Date(pstYear, pstMonth, pstDay + 1, 17, 0, 0);
       }
 
+      // Validate the target date
+      if (isNaN(targetDate.getTime())) {
+        throw new Error('Invalid target date calculated');
+      }
+
       // Convert the PT-local date to UTC
       const localPSTStr = formatter.format(targetDate);
       const offset = targetDate.getTime() - new Date(localPSTStr).getTime();
 
-      return new Date(targetDate.getTime() - offset);
+      const result = new Date(targetDate.getTime() - offset);
+      
+      // Final validation
+      if (isNaN(result.getTime())) {
+        throw new Error('Invalid UTC conversion result');
+      }
+
+      return result;
     } catch (error) {
       console.warn('[getNextRevealTime] Intl.DateTimeFormat failed, using fallback:', error.message);
       // Fallback: compute next 5 PM PST using a fixed -08:00 offset
@@ -167,7 +184,19 @@ export class BettingService {
         Date.UTC(pstYear, pstMonth, targetPstDay, 17, 0, 0) -
         pstOffsetMinutes * 60 * 1000;
 
-      return new Date(targetPstUtcMs);
+      const result = new Date(targetPstUtcMs);
+      
+      // Validate fallback result
+      if (isNaN(result.getTime())) {
+        console.error('[getNextRevealTime] Fallback calculation also failed, returning fixed next 5 PM');
+        // Absolute fallback: just return tomorrow at 5 PM UTC (worst case)
+        const tomorrow = new Date(now);
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        tomorrow.setUTCHours(22, 0, 0, 0); // 5 PM PT = 1 AM UTC next day, use 10 PM UTC for safety
+        return tomorrow;
+      }
+
+      return result;
     }
   }
 
@@ -490,6 +519,18 @@ export class BettingService {
             '[createBettingVariable] Calculating nextRevealTime for sentiment pick',
           );
           firstRevealTime = this.getNextRevealTime();
+          
+          // Validate the calculated date
+          if (!firstRevealTime || isNaN(firstRevealTime.getTime())) {
+            console.error(
+              '[createBettingVariable] Invalid firstRevealTime calculated:',
+              firstRevealTime,
+            );
+            throw new BadRequestException(
+              'Failed to calculate reveal time for sentiment pick. Please try again.',
+            );
+          }
+          
           console.log(
             '[createBettingVariable] nextRevealTime calculated:',
             firstRevealTime,
