@@ -87,52 +87,87 @@ export class BettingService {
   ) {}
 
   /**
-   * Calculates the next 5 PM Pacific Standard Time.
-   * Returns a Date object representing the next occurrence of 5 PM PST/PDT.
-   * If current time is before 5 PM PST today, returns today at 5 PM PST.
-   * Otherwise, returns tomorrow at 5 PM PST.
+   * Calculates the next 5 PM Pacific Time.
+   * Returns a Date object representing the next occurrence of 5 PM PT.
+   * If current time is before 5 PM PT today, returns today at 5 PM PT.
+   * Otherwise, returns tomorrow at 5 PM PT.
+   *
+   * NOTE: Some environments lack full ICU time zone data, which can cause
+   * Intl.DateTimeFormat to throw. In that case, fall back to a UTC calculation
+   * using a fixed PST offset to avoid 500s during sentiment pick creation.
    */
   private getNextRevealTime(): Date {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      hour12: false,
-    });
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        hour12: false,
+      });
 
-    const now = new Date();
-    const pstParts = formatter.formatToParts(now);
+      const now = new Date();
+      const pstParts = formatter.formatToParts(now);
 
-    const pstYear = parseInt(
-      pstParts.find((p) => p.type === 'year')?.value || '0',
-    );
-    const pstMonth =
-      parseInt(pstParts.find((p) => p.type === 'month')?.value || '0') - 1;
-    const pstDay = parseInt(
-      pstParts.find((p) => p.type === 'day')?.value || '0',
-    );
-    const pstHour = parseInt(
-      pstParts.find((p) => p.type === 'hour')?.value || '0',
-    );
+      const pstYear = parseInt(
+        pstParts.find((p) => p.type === 'year')?.value || '0',
+      );
+      const pstMonth =
+        parseInt(pstParts.find((p) => p.type === 'month')?.value || '0') - 1;
+      const pstDay = parseInt(
+        pstParts.find((p) => p.type === 'day')?.value || '0',
+      );
+      const pstHour = parseInt(
+        pstParts.find((p) => p.type === 'hour')?.value || '0',
+      );
 
-    let targetDate: Date;
+      let targetDate: Date;
 
-    if (pstHour < 17) {
-      // 5 PM hasn't happened yet today, use today at 5 PM
-      targetDate = new Date(pstYear, pstMonth, pstDay, 17, 0, 0);
-    } else {
-      // 5 PM has already passed, use tomorrow at 5 PM
-      targetDate = new Date(pstYear, pstMonth, pstDay + 1, 17, 0, 0);
+      if (pstHour < 17) {
+        // 5 PM hasn't happened yet today, use today at 5 PM
+        targetDate = new Date(pstYear, pstMonth, pstDay, 17, 0, 0);
+      } else {
+        // 5 PM has already passed, use tomorrow at 5 PM
+        targetDate = new Date(pstYear, pstMonth, pstDay + 1, 17, 0, 0);
+      }
+
+      // Convert the PT-local date to UTC
+      const localPSTStr = formatter.format(targetDate);
+      const offset = targetDate.getTime() - new Date(localPSTStr).getTime();
+
+      return new Date(targetDate.getTime() - offset);
+    } catch (error) {
+      // Fallback: compute next 5 PM PST using a fixed -08:00 offset
+      const now = new Date();
+      const nowUtc = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          now.getUTCHours(),
+          now.getUTCMinutes(),
+          now.getUTCSeconds(),
+        ),
+      );
+
+      // Convert to "PST" with fixed offset
+      const pstOffsetMinutes = -8 * 60;
+      const pstNowMs = nowUtc.getTime() + pstOffsetMinutes * 60 * 1000;
+      const pstNow = new Date(pstNowMs);
+
+      const pstYear = pstNow.getUTCFullYear();
+      const pstMonth = pstNow.getUTCMonth();
+      const pstDay = pstNow.getUTCDate();
+      const pstHour = pstNow.getUTCHours();
+
+      const targetPstDay = pstHour < 17 ? pstDay : pstDay + 1;
+      const targetPstUtcMs =
+        Date.UTC(pstYear, pstMonth, targetPstDay, 17, 0, 0) -
+        pstOffsetMinutes * 60 * 1000;
+
+      return new Date(targetPstUtcMs);
     }
-
-    // Now we need to find the UTC time that corresponds to this PST 5 PM
-    // We do this by calculating the offset between local time and PST interpretation
-    const localPSTStr = formatter.format(targetDate);
-    const offset = targetDate.getTime() - new Date(localPSTStr).getTime();
-
-    return new Date(targetDate.getTime() - offset);
   }
 
   /**
