@@ -9,27 +9,19 @@ import {
   Body,
 } from '@nestjs/common';
 import { StreamService } from './stream.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
 import { User } from '../users/entities/user.entity';
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
   ApiOkResponse,
-  ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
 import {
   LiveScheduledStreamListDto,
   StreamFilterDto,
 } from './dto/list-stream.dto';
-import { Stream } from './entities/stream.entity';
-import { UserIdDto } from 'src/users/dto/user.requests.dto';
-// import { GeoFencingGuard } from 'src/auth/guards/geo-fencing.guard';
 import { StreamResponseDto } from './dto/stream-detail.response.dto';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
-import { RoundIdDto } from 'src/betting/dto/place-bet.dto';
 import { BetRoundDetailsDto } from './dto/stream.dto';
 import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
 import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
@@ -42,7 +34,7 @@ interface RequestWithUser extends Request {
 @ApiTags('stream')
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) {}
+  constructor(private readonly streamService: StreamService) { }
   /**
  * Retrieves a paginated list of live and scheduled streams for the home page view.
    * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
@@ -203,6 +195,20 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   @Get('promoted-bets')
   async promotedBets() {
     const { data } = await this.streamService.getTopPromotedBets();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Get Last Live Feeds',
+  })
+  @Get('last-live-feeds')
+  async getLastLiveFeeds() {
+    const { data } = await this.streamService.getLatestLiveFeeds();
+
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',
