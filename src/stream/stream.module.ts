@@ -13,6 +13,7 @@ import { RedisModule } from 'src/redis/redis.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { LiveFeedUpdateModule } from 'src/live-feed-update/live-feed-update.module';
 
 @Module({
   imports: [
@@ -24,9 +25,10 @@ import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
     forwardRef(() => WsModule),
     RedisModule,
     NotificationModule,
+    LiveFeedUpdateModule,
   ],
   controllers: [StreamController],
   providers: [StreamService, StreamGateway],
   exports: [StreamService, StreamGateway],
 })
-export class StreamModule {}
+export class StreamModule { }

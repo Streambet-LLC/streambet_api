@@ -1,4 +1,4 @@
-import { STREAM, STREAMBET, USER } from './constants/ws.constants';
+import { LIVEFEED, STREAM, STREAMBET, USER } from './constants/ws.constants';
 import { GatewayManager } from 'src/ws/gateway.manager';
 import { AuthenticatedSocket } from 'src/interface/socket.interface';
 
@@ -21,6 +21,15 @@ export async function emitToStream(
 ) {
   const server = await gatewayManager.getServer();
   server.to(`${STREAM}${streamId}`).emit(event, payload);
+}
+
+export async function emitToLiveFeed(
+  gatewayManager: GatewayManager,
+  event: string,
+  payload: any,
+) {
+  const server = await gatewayManager.getServer();
+  server.to(LIVEFEED).emit(event, payload);
 }
 
 export async function emitToClient(
