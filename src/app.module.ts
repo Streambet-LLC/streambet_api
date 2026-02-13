@@ -46,6 +46,7 @@ import personaConfig from './config/persona.config';
 import { WebhookModule } from './webhook/webhook.module';
 import { CreatorModule } from './creator/creator.module';
 import { PrizeModule } from './prize/prize.module';
+import { DailySpinModule } from './daily-spin/daily-spin.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
@@ -136,6 +137,7 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
     CoinPackageModule,
     WebhookModule,
     PrizeModule,
+    DailySpinModule,
     ScheduleModule.forRoot(),
     ScheduledTaskModule,
   ],

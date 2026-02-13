@@ -32,6 +32,7 @@ export enum SocketEventName {
   StreamPromotionUpdated = 'streamPromotionUpdated',
   WithdrawSuccess = 'withdrawSuccess',
   WithdrawFailed = 'withdrawFailed',
+  DailySpinReward = 'dailySpinReward',
 }
 
 export enum ChatType {
