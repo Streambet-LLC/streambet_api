@@ -1,18 +1,12 @@
 import { IsOptional } from 'class-validator';
 import {
-  BaseEntity,
   Column,
-  CreateDateColumn,
   Entity,
-  PrimaryColumn,
 } from 'typeorm';
+import { BaseEntity } from '../common/entities/base.entity';
 
 @Entity('live_feed_updates')
 export class LiveFeedUpdate extends BaseEntity {
-  @Column({ name: 'id' })
-  @PrimaryColumn()
-  id: string;
-
   @Column({ name: 'type' })
   type: string;
 
@@ -39,7 +33,4 @@ export class LiveFeedUpdate extends BaseEntity {
   @Column({ name: 'ranking' })
   @IsOptional()
   ranking?: number;
-
-  @CreateDateColumn({ type: 'timestamp' })
-  createdAt: Date;
 }
