@@ -79,4 +79,26 @@ export class WalletGateway {
   async emitAdminAddedGoldCoin(userId: string): Promise<void> {
     emitToUser(this.gatewayManager, userId, SocketEventName.RefetchEvent, {});
   }
+
+  /**
+   * Emit daily spin reward event to all active sockets of a specific user.
+   * @param userId - ID of the user
+   * @param payload - Data including reward amount and updated balances
+   */
+  emitDailySpinReward(
+    userId: string,
+    payload: {
+      reward: number;
+      cadeCoinsBalance: number;
+      lifetimeCoinsEarned: number;
+      nextSpinAt: Date;
+    },
+  ): void {
+    emitToUser(
+      this.gatewayManager,
+      userId,
+      SocketEventName.DailySpinReward,
+      payload,
+    );
+  }
 }
