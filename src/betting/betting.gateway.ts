@@ -14,7 +14,7 @@ import {
   emitToStreamBet,
   emitToUser,
 } from 'src/common/common';
-import { STREAMBET } from 'src/common/constants/ws.constants';
+import { LIVEFEED, STREAMBET } from 'src/common/constants/ws.constants';
 import { ChatType, SocketEventName } from 'src/enums/socket.enum';
 import { AuthenticatedSocket } from 'src/interface/socket.interface';
 import { AppGateway } from 'src/ws/app.gateway';
@@ -47,7 +47,12 @@ export class BettingGateway {
     private readonly walletsService: WalletsService,
     private readonly notificationService: NotificationService,
     private readonly chatGateway: ChatGateway,
-  ) {}
+  ) { }
+
+  @SubscribeMessage(SocketEventName.JoinLiveFeed)
+  handleJoinLiveFeed(@ConnectedSocket() client: AuthenticatedSocket) {
+    client.join(LIVEFEED);
+  }
 
   @SubscribeMessage(SocketEventName.JoinStreamBet)
   async handleJoinStreamBet(@ConnectedSocket() client: AuthenticatedSocket) {
@@ -629,8 +634,7 @@ export class BettingGateway {
       })
       .catch((error) =>
         this.logger.error(
-          `Error emitting betting update: ${
-            error instanceof Error ? error.message : 'Unknown error'
+          `Error emitting betting update: ${error instanceof Error ? error.message : 'Unknown error'
           }`,
         ),
       );

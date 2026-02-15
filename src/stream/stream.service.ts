@@ -11,12 +11,9 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Stream } from './entities/stream.entity';
-import {
-  LiveScheduledStreamListDto,
-  StreamFilterDto,
-} from './dto/list-stream.dto';
+import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
@@ -24,7 +21,6 @@ import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
-import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
@@ -41,11 +37,12 @@ import { User } from 'src/users/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
-import { Bet } from 'src/betting/entities/bet.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { UserRole } from 'src/enums/user-role.enum';
 import { getPromotedBetsConfig } from './config/promoted-bets.config';
 import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
+import { LiveFeedUpdateService } from 'src/live-feed-update/live-feed-update.service';
+import * as moment from 'moment';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -68,14 +65,15 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     private queueService: QueueService,
     private bettingSummaryService: BettingSummaryService,
     private notificationService: NotificationService,
-  ) {}
+    private liveFeedUpdateService: LiveFeedUpdateService,
+  ) { }
   async onModuleDestroy() {
     await this.flushViewerCounts('moduleDestroy');
   }
 
   /**
    * Applies standardized ordering for promoted streams across queries.
-   *
+   * 
    * Business Rules:
    * 1. isPromoted streams appear first (promoted = priority)
    * 2. LIVE streams appear before SCHEDULED (live content takes precedence)
@@ -107,20 +105,20 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
   /**
    * Limits the number of rounds per promoted stream while allowing unlimited unpromoted rounds.
-   *
+   * 
    * Business Rules:
    * 1. Promoted streams: limited to maxPromotedRounds rounds each
    * 2. Unpromoted streams: unlimited rounds (until finalLimit reached)
    * 3. Maintains original ordering (promoted first, then by status/time)
    * 4. Stops when finalLimit is reached
-   *
+   * 
    * This ensures a single promoted stream with many rounds doesn't dominate the results.
-   *
+   * 
    * @param rounds - Array of betting rounds (pre-ordered by applyPromotedOrdering)
    * @param maxPromotedRounds - Maximum rounds to include per promoted stream
    * @param finalLimit - Total number of rounds to return
    * @returns Filtered array of rounds
-   *
+   * 
    * @example
    * // Input: Stream A (promoted) has 10 rounds, Stream B (unpromoted) has 5 rounds
    * // maxPromotedRounds = 2, finalLimit = 10
@@ -165,35 +163,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
   }
 
   /**
-   * Batch retrieves CADE coin user counts for multiple betting rounds.
-   * @param roundIds - Array of betting round IDs
-   * @returns Map of roundId to distinct user count
-   */
-  private async getCadeCoinUserCountsByRounds(
-    roundIds: string[],
-  ): Promise<Map<string, number>> {
-    if (roundIds.length === 0) {
-      return new Map<string, number>();
-    }
-
-    const userCountResults = await this.dataSource
-      .getRepository(Bet)
-      .createQueryBuilder('bet')
-      .innerJoin('bet.bettingVariable', 'bv')
-      .where('bv.roundId IN (:...roundIds)', { roundIds })
-      .andWhere('bet.currency = :currency', {
-        currency: CurrencyType.CADE_COINS,
-      })
-      .andWhere('bet.status = :status', { status: BetStatus.Active })
-      .select('bv.roundId', 'roundId')
-      .addSelect('COUNT(DISTINCT bet.userId)', 'count')
-      .groupBy('bv.roundId')
-      .getRawMany();
-
-    return new Map(userCountResults.map((r) => [r.roundId, Number(r.count)]));
-  }
-
-  /**
    * Retrieves a paginated list of streams for the home page view.
    * Applies optional filters such as stream status and sorting based on the provided DTO.
    * Selects limited fields (id, name, thumbnailUrl) for performance optimization.
@@ -221,29 +190,24 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const { pagination = true, streamStatus, username } = streamFilterDto;
 
-      const streamQB = this.streamsRepository.createQueryBuilder('s');
+      const streamQB = this.streamsRepository
+        .createQueryBuilder('s');
 
       if (username) {
-        streamQB
-          .innerJoinAndSelect(
-            's.creator',
-            'creator',
-            'creator.username = :username',
-          )
+        streamQB.innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
           .setParameter('username', username);
       } else {
         streamQB.leftJoinAndSelect('s.creator', 'creator');
-      }
+      };
 
-      streamQB
-        .leftJoinAndSelect(
-          's.bettingRounds',
-          'br',
-          'br.status IN (:...roundStatuses)',
-          {
-            roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
-          },
-        )
+      streamQB.leftJoinAndSelect(
+        's.bettingRounds',
+        'br',
+        'br.status IN (:...roundStatuses)',
+        {
+          roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
+        },
+      )
         .leftJoinAndSelect('br.bettingVariables', 'bv')
         .select('s.id', 'id')
         .addSelect('s.name', 'streamName')
@@ -289,17 +253,14 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     }
   }
 
-  async getTopLivestreams(): Promise<{
-    data: Pick<Stream, 'id' | 'name' | 'viewerCount' | 'creator'> &
-      { pfp: string }[];
-  }> {
+  async getTopLivestreams(): Promise<{ data: Pick<Stream, "id" | "name" | "viewerCount" | "creator"> & { pfp: string }[]; }> {
     try {
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
         .innerJoinAndSelect('s.creator', 'creator')
         .where('s.status = :status', { status: StreamStatus.LIVE })
         .andWhere('s.type = :type', {
-          type: StreamEventType.STREAM,
+          type: StreamEventType.STREAM
         })
         .orderBy('s.viewerCount', 'DESC')
         .select('s.id', 'id')
@@ -311,10 +272,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const data = await streamQB.getRawMany();
 
-      return {
-        data: data as Pick<Stream, 'id' | 'name' | 'viewerCount' | 'creator'> &
-          { pfp: string }[],
-      };
+      return { data: data as Pick<Stream, "id" | "name" | "viewerCount" | "creator"> & { pfp: string }[] };
     } catch (e) {
       Logger.error('Unable to retrieve top live streams', e);
       throw new HttpException(
@@ -333,7 +291,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .where('s.type = :type', { type: StreamEventType.PROMO })
         .andWhere('s.isPromoted = :isPromoted', { isPromoted: true })
         .andWhere('s.status IN (:...statuses)', {
-          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
+          statuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
         })
         .orderBy('s.updatedAt', 'DESC')
         .limit(10)
@@ -345,19 +303,16 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
-        .where('br.status IN (:...statuses)', {
-          statuses: [BettingRoundStatus.OPEN],
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN]
         })
-        .leftJoinAndSelect('br.stream', 's')
-        .leftJoinAndSelect('s.creator', 'c')
-        .addSelect('br.firstRevealTime')
-        .addSelect('br.lastRevealTime')
-        .addSelect('br.isInitialRevealPeriod')
-        .andWhere('s.status IN (:...streamStatuses)', {
-          streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED]
         })
-        .andWhere('s.type != :promoType', {
-          promoType: StreamEventType.PROMO,
+        .andWhere("s.type != :promoType", {
+          promoType: StreamEventType.PROMO
         });
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br').limit(fetchLimit);
@@ -368,12 +323,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       const filteredRounds = this.limitPromotedRounds(
         allRounds,
         config.maxPromotedRounds,
-        config.totalLimit,
+        config.totalLimit
       );
-
-      // Batch query for user counts
-      const roundIds = filteredRounds.map((r) => r.br_id);
-      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
 
       const resultList = [];
 
@@ -381,9 +332,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         const item = filteredRounds[i];
 
         const variables = await this.bettingVariableRepository
-          .createQueryBuilder('bv')
-          .where('bv.roundId = :roundId', {
-            roundId: item.br_id,
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
           })
           .getRawMany();
 
@@ -393,46 +344,29 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         let totalCadeCoins = 0;
 
         variables.forEach((bv) => {
-          totalVotes +=
-            Number(bv.bv_bet_count_gold_coin) +
-            Number(bv.bv_bet_count_sweep_coin) +
-            Number(bv.bv_bet_count_cade_coin);
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
-          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
-          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
-          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
-        const hideSentimentResults =
-          item.mechanism === PickMechanism.SENTIMENT &&
-          item.isInitialRevealPeriod;
-
         const options = variables.map((v) => {
-          const votes =
-            Number(v.bv_bet_count_gold_coin) +
-            Number(v.bv_bet_count_sweep_coin) +
-            Number(v.bv_bet_count_cade_coin);
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: hideSentimentResults
-              ? 0
-              : totalCadeCoins > 0
-                ? (
-                    (Number(v.bv_total_bets_cade_coin_amount) /
-                      totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-          };
+            createdAt: v.bv_createdAt,
+          }
         });
 
         const itemData = {
           streamId: item.s_id,
           roundId: item.br_id,
-          thumbnail: item.s_thumbnailUrl ?? '',
+          thumbnail: item.s_thumbnailUrl ?? "",
           lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
@@ -441,29 +375,25 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          mechanism: item.br_mechanism,
-          options: options.sort(
-            (a, b) => Number(b.percentage) - Number(a.percentage),
-          ),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
-          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
-          firstRevealTime: item.br_firstRevealTime,
-          lastRevealTime: item.br_lastRevealTime,
-          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
-        };
+        }
 
         resultList.push(itemData);
       }
 
       // Format promo cards response as array
-      const promoCardsData = promoCards.map((promoCard) => ({
+      const promoCardsData = promoCards.map(promoCard => ({
         streamId: promoCard.id,
-        thumbnail: promoCard.thumbnailUrl ?? '',
+        thumbnail: promoCard.thumbnailUrl ?? "",
         name: promoCard.name,
         description: promoCard.description,
         creator: promoCard.creator?.username || null,
@@ -475,9 +405,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       return {
         data: {
           bets: resultList,
-          promoCards: promoCardsData,
-        },
-      };
+          promoCards: promoCardsData
+        }
+      }
     } catch (e) {
       console.log(e);
 
@@ -512,7 +442,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       viewerCount,
       creatorId,
       bettingRounds = [],
-      type,
+      type
     } = streamData;
 
     return {
@@ -548,7 +478,6 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           options: (round.bettingVariables ?? []).map((variable: any) => ({
             id: variable.id,
             option: variable.name,
-            is_winning_option: variable.is_winning_option,
           })),
         })),
     };
@@ -738,7 +667,7 @@ END
         );
       }
 
-      const resultList = [];
+      let resultList = [];
 
       const bettingRounds = stream.bettingRounds.sort((a, b) => {
         if (new Date(a.createdAt) > new Date(b.createdAt)) return 1;
@@ -750,47 +679,35 @@ END
         const item = bettingRounds[i];
 
         const variables = await this.bettingVariableRepository
-          .createQueryBuilder('bv')
-          .where('bv.roundId = :roundId', {
-            roundId: item.id,
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.id
           })
           .getRawMany();
 
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes +=
-            Number(bv.bv_bet_count_gold_coin) +
-            Number(bv.bv_bet_count_sweep_coin) +
-            Number(bv.bv_bet_count_cade_coin);
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
-          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
-          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
-          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
-          const votes =
-            Number(v.bv_bet_count_gold_coin) +
-            Number(v.bv_bet_count_sweep_coin) +
-            Number(v.bv_bet_count_cade_coin);
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage:
-              totalCadeCoins > 0
-                ? (
-                    (Number(v.bv_total_bets_cade_coin_amount) /
-                      totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-          };
+            createdAt: v.bv_createdAt,
+          }
         });
 
         const itemData = {
@@ -800,21 +717,23 @@ END
           thumbnail: stream.thumbnailUrl,
           creator: stream.creator?.username,
           streamName: stream.name,
-          roundName: item.roundName,
+          name: item.roundName,
           type: stream.type,
-          mechanism: item.mechanism,
-          options: options.sort(
-            (a, b) => Number(b.percentage) - Number(a.percentage),
-          ),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
+          // options,
           status: item.status,
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
-          },
-        };
+          }
+        }
 
         resultList.push(itemData);
+
       }
 
       // Prepare the final structured response
@@ -831,7 +750,7 @@ END
         roundDetails: resultList,
         creatorId: stream.creatorId,
         creatorUsername: stream.creator?.username,
-        streamType: stream.type,
+        streamType: stream.type
       };
 
       return streamDetails;
@@ -846,11 +765,7 @@ END
     }
   }
 
-  async findBetRoundDetailsByStreamId(
-    streamId: string,
-    userId: string,
-    roundId: string,
-  ) {
+  async findBetRoundDetailsByStreamId(streamId: string, userId: string, roundId: string) {
     try {
       let userBetGoldCoins: number;
       let userBetSweepCoin: number;
@@ -869,7 +784,7 @@ END
         .setParameters({
           roundStatuses: [BettingRoundStatus.OPEN, BettingRoundStatus.LOCKED],
           userId,
-          roundId,
+          roundId
         })
         .getOne();
       if (userId) {
@@ -938,58 +853,23 @@ END
             delete variable?.bets;
           }
         });
-
-        const hideSentimentResults =
-          round.mechanism === PickMechanism.SENTIMENT &&
-          round.isInitialRevealPeriod;
-
-        if (hideSentimentResults) {
-          round.bettingVariables.forEach((variable) => {
-            variable.totalBetsGoldCoinAmount = 0;
-            variable.totalBetsSweepCoinAmount = 0;
-            variable.totalBetsCadeCoinAmount = 0;
-            variable.betCountGoldCoin = 0;
-            variable.betCountSweepCoin = 0;
-            variable.betCountCadeCoin = 0;
-          });
-        }
       });
 
-      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map(
-        (round) => {
-          const isSentiment = round.mechanism === PickMechanism.SENTIMENT;
-          let totalCadeCoins = 0;
-          let totalSentimentVotes = 0;
+      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map((round) => {
+        let totalCadeCoins = 0;
 
-          round.bettingVariables.forEach((bv) => {
-            totalCadeCoins += Number(bv.totalBetsCadeCoinAmount);
-            totalSentimentVotes += Number(bv.betCountCadeCoin);
-          });
+        round.bettingVariables.forEach((bv) => {
+          totalCadeCoins += Number(bv.totalBetsCadeCoinAmount)
+        });
 
-          const variables = round.bettingVariables.map((bv) => ({
-            percentage:
-              isSentiment && round.isInitialRevealPeriod
-                ? 0
-                : isSentiment
-                  ? totalSentimentVotes > 0
-                    ? (
-                        (Number(bv.betCountCadeCoin) / totalSentimentVotes) *
-                        100
-                      ).toFixed(2)
-                    : 0
-                  : totalCadeCoins > 0
-                    ? (
-                        (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
-                        100
-                      ).toFixed(2)
-                    : 0,
-          }));
+        const variables = round.bettingVariables.map((bv) => ({
+          percentage: totalCadeCoins > 0 ? (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins * 100).toFixed(2) : 0,
+        }))
 
-          return {
-            bettingVariables: variables,
-          };
-        },
-      );
+        return {
+          bettingVariables: variables,
+        }
+      })
 
       const result = {
         walletGoldCoin: wallet?.goldCoins || 0,
@@ -1016,11 +896,7 @@ END
     }
   }
 
-  async findStreamDetailsForAdmin(
-    role: UserRole,
-    creator: string,
-    streamId: string,
-  ) {
+  async findStreamDetailsForAdmin(role: UserRole, creator: string, streamId: string) {
     const stream = await this.streamsRepository.findOne({
       where: { id: streamId },
       relations: ['bettingRounds', 'bettingRounds.bettingVariables'],
@@ -1135,14 +1011,10 @@ END
         // Validate that only LIVE, SCHEDULED, or ACTIVE streams can be promoted
         if (
           updateStreamDto.isPromoted === true &&
-          ![
-            StreamStatus.LIVE,
-            StreamStatus.SCHEDULED,
-            StreamStatus.ACTIVE,
-          ].includes(stream.status)
+          ![StreamStatus.LIVE, StreamStatus.SCHEDULED, StreamStatus.ACTIVE].includes(stream.status)
         ) {
           throw new BadRequestException(
-            `Only streams with status LIVE, SCHEDULED, or ACTIVE can be promoted. Current status: ${stream.status}`,
+            `Only streams with status LIVE, SCHEDULED, or ACTIVE can be promoted. Current status: ${stream.status}`
           );
         }
         stream.isPromoted = updateStreamDto.isPromoted;
@@ -1177,10 +1049,7 @@ END
       }
 
       // Emit promotion update event if isPromoted was changed
-      if (
-        updateStreamDto.isPromoted !== undefined &&
-        prevIsPromoted !== streamResponse.isPromoted
-      ) {
+      if (updateStreamDto.isPromoted !== undefined && prevIsPromoted !== streamResponse.isPromoted) {
         this.streamGateway.emitStreamPromotionUpdated(
           streamResponse.id,
           streamResponse.isPromoted,
@@ -1220,6 +1089,7 @@ END
     if (!stream) {
       throw new NotFoundException(`Stream with ID ${streamId} not found`);
     }
+
 
     if (role === UserRole.CREATOR) {
       if (stream.creatorId !== creator) {
@@ -1462,17 +1332,9 @@ END
    *    - totalUsers: (currently uses viewerCount as a placeholder for unique users)
    *    - totalStreamTime: formatted duration string
    */
-  async getStreamAnalytics(
-    role: UserRole,
-    creator: string,
-    streamId: string,
-  ): Promise<any> {
+  async getStreamAnalytics(role: UserRole, creator: string, streamId: string): Promise<any> {
     // Fetch stream details for the given streamId
-    const stream = await this.findStreamDetailsForAdmin(
-      role,
-      creator,
-      streamId,
-    );
+    const stream = await this.findStreamDetailsForAdmin(role, creator, streamId);
 
     // Calculate total stream time in seconds
     const scheduledStart = stream.scheduledStartTime
@@ -1511,11 +1373,7 @@ END
    * @returns A promise that resolves with the canceled stream's ID.
    * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
    */
-  async cancelScheduledStream(
-    role: UserRole,
-    creator: string,
-    streamId: string,
-  ): Promise<string> {
+  async cancelScheduledStream(role: UserRole, creator: string, streamId: string): Promise<String> {
     try {
       //retun a sheduled stream with open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
@@ -1547,11 +1405,7 @@ END
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
         for (const round of stream.bettingRounds) {
-          await this.bettingService.cancelRoundAndRefund(
-            role,
-            creator,
-            round.id,
-          );
+          await this.bettingService.cancelRoundAndRefund(role, creator, round.id);
         }
       }
       return streamId;
@@ -1574,11 +1428,7 @@ END
    * @returns A promise that resolves with the delete stream's ID.
    * @throws BadRequestException - If the stream doesn't exist or is not in the queue.
    */
-  async deleteScheduledStream(
-    role: UserRole,
-    creator: string,
-    streamId: string,
-  ): Promise<string> {
+  async deleteScheduledStream(role: UserRole, creator: string, streamId: string): Promise<String> {
     try {
       //retun a sheduled stream with created, open or locked round. and with active bets
       const stream = await this.getScheduledStreamWithActiveRound(streamId);
@@ -1609,11 +1459,7 @@ END
         .execute();
       if (stream?.bettingRounds && stream.bettingRounds.length > 0) {
         for (const round of stream.bettingRounds) {
-          await this.bettingService.cancelRoundAndRefund(
-            role,
-            creator,
-            round.id,
-          );
+          await this.bettingService.cancelRoundAndRefund(role, creator, round.id);
         }
       }
 
@@ -1647,7 +1493,7 @@ END
    * @param streamId - The unique identifier of the stream/job to be removed from the queue.
    * @returns A boolean indicating whether the job was found and successfully removed.
    */
-  async removeScheduledStreamFromQueue(streamId: string): Promise<boolean> {
+  async removeScheduledStreamFromQueue(streamId: string): Promise<Boolean> {
     const job = await this.queueService.getJobById(STREAM_LIVE_QUEUE, streamId);
     if (job) {
       await job.remove();
@@ -1745,11 +1591,7 @@ END
 
       if (liveScheduledStreamListDto.username) {
         streamQB
-          .innerJoinAndSelect(
-            's.creator',
-            'creator',
-            'creator.username = :username',
-          )
+          .innerJoinAndSelect('s.creator', 'creator', 'creator.username = :username')
           .setParameter('username', liveScheduledStreamListDto.username);
       } else {
         streamQB.leftJoinAndSelect('s.creator', 'creator');
@@ -1865,6 +1707,7 @@ END
     homepageBetListDto: HomepageBetListDto,
     userId?: string | null,
   ): Promise<any> {
+
     const config = getPromotedBetsConfig('displayBets');
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
@@ -1875,20 +1718,20 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
-        .where('br.status IN (:...statuses)', {
-          statuses: [BettingRoundStatus.OPEN],
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN]
         })
-        .andWhere('br.is_landing_hidden = false')
-        .leftJoinAndSelect('br.stream', 's')
-        .leftJoinAndSelect('s.creator', 'c')
-        .addSelect('br.firstRevealTime')
-        .addSelect('br.lastRevealTime')
-        .addSelect('br.isInitialRevealPeriod')
-        .andWhere('s.status IN (:...streamStatuses)', {
-          streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
+        .andWhere("br.is_landing_hidden = false")
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED
+          ]
         })
-        .andWhere('s.type != :promoType', {
-          promoType: StreamEventType.PROMO,
+        .andWhere("s.type != :promoType", {
+          promoType: StreamEventType.PROMO
         });
 
       // Only apply search filter if search term is provided
@@ -1900,9 +1743,10 @@ END
       }
 
       // Hide bets with (GCA) in the name
-      betRoundsQB.andWhere(`LOWER(s.name) NOT LIKE :excludedName`, {
-        excludedName: '%(gca)%',
-      });
+      betRoundsQB.andWhere(
+        `LOWER(s.name) NOT LIKE :excludedName`,
+        { excludedName: '%(gca)%' }
+      );
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
@@ -1929,7 +1773,7 @@ END
       const filteredRounds = this.limitPromotedRounds(
         allRounds,
         config.maxPromotedRounds,
-        config.totalLimit,
+        config.totalLimit
       );
 
       // Calculate hasNextPage based on filtered results
@@ -1937,26 +1781,17 @@ END
 
       const resultList = [];
 
-      // Batch query: Get all user counts in one database call
-      const roundIds = filteredRounds.map((r) => r.br_id);
-      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
-
       for (let i = 0; i < filteredRounds.length; i++) {
         const item = filteredRounds[i];
 
         const variablesQb = this.bettingVariableRepository
-          .createQueryBuilder('bv')
-          .where('bv.roundId = :roundId', {
-            roundId: item.br_id,
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
           });
 
         if (userId) {
-          variablesQb.leftJoinAndSelect(
-            'bv.bets',
-            'user_bet',
-            'user_bet.user_id = :userId',
-            { userId },
-          );
+          variablesQb.leftJoinAndSelect('bv.bets', 'user_bet', 'user_bet.user_id = :userId', { userId });
         }
 
         const variables = await variablesQb.getRawMany();
@@ -1964,98 +1799,58 @@ END
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes +=
-            Number(bv.bv_bet_count_gold_coin) +
-            Number(bv.bv_bet_count_sweep_coin) +
-            Number(bv.bv_bet_count_cade_coin);
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
-          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
-          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
-          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
-          const votes =
-            Number(v.bv_bet_count_gold_coin) +
-            Number(v.bv_bet_count_sweep_coin) +
-            Number(v.bv_bet_count_cade_coin);
-
-          // For sentiment picks, calculate percentage based on vote count (betCountCadeCoin)
-          // For regular picks, calculate based on cadecoin amounts
-          const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
-          let percentage: string | number;
-
-          if (isSentimentPick) {
-            // Use only cadecoin vote count for sentiment picks
-            const sentimentVotes = variables.reduce(
-              (sum, bv) => sum + Number(bv.bv_bet_count_cade_coin),
-              0,
-            );
-            percentage =
-              sentimentVotes > 0
-                ? (
-                    (Number(v.bv_bet_count_cade_coin) / sentimentVotes) *
-                    100
-                  ).toFixed(2)
-                : 0;
-          } else {
-            // Use cadecoin amounts for regular picks
-            percentage =
-              totalCadeCoins > 0
-                ? (
-                    (Number(v.bv_total_bets_cade_coin_amount) /
-                      totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0;
-          }
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-            userBet:
-              !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS
-                ? {
-                    amount: v.user_bet_amount,
-                    currency: v.user_bet_currency,
-                  }
-                : null,
-          };
+            createdAt: v.bv_createdAt,
+            userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
+              amount: v.user_bet_amount,
+              currency: v.user_bet_currency,
+            } : null
+          }
         });
 
         const itemData = {
           streamId: item.s_id,
           roundId: item.br_id,
-          thumbnail: item.s_thumbnailUrl ?? '',
+          thumbnail: item.s_thumbnailUrl ?? "",
           lockDate: item.br_lockDate,
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
           type: item.s_type,
           betRoundType: item.br_type,
-          mechanism: item.br_mechanism,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           category: item.br_category,
-          options: options.sort(
-            (a, b) => Number(b.percentage) - Number(a.percentage),
-          ),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
+          // options,
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
-          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
-          firstRevealTime: item.br_firstRevealTime,
-          lastRevealTime: item.br_lastRevealTime,
-          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
-        };
+        }
 
         resultList.push(itemData);
       }
@@ -2064,9 +1859,9 @@ END
         data: {
           data: resultList,
           page,
-          hasNextPage,
-        },
-      };
+          hasNextPage
+        }
+      }
     } catch (e) {
       console.log(e);
 
@@ -2089,83 +1884,65 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
-        .where('br.status IN (:...statuses)', {
-          statuses: [BettingRoundStatus.OPEN],
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN]
         })
-        .leftJoinAndSelect('br.stream', 's')
+        .leftJoinAndSelect("br.stream", "s")
         .innerJoinAndSelect('s.creator', 'c', 'c.username = :username')
-        .addSelect('br.firstRevealTime')
-        .addSelect('br.lastRevealTime')
-        .addSelect('br.isInitialRevealPeriod')
         .setParameter('username', username)
-        .andWhere('s.status IN (:...streamStatuses)', {
-          streamStatuses: [StreamStatus.LIVE, StreamStatus.SCHEDULED],
+        .andWhere("s.status IN (:...streamStatuses)", {
+          streamStatuses: [
+            StreamStatus.LIVE,
+            StreamStatus.SCHEDULED
+          ]
         })
-        .andWhere("s.type = 'non-video'");
+        .andWhere("s.type = 'non-video'")
+        .andWhere("s.app = 'non-video'");
 
       const count = await betRoundsQB.getCount();
-      const allRounds = await betRoundsQB
-        .offset(offset)
-        .limit(take)
-        .getRawMany();
+      const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
 
       const resultList = [];
-
-      // Batch query: Get all user counts in one database call
-      const roundIds = allRounds.map((r) => r.br_id);
-      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
 
       for (let i = 0; i < allRounds.length; i++) {
         const item = allRounds[i];
 
         const variables = await this.bettingVariableRepository
-          .createQueryBuilder('bv')
-          .where('bv.roundId = :roundId', {
-            roundId: item.br_id,
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
           })
           .getRawMany();
 
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes +=
-            Number(bv.bv_bet_count_gold_coin) +
-            Number(bv.bv_bet_count_sweep_coin) +
-            Number(bv.bv_bet_count_cade_coin);
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
-          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
-          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
-          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
-          const votes =
-            Number(v.bv_bet_count_gold_coin) +
-            Number(v.bv_bet_count_sweep_coin) +
-            Number(v.bv_bet_count_cade_coin);
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage:
-              totalCadeCoins > 0
-                ? (
-                    (Number(v.bv_total_bets_cade_coin_amount) /
-                      totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-          };
+            createdAt: v.bv_createdAt,
+          }
         });
 
         const itemData = {
           streamId: item.s_id,
           roundId: item.br_id,
-          thumbnail: item.s_thumbnailUrl ?? '',
+          thumbnail: item.s_thumbnailUrl ?? "",
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -2173,21 +1950,19 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          mechanism: item.br_mechanism,
-          options: options.sort(
-            (a, b) => Number(b.percentage) - Number(a.percentage),
-          ),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options,
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
-          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
-          firstRevealTime: item.br_firstRevealTime,
-          lastRevealTime: item.br_lastRevealTime,
-          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
-        };
+        }
 
         resultList.push(itemData);
       }
@@ -2197,8 +1972,8 @@ END
           data: resultList,
           page,
           total: count,
-        },
-      };
+        }
+      }
     } catch (e) {
       console.log(e);
 
@@ -2210,7 +1985,10 @@ END
     }
   }
 
-  async getUpcomingBets(homepageBetListDto: HomepageBetListDto): Promise<any> {
+  async getUpcomingBets(
+    homepageBetListDto: HomepageBetListDto,
+  ): Promise<any> {
+
     const config = getPromotedBetsConfig('upcomingBets');
     const page = homepageBetListDto.page ?? 1;
     const take = config.totalLimit;
@@ -2220,17 +1998,14 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
-        .where('br.status IN (:...statuses)', {
-          statuses: [BettingRoundStatus.OPEN],
+        .where("br.status IN (:...statuses)", {
+          statuses: [BettingRoundStatus.OPEN]
         })
-        .leftJoinAndSelect('br.stream', 's')
-        .leftJoinAndSelect('s.creator', 'c')
-        .addSelect('br.firstRevealTime')
-        .addSelect('br.lastRevealTime')
-        .addSelect('br.isInitialRevealPeriod')
-        .andWhere('s.status = :status', {
-          status: StreamStatus.SCHEDULED,
-        });
+        .leftJoinAndSelect("br.stream", "s")
+        .leftJoinAndSelect("s.creator", "c")
+        .andWhere("s.status = :status", {
+          status: StreamStatus.SCHEDULED
+        })
 
       this.applyPromotedOrdering(betRoundsQB, 's', 'br')
         .limit(fetchLimit)
@@ -2254,7 +2029,7 @@ END
       const filteredRounds = this.limitPromotedRounds(
         allRounds,
         config.maxPromotedRounds,
-        config.totalLimit,
+        config.totalLimit
       );
 
       // Calculate hasNextPage based on filtered results
@@ -2262,60 +2037,44 @@ END
 
       const resultList = [];
 
-      // Batch query: Get all user counts in one database call
-      const roundIds = filteredRounds.map((r) => r.br_id);
-      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
-
       for (let i = 0; i < filteredRounds.length; i++) {
         const item = filteredRounds[i];
 
         const variables = await this.bettingVariableRepository
-          .createQueryBuilder('bv')
-          .where('bv.roundId = :roundId', {
-            roundId: item.br_id,
+          .createQueryBuilder("bv")
+          .where("bv.roundId = :roundId", {
+            roundId: item.br_id
           })
           .getRawMany();
 
         let totalVotes = 0;
         let totalStreamCoins = 0;
         let totalGoldCoins = 0;
-        let totalCadeCoins = 0;
+        let totalCadeCoins = 0
 
         variables.forEach((bv) => {
-          totalVotes +=
-            Number(bv.bv_bet_count_gold_coin) +
-            Number(bv.bv_bet_count_sweep_coin) +
-            Number(bv.bv_bet_count_cade_coin);
+          totalVotes += Number(bv.bv_bet_count_gold_coin) + Number(bv.bv_bet_count_sweep_coin) + Number(bv.bv_bet_count_cade_coin)
 
-          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount);
-          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount);
-          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount);
+          totalStreamCoins += Number(bv.bv_total_bets_sweep_coin_amount)
+          totalGoldCoins += Number(bv.bv_total_bets_gold_coin_amount)
+          totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
         const options = variables.map((v) => {
-          const votes =
-            Number(v.bv_bet_count_gold_coin) +
-            Number(v.bv_bet_count_sweep_coin) +
-            Number(v.bv_bet_count_cade_coin);
+          const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage:
-              totalCadeCoins > 0
-                ? (
-                    (Number(v.bv_total_bets_cade_coin_amount) /
-                      totalCadeCoins) *
-                    100
-                  ).toFixed(2)
-                : 0,
+            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
-          };
+            createdAt: v.bv_createdAt,
+          }
         });
 
         const itemData = {
           streamId: item.s_id,
-          thumbnail: item.s_thumbnailUrl ?? '',
+          thumbnail: item.s_thumbnailUrl ?? "",
           creator: item.c_username,
           streamName: item.s_name,
           name: item.br_roundName,
@@ -2323,21 +2082,19 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          mechanism: item.br_mechanism,
-          options: options.sort(
-            (a, b) => Number(b.percentage) - Number(a.percentage),
-          ),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options,
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
-          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
-          firstRevealTime: item.br_firstRevealTime,
-          lastRevealTime: item.br_lastRevealTime,
-          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
-        };
+        }
 
         resultList.push(itemData);
       }
@@ -2346,9 +2103,9 @@ END
         data: {
           data: resultList,
           page,
-          hasNextPage,
-        },
-      };
+          hasNextPage
+        }
+      }
     } catch (e) {
       console.log(e);
 
@@ -2358,5 +2115,9 @@ END
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async getLatestLiveFeeds() {
+    return this.liveFeedUpdateService.getLastUpdates();
   }
 }

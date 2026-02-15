@@ -25,8 +25,6 @@ import {
   EditBettingVariableDto,
   UpdateRoundStatusDto,
 } from '../betting/dto/create-betting-variable.dto';
-
-import { BettingVariableStatus } from '../enums/betting-variable-status.enum';
 import { ApiResponse } from '../common/types/api-response.interface';
 import {
   ApiTags,
@@ -76,7 +74,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly streamService: StreamService,
     private readonly payoutService: PlatformPayoutService,
-  ) {}
+  ) { }
 
   // Helper method to check if user is admin
   private ensureAdmin(user: User) {
@@ -861,7 +859,9 @@ export class AdminController {
       streamId,
     );
     return {
+      // @ts-expect-error any
       data: canceledStreamId,
+      // @ts-ignore
       message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
       statusCode: HttpStatus.OK,
     };
@@ -953,6 +953,7 @@ export class AdminController {
       streamId,
     );
     return {
+      // @ts-ignore
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
       statusCode: HttpStatus.OK,

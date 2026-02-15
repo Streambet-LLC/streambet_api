@@ -19,10 +19,12 @@ import { WsModule } from 'src/ws/ws.module';
 import { NotificationModule } from 'src/notification/notification.module';
 import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
 import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.module';
+import { LiveFeedUpdateModule } from 'src/live-feed-update/live-feed-update.module';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BettingVariable, BettingRound, Bet, BetEditHistory, SentimentPickVote, Stream]),
+    TypeOrmModule.forFeature([BettingVariable, BettingRound, User, Bet, BetEditHistory, SentimentPickVote, Stream]),
     forwardRef(() => WalletsModule),
     UsersModule,
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
@@ -32,9 +34,10 @@ import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.m
     NotificationModule,
     PlatformPayoutModule,
     BetRoundHistoryModule,
+    LiveFeedUpdateModule,
   ],
   controllers: [BettingController],
   providers: [BettingService, BettingGateway, SentimentPickVoteService],
   exports: [BettingService, BettingGateway, SentimentPickVoteService],
 })
-export class BettingModule {}
+export class BettingModule { }
