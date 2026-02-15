@@ -8,7 +8,7 @@ export class AddDailySpinTransactionType1770677038000
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TYPE transaction_type_enum ADD VALUE IF NOT EXISTS 'Daily spin reward'`,
+      `ALTER TYPE "public"."transactions_type_enum" ADD VALUE IF NOT EXISTS 'Daily spin reward'`,
     );
 
     // Index for daily spin status queries (userId + type + createdAt)
