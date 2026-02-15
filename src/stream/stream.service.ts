@@ -11,12 +11,9 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Stream } from './entities/stream.entity';
-import {
-  LiveScheduledStreamListDto,
-  StreamFilterDto,
-} from './dto/list-stream.dto';
+import { StreamFilterDto } from './dto/list-stream.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
 import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
 import { WalletsService } from 'src/wallets/wallets.service';
@@ -27,7 +24,11 @@ import { PlatformName } from 'src/enums/platform-name.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
-import { StreamEventType, StreamList, StreamStatus } from 'src/enums/stream.enum';
+import {
+  StreamEventType,
+  StreamList,
+  StreamStatus,
+} from 'src/enums/stream.enum';
 import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
 import { StreamDetailsDto } from './dto/stream-detail.response.dto';
 import { StreamGateway } from './stream.gateway';
@@ -41,6 +42,7 @@ import { UserRole } from 'src/enums/user-role.enum';
 import { getPromotedBetsConfig } from './config/promoted-bets.config';
 import { CreatorProfileNonVideoBetsDto } from './dto/creator-non-video-bets.dto';
 import { LiveFeedUpdateService } from 'src/live-feed-update/live-feed-update.service';
+import * as moment from 'moment';
 
 @Injectable()
 export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
@@ -357,6 +359,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            createdAt: v.bv_createdAt,
           }
         });
 
@@ -372,7 +375,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
@@ -700,6 +706,7 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            createdAt: v.bv_createdAt,
           }
         });
 
@@ -712,7 +719,11 @@ END
           streamName: stream.name,
           name: item.roundName,
           type: stream.type,
-          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
+          // options,
           status: item.status,
           totalPot: {
             streamCoins: totalStreamCoins,
@@ -1806,6 +1817,7 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            createdAt: v.bv_createdAt,
             userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
               amount: v.user_bet_amount,
               currency: v.user_bet_currency,
@@ -1826,7 +1838,12 @@ END
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           category: item.br_category,
-          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
+          // options,
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
@@ -1918,6 +1935,7 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            createdAt: v.bv_createdAt,
           }
         });
 
@@ -1932,7 +1950,12 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options,
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,
@@ -2045,6 +2068,7 @@ END
             option: v.bv_name,
             percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
             isWinner: v.bv_is_winning_option,
+            createdAt: v.bv_createdAt,
           }
         });
 
@@ -2058,7 +2082,12 @@ END
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
-          options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
+          // options,
+          options: options.sort((a, b) => {
+            return moment(b.createdAt)
+              .isAfter(moment(a.createdAt)) ? -1 : 1
+          }),
           totalPot: {
             streamCoins: totalStreamCoins,
             goldCoins: totalGoldCoins,

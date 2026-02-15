@@ -60,6 +60,7 @@ import { SentimentPickVoteService } from './services/sentiment-pick-vote.service
 import { LiveFeedUpdateService } from 'src/live-feed-update/live-feed-update.service';
 import { LiveFeedType } from 'src/enums/live-feed-type.enum';
 import { User } from 'src/users/entities/user.entity';
+import * as moment from 'moment';
 
 @Injectable()
 export class BettingService {
@@ -153,7 +154,7 @@ export class BettingService {
       const offset = targetDate.getTime() - new Date(localPSTStr).getTime();
 
       const result = new Date(targetDate.getTime() - offset);
-      
+
       // Final validation
       if (isNaN(result.getTime())) {
         throw new Error('Invalid UTC conversion result');
@@ -191,7 +192,7 @@ export class BettingService {
         pstOffsetMinutes * 60 * 1000;
 
       const result = new Date(targetPstUtcMs);
-      
+
       // Validate fallback result
       if (isNaN(result.getTime())) {
         console.error('[getNextRevealTime] Fallback calculation also failed, returning fixed next 5 PM');
@@ -525,7 +526,7 @@ export class BettingService {
             '[createBettingVariable] Calculating nextRevealTime for sentiment pick',
           );
           firstRevealTime = this.getNextRevealTime();
-          
+
           // Validate the calculated date
           if (!firstRevealTime || isNaN(firstRevealTime.getTime())) {
             console.error(
@@ -536,7 +537,7 @@ export class BettingService {
               'Failed to calculate reveal time for sentiment pick. Please try again.',
             );
           }
-          
+
           console.log(
             '[createBettingVariable] nextRevealTime calculated:',
             firstRevealTime,
@@ -3074,6 +3075,7 @@ export class BettingService {
           option: v.bv_name,
           percentage,
           isWinner: v.bv_is_winning_option,
+          createdAt: v.bv_createdAt,
         };
       });
 
@@ -3106,9 +3108,13 @@ export class BettingService {
         scheduledStartTime: bettingRound.stream.scheduledStartTime,
         category: bettingRound.category,
         mechanism: bettingRound.mechanism,
-        options: options.sort(
-          (a, b) => Number(b.percentage) - Number(a.percentage),
-        ),
+        // options: options.sort(
+        //   (a, b) => Number(b.percentage) - Number(a.percentage),
+        // ),
+        options: options.sort((a, b) => {
+          return moment(b.createdAt)
+            .isAfter(moment(a.createdAt)) ? -1 : 1
+        }),
         totalPot: {
           streamCoins: totalStreamCoins,
           goldCoins: totalGoldCoins,
