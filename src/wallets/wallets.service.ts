@@ -510,6 +510,14 @@ export class WalletsService {
       return;
     }
 
+    // Skip refunds - not earned coins
+    if (transactionType === TransactionType.REFUND) {
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: REFUND transactions don't count toward lifetime earnings`,
+      );
+      return;
+    }
+
     let lifetimeIncrement = amount;
 
     // Handle bet winnings - only count net profit
