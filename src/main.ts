@@ -101,7 +101,7 @@ async function bootstrap() {
   }
   // Start server
   const port = configService.get<number>('PORT', 3000);
-  await app.listen(port);
+  await app.listen(port, 'localhost');
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`API Documentation available at: ${await app.getUrl()}/api/docs`);
 }

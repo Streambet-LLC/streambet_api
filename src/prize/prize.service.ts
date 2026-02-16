@@ -7,9 +7,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
+import { PrizeOrder } from './entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
+import { WalletsService } from '../wallets/wallets.service';
+import { EmailsService } from '../emails/email.service';
+import { CurrencyType } from '../enums/currency.enum';
 import {
   PrizeConfigurationDto,
   CreatePrizeTierDto,
@@ -21,6 +27,8 @@ import {
   AdminRedemptionResponseDto,
   UpdateRedemptionStatusDto,
   ShippingStatus,
+  CreatePrizeOrderDto,
+  PrizeOrderResponseDto,
 } from './dto';
 
 /**
@@ -30,15 +38,25 @@ import {
 @Injectable()
 export class PrizeService {
   private readonly logger = new Logger(PrizeService.name);
+  private stripe: Stripe;
 
   constructor(
     @InjectRepository(PrizeConfiguration)
     private readonly prizeConfigRepository: Repository<PrizeConfiguration>,
     @InjectRepository(PrizeRedemption)
     private readonly prizeRedemptionRepository: Repository<PrizeRedemption>,
+    @InjectRepository(PrizeOrder)
+    private readonly prizeOrderRepository: Repository<PrizeOrder>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+    private readonly walletService: WalletsService,
+    private readonly configService: ConfigService,
+    private readonly emailsService: EmailsService,
+  ) {
+    this.stripe = new Stripe(
+      this.configService.get<string>('STRIPE_SECRET_KEY') || '',
+    );
+  }
 
   /**
    * Get all active prize tiers, ordered by tier number.
@@ -506,6 +524,32 @@ export class PrizeService {
       `Redemption ${id} updated to status: ${dto.shippingStatus}`,
     );
 
+    if (dto.shippingStatus === ShippingStatus.SHIPPED) {
+      try {
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [redemption.user.email],
+            subject: `Your ${redemption.prizeConfiguration.name} has shipped! 📦`,
+            params: {
+              fullName: redemption.user.name || redemption.user.username,
+              prizeName: redemption.prizeConfiguration.name,
+              trackingNumber: dto.trackingNumber,
+              shippingCarrier: dto.shippingCarrier,
+            },
+          },
+          'prize_shipped',
+        );
+        this.logger.log(
+          `Shipped notification email sent to ${redemption.user.email} for redemption ${id}`,
+        );
+      } catch (emailError) {
+        this.logger.error(
+          `Failed to send shipped notification email for redemption ${id}:`,
+          emailError,
+        );
+      }
+    }
+
     return this.mapToAdminRedemptionDto(saved);
   }
 
@@ -593,6 +637,362 @@ export class PrizeService {
       prizeConfiguration: redemption.prizeConfiguration
         ? this.mapPrizeConfigToSummary(redemption.prizeConfiguration)
         : undefined,
+    };
+  }
+
+  /**
+   * Create a prize order with combined payment (coins + USD)
+   * 50 Cade coins = $1
+   * @param userId - User creating the order
+   * @param dto - Order details
+   */
+  async createPrizeOrder(
+    userId: string,
+    dto: CreatePrizeOrderDto,
+  ): Promise<any> {
+    // Validate prize exists and is active
+    const prize = await this.getPrizeTierById(dto.prizeConfigId);
+    if (!prize.isActive) {
+      throw new BadRequestException('This prize is no longer available');
+    }
+
+    // Validate payment method matches amounts
+    if (dto.paymentMethod === 'coins' && dto.usdAmount !== 0) {
+      throw new BadRequestException(
+        'For coins-only payment, USD amount must be 0',
+      );
+    }
+    if (dto.paymentMethod === 'usd' && dto.coinsAmount !== 0) {
+      throw new BadRequestException(
+        'For USD-only payment, coins amount must be 0',
+      );
+    }
+    if (
+      dto.paymentMethod === 'combined' &&
+      (dto.coinsAmount === 0 || dto.usdAmount === 0)
+    ) {
+      throw new BadRequestException(
+        'For combined payment, both amounts must be > 0',
+      );
+    }
+
+    // Verify total price calculation (50 coins = $1)
+    const coinsAsUSD = dto.coinsAmount / 50;
+    const expectedTotal = coinsAsUSD + dto.usdAmount;
+    if (Math.abs(expectedTotal - dto.totalPrice) > 0.01) {
+      throw new BadRequestException('Price calculation mismatch');
+    }
+
+    // Get user and check wallet balance for coins
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (dto.paymentMethod === 'coins' || dto.paymentMethod === 'combined') {
+      const cadeCoins = user.wallet?.cadeCoins || 0;
+      if (cadeCoins < dto.coinsAmount) {
+        throw new BadRequestException(
+          `Insufficient CadeCoins. You have ${cadeCoins}, but need ${dto.coinsAmount}`,
+        );
+      }
+    }
+
+    // Create the order
+    const order = this.prizeOrderRepository.create({
+      userId,
+      prizeConfigurationId: dto.prizeConfigId,
+      shippingAddress: dto.shippingAddress,
+      paymentMethod: dto.paymentMethod,
+      coinsDeducted: dto.coinsAmount,
+      usdCharged: parseFloat(dto.usdAmount.toString()),
+      totalPrice: parseFloat(dto.totalPrice.toString()),
+      status: 'pending', // Will be updated to 'paid' after Stripe or coins deduction
+    });
+
+    const savedOrder = await this.prizeOrderRepository.save(order);
+
+    // Handle payments
+    let stripeSessionUrl = null;
+
+    if (dto.paymentMethod === 'coins') {
+      // Instant payment with coins - deduct immediately
+      try {
+        await this.walletService.deductForBet(
+          userId,
+          dto.coinsAmount,
+          CurrencyType.CADE_COINS,
+          `Prize purchase: ${prize.name}`,
+        );
+
+        // Mark order as paid
+        savedOrder.status = 'paid';
+        await this.prizeOrderRepository.save(savedOrder);
+
+        await this.userRepository.update(userId, {
+          address: savedOrder.shippingAddress.addressLine1,
+          address2: savedOrder.shippingAddress.addressLine2 || null,
+          city: savedOrder.shippingAddress.city,
+          state: savedOrder.shippingAddress.state,
+          zipCode: savedOrder.shippingAddress.zipCode,
+          country: savedOrder.shippingAddress.country,
+        });
+        await this.ensureRedemptionForOrder(savedOrder, prize);
+
+        this.logger.log(
+          `Prize order ${savedOrder.id} paid with coins for user ${userId}`,
+        );
+      } catch (error) {
+        // Revert order if coin deduction fails
+        await this.prizeOrderRepository.remove(savedOrder);
+        throw error;
+      }
+    } else if (
+      dto.paymentMethod === 'usd' ||
+      dto.paymentMethod === 'combined'
+    ) {
+      // Create Stripe checkout session for USD portion
+      try {
+        const usdCents = Math.round(dto.usdAmount * 100);
+
+        const session = await this.stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: `${prize.name} Prize Purchase`,
+                  description:
+                    dto.paymentMethod === 'combined'
+                      ? `${dto.coinsAmount} CadeCoins + $${dto.usdAmount.toFixed(2)} USD`
+                      : `$${dto.usdAmount.toFixed(2)} USD`,
+                },
+                unit_amount: usdCents,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: 'payment',
+          customer_email: user.email,
+          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${savedOrder.id}`,
+          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${savedOrder.id}`,
+          metadata: {
+            orderId: savedOrder.id,
+            userId,
+            prizeId: dto.prizeConfigId,
+            paymentMethod: dto.paymentMethod,
+            coinsAmount: dto.coinsAmount.toString(),
+          },
+        });
+
+        // Save Stripe session ID to order
+        savedOrder.stripeSessionId = session.id;
+        await this.prizeOrderRepository.save(savedOrder);
+
+        stripeSessionUrl = session.url;
+
+        this.logger.log(
+          `Stripe checkout session created for order ${savedOrder.id}. Session ID: ${session.id}`,
+        );
+      } catch (error) {
+        // Revert order if Stripe fails
+        await this.prizeOrderRepository.remove(savedOrder);
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown Stripe error';
+        throw new BadRequestException(
+          `Failed to create checkout session: ${errorMessage}`,
+        );
+      }
+    }
+
+    return {
+      order: this.mapOrderToDto(savedOrder),
+      stripeSessionUrl,
+    };
+  }
+
+  /**
+   * Handle Stripe checkout success and deduct coins if combined payment
+   */
+  async handlePaymentSuccess(orderId: string): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status === 'paid') {
+      return this.mapOrderToDto(order);
+    }
+
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+
+    // Deduct coins for combined payment
+    if (order.paymentMethod === 'combined' && order.coinsDeducted > 0) {
+      try {
+        await this.walletService.deductForBet(
+          order.userId,
+          order.coinsDeducted,
+          CurrencyType.CADE_COINS,
+          `Prize purchase: ${prize.name}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to deduct coins for order ${orderId}: ${error}`,
+        );
+        // Don't fail the order, just log the error
+        // Admin will need to manually correct this
+      }
+    }
+
+    // Mark order as paid
+    order.status = 'paid';
+    const updated = await this.prizeOrderRepository.save(order);
+
+    // Update user shipping address and create redemption
+    await this.userRepository.update(order.userId, {
+      address: order.shippingAddress.addressLine1,
+      address2: order.shippingAddress.addressLine2 || null,
+      city: order.shippingAddress.city,
+      state: order.shippingAddress.state,
+      zipCode: order.shippingAddress.zipCode,
+      country: order.shippingAddress.country,
+    });
+    await this.ensureRedemptionForOrder(updated, prize);
+
+    this.logger.log(`Order ${orderId} marked as paid after Stripe success`);
+
+    return this.mapOrderToDto(updated);
+  }
+
+  private async ensureRedemptionForOrder(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+  ): Promise<void> {
+    const existing = await this.prizeRedemptionRepository.findOne({
+      where: {
+        userId: order.userId,
+        prizeConfigurationId: order.prizeConfigurationId,
+      },
+    });
+
+    if (existing) {
+      return;
+    }
+
+    const redemption = this.prizeRedemptionRepository.create({
+      userId: order.userId,
+      prizeConfigurationId: order.prizeConfigurationId,
+      dateRedeemed: new Date(),
+      prizeTier: prize.prizeTier,
+      prizeCategory: null,
+      shippingStatus: ShippingStatus.OPEN,
+      fulfilled: false,
+    });
+
+    await this.prizeRedemptionRepository.save(redemption);
+  }
+
+  /**
+   * Get a prize order by ID
+   */
+  async getPrizeOrderById(id: string): Promise<PrizeOrder> {
+    const order = await this.prizeOrderRepository.findOne({
+      where: { id },
+      relations: ['user', 'prizeConfiguration'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return order;
+  }
+
+  /**
+   * Get all orders for a user
+   */
+  async getUserOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
+    const orders = await this.prizeOrderRepository.find({
+      where: { userId },
+      relations: ['prizeConfiguration'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return orders.map((order) => this.mapOrderToDto(order));
+  }
+
+  /**
+   * Get all orders for admins
+   */
+  async getAllOrders(filterDto?: {
+    range?: string;
+    status?: string;
+  }): Promise<{ data: PrizeOrderResponseDto[]; total: number }> {
+    const query = this.prizeOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.prizeConfiguration', 'prize');
+
+    if (filterDto?.status && filterDto.status !== 'all') {
+      query.where('order.status = :status', { status: filterDto.status });
+    }
+
+    const total = await query.getCount();
+    let data = await query.orderBy('order.createdAt', 'DESC').getMany();
+
+    // Parse range for pagination
+    if (filterDto?.range) {
+      try {
+        const [start, end] = JSON.parse(filterDto.range);
+        data = data.slice(start, end);
+      } catch {
+        // Invalid range format, return all
+      }
+    }
+
+    return {
+      data: data.map((order) => this.mapOrderToDto(order)),
+      total,
+    };
+  }
+
+  /**
+   * Update order status
+   */
+  async updateOrderStatus(
+    orderId: string,
+    status:
+      | 'pending'
+      | 'paid'
+      | 'processing'
+      | 'shipped'
+      | 'delivered'
+      | 'cancelled',
+  ): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+    order.status = status;
+    const updated = await this.prizeOrderRepository.save(order);
+
+    this.logger.log(`Order ${orderId} status updated to ${status}`);
+
+    return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * Map order entity to DTO
+   */
+  private mapOrderToDto(order: PrizeOrder): PrizeOrderResponseDto {
+    return {
+      id: order.id,
+      userId: order.userId,
+      prizeConfigId: order.prizeConfigurationId,
+      shippingAddress: order.shippingAddress,
+      paymentMethod: order.paymentMethod,
+      coinsDeducted: order.coinsDeducted,
+      usdCharged: parseFloat(order.usdCharged.toString()),
+      totalPrice: parseFloat(order.totalPrice.toString()),
+      stripeSessionId: order.stripeSessionId,
+      status: order.status,
+      createdAt: order.createdAt.toISOString(),
+      updatedAt: order.updatedAt.toISOString(),
     };
   }
 

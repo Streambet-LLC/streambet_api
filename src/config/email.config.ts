@@ -62,5 +62,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/betting_stream_summary.ejs',
       schemaPath: './src/templates/betting_stream_summary.json',
     },
+    prize_shipped: {
+      templatePath: './src/templates/prize_shipped.ejs',
+      schemaPath: './src/templates/prize_shipped.json',
+    },
   },
 }));

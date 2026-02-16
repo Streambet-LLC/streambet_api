@@ -1,14 +1,24 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
+import { PrizeOrder } from './entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
 import { PrizeController, AdminPrizeController } from './prize.controller';
+import { WalletsModule } from '../wallets/wallets.module';
+import { EmailsModule } from '../emails/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PrizeConfiguration, PrizeRedemption, User]),
+    TypeOrmModule.forFeature([
+      PrizeConfiguration,
+      PrizeRedemption,
+      PrizeOrder,
+      User,
+    ]),
+    forwardRef(() => WalletsModule),
+    EmailsModule,
   ],
   controllers: [PrizeController, AdminPrizeController],
   providers: [PrizeService],

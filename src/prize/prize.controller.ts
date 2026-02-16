@@ -28,6 +28,8 @@ import {
   UpdateRedemptionStatusDto,
   SubmitPrizeRedemptionDto,
   UserRedemptionResponseDto,
+  CreatePrizeOrderDto,
+  PrizeOrderResponseDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -96,6 +98,73 @@ export class PrizeController {
     @Request() req: RequestWithUser,
   ): Promise<UserRedemptionResponseDto[]> {
     return this.prizeService.getUserRedemptions(req.user.id);
+  }
+
+  /**
+   * User endpoint: Create a prize order (combined payment: coins + USD)
+   * 100 Cade coins = $1
+   */
+  @Post('purchase')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create a prize purchase order with combined payment',
+    description:
+      'Users can pay with coins only, USD only, or a combination. 50 Cade coins = $1',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Prize order created successfully',
+    type: 'object',
+    schema: {
+      properties: {
+        order: { type: 'object' },
+        stripeSessionUrl: { type: 'string', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid order data or insufficient balance',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Prize not found' })
+  async createPrizeOrder(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreatePrizeOrderDto,
+  ) {
+    return this.prizeService.createPrizeOrder(req.user.id, dto);
+  }
+
+  /**
+   * User endpoint: Get my orders
+   */
+  @Get('my-orders')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user prize orders' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns user prize orders',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMyOrders(@Request() req: RequestWithUser) {
+    return this.prizeService.getUserOrders(req.user.id);
+  }
+
+  /**
+   * Webhook: Handle Stripe payment success for prize orders
+   */
+  @Post('webhook/stripe-success/:orderId')
+  @ApiOperation({ summary: 'Webhook handler for Stripe payment success' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment processed successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async handleStripeSuccess(@Param('orderId') orderId: string) {
+    return this.prizeService.handlePaymentSuccess(orderId);
   }
 }
 
@@ -309,5 +378,100 @@ export class AdminPrizeController {
   ): Promise<AdminRedemptionResponseDto> {
     this.ensureAdmin(req.user);
     return this.prizeService.updateRedemptionStatus(id, dto);
+  }
+
+  /**
+   * Admin endpoint: Get all prize orders
+   */
+  @Get('orders')
+  @ApiOperation({
+    summary: 'Get all prize orders with optional filters (admin only)',
+    description: 'Returns paginated list of prize orders',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns paginated prize orders',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async getOrders(
+    @Request() req: RequestWithUser,
+    @Query() filterDto: { range?: string; status?: string },
+  ) {
+    this.ensureAdmin(req.user);
+    return this.prizeService.getAllOrders(filterDto);
+  }
+
+  /**
+   * Admin endpoint: Get a single order by ID
+   */
+  @Get('orders/:id')
+  @ApiOperation({ summary: 'Get a single prize order by ID (admin only)' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the order details',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderById(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    const order = await this.prizeService.getPrizeOrderById(id);
+    return this.mapOrderToDto(order);
+  }
+
+  /**
+   * Admin endpoint: Update order status
+   */
+  @Patch('orders/:id/status')
+  @ApiOperation({ summary: 'Update prize order status (admin only)' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status updated successfully',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async updateOrderStatus(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body('status')
+    status:
+      | 'pending'
+      | 'paid'
+      | 'processing'
+      | 'shipped'
+      | 'delivered'
+      | 'cancelled',
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.updateOrderStatus(id, status);
+  }
+
+  /**
+   * Helper to map order to DTO (needed in controller for response typing)
+   */
+  private mapOrderToDto(order: any) {
+    return {
+      id: order.id,
+      userId: order.userId,
+      prizeConfigId: order.prizeConfigurationId,
+      shippingAddress: order.shippingAddress,
+      paymentMethod: order.paymentMethod,
+      coinsDeducted: order.coinsDeducted,
+      usdCharged: parseFloat(order.usdCharged?.toString() || '0'),
+      totalPrice: parseFloat(order.totalPrice?.toString() || '0'),
+      stripeSessionId: order.stripeSessionId,
+      status: order.status,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
   }
 }

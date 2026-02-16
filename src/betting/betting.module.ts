@@ -24,9 +24,17 @@ import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BettingVariable, BettingRound, User, Bet, BetEditHistory, SentimentPickVote, Stream]),
+    TypeOrmModule.forFeature([
+      BettingVariable,
+      BettingRound,
+      User,
+      Bet,
+      BetEditHistory,
+      SentimentPickVote,
+      Stream,
+    ]),
     forwardRef(() => WalletsModule),
-    UsersModule,
+    forwardRef(() => UsersModule),
     forwardRef(() => StreamModule), // Add StreamModule with forwardRef
     ChatModule,
     GeoFencingModule,
@@ -40,4 +48,4 @@ import { User } from 'src/users/entities/user.entity';
   providers: [BettingService, BettingGateway, SentimentPickVoteService],
   exports: [BettingService, BettingGateway, SentimentPickVoteService],
 })
-export class BettingModule { }
+export class BettingModule {}

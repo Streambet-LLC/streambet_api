@@ -11,7 +11,7 @@ import { Transaction } from 'src/wallets/entities/transaction.entity';
 
 @Module({
   imports: [
-    UsersModule,
+    forwardRef(() => UsersModule),
     forwardRef(() => CoinPackageModule),
     forwardRef(() => WalletsModule),
     forwardRef(() => NotificationModule),
