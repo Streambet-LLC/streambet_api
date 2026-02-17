@@ -4,4 +4,6 @@ export {
   CreatePrizeOrderDto,
   PrizeOrderResponseDto,
   PaymentMethod,
+  MakeOfferDto,
+  CounterOfferDto,
 } from './prize-purchase.dto';

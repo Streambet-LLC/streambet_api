@@ -110,6 +110,15 @@ export class PrizeOrderResponseDto {
   totalPrice: number;
 
   @ApiProperty({ nullable: true })
+  offerAmount?: number;
+
+  @ApiProperty({ nullable: true })
+  counterOfferAmount?: number;
+
+  @ApiProperty({ nullable: true })
+  offerNotes?: string;
+
+  @ApiProperty({ nullable: true })
   stripeSessionId?: string;
 
   @ApiProperty({
@@ -120,6 +129,10 @@ export class PrizeOrderResponseDto {
       'shipped',
       'delivered',
       'cancelled',
+      'offer_made',
+      'countered',
+      'rejected',
+      'offer_accepted',
     ],
   })
   status:
@@ -128,11 +141,75 @@ export class PrizeOrderResponseDto {
     | 'processing'
     | 'shipped'
     | 'delivered'
-    | 'cancelled';
+    | 'cancelled'
+    | 'offer_made'
+    | 'countered'
+    | 'rejected'
+    | 'offer_accepted';
 
   @ApiProperty()
   createdAt: string;
 
   @ApiProperty()
   updatedAt: string;
+
+  @ApiProperty({ nullable: true })
+  user?: {
+    username: string;
+    email: string;
+  };
+
+  @ApiProperty({ nullable: true })
+  prizeConfig?: {
+    name: string;
+    category: string;
+  };
+}
+
+export class MakeOfferDto {
+  @ApiProperty({ description: 'Prize configuration ID' })
+  @IsString()
+  @IsNotEmpty()
+  prizeConfigId: string;
+
+  @ApiProperty({ type: ShippingAddressDto })
+  @ValidateNested()
+  @Type(() => ShippingAddressDto)
+  shippingAddress: ShippingAddressDto;
+
+  @ApiProperty({
+    example: 50.0,
+    description: 'Offer amount in USD',
+  })
+  @IsNumber()
+  @Min(0.01)
+  offerAmount: number;
+
+  @ApiProperty({
+    example: 'Would like a discount for bulk purchase',
+    description: 'Optional notes for the offer',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  offerNotes?: string;
+}
+
+export class CounterOfferDto {
+  @ApiProperty({
+    example: 75.0,
+    description: 'Counter offer amount in USD',
+  })
+  @IsNumber()
+  @Min(0.01)
+  counterOfferAmount: number;
+
+  @ApiProperty({
+    example: 'Best we can do is $75',
+    description: 'Optional notes for the counter offer',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  offerNotes?: string;
 }

@@ -29,6 +29,8 @@ import {
   ShippingStatus,
   CreatePrizeOrderDto,
   PrizeOrderResponseDto,
+  MakeOfferDto,
+  CounterOfferDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 
@@ -680,6 +682,8 @@ export class PrizeService {
       throw new BadRequestException('This prize is no longer available');
     }
 
+    const SHIPPING_FEE = 5; // $5 shipping fee
+
     // Validate payment method matches amounts
     if (dto.paymentMethod === 'coins' && dto.usdAmount !== 0) {
       throw new BadRequestException(
@@ -725,15 +729,15 @@ export class PrizeService {
       }
     }
 
-    // Create the order
+    // Create the order with shipping fee added to total
     const order = this.prizeOrderRepository.create({
       userId,
       prizeConfigurationId: dto.prizeConfigId,
       shippingAddress: dto.shippingAddress,
       paymentMethod: dto.paymentMethod,
       coinsDeducted: dto.coinsAmount,
-      usdCharged: parseFloat(dto.usdAmount.toString()),
-      totalPrice: parseFloat(dto.totalPrice.toString()),
+      usdCharged: parseFloat((dto.usdAmount + SHIPPING_FEE).toString()),
+      totalPrice: parseFloat((dto.totalPrice + SHIPPING_FEE).toString()),
       status: 'pending', // Will be updated to 'paid' after Stripe or coins deduction
     });
 
@@ -1059,9 +1063,330 @@ export class PrizeService {
       totalPrice: parseFloat(order.totalPrice.toString()),
       stripeSessionId: order.stripeSessionId,
       status: order.status,
+      offerAmount: order.offerAmount
+        ? parseFloat(order.offerAmount.toString())
+        : undefined,
+      counterOfferAmount: order.counterOfferAmount
+        ? parseFloat(order.counterOfferAmount.toString())
+        : undefined,
+      offerNotes: order.offerNotes,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
+      user: order.user
+        ? {
+            username: order.user.username,
+            email: order.user.email,
+          }
+        : undefined,
+      prizeConfig: order.prizeConfiguration
+        ? {
+            name: order.prizeConfiguration.name,
+            category: order.prizeConfiguration.category,
+          }
+        : undefined,
     };
+  }
+
+  /**
+   * Make an offer on a prize item
+   */
+  async makeOffer(
+    userId: string,
+    dto: MakeOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    // Validate prize exists and is active
+    const prize = await this.getPrizeTierById(dto.prizeConfigId);
+    if (!prize.isActive) {
+      throw new BadRequestException('This prize is not available');
+    }
+
+    const SHIPPING_FEE = 5; // $5 shipping fee
+    const totalWithShipping = dto.offerAmount + SHIPPING_FEE;
+
+    // Create order with offer_made status
+    const order = this.prizeOrderRepository.create({
+      userId,
+      prizeConfigurationId: dto.prizeConfigId,
+      shippingAddress: dto.shippingAddress,
+      paymentMethod: 'usd', // Offers are USD payment
+      coinsDeducted: 0,
+      usdCharged: 0, // Will be charged later if accepted
+      totalPrice: totalWithShipping,
+      offerAmount: dto.offerAmount,
+      offerNotes: dto.offerNotes,
+      status: 'offer_made',
+    });
+
+    const saved = await this.prizeOrderRepository.save(order);
+
+    // Send email notification to admin
+    try {
+      const adminEmail =
+        this.configService.get<string>('ADMIN_EMAIL') || 'admin@cardcade.io';
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [adminEmail],
+          subject: `💰 New Prize Offer: ${prize.name}`,
+          params: {
+            orderId: saved.id,
+            userId,
+            prizeName: prize.name,
+            offerAmount: dto.offerAmount,
+            notes: dto.offerNotes || '',
+            adminUrl: frontendUrl,
+          },
+        },
+        'offer_made',
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send offer notification email: ${error}`);
+    }
+
+    return this.mapOrderToDto(saved);
+  }
+
+  /**
+   * Admin counter-offers on a user's offer
+   */
+  async counterOffer(
+    orderId: string,
+    dto: CounterOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status !== 'offer_made') {
+      throw new BadRequestException('Can only counter offer on pending offers');
+    }
+
+    order.counterOfferAmount = dto.counterOfferAmount;
+    order.offerNotes = dto.offerNotes || order.offerNotes;
+    order.status = 'countered';
+
+    const updated = await this.prizeOrderRepository.save(order);
+
+    // Send email to user with counter offer details
+    try {
+      const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+      const user = await this.userRepository.findOne({
+        where: { id: order.userId },
+      });
+
+      if (user?.email) {
+        const frontendUrl = this.configService.get<string>(
+          'CLIENT_URL',
+          'http://localhost:3000',
+        );
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [user.email],
+            subject: `🔄 Counter Offer on ${prize.name}`,
+            params: {
+              userName: user.username,
+              orderId: order.id,
+              prizeName: prize.name,
+              originalOffer: order.offerAmount || 0,
+              counterOffer: dto.counterOfferAmount,
+              notes: dto.offerNotes || '',
+              acceptUrl: `${frontendUrl}/prizes?acceptCounter=${order.id}`,
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_countered',
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send counter offer email: ${error}`);
+    }
+
+    return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * Admin accepts a user's offer
+   */
+  async acceptOffer(orderId: string): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status !== 'offer_made' && order.status !== 'countered') {
+      throw new BadRequestException('Can only accept pending offers');
+    }
+
+    // Determine amount to charge before updating status
+    const wasCountered = order.status === 'countered';
+    const amountToCharge =
+      wasCountered && order.counterOfferAmount
+        ? order.counterOfferAmount
+        : order.offerAmount || order.totalPrice;
+
+    order.status = 'offer_accepted';
+    const updated = await this.prizeOrderRepository.save(order);
+
+    // Create Stripe checkout session
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+
+    const session = await this.stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${prize.name} - Accepted Offer`,
+              description: `Offer accepted at $${amountToCharge}`,
+            },
+            unit_amount: Math.round(amountToCharge * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      metadata: {
+        orderId: order.id,
+        userId: order.userId,
+        type: 'prize_offer',
+      },
+    });
+
+    // Save Stripe session ID
+    order.stripeSessionId = session.id;
+    order.usdCharged = amountToCharge;
+    await this.prizeOrderRepository.save(order);
+
+    // Send email to user with Stripe checkout link
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: order.userId },
+      });
+
+      if (user?.email) {
+        const frontendUrl = this.configService.get<string>(
+          'CLIENT_URL',
+          'http://localhost:3000',
+        );
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [user.email],
+            subject: `✅ Your Offer for ${prize.name} Has Been Accepted!`,
+            params: {
+              userName: user.username,
+              orderId: order.id,
+              prizeName: prize.name,
+              acceptedAmount: amountToCharge,
+              checkoutUrl: session.url || '',
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_accepted',
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send offer accepted email: ${error}`);
+    }
+
+    return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * Admin rejects a user's offer
+   */
+  async rejectOffer(orderId: string): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status !== 'offer_made') {
+      throw new BadRequestException('Can only reject pending offers');
+    }
+
+    order.status = 'rejected';
+    const updated = await this.prizeOrderRepository.save(order);
+
+    // Send email to user
+    try {
+      const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+      const user = await this.userRepository.findOne({
+        where: { id: order.userId },
+      });
+
+      if (user?.email) {
+        const frontendUrl = this.configService.get<string>(
+          'CLIENT_URL',
+          'http://localhost:3000',
+        );
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [user.email],
+            subject: `Update on Your Offer for ${prize.name}`,
+            params: {
+              userName: user.username,
+              prizeName: prize.name,
+              offerAmount: order.offerAmount || 0,
+              prizesUrl: `${frontendUrl}/prizes`,
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_rejected',
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send offer rejected email: ${error}`);
+    }
+
+    return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * User accepts a counter offer
+   */
+  async acceptCounterOffer(
+    orderId: string,
+  ): Promise<{ stripeSessionUrl: string }> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status !== 'countered') {
+      throw new BadRequestException('No counter offer to accept');
+    }
+
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+    const amountToCharge = order.counterOfferAmount || order.totalPrice;
+
+    // Create Stripe checkout session
+    const session = await this.stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${prize.name} - Counter Offer Accepted`,
+              description: `Counter offer accepted at $${amountToCharge}`,
+            },
+            unit_amount: Math.round(amountToCharge * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      metadata: {
+        orderId: order.id,
+        userId: order.userId,
+        type: 'prize_counter_offer',
+      },
+    });
+
+    // Update order with Stripe session
+    order.stripeSessionId = session.id;
+    order.usdCharged = amountToCharge;
+    order.status = 'offer_accepted';
+    await this.prizeOrderRepository.save(order);
+
+    return { stripeSessionUrl: session.url || '' };
   }
 
   /**

@@ -30,6 +30,8 @@ import {
   UserRedemptionResponseDto,
   CreatePrizeOrderDto,
   PrizeOrderResponseDto,
+  MakeOfferDto,
+  CounterOfferDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -165,6 +167,48 @@ export class PrizeController {
   @ApiResponse({ status: 404, description: 'Order not found' })
   async handleStripeSuccess(@Param('orderId') orderId: string) {
     return this.prizeService.handlePaymentSuccess(orderId);
+  }
+
+  /**
+   * User endpoint: Make an offer on a prize
+   */
+  @Post('make-offer')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Make an offer on a prize item' })
+  @ApiResponse({
+    status: 201,
+    description: 'Offer submitted successfully',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid offer data' })
+  @ApiResponse({ status: 404, description: 'Prize not found' })
+  async makeOffer(
+    @Request() req: RequestWithUser,
+    @Body() dto: MakeOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    return this.prizeService.makeOffer(req.user.id, dto);
+  }
+
+  /**
+   * User endpoint: Accept a counter offer
+   */
+  @Post('orders/:orderId/accept-counter')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Accept a counter offer on your order' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Counter offer accepted, Stripe checkout URL returned',
+  })
+  @ApiResponse({ status: 400, description: 'No counter offer to accept' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async acceptCounterOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.prizeService.acceptCounterOffer(orderId);
   }
 }
 
@@ -453,6 +497,73 @@ export class AdminPrizeController {
   ): Promise<PrizeOrderResponseDto> {
     this.ensureAdmin(req.user);
     return this.prizeService.updateOrderStatus(id, status);
+  }
+
+  /**
+   * Admin endpoint: Counter offer on a user's offer
+   */
+  @Patch('orders/:orderId/counter')
+  @ApiOperation({ summary: 'Make a counter offer (admin only)' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Counter offer sent successfully',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid counter offer' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async counterOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+    @Body() dto: CounterOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.counterOffer(orderId, dto);
+  }
+
+  /**
+   * Admin endpoint: Accept a user's offer
+   */
+  @Patch('orders/:orderId/accept-offer')
+  @ApiOperation({ summary: 'Accept an offer (admin only)' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Offer accepted, checkout link sent to user',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Cannot accept this offer' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async acceptOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.acceptOffer(orderId);
+  }
+
+  /**
+   * Admin endpoint: Reject a user's offer
+   */
+  @Patch('orders/:orderId/reject-offer')
+  @ApiOperation({ summary: 'Reject an offer (admin only)' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Offer rejected successfully',
+    type: PrizeOrderResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Cannot reject this offer' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async rejectOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.rejectOffer(orderId);
   }
 
   /**

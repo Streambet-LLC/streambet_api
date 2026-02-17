@@ -62,6 +62,31 @@ export class PrizeOrder extends BaseEntity {
   totalPrice: number;
 
   @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    name: 'offer_amount',
+  })
+  offerAmount?: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    name: 'counter_offer_amount',
+  })
+  counterOfferAmount?: number;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'offer_notes',
+  })
+  offerNotes?: string;
+
+  @Column({
     type: 'varchar',
     length: 255,
     nullable: true,
@@ -83,7 +108,17 @@ export class PrizeOrder extends BaseEntity {
     default: 'pending',
     name: 'status',
   })
-  status: 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status:
+    | 'pending'
+    | 'paid'
+    | 'processing'
+    | 'shipped'
+    | 'delivered'
+    | 'cancelled'
+    | 'offer_made'
+    | 'countered'
+    | 'rejected'
+    | 'offer_accepted';
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
