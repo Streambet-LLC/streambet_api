@@ -1,0 +1,74 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "emailDetails": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        },
+        "subject": {
+          "type": "string"
+        },
+        "html": {
+          "type": "string"
+        }
+      },
+      "required": ["to", "subject"]
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string"
+        },
+        "prizeName": {
+          "type": "string"
+        },
+        "trackingNumber": {
+          "type": "string"
+        },
+        "shippingCarrier": {
+          "type": "string"
+        }
+      },
+      "required": ["fullName", "prizeName", "trackingNumber", "shippingCarrier"]
+    }
+  },
+  "required": ["emailDetails", "params"]
+}

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UsersController } from './users.controller';
@@ -12,7 +12,7 @@ import { PrizeModule } from 'src/prize/prize.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, ReferralLink, Follower]),
-    PrizeModule,
+    forwardRef(() => PrizeModule),
   ],
   controllers: [UsersController],
   providers: [UsersService, ReferralService, FollowerService],

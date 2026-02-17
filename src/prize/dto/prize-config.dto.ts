@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, Min, IsString, IsNumber, IsOptional } from 'class-validator';
+import {
+  IsInt,
+  Min,
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
+import { PrizeCategory } from '../enums/prize-category.enum';
 
 /**
  * DTO for individual prize tier information
@@ -84,6 +92,20 @@ export class PrizeConfigurationDto {
   })
   imageUrl: string | null;
 
+  @ApiProperty({
+    example: 'slab',
+    description: 'Prize category: slab or sealed',
+    enum: ['slab', 'sealed'],
+  })
+  category: string;
+
+  @ApiProperty({
+    example: 100,
+    description: 'Stock quantity (0 = unlimited/always in stock)',
+    minimum: 0,
+  })
+  stock: number;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -106,11 +128,13 @@ export class PrizeConfigurationDto {
 export class CreatePrizeTierDto {
   @ApiProperty({
     example: 4,
-    description: 'Prize tier number (must be unique among active tiers)',
+    description: 'Prize tier number (auto-generated if not provided)',
+    required: false,
   })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  prizeTier: number;
+  prizeTier?: number;
 
   @ApiProperty({
     example: 250000,
@@ -126,6 +150,26 @@ export class CreatePrizeTierDto {
   })
   @IsString()
   name: string;
+
+  @ApiProperty({
+    example: 'slab',
+    description: 'Prize category: slab or sealed',
+    enum: ['slab', 'sealed'],
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiProperty({
+    example: 100,
+    description: 'Stock quantity (0 = unlimited)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  stock?: number;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
@@ -154,10 +198,12 @@ export class UpdatePrizeTierDto {
   @ApiProperty({
     example: 4,
     description: 'Prize tier number (will remain the same)',
+    required: false,
   })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  prizeTier: number;
+  prizeTier?: number;
 
   @ApiProperty({
     example: 250000,
@@ -173,6 +219,26 @@ export class UpdatePrizeTierDto {
   })
   @IsString()
   name: string;
+
+  @ApiProperty({
+    example: 'slab',
+    description: 'Prize category: slab or sealed',
+    enum: ['slab', 'sealed'],
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @ApiProperty({
+    example: 100,
+    description: 'Stock quantity (0 = unlimited)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  stock?: number;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
