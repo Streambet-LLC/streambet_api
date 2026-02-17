@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizeConfiguration } from './prize-configuration.entity';
+import { PrizeOrder } from './prize-order.entity';
 import { PrizeCategory } from '../enums/prize-category.enum';
 
 /**
@@ -16,6 +17,9 @@ export class PrizeRedemption extends BaseEntity {
 
   @Column({ type: 'uuid', name: 'prize_configuration_id' })
   prizeConfigurationId: string;
+
+  @Column({ type: 'uuid', name: 'prize_order_id', nullable: true })
+  prizeOrderId: string | null;
 
   @Column({ type: 'integer', name: 'prize_tier' })
   prizeTier: number;
@@ -68,4 +72,8 @@ export class PrizeRedemption extends BaseEntity {
   @ManyToOne(() => PrizeConfiguration, { nullable: false })
   @JoinColumn({ name: 'prize_configuration_id' })
   prizeConfiguration: PrizeConfiguration;
+
+  @ManyToOne(() => PrizeOrder, { nullable: true })
+  @JoinColumn({ name: 'prize_order_id' })
+  prizeOrder: PrizeOrder | null;
 }

@@ -30,6 +30,7 @@ import {
   CreatePrizeOrderDto,
   PrizeOrderResponseDto,
 } from './dto';
+import { PrizeCategory } from './enums/prize-category.enum';
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -445,7 +446,8 @@ export class PrizeService {
     const query = this.prizeRedemptionRepository
       .createQueryBuilder('redemption')
       .leftJoinAndSelect('redemption.user', 'user')
-      .leftJoinAndSelect('redemption.prizeConfiguration', 'prizeConfig');
+      .leftJoinAndSelect('redemption.prizeConfiguration', 'prizeConfig')
+      .leftJoinAndSelect('redemption.prizeOrder', 'prizeOrder');
 
     if (filterDto.status) {
       query.andWhere('redemption.shippingStatus = :status', {
@@ -477,7 +479,7 @@ export class PrizeService {
   ): Promise<AdminRedemptionResponseDto> {
     const redemption = await this.prizeRedemptionRepository.findOne({
       where: { id },
-      relations: ['user', 'prizeConfiguration'],
+      relations: ['user', 'prizeConfiguration', 'prizeOrder'],
     });
 
     if (!redemption) {
@@ -627,6 +629,7 @@ export class PrizeService {
     redemption: PrizeRedemption & {
       user?: User;
       prizeConfiguration?: PrizeConfiguration;
+      prizeOrder?: PrizeOrder | null;
     },
   ): AdminRedemptionResponseDto {
     return {
@@ -637,6 +640,11 @@ export class PrizeService {
       prizeConfiguration: redemption.prizeConfiguration
         ? this.mapPrizeConfigToSummary(redemption.prizeConfiguration)
         : undefined,
+      paymentMethod: redemption.prizeOrder?.paymentMethod || null,
+      coinsDeducted: redemption.prizeOrder?.coinsDeducted || null,
+      usdCharged: redemption.prizeOrder
+        ? redemption.prizeOrder.usdCharged.toString()
+        : null,
     };
   }
 
@@ -684,7 +692,10 @@ export class PrizeService {
     }
 
     // Get user and check wallet balance for coins
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['wallet'],
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -877,12 +888,17 @@ export class PrizeService {
       return;
     }
 
+    let prizeCategory: PrizeCategory = PrizeCategory.SLAB;
+    if (prize.category === 'sealed') {
+      prizeCategory = PrizeCategory.SEALED;
+    }
     const redemption = this.prizeRedemptionRepository.create({
       userId: order.userId,
       prizeConfigurationId: order.prizeConfigurationId,
+      prizeOrderId: order.id,
       dateRedeemed: new Date(),
       prizeTier: prize.prizeTier,
-      prizeCategory: null,
+      prizeCategory,
       shippingStatus: ShippingStatus.OPEN,
       fulfilled: false,
     });
