@@ -93,14 +93,10 @@ jobs:
           CLUSTER: cardcade-clusters
           SERVICE: cardcade-${{ github.ref_name }}
         run: |
-          # We don't need to register again; just update the service 
-          # to use the latest revision of the family.
-          # Note: Ensure the 'family' in your JSON matches your service name or task name.
-          aws ecs update-service \
-            --cluster $CLUSTER \
-            --service $SERVICE \
-            --task-definition $SERVICE \
-            --force-new-deployment
+          aws ecs register-task-definition --cli-input-json file://.devops/task-def.${{ github.ref_name }}.json
+          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $SERVICE --desired-count 1
+          echo "Waiting for stabilization..."
+          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
           
           echo "Waiting for stabilization..."
           aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
