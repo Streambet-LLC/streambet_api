@@ -6,9 +6,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.build-image.outputs.tag }}
+      # FIX: Construct the full image URI here so other jobs can see it
+      image_tag: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -24,16 +25,18 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Image
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: cardcade_${{ github.ref_name }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "tag=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # Use the same naming convention defined in your outputs
+          tags: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}
+          provenance: false
 
   validate:
     needs: build
@@ -43,7 +46,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -53,7 +56,11 @@ jobs:
         run: |
           DEPLOY_ENV=${{ github.ref_name }}
           IMAGE_TAG=${{ needs.build.outputs.image_tag }}
+          
+          # Use '|' as a delimiter because IMAGE_TAG contains '/'
           sed -i "s|<IMAGE_URI>|$IMAGE_TAG|g" .devops/task-def.$DEPLOY_ENV.json
+          
+          # Register and get the new revision
           aws ecs register-task-definition --cli-input-json file://.devops/task-def.$DEPLOY_ENV.json
 
       - name: Upload Task Def Artifact
@@ -67,7 +74,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref_name }}
-    # Manual trigger for prod via Environment Protection Rules in GitHub UI
     steps:
       - name: Download Task Def
         uses: actions/download-artifact@v4
@@ -76,7 +82,7 @@ jobs:
           path: .devops/
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -84,11 +90,17 @@ jobs:
 
       - name: Deploy to ECS
         env:
-          # Mapping names as per your GitLab logic
           CLUSTER: cardcade-clusters
           SERVICE: cardcade-${{ github.ref_name }}
         run: |
-          aws ecs register-task-definition --cli-input-json file://.devops/task-def.${{ github.ref_name }}.json
-          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $SERVICE --desired-count 1
+          # We don't need to register again; just update the service 
+          # to use the latest revision of the family.
+          # Note: Ensure the 'family' in your JSON matches your service name or task name.
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --task-definition $SERVICE \
+            --force-new-deployment
+          
           echo "Waiting for stabilization..."
           aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE
