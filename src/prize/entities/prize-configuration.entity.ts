@@ -36,6 +36,9 @@ export class PrizeConfiguration extends BaseEntity {
   })
   category: 'slab' | 'sealed';
 
+  @Column({ type: 'integer', name: 'stock', default: 0, nullable: false })
+  stock: number;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

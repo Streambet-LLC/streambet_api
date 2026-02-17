@@ -110,24 +110,38 @@ export class PrizeService {
     dto: CreatePrizeTierDto,
     userId: string,
   ): Promise<PrizeConfigurationDto> {
-    // Check if tier number is already active
-    const existingTier = await this.prizeConfigRepository.findOne({
-      where: { prizeTier: dto.prizeTier, isActive: true },
-    });
+    // Auto-generate tier number if not provided
+    let prizeTier = dto.prizeTier;
+    if (!prizeTier) {
+      // Get the highest tier number and add 1
+      const maxTier = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.prizeTier)', 'max')
+        .getRawOne();
 
-    if (existingTier) {
-      throw new ConflictException(
-        `Prize tier ${dto.prizeTier} is already active. Please deactivate it first or use update.`,
-      );
+      prizeTier = (maxTier?.max || 0) + 1;
+    } else {
+      // If provided, check if tier number is already active
+      const existingTier = await this.prizeConfigRepository.findOne({
+        where: { prizeTier, isActive: true },
+      });
+
+      if (existingTier) {
+        throw new ConflictException(
+          `Prize tier ${prizeTier} is already active. Please deactivate it first or use update.`,
+        );
+      }
     }
 
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
-      prizeTier: dto.prizeTier,
+      prizeTier,
       amount: dto.amount,
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
+      category: (dto.category || 'slab') as 'slab' | 'sealed',
+      stock: dto.stock ?? 0,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -135,7 +149,7 @@ export class PrizeService {
 
     const saved = await this.prizeConfigRepository.save(newTier);
     this.logger.log(
-      `Prize tier ${dto.prizeTier} created by user ${userId}. New ID: ${saved.id}`,
+      `Prize tier ${prizeTier} created by user ${userId}. New ID: ${saved.id}`,
     );
 
     return this.mapToDto(saved);
@@ -174,11 +188,13 @@ export class PrizeService {
 
     // Create new tier with updated data and new UUID
     const newTier = this.prizeConfigRepository.create({
-      prizeTier: dto.prizeTier,
+      prizeTier: dto.prizeTier ?? existingTier.prizeTier,
       amount: dto.amount,
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
+      category: (dto.category || existingTier.category) as 'slab' | 'sealed',
+      stock: dto.stock ?? existingTier.stock,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -186,7 +202,7 @@ export class PrizeService {
 
     const saved = await this.prizeConfigRepository.save(newTier);
     this.logger.log(
-      `Prize tier ${dto.prizeTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
+      `Prize tier ${dto.prizeTier ?? existingTier.prizeTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
     );
 
     return this.mapToDto(saved);
@@ -750,6 +766,31 @@ export class PrizeService {
         });
         await this.ensureRedemptionForOrder(savedOrder, prize);
 
+        // Decrement stock
+        this.logger.log(
+          `About to decrement stock for prize ${dto.prizeConfigId}`,
+        );
+        try {
+          const prizeToUpdate = await this.prizeConfigRepository.findOne({
+            where: { id: dto.prizeConfigId },
+          });
+          if (prizeToUpdate) {
+            prizeToUpdate.stock = Math.max(0, prizeToUpdate.stock - 1);
+            await this.prizeConfigRepository.save(prizeToUpdate);
+            this.logger.log(
+              `Stock decremented for prize ${dto.prizeConfigId}. New stock: ${prizeToUpdate.stock}`,
+            );
+          } else {
+            this.logger.error(
+              `Prize ${dto.prizeConfigId} not found for stock decrement`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to decrement stock for prize ${dto.prizeConfigId}: ${error}`,
+          );
+        }
+
         this.logger.log(
           `Prize order ${savedOrder.id} paid with coins for user ${userId}`,
         );
@@ -868,6 +909,28 @@ export class PrizeService {
     });
     await this.ensureRedemptionForOrder(updated, prize);
 
+    // Decrement stock
+    try {
+      const prizeToUpdate = await this.prizeConfigRepository.findOne({
+        where: { id: order.prizeConfigurationId },
+      });
+      if (prizeToUpdate) {
+        prizeToUpdate.stock = Math.max(0, prizeToUpdate.stock - 1);
+        await this.prizeConfigRepository.save(prizeToUpdate);
+        this.logger.log(
+          `Stock decremented for prize ${order.prizeConfigurationId}. New stock: ${prizeToUpdate.stock}`,
+        );
+      } else {
+        this.logger.error(
+          `Prize ${order.prizeConfigurationId} not found for stock decrement`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to decrement stock for prize ${order.prizeConfigurationId}: ${error}`,
+      );
+    }
+
     this.logger.log(`Order ${orderId} marked as paid after Stripe success`);
 
     return this.mapOrderToDto(updated);
@@ -877,17 +940,6 @@ export class PrizeService {
     order: PrizeOrder,
     prize: PrizeConfiguration,
   ): Promise<void> {
-    const existing = await this.prizeRedemptionRepository.findOne({
-      where: {
-        userId: order.userId,
-        prizeConfigurationId: order.prizeConfigurationId,
-      },
-    });
-
-    if (existing) {
-      return;
-    }
-
     let prizeCategory: PrizeCategory = PrizeCategory.SLAB;
     if (prize.category === 'sealed') {
       prizeCategory = PrizeCategory.SEALED;
@@ -1023,6 +1075,8 @@ export class PrizeService {
       name: entity.name,
       description: entity.description,
       imageUrl: entity.imageUrl,
+      category: entity.category,
+      stock: entity.stock,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
