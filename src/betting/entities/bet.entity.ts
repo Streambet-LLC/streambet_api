@@ -32,7 +32,7 @@ export class Bet extends BaseEntity {
   @Column({ name: 'betting_variable_id' })
   bettingVariableId: string;
 
-  @Column({ type: 'bigint' })
+  @Column({ type: 'decimal', precision: 12, scale: 3 })
   amount: number;
 
   @Column({
@@ -45,7 +45,7 @@ export class Bet extends BaseEntity {
   @Column({ type: 'enum', enum: BetStatus, default: BetStatus.Active })
   status: BetStatus;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 3, default: 0 })
   payout: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 3, nullable: true })

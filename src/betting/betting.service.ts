@@ -2969,8 +2969,10 @@ export class BettingService {
           'bettingVariable.name AS variablename',
           'bettingVariable.total_bets_gold_coin_amount AS variableTotalGoldCoins',
           'bettingVariable.total_bets_sweep_coin_amount AS variableTotalSweepCoins',
+          'bettingVariable.total_bets_cade_coin_amount AS variableTotalCadeCoins',
           'bettingVariable.bet_count_gold_coin AS betCountFreeGoldCoin',
           'bettingVariable.bet_count_sweep_coin AS betCountSweepCoin',
+          'bettingVariable.bet_count_cade_coin AS betCountCadeCoin',
         ])
         .getRawOne();
 
@@ -2979,8 +2981,8 @@ export class BettingService {
         return null;
       }
 
-      // Calculate potential winnings for Gold Coins and Sweep Coins
-      const { potentialSweepCoinAmt, potentialGoldCoinAmt, betAmount } =
+      // Calculate potential winnings for Gold Coins, Sweep Coins, and Cade Coins
+      const { potentialSweepCoinAmt, potentialGoldCoinAmt, potentialCadeCoinAmt, betAmount } =
         this.potentialAmountCal(bettingRound, bets);
 
       // Return structured response
@@ -2990,6 +2992,7 @@ export class BettingService {
         optionName: bets.variablename,
         potentialSweepCoinAmt,
         potentialGoldCoinAmt,
+        potentialCadeCoinAmt,
         betAmount,
         currencyType: bets.betcurrency,
       };
@@ -3175,8 +3178,10 @@ export class BettingService {
           'bettingVariable.name AS variablename',
           'bettingVariable.total_bets_gold_coin_amount AS variableTotalGoldCoins',
           'bettingVariable.total_bets_sweep_coin_amount AS variableTotalSweepCoins',
+          'bettingVariable.total_bets_cade_coin_amount AS variableTotalCadeCoins',
           'bettingVariable.bet_count_gold_coin AS betCountFreeGoldCoin',
           'bettingVariable.bet_count_sweep_coin AS betCountSweepCoin',
+          'bettingVariable.bet_count_cade_coin AS betCountCadeCoin',
         ])
         .getRawMany();
 
@@ -3186,8 +3191,8 @@ export class BettingService {
       for (const bet of allBets) {
         if (bet.betstatus === BetStatus.Active) {
           try {
-            // Calculate potential winnings for Gold Coins and Sweep Coins
-            const { potentialSweepCoinAmt, potentialGoldCoinAmt, betAmount } =
+            // Calculate potential winnings for all currency types
+            const { potentialSweepCoinAmt, potentialGoldCoinAmt, potentialCadeCoinAmt, betAmount } =
               this.potentialAmountCal(bettingRound, bet);
 
             potentialAmounts.push({
@@ -3198,6 +3203,7 @@ export class BettingService {
               optionName: bet.variablename,
               potentialSweepCoinAmt,
               potentialGoldCoinAmt,
+              potentialCadeCoinAmt,
               betAmount,
               currencyType: bet.betcurrency,
               bettingVariableId: bet.variableid,

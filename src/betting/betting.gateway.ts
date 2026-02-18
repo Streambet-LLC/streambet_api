@@ -271,9 +271,11 @@ export class BettingGateway {
           socket.emit(SocketEventName.PotentialAmountUpdate, {
             bettingVariableId: potentialAmount.bettingVariableId,
             potentialSweepCoinWinningAmount:
-              potentialAmount.potentialSweepCoinAmt,
+              potentialAmount.potentialSweepCoinAmt || 0,
             potentialGoldCoinWinningAmount:
-              potentialAmount.potentialGoldCoinAmt,
+              potentialAmount.potentialGoldCoinAmt || 0,
+            potentialCadeCoinWinningAmount:
+              potentialAmount.potentialCadeCoinAmt || 0,
             currencyType: potentialAmount.currencyType,
             optionName: potentialAmount.optionName,
           });
