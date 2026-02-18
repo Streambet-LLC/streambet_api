@@ -26,7 +26,7 @@ export class LiveFeedUpdate extends BaseEntity {
   @IsOptional()
   option?: string;
 
-  @Column({ name: 'amount' })
+  @Column({ name: 'amount', type: 'decimal', precision: 12, scale: 3 })
   @IsOptional()
   amount?: number;
 

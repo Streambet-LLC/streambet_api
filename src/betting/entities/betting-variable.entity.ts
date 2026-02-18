@@ -38,13 +38,15 @@ export class BettingVariable extends BaseEntity {
   })
   status: BettingVariableStatus;
 
+  // Deprecated currencies - kept as bigint (no fractional amounts)
   @Column({ type: 'bigint', default: 0, name: 'total_bets_gold_coin_amount' })
   totalBetsGoldCoinAmount: number;
 
   @Column({ type: 'bigint', default: 0, name: 'total_bets_sweep_coin_amount' })
   totalBetsSweepCoinAmount: number;
 
-  @Column({ type: 'bigint', default: 0, name: 'total_bets_cade_coin_amount' })
+  // Active currency - supports fractional amounts
+  @Column({ type: 'decimal', precision: 15, scale: 3, default: 0, name: 'total_bets_cade_coin_amount' })
   totalBetsCadeCoinAmount: number;
 
   @Column({ type: 'int', default: 0, name: 'bet_count_gold_coin' })
