@@ -52,10 +52,10 @@ export class BetEditHistory extends BaseEntity {
   @Column({ name: 'new_betting_variable_id' })
   newBettingVariableId: string;
 
-  @Column({ type: 'bigint', name: 'old_amount' })
+  @Column({ type: 'decimal', precision: 12, scale: 3, name: 'old_amount' })
   oldAmount: number;
 
-  @Column({ type: 'bigint', name: 'new_amount' })
+  @Column({ type: 'decimal', precision: 12, scale: 3, name: 'new_amount' })
   newAmount: number;
 
   @Column({

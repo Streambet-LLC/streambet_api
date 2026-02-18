@@ -37,6 +37,7 @@ import { User } from 'src/users/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
+import { Bet } from 'src/betting/entities/bet.entity';
 import { HomepageBetListDto } from './dto/homepage-bet-list.dto';
 import { UserRole } from 'src/enums/user-role.enum';
 import { getPromotedBetsConfig } from './config/promoted-bets.config';
@@ -160,6 +161,35 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     }
 
     return result;
+  }
+
+  /**
+   * Batch retrieves CADE coin user counts for multiple betting rounds.
+   * @param roundIds - Array of betting round IDs
+   * @returns Map of roundId to distinct user count
+   */
+  private async getCadeCoinUserCountsByRounds(
+    roundIds: string[],
+  ): Promise<Map<string, number>> {
+    if (roundIds.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const userCountResults = await this.dataSource
+      .getRepository(Bet)
+      .createQueryBuilder('bet')
+      .innerJoin('bet.bettingVariable', 'bv')
+      .where('bv.roundId IN (:...roundIds)', { roundIds })
+      .andWhere('bet.currency = :currency', {
+        currency: CurrencyType.CADE_COINS,
+      })
+      .andWhere('bet.status = :status', { status: BetStatus.Active })
+      .select('bv.roundId', 'roundId')
+      .addSelect('COUNT(DISTINCT bet.userId)', 'count')
+      .groupBy('bv.roundId')
+      .getRawMany();
+
+    return new Map(userCountResults.map((r) => [r.roundId, Number(r.count)]));
   }
 
   /**
@@ -326,6 +356,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         config.totalLimit
       );
 
+      // Batch fetch CADE coin user counts for all rounds
+      const roundIds = filteredRounds.map((round) => round.br_id);
+      const cadeCoinUserCountsByRounds = await this.getCadeCoinUserCountsByRounds(roundIds);
+
       const resultList = [];
 
       for (let i = 0; i < filteredRounds.length; i++) {
@@ -384,6 +418,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          cadeCoinUsersCount: cadeCoinUserCountsByRounds.get(item.br_id) || 0,
           description: item.s_description,
         }
 
@@ -1779,6 +1814,10 @@ END
       // Calculate hasNextPage based on filtered results
       const hasNextPage = filteredRounds.length >= take;
 
+      // Batch fetch user counts for all rounds
+      const roundIds = filteredRounds.map(r => r.br_id);
+      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
+
       const resultList = [];
 
       for (let i = 0; i < filteredRounds.length; i++) {
@@ -1849,6 +1888,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
         }
 
@@ -1901,6 +1941,10 @@ END
 
       const count = await betRoundsQB.getCount();
       const allRounds = await betRoundsQB.offset(offset).limit(take).getRawMany();
+
+      // Batch fetch user counts for all rounds
+      const roundIds = allRounds.map(r => r.br_id);
+      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
 
       const resultList = [];
 
@@ -1961,6 +2005,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
         }
 
@@ -2035,6 +2080,10 @@ END
       // Calculate hasNextPage based on filtered results
       const hasNextPage = filteredRounds.length >= take;
 
+      // Batch fetch user counts for all rounds
+      const roundIds = filteredRounds.map(r => r.br_id);
+      const userCountsMap = await this.getCadeCoinUserCountsByRounds(roundIds);
+
       const resultList = [];
 
       for (let i = 0; i < filteredRounds.length; i++) {
@@ -2093,6 +2142,7 @@ END
             goldCoins: totalGoldCoins,
             cadeCoins: totalCadeCoins,
           },
+          cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
         }
 
