@@ -34,7 +34,7 @@ import { User } from 'src/users/entities/user.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
-import { AnalyticsSummaryResponseDto } from './dto/analytics.dto';
+import { CreatorAnalyticsSummaryResponseDto } from './dto/analytics.dto';
 import { Stream } from 'src/stream/entities/stream.entity';
 import { CreatorApplicationDto } from './dto/creator-application.dto';
 import { CreatorApplication } from './entities/creator-application.entity';
@@ -70,7 +70,7 @@ export class CreatorService {
     creatorId,
   }: {
     creatorId: string;
-  }): Promise<AnalyticsSummaryResponseDto> {
+  }): Promise<CreatorAnalyticsSummaryResponseDto> {
     try {
       const totalViews = await this.streamsRepository.sum('viewerCount', {
         creatorId,

@@ -39,7 +39,7 @@ import { UserFilterDto, UserUpdateDto } from 'src/users/dto/user.requests.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
 import {
-  AnalyticsSummaryResponseDto,
+  CreatorAnalyticsSummaryResponseDto,
   StreamAnalyticsResponseDto,
 } from './dto/analytics.dto';
 import { StreamStatus } from 'src/enums/stream.enum';
@@ -278,7 +278,7 @@ export class CreatorController {
   @SwaggerApiResponse({
     status: 200,
     description: 'Analytics summary fetched successfully',
-    type: AnalyticsSummaryResponseDto,
+    type: CreatorAnalyticsSummaryResponseDto,
   })
   @Get('analytics/summary')
   async getAnalyticsSummary(@Request() req: RequestWithUser) {

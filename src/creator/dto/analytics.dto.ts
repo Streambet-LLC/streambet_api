@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class AnalyticsSummaryResponseDto {
+export class CreatorAnalyticsSummaryResponseDto {
   @ApiProperty({ type: Number, description: 'Total views' })
   totalViews: number;
 

@@ -1,0 +1,41 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "subject": {
+      "type": "string"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "prizeName": {
+          "type": "string"
+        },
+        "offerAmount": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "adminUrl": {
+          "type": "string"
+        }
+      },
+      "required": ["orderId", "userId", "prizeName", "offerAmount", "adminUrl"]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}

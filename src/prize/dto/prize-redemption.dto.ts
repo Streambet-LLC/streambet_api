@@ -95,7 +95,7 @@ export class SubmitPrizeRedemptionDto {
   prizeLevel: number;
 
   @ApiProperty({
-    example: PrizeCategory.POKEMON,
+    example: PrizeCategory.SLAB,
     description: 'Selected prize category',
     enum: PrizeCategory,
   })
@@ -352,4 +352,25 @@ export class AdminRedemptionResponseDto {
     description: 'Prize configuration details',
   })
   prizeConfiguration?: RedemptionPrizeConfigDto;
+
+  @ApiProperty({
+    example: 'coins',
+    nullable: true,
+    description: 'Payment method used (coins, usd, or combined)',
+  })
+  paymentMethod?: string | null;
+
+  @ApiProperty({
+    example: 100,
+    nullable: true,
+    description: 'CadeCoins deducted for this purchase',
+  })
+  coinsDeducted?: number | null;
+
+  @ApiProperty({
+    example: '9.99',
+    nullable: true,
+    description: 'USD charged for this purchase',
+  })
+  usdCharged?: string | null;
 }

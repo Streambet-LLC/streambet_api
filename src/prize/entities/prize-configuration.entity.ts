@@ -27,6 +27,18 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({
+    type: 'enum',
+    enum: ['slab', 'sealed'],
+    name: 'category',
+    nullable: false,
+    default: 'slab',
+  })
+  category: 'slab' | 'sealed';
+
+  @Column({ type: 'integer', name: 'stock', default: 0, nullable: false })
+  stock: number;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

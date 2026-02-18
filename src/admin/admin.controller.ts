@@ -47,7 +47,7 @@ import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
 import {
-  AnalyticsSummaryResponseDto,
+  AdminAnalyticsSummaryResponseDto,
   StreamAnalyticsResponseDto,
 } from './dto/analytics.dto';
 import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
@@ -731,7 +731,7 @@ export class AdminController {
   @SwaggerApiResponse({
     status: 200,
     description: 'Analytics summary fetched successfully',
-    type: AnalyticsSummaryResponseDto,
+    type: AdminAnalyticsSummaryResponseDto,
   })
   @Get('analytics/summary')
   async getAnalyticsSummary(@Request() req: RequestWithUser) {

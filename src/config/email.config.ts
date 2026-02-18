@@ -62,5 +62,25 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/betting_stream_summary.ejs',
       schemaPath: './src/templates/betting_stream_summary.json',
     },
+    prize_shipped: {
+      templatePath: './src/templates/prize_shipped.ejs',
+      schemaPath: './src/templates/prize_shipped.json',
+    },
+    offer_made: {
+      templatePath: './src/templates/offer_made.ejs',
+      schemaPath: './src/templates/offer_made.json',
+    },
+    offer_countered: {
+      templatePath: './src/templates/offer_countered.ejs',
+      schemaPath: './src/templates/offer_countered.json',
+    },
+    offer_accepted: {
+      templatePath: './src/templates/offer_accepted.ejs',
+      schemaPath: './src/templates/offer_accepted.json',
+    },
+    offer_rejected: {
+      templatePath: './src/templates/offer_rejected.ejs',
+      schemaPath: './src/templates/offer_rejected.json',
+    },
   },
 }));
