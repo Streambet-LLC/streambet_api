@@ -33,6 +33,7 @@ import {
   CounterOfferDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
+import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -144,6 +145,7 @@ export class PrizeService {
       imageUrl: dto.imageUrl || null,
       category: (dto.category || 'slab') as 'slab' | 'sealed',
       stock: dto.stock ?? 0,
+      purchaseOption: dto.purchaseOption || PrizePurchaseOption.BOTH,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -197,6 +199,7 @@ export class PrizeService {
       imageUrl: dto.imageUrl || null,
       category: (dto.category || existingTier.category) as 'slab' | 'sealed',
       stock: dto.stock ?? existingTier.stock,
+      purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -681,6 +684,9 @@ export class PrizeService {
     if (!prize.isActive) {
       throw new BadRequestException('This prize is no longer available');
     }
+    if (prize.purchaseOption === PrizePurchaseOption.OFFERS_ONLY) {
+      throw new BadRequestException('This prize is offer-only and cannot be purchased directly');
+    }
 
     const SHIPPING_FEE = 5; // $5 shipping fee
 
@@ -1099,6 +1105,9 @@ export class PrizeService {
     if (!prize.isActive) {
       throw new BadRequestException('This prize is not available');
     }
+    if (prize.purchaseOption === PrizePurchaseOption.BUY_ONLY) {
+      throw new BadRequestException('This prize is buy-only and does not accept offers');
+    }
 
     const SHIPPING_FEE = 5; // $5 shipping fee
     const totalWithShipping = dto.offerAmount + SHIPPING_FEE;
@@ -1402,6 +1411,7 @@ export class PrizeService {
       imageUrl: entity.imageUrl,
       category: entity.category,
       stock: entity.stock,
+      purchaseOption: entity.purchaseOption,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
