@@ -8,6 +8,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { PrizeCategory } from '../enums/prize-category.enum';
+import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 
 /**
  * DTO for individual prize tier information
@@ -106,6 +107,13 @@ export class PrizeConfigurationDto {
   })
   stock: number;
 
+  @ApiProperty({
+    example: 'both',
+    description: 'Purchase option: offers only, buy only, or both',
+    enum: PrizePurchaseOption,
+  })
+  purchaseOption: PrizePurchaseOption;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -170,6 +178,16 @@ export class CreatePrizeTierDto {
   @IsInt()
   @Min(0)
   stock?: number;
+
+  @ApiProperty({
+    example: 'both',
+    description: 'Purchase option: offers only, buy only, or both',
+    enum: PrizePurchaseOption,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizePurchaseOption)
+  purchaseOption?: PrizePurchaseOption;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
@@ -239,6 +257,16 @@ export class UpdatePrizeTierDto {
   @IsInt()
   @Min(0)
   stock?: number;
+
+  @ApiProperty({
+    example: 'both',
+    description: 'Purchase option: offers only, buy only, or both',
+    enum: PrizePurchaseOption,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizePurchaseOption)
+  purchaseOption?: PrizePurchaseOption;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
