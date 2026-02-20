@@ -29,6 +29,7 @@ import { WebhookDto } from 'src/webhook/dto/webhook.dto';
 import { Repository } from 'typeorm';
 import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
 
 @Injectable()
 export class PaymentsService {
@@ -53,6 +54,8 @@ export class PaymentsService {
     private readonly notificationService: NotificationService,
     @InjectRepository(Transaction)
     private transactionsRepository: Repository<Transaction>,
+    @InjectRepository(PrizeOrder)
+    private readonly prizeOrderRepository: Repository<PrizeOrder>,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -110,7 +113,12 @@ export class PaymentsService {
     );
   }
 
-  async createCheckoutSession(userId: string, packageId: string) {
+  async createCheckoutSession(
+    userId: string,
+    packageId: string,
+    shippingAddress?: any,
+    prizeConfigId?: string,
+  ) {
     // Define available packages
     type PackageInfo = {
       id: string;
@@ -142,6 +150,27 @@ export class PaymentsService {
     }
 
     const selectedPackage = packages[packageId];
+
+    // If shippingAddress and prizeConfigId are provided, track this as a started prize order
+    if (shippingAddress && prizeConfigId) {
+      try {
+        await this.prizeOrderRepository.save({
+          userId,
+          prizeConfigurationId: prizeConfigId,
+          shippingAddress,
+          paymentMethod: 'usd',
+          coinsDeducted: 0,
+          usdCharged: 0,
+          totalPrice: selectedPackage.price,
+          status: 'started',
+        });
+      } catch (error) {
+        Logger.error(
+          `Failed to save prize order with status 'started': ${error}`,
+          'PaymentsService',
+        );
+      }
+    }
 
     // Create Stripe Checkout Session
     const session = await this.stripe.checkout.sessions.create({

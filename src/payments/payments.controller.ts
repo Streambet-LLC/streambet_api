@@ -55,6 +55,24 @@ export class PaymentsController {
           type: 'string',
           description: 'Gold Coin package ID to purchase',
         },
+        shippingAddress: {
+          type: 'object',
+          description:
+            'Optional shipping address for tracking prize purchase attempts',
+          properties: {
+            addressLine1: { type: 'string' },
+            addressLine2: { type: 'string' },
+            city: { type: 'string' },
+            state: { type: 'string' },
+            zipCode: { type: 'string' },
+            country: { type: 'string' },
+          },
+        },
+        prizeConfigId: {
+          type: 'string',
+          description:
+            'Optional prize configuration ID when purchasing prize with shipping',
+        },
       },
     },
   })
@@ -70,8 +88,15 @@ export class PaymentsController {
   async createCheckoutSession(
     @Request() req: RequestWithUser,
     @Body('packageId') packageId: string,
+    @Body('shippingAddress') shippingAddress?: any,
+    @Body('prizeConfigId') prizeConfigId?: string,
   ) {
-    return this.paymentsService.createCheckoutSession(req.user.id, packageId);
+    return this.paymentsService.createCheckoutSession(
+      req.user.id,
+      packageId,
+      shippingAddress,
+      prizeConfigId,
+    );
   }
 
   @ApiOperation({ summary: 'Stripe webhook endpoint' })
