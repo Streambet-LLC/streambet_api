@@ -151,7 +151,7 @@ export class PaymentsService {
 
     const selectedPackage = packages[packageId];
 
-    // If shippingAddress and prizeConfigId are provided, track this as a started prize order
+    // If shippingAddress and prizeConfigId are provided, track this as a buy_attempted prize order
     if (shippingAddress && prizeConfigId) {
       try {
         await this.prizeOrderRepository.save({
@@ -162,11 +162,11 @@ export class PaymentsService {
           coinsDeducted: 0,
           usdCharged: 0,
           totalPrice: selectedPackage.price,
-          status: 'started',
+          status: 'buy_attempted',
         });
       } catch (error) {
         Logger.error(
-          `Failed to save prize order with status 'started': ${error}`,
+          `Failed to save prize order with status 'buy_attempted': ${error}`,
           'PaymentsService',
         );
       }
