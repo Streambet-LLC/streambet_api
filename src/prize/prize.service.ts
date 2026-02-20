@@ -136,16 +136,34 @@ export class PrizeService {
       }
     }
 
+    // Determine purchase option (default to BOTH)
+    const purchaseOption = dto.purchaseOption || PrizePurchaseOption.BOTH;
+
+    // Validate and set amount
+    let amount: number;
+    if (purchaseOption === PrizePurchaseOption.OFFERS_ONLY) {
+      // For offers_only, use 1 as default (admin doesn't need to enter price)
+      amount = dto.amount && dto.amount > 0 ? dto.amount : 1;
+    } else {
+      // For buy_only or both, amount is required and must be positive
+      if (!dto.amount || dto.amount <= 0) {
+        throw new BadRequestException(
+          'Prize amount is required and must be positive for buy_only and both purchase options',
+        );
+      }
+      amount = dto.amount;
+    }
+
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
-      amount: dto.amount,
+      amount,
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
       category: (dto.category || 'slab') as 'slab' | 'sealed',
       stock: dto.stock ?? 0,
-      purchaseOption: dto.purchaseOption || PrizePurchaseOption.BOTH,
+      purchaseOption,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -181,9 +199,22 @@ export class PrizeService {
       );
     }
 
-    // Validate that amounts are positive
-    if (dto.amount <= 0) {
-      throw new BadRequestException('Prize amount must be positive');
+    // Determine purchase option
+    const purchaseOption = dto.purchaseOption || existingTier.purchaseOption;
+
+    // Validate and set amount
+    let amount: number;
+    if (purchaseOption === PrizePurchaseOption.OFFERS_ONLY) {
+      // For offers_only, use 1 as default (admin doesn't need to enter price)
+      amount = dto.amount && dto.amount > 0 ? dto.amount : 1;
+    } else {
+      // For buy_only or both, amount is required and must be positive
+      if (!dto.amount || dto.amount <= 0) {
+        throw new BadRequestException(
+          'Prize amount is required and must be positive for buy_only and both purchase options',
+        );
+      }
+      amount = dto.amount;
     }
 
     // Data hardening: Set old tier to inactive
@@ -193,7 +224,7 @@ export class PrizeService {
     // Create new tier with updated data and new UUID
     const newTier = this.prizeConfigRepository.create({
       prizeTier: dto.prizeTier ?? existingTier.prizeTier,
-      amount: dto.amount,
+      amount,
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
