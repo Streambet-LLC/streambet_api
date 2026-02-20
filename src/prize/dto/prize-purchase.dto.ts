@@ -125,6 +125,7 @@ export class PrizeOrderResponseDto {
   @ApiProperty({
     enum: [
       'pending',
+      'buy_attempted',
       'paid',
       'processing',
       'shipped',
@@ -138,6 +139,7 @@ export class PrizeOrderResponseDto {
   })
   status:
     | 'pending'
+    | 'buy_attempted'
     | 'paid'
     | 'processing'
     | 'shipped'
