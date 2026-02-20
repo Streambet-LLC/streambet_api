@@ -110,7 +110,7 @@ export class PrizeOrder extends BaseEntity {
   })
   status:
     | 'pending'
-    | 'started'
+    | 'buy_attempted'
     | 'paid'
     | 'processing'
     | 'shipped'
