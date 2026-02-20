@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
+import { PrizeBrand } from '../enums/prize-brand.enum';
 
 /**
  * Entity for storing prize tier configurations.
@@ -47,6 +48,14 @@ export class PrizeConfiguration extends BaseEntity {
     default: PrizePurchaseOption.BOTH,
   })
   purchaseOption: PrizePurchaseOption;
+
+  @Column({
+    type: 'enum',
+    enum: PrizeBrand,
+    name: 'brand',
+    default: PrizeBrand.POKEMON,
+  })
+  brand: PrizeBrand;
 
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;

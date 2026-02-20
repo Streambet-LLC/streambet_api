@@ -34,6 +34,7 @@ import {
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
+import { PrizeBrand } from './enums/prize-brand.enum';
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -164,6 +165,7 @@ export class PrizeService {
       category: (dto.category || 'slab') as 'slab' | 'sealed',
       stock: dto.stock ?? 0,
       purchaseOption,
+      brand: dto.brand || PrizeBrand.POKEMON,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -231,6 +233,7 @@ export class PrizeService {
       category: (dto.category || existingTier.category) as 'slab' | 'sealed',
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
+      brand: dto.brand || existingTier.brand,
       isActive: true,
       createdBy: userId,
       updatedBy: userId,
@@ -1448,6 +1451,7 @@ export class PrizeService {
       category: entity.category,
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
+      brand: entity.brand,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
