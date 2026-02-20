@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { PrizeCategory } from '../enums/prize-category.enum';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
+import { PrizeBrand } from '../enums/prize-brand.enum';
 
 /**
  * DTO for individual prize tier information
@@ -114,6 +115,13 @@ export class PrizeConfigurationDto {
   })
   purchaseOption: PrizePurchaseOption;
 
+  @ApiProperty({
+    example: 'pokemon',
+    description: 'Prize brand: pokemon, one_piece, or sports',
+    enum: PrizeBrand,
+  })
+  brand: PrizeBrand;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -191,6 +199,16 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsEnum(PrizePurchaseOption)
   purchaseOption?: PrizePurchaseOption;
+
+  @ApiProperty({
+    example: 'pokemon',
+    description: 'Prize brand: pokemon, one_piece, or sports',
+    enum: PrizeBrand,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizeBrand)
+  brand?: PrizeBrand;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
@@ -273,6 +291,16 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsEnum(PrizePurchaseOption)
   purchaseOption?: PrizePurchaseOption;
+
+  @ApiProperty({
+    example: 'pokemon',
+    description: 'Prize brand: pokemon, one_piece, or sports',
+    enum: PrizeBrand,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizeBrand)
+  brand?: PrizeBrand;
 
   @ApiProperty({
     example: 'Reach 250,000 lifetime coins to unlock the Legend badge',
