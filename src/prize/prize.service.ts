@@ -685,7 +685,9 @@ export class PrizeService {
       throw new BadRequestException('This prize is no longer available');
     }
     if (prize.purchaseOption === PrizePurchaseOption.OFFERS_ONLY) {
-      throw new BadRequestException('This prize is offer-only and cannot be purchased directly');
+      throw new BadRequestException(
+        'This prize is offer-only and cannot be purchased directly',
+      );
     }
 
     const SHIPPING_FEE = 5; // $5 shipping fee
@@ -744,7 +746,7 @@ export class PrizeService {
       coinsDeducted: dto.coinsAmount,
       usdCharged: parseFloat((dto.usdAmount + SHIPPING_FEE).toString()),
       totalPrice: parseFloat((dto.totalPrice + SHIPPING_FEE).toString()),
-      status: 'pending', // Will be updated to 'paid' after Stripe or coins deduction
+      status: 'buy_attempted', // User submitted form with shipping info
     });
 
     const savedOrder = await this.prizeOrderRepository.save(order);
@@ -1039,6 +1041,7 @@ export class PrizeService {
     orderId: string,
     status:
       | 'pending'
+      | 'buy_attempted'
       | 'paid'
       | 'processing'
       | 'shipped'
@@ -1106,7 +1109,9 @@ export class PrizeService {
       throw new BadRequestException('This prize is not available');
     }
     if (prize.purchaseOption === PrizePurchaseOption.BUY_ONLY) {
-      throw new BadRequestException('This prize is buy-only and does not accept offers');
+      throw new BadRequestException(
+        'This prize is buy-only and does not accept offers',
+      );
     }
 
     const SHIPPING_FEE = 5; // $5 shipping fee

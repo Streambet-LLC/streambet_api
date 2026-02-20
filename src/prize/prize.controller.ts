@@ -489,6 +489,7 @@ export class AdminPrizeController {
     @Body('status')
     status:
       | 'pending'
+      | 'buy_attempted'
       | 'paid'
       | 'processing'
       | 'shipped'
