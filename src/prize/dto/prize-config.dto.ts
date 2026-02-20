@@ -146,11 +146,14 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 250000,
-    description: 'Coin threshold for this tier',
+    description:
+      'Coin threshold for this tier (optional for offers_only, will default to 1)',
+    required: false,
   })
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  amount: number;
+  amount?: number;
 
   @ApiProperty({
     example: 'Legend',
@@ -225,11 +228,14 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: 250000,
-    description: 'Updated coin threshold',
+    description:
+      'Updated coin threshold (optional for offers_only, will default to 1)',
+    required: false,
   })
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  amount: number;
+  amount?: number;
 
   @ApiProperty({
     example: 'Legend',
