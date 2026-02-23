@@ -1770,6 +1770,9 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
@@ -1865,13 +1868,22 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
+        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+
+          let percentage;
+          if (hideSentimentResults) {
+            percentage = 0;
+          } else {
+            percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
+          }
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
+            percentage,
             isWinner: v.bv_is_winning_option,
             createdAt: v.bv_createdAt,
             userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
@@ -1891,6 +1903,7 @@ END
           name: item.br_roundName,
           type: item.s_type,
           betRoundType: item.br_type,
+          mechanism: item.br_mechanism,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           category: item.br_category,
@@ -1907,6 +1920,9 @@ END
           },
           cadeCoinUsersCount: userCountsMap.get(item.br_id) || 0,
           description: item.s_description,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
         }
 
         resultList.push(itemData);
@@ -1941,6 +1957,9 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
@@ -1988,13 +2007,22 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
+        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+
+          let percentage;
+          if (hideSentimentResults) {
+            percentage = 0;
+          } else {
+            percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
+          }
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
+            percentage,
             isWinner: v.bv_is_winning_option,
             createdAt: v.bv_createdAt,
           }
@@ -2009,6 +2037,7 @@ END
           name: item.br_roundName,
           type: item.s_type,
           betRoundType: item.br_type,
+          mechanism: item.br_mechanism,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
           // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
@@ -2060,6 +2089,9 @@ END
     try {
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
@@ -2126,13 +2158,22 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
+        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+
+          let percentage;
+          if (hideSentimentResults) {
+            percentage = 0;
+          } else {
+            percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
+          }
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
+            percentage,
             isWinner: v.bv_is_winning_option,
             createdAt: v.bv_createdAt,
           }
@@ -2146,8 +2187,12 @@ END
           name: item.br_roundName,
           type: item.s_type,
           betRoundType: item.br_type,
+          mechanism: item.br_mechanism,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
           // options: options.sort((a, b) => Number(b.percentage) - Number(a.percentage)),
           // options,
           options: options.sort((a, b) => {
