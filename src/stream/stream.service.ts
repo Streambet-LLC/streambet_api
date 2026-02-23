@@ -21,6 +21,7 @@ import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { BettingRoundStatus } from 'src/enums/round-status.enum';
 import { BetStatus } from 'src/enums/bet-status.enum';
 import { PlatformName } from 'src/enums/platform-name.enum';
+import { PickMechanism } from 'src/enums/pick-mechanism.enum';
 import { QueueService } from 'src/queue/queue.service';
 import { BettingService } from 'src/betting/betting.service';
 import { BettingSummaryService } from 'src/redis/betting-summary.service';
@@ -333,6 +334,9 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
 
       const betRoundsQB = this.bettingRoundRepository
         .createQueryBuilder('br')
+        .addSelect('br.firstRevealTime')
+        .addSelect('br.lastRevealTime')
+        .addSelect('br.isInitialRevealPeriod')
         .where("br.status IN (:...statuses)", {
           statuses: [BettingRoundStatus.OPEN]
         })
@@ -385,13 +389,22 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
+        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
+
+          let percentage;
+          if (hideSentimentResults) {
+            percentage = 0;
+          } else {
+            percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
+          }
 
           return {
             id: v.bv_id,
             option: v.bv_name,
-            percentage: totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0,
+            percentage,
             isWinner: v.bv_is_winning_option,
             createdAt: v.bv_createdAt,
           }
@@ -409,6 +422,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           betRoundType: item.br_type,
           streamStatus: item.s_status,
           scheduledStartTime: item.s_scheduledStartTime,
+          mechanism: item.br_mechanism,
+          firstRevealTime: item.br_firstRevealTime,
+          lastRevealTime: item.br_lastRevealTime,
+          isInitialRevealPeriod: item.br_isInitialRevealPeriod,
           options: options.sort((a, b) => {
             return moment(b.createdAt)
               .isAfter(moment(a.createdAt)) ? -1 : 1
