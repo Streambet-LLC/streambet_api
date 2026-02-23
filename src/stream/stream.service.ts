@@ -389,7 +389,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
-        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+        const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
+        const hideSentimentResults = isSentimentPick && item.br_isInitialRevealPeriod;
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
@@ -397,6 +398,8 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
           let percentage;
           if (hideSentimentResults) {
             percentage = 0;
+          } else if (isSentimentPick) {
+            percentage = totalVotes > 0 ? (votes / totalVotes * 100).toFixed(2) : 0;
           } else {
             percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
           }
@@ -907,21 +910,38 @@ END
         });
       });
 
-      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map((round) => {
-        let totalCadeCoins = 0;
+      const bettingRoundsWithVariablePercentages = stream.bettingRounds.map(
+        (round) => {
+          let totalCadeCoins = 0;
+          let totalSentimentVotes = 0;
 
-        round.bettingVariables.forEach((bv) => {
-          totalCadeCoins += Number(bv.totalBetsCadeCoinAmount)
-        });
+          round.bettingVariables.forEach((bv) => {
+            totalCadeCoins += Number(bv.totalBetsCadeCoinAmount);
+            totalSentimentVotes += Number(bv.betCountCadeCoin || 0);
+          });
 
-        const variables = round.bettingVariables.map((bv) => ({
-          percentage: totalCadeCoins > 0 ? (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins * 100).toFixed(2) : 0,
-        }))
+          const isSentimentPick = round.mechanism === PickMechanism.SENTIMENT;
+          const variables = round.bettingVariables.map((bv) => ({
+            percentage: isSentimentPick
+              ? totalSentimentVotes > 0
+                ? (
+                    (Number(bv.betCountCadeCoin || 0) / totalSentimentVotes) *
+                    100
+                  ).toFixed(2)
+                : 0
+              : totalCadeCoins > 0
+                ? (
+                    (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
+                    100
+                  ).toFixed(2)
+                : 0,
+          }));
 
-        return {
-          bettingVariables: variables,
-        }
-      })
+          return {
+            bettingVariables: variables,
+          };
+        },
+      );
 
       const result = {
         walletGoldCoin: wallet?.goldCoins || 0,
@@ -1868,7 +1888,8 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
-        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+        const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
+        const hideSentimentResults = isSentimentPick && item.br_isInitialRevealPeriod;
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
@@ -1876,6 +1897,8 @@ END
           let percentage;
           if (hideSentimentResults) {
             percentage = 0;
+          } else if (isSentimentPick) {
+            percentage = totalVotes > 0 ? (votes / totalVotes * 100).toFixed(2) : 0;
           } else {
             percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
           }
@@ -2007,7 +2030,8 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
-        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+        const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
+        const hideSentimentResults = isSentimentPick && item.br_isInitialRevealPeriod;
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
@@ -2015,6 +2039,8 @@ END
           let percentage;
           if (hideSentimentResults) {
             percentage = 0;
+          } else if (isSentimentPick) {
+            percentage = totalVotes > 0 ? (votes / totalVotes * 100).toFixed(2) : 0;
           } else {
             percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
           }
@@ -2158,7 +2184,8 @@ END
           totalCadeCoins += Number(bv.bv_total_bets_cade_coin_amount)
         });
 
-        const hideSentimentResults = item.br_mechanism === PickMechanism.SENTIMENT && item.br_isInitialRevealPeriod;
+        const isSentimentPick = item.br_mechanism === PickMechanism.SENTIMENT;
+        const hideSentimentResults = isSentimentPick && item.br_isInitialRevealPeriod;
 
         const options = variables.map((v) => {
           const votes = Number(v.bv_bet_count_gold_coin) + Number(v.bv_bet_count_sweep_coin) + Number(v.bv_bet_count_cade_coin)
@@ -2166,6 +2193,8 @@ END
           let percentage;
           if (hideSentimentResults) {
             percentage = 0;
+          } else if (isSentimentPick) {
+            percentage = totalVotes > 0 ? (votes / totalVotes * 100).toFixed(2) : 0;
           } else {
             percentage = totalCadeCoins > 0 ? (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins * 100).toFixed(2) : 0;
           }
