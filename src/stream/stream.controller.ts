@@ -192,9 +192,10 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
     summary: 'Lists Promoted Bets',
   })
   // @UseGuards(GeoFencingGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('promoted-bets')
-  async promotedBets() {
-    const { data } = await this.streamService.getTopPromotedBets();
+  async promotedBets(@Request() req: RequestWithUser) {
+    const { data } = await this.streamService.getTopPromotedBets(req.user ? req.user.id : null,);
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',

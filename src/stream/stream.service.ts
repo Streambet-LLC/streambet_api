@@ -313,7 +313,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
     }
   }
 
-  async getTopPromotedBets(): Promise<any> {
+  async getTopPromotedBets(userId?: string | null): Promise<any> {
     try {
       // Fetch active promo cards (up to 10)
       const promoCards = await this.streamsRepository
@@ -369,12 +369,17 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
       for (let i = 0; i < filteredRounds.length; i++) {
         const item = filteredRounds[i];
 
-        const variables = await this.bettingVariableRepository
+        const variablesQb = this.bettingVariableRepository
           .createQueryBuilder("bv")
           .where("bv.roundId = :roundId", {
             roundId: item.br_id
-          })
-          .getRawMany();
+          });
+
+        if (userId) {
+          variablesQb.leftJoinAndSelect('bv.bets', 'user_bet', 'user_bet.user_id = :userId', { userId });
+        }
+
+        const variables = await variablesQb.getRawMany();
 
         let totalVotes = 0;
         let totalStreamCoins = 0;
@@ -410,6 +415,10 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
             percentage,
             isWinner: v.bv_is_winning_option,
             createdAt: v.bv_createdAt,
+            userBet: !!v.user_bet_id && v.user_bet_currency === CurrencyType.CADE_COINS ? {
+              amount: v.user_bet_amount,
+              currency: v.user_bet_currency,
+            } : null
           }
         });
 
@@ -925,15 +934,15 @@ END
             percentage: isSentimentPick
               ? totalSentimentVotes > 0
                 ? (
-                    (Number(bv.betCountCadeCoin || 0) / totalSentimentVotes) *
-                    100
-                  ).toFixed(2)
+                  (Number(bv.betCountCadeCoin || 0) / totalSentimentVotes) *
+                  100
+                ).toFixed(2)
                 : 0
               : totalCadeCoins > 0
                 ? (
-                    (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
-                    100
-                  ).toFixed(2)
+                  (Number(bv.totalBetsCadeCoinAmount) / totalCadeCoins) *
+                  100
+                ).toFixed(2)
                 : 0,
           }));
 
