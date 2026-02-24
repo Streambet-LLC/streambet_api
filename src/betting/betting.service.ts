@@ -976,7 +976,9 @@ export class BettingService {
           createdBy: creator,
           category: roundData.category,
           type: roundData.betRoundType,
+          mechanism: roundData.mechanism,
         });
+
         bettingRound = await this.bettingRoundsRepository.save(bettingRound);
 
         await this.betRoundHistoryService.recordBetRoundHistory(
