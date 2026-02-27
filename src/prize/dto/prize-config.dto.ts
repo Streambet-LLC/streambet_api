@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsEnum,
+  IsBoolean,
 } from 'class-validator';
 import { PrizeCategory } from '../enums/prize-category.enum';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
@@ -122,6 +123,24 @@ export class PrizeConfigurationDto {
   })
   brand: PrizeBrand;
 
+  @ApiProperty({
+    example: 0,
+    description: 'Order of display on frontend pages',
+  })
+  displayOrder: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the redemptions page',
+  })
+  showOnRedemptions: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether to show this prize on Nick's Niceties page",
+  })
+  showOnNicksNiceties: boolean;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -227,6 +246,33 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Order of display on frontend pages',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  displayOrder?: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the redemptions page',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnRedemptions?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether to show this prize on Nick's Niceties page",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnNicksNiceties?: boolean;
 }
 
 /**
@@ -319,6 +365,33 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Order of display on frontend pages',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  displayOrder?: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the redemptions page',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnRedemptions?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether to show this prize on Nick's Niceties page",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnNicksNiceties?: boolean;
 }
 
 /**
