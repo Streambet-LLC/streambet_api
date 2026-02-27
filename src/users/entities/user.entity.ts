@@ -101,6 +101,9 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean', default: false, name: 'is_creator' })
   isCreator: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_seller' })
+  isSeller: boolean;
+
   @Column({ type: 'decimal', default: 0, name: 'revShare' })
   revShare: number;
 

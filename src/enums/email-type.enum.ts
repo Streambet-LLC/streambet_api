@@ -7,4 +7,6 @@ export enum EmailType {
   BetWonGoldCoin = 'bet_won_gold_coin',
   CoinPurchase = 'coin_purchase',
   BettingStreamSummary = 'betting_stream_summary',
+  ApplicationApproved = 'application_approved',
+  ApplicationRejected = 'application_rejected',
 }

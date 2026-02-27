@@ -10,6 +10,7 @@ import { Stream } from 'src/stream/entities/stream.entity';
 import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
 import { CreatorApplication } from './entities/creator-application.entity';
 import { User } from 'src/users/entities/user.entity';
+import { EmailsModule } from 'src/emails/email.module';
 
 @Module({
   imports: [
@@ -19,8 +20,10 @@ import { User } from 'src/users/entities/user.entity';
     BettingModule,
     StreamModule,
     PlatformPayoutModule,
+    EmailsModule,
   ],
   controllers: [CreatorController],
   providers: [CreatorService],
+  exports: [CreatorService],
 })
 export class CreatorModule {}

@@ -1,0 +1,74 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "emailDetails": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        },
+        "subject": {
+          "type": "string"
+        },
+        "html": {
+          "type": "string"
+        }
+      },
+      "required": ["to", "from", "subject", "html"]
+    },
+    "params": {
+      "type": "object",
+      "required": ["username", "applicationType", "dashboardLink"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Username of the applicant"
+        },
+        "applicationType": {
+          "type": "string",
+          "description": "Type of application (creator or seller)"
+        },
+        "dashboardLink": {
+          "type": "string",
+          "description": "Link to user dashboard"
+        }
+      }
+    }
+  },
+  "required": ["params"]
+}

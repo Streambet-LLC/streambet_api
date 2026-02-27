@@ -2,7 +2,7 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('email', () => ({
   // Determine if we should use MailHog based on NODE_ENV
-  USE_MAILHOG: false,
+  USE_MAILHOG: true,
 
   // MailHog Configuration (Development)
   MAILHOG_HOST: process.env.MAILHOG_HOST || 'localhost',
@@ -81,6 +81,14 @@ export default registerAs('email', () => ({
     offer_rejected: {
       templatePath: './src/templates/offer_rejected.ejs',
       schemaPath: './src/templates/offer_rejected.json',
+    },
+    application_approved: {
+      templatePath: './src/templates/application_approved.ejs',
+      schemaPath: './src/templates/application_approved.json',
+    },
+    application_rejected: {
+      templatePath: './src/templates/application_rejected.ejs',
+      schemaPath: './src/templates/application_rejected.json',
     },
   },
 }));
