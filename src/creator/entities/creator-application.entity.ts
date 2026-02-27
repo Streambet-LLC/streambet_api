@@ -20,11 +20,37 @@ export class CreatorApplication extends BaseEntity {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', length: 50, default: 'creator', name: 'application_type' })
+  applicationType: string;
+
+  // Creator-specific fields (nullable)
+  @Column({ type: 'text', nullable: true })
   socials: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: true })
   message: string;
+
+  // Seller-specific fields (nullable)
+  @Column({ type: 'text', nullable: true, name: 'collector_background' })
+  collectorBackground: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'city_state' })
+  cityState: string;
+
+  @Column({ type: 'text', nullable: true, name: 'cards_collected' })
+  cardsCollected: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'card_preference' })
+  cardPreference: string;
+
+  @Column({ type: 'varchar', length: 50, default: 'pending', name: 'application_status' })
+  applicationStatus: string;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'reviewed_at' })
+  reviewedAt: Date;
+
+  @Column({ type: 'varchar', nullable: true, name: 'reviewed_by_user_id' })
+  reviewedByUserId: string;
 
   @Column({ default: false, name: 'is_deleted', type: 'boolean' })
   isDeleted: boolean;

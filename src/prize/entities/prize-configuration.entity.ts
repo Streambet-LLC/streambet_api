@@ -57,6 +57,15 @@ export class PrizeConfiguration extends BaseEntity {
   })
   brand: PrizeBrand;
 
+  @Column({ type: 'integer', name: 'display_order', default: 0, nullable: false })
+  displayOrder: number;
+
+  @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
+  showOnRedemptions: boolean;
+
+  @Column({ type: 'boolean', name: 'show_on_nicks_niceties', default: true, nullable: false })
+  showOnNicksNiceties: boolean;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

@@ -8,6 +8,7 @@ import { StreamModule } from 'src/stream/stream.module';
 import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
+import { CreatorModule } from 'src/creator/creator.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { User } from 'src/users/entities/user.entity';
     WalletsModule,
     StreamModule,
     PlatformPayoutModule,
+    CreatorModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],
