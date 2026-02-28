@@ -165,6 +165,32 @@ export class UsersController {
   }
 
   /**
+   * Public endpoint to get platform statistics for landing page.
+   * Returns total count of active users.
+   */
+  @ApiOperation({
+    summary: 'Get platform stats',
+    description:
+      'Public endpoint returning total active user count for landing page display',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Platform stats fetched successfully',
+  })
+  @Get('stats')
+  async getPlatformStats() {
+    const totalUsers = await this.usersService.getUsersCount();
+
+    return {
+      data: {
+        totalUsers,
+      },
+      message: 'Platform stats fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  /**
    * Updates the profile of the currently logged-in user.
    * @param req - The request object containing user information.
    * @param username - The username of the user.
