@@ -141,6 +141,12 @@ export class PrizeConfigurationDto {
   })
   showOnNicksNiceties: boolean;
 
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the shop page',
+  })
+  showOnShop: boolean;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -273,6 +279,15 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   showOnNicksNiceties?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the shop page',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnShop?: boolean;
 }
 
 /**
@@ -392,6 +407,15 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   showOnNicksNiceties?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether to show this prize on the shop page',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  showOnShop?: boolean;
 }
 
 /**
