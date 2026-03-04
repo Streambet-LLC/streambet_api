@@ -63,9 +63,6 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
   showOnRedemptions: boolean;
 
-  @Column({ type: 'boolean', name: 'show_on_nicks_niceties', default: true, nullable: false })
-  showOnNicksNiceties: boolean;
-
   @Column({ type: 'boolean', name: 'show_on_shop', default: true, nullable: false })
   showOnShop: boolean;
 

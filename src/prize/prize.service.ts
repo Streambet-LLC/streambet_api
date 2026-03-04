@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -64,11 +65,15 @@ export class PrizeService {
   }
 
   /**
-   * Get all active prize tiers, ordered by tier number.
+   * Get all active prize tiers (admin redemption items only), ordered by tier number.
+   * These are used for the redemption system
    */
   async getActivePrizeTiers(): Promise<PrizeConfiguration[]> {
     const tiers = await this.prizeConfigRepository.find({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        createdBy: null, // Only admin-managed redemption items - null means has no createdBy
+      },
       order: { prizeTier: 'ASC' },
     });
 
@@ -83,10 +88,211 @@ export class PrizeService {
 
   /**
    * Get all active prize tiers as DTOs (public endpoint).
+   * Returns admin-managed redemption items only, not seller shop items.
    */
   async getPrizeConfiguration(): Promise<PrizeConfigurationDto[]> {
     const tiers = await this.getActivePrizeTiers();
     return tiers.map((tier) => this.mapToDto(tier));
+  }
+
+  /**
+   * Public: list seller shops that have active shop items.
+   */
+  async getSellerShops(): Promise<
+    Array<{
+      id: string;
+      username: string;
+      displayName: string;
+      profileImageUrl: string | null;
+      itemCount: number;
+    }>
+  > {
+    const rows = await this.userRepository
+      .createQueryBuilder('u')
+      .innerJoin(
+        PrizeConfiguration,
+        'p',
+        'p.created_by = u.id AND p.is_active = :isActive AND p.show_on_shop = :showOnShop AND p.stock > 0',
+        {
+          isActive: true,
+          showOnShop: true,
+        },
+      )
+      .where('u.is_seller = :isSeller', { isSeller: true })
+      .andWhere('u.is_active = :isUserActive', { isUserActive: true })
+      .select('u.id', 'id')
+      .addSelect('u.username', 'username')
+      .addSelect('u.name', 'displayName')
+      .addSelect('u.profile_image_url', 'profileImageUrl')
+      .addSelect('COUNT(p.id)', 'itemCount')
+      .groupBy('u.id')
+      .addGroupBy('u.username')
+      .addGroupBy('u.name')
+      .addGroupBy('u.profile_image_url')
+      .orderBy('RANDOM()')
+      .limit(5)
+      .getRawMany();
+
+    return rows.map((row) => ({
+      id: row.id,
+      username: row.username,
+      displayName: row.displayName || row.username,
+      profileImageUrl: row.profileImageUrl || null,
+      itemCount: Number(row.itemCount || 0),
+    }));
+  }
+
+  /**
+   * Public: get one seller shop and its active items.
+   */
+  async getPublicShopByUsername(username: string): Promise<{
+    shop: {
+      id: string;
+      username: string;
+      displayName: string;
+      profileImageUrl: string | null;
+    };
+    items: PrizeConfigurationDto[];
+  }> {
+    const seller = await this.userRepository.findOne({
+      where: {
+        username,
+        isSeller: true,
+        isActive: true,
+      },
+    });
+
+    if (!seller) {
+      throw new NotFoundException('Seller shop not found');
+    }
+
+    const items = await this.prizeConfigRepository.find({
+      where: {
+        createdBy: seller.id,
+        isActive: true,
+        showOnShop: true,
+      },
+      order: {
+        displayOrder: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+    return {
+      shop: {
+        id: seller.id,
+        username: seller.username,
+        displayName: seller.name || seller.username,
+        profileImageUrl: seller.profileImageUrl || null,
+      },
+      items: items.map((item) => this.mapToDto(item)),
+    };
+  }
+
+  /**
+   * Seller: get my active shop items.
+   */
+  async getMySellerShopItems(
+    sellerId: string,
+  ): Promise<PrizeConfigurationDto[]> {
+    await this.ensureSeller(sellerId);
+
+    const items = await this.prizeConfigRepository.find({
+      where: {
+        createdBy: sellerId,
+        isActive: true,
+        showOnShop: true, // Only show items meant for shop, exclude admin redemptions
+      },
+      order: {
+        displayOrder: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+    return items.map((item) => this.mapToDto(item));
+  }
+
+  /**
+   * Seller: create an item in my shop.
+   */
+  async createMySellerShopItem(
+    sellerId: string,
+    dto: CreatePrizeTierDto,
+  ): Promise<PrizeConfigurationDto> {
+    await this.ensureSeller(sellerId);
+
+    return this.createPrizeTier(
+      {
+        ...dto,
+        showOnShop: true,
+        showOnRedemptions: false,
+      },
+      sellerId, // userId (not used for seller items)
+      sellerId, // createdBy - identifies this as a seller item
+    );
+  }
+
+  /**
+   * Seller: update one of my shop items.
+   */
+  async updateMySellerShopItem(
+    sellerId: string,
+    itemId: string,
+    dto: UpdatePrizeTierDto,
+  ): Promise<PrizeConfigurationDto> {
+    await this.ensureSeller(sellerId);
+
+    const existing = await this.getPrizeTierById(itemId);
+    if (existing.createdBy !== sellerId) {
+      throw new ForbiddenException('You can only update your own shop items');
+    }
+
+    return this.updatePrizeTier(
+      itemId,
+      {
+        ...dto,
+        showOnShop: true,
+        showOnRedemptions: false,
+      },
+      sellerId,
+    );
+  }
+
+  /**
+   * Seller: delete one of my shop items (soft delete).
+   */
+  async deleteMySellerShopItem(
+    sellerId: string,
+    itemId: string,
+  ): Promise<void> {
+    await this.ensureSeller(sellerId);
+
+    const existing = await this.getPrizeTierById(itemId);
+    if (existing.createdBy !== sellerId) {
+      throw new ForbiddenException('You can only delete your own shop items');
+    }
+
+    await this.deletePrizeTier(itemId);
+  }
+
+  private async ensureSeller(sellerId: string): Promise<void> {
+    const seller = await this.userRepository.findOne({
+      where: { id: sellerId, isSeller: true, isActive: true },
+    });
+
+    if (!seller) {
+      throw new ForbiddenException('Seller access required');
+    }
+  }
+
+  private async isSellerOwnedItem(item: PrizeConfiguration): Promise<boolean> {
+    if (!item.createdBy) return false;
+
+    const owner = await this.userRepository.findOne({
+      where: { id: item.createdBy },
+    });
+
+    return !!owner?.isSeller;
   }
 
   /**
@@ -105,29 +311,41 @@ export class PrizeService {
   }
 
   /**
-   * Create a new prize tier (admin only).
+   * Create a new prize tier (used by both admin and seller endpoints).
    *
    * @param dto - Prize tier data
-   * @param userId - Admin user ID making the change
+   * @param userId - User ID making the change (for updatedBy tracking)
+   * @param createdBy - Optional: ID of the user who owns this item (null for admin redemption items, sellerId for seller shop items)
    */
   async createPrizeTier(
     dto: CreatePrizeTierDto,
     userId: string,
+    createdBy: string | null = null,
   ): Promise<PrizeConfigurationDto> {
     // Auto-generate tier number if not provided
     let prizeTier = dto.prizeTier;
     if (!prizeTier) {
-      // Get the highest tier number and add 1
-      const maxTier = await this.prizeConfigRepository
+      // Get the highest tier number and add 1 (scoped by createdBy)
+      const query = this.prizeConfigRepository
         .createQueryBuilder('pc')
-        .select('MAX(pc.prizeTier)', 'max')
-        .getRawOne();
+        .select('MAX(pc.prizeTier)', 'max');
 
+      if (createdBy) {
+        query.where('pc.createdBy = :createdBy', { createdBy });
+      } else {
+        query.where('pc.createdBy IS NULL');
+      }
+
+      const maxTier = await query.getRawOne();
       prizeTier = (maxTier?.max || 0) + 1;
     } else {
-      // If provided, check if tier number is already active
+      // If provided, check if tier number is already active for this scope (admin or seller)
       const existingTier = await this.prizeConfigRepository.findOne({
-        where: { prizeTier, isActive: true },
+        where: {
+          prizeTier,
+          isActive: true,
+          createdBy: createdBy, // Scoped per seller or admin (null for admin)
+        },
       });
 
       if (existingTier) {
@@ -168,10 +386,9 @@ export class PrizeService {
       brand: dto.brand || PrizeBrand.POKEMON,
       displayOrder: dto.displayOrder ?? 0,
       showOnRedemptions: dto.showOnRedemptions ?? true,
-      showOnNicksNiceties: dto.showOnNicksNiceties ?? true,
       showOnShop: dto.showOnShop ?? true,
       isActive: true,
-      createdBy: userId,
+      createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
     });
 
@@ -184,17 +401,19 @@ export class PrizeService {
   }
 
   /**
-   * Update prize tier (admin only).
+   * Update prize tier (used by both admin and seller endpoints).
    * Implements data hardening: deactivates old tier and creates new one.
    *
    * @param id - ID of the tier to update
    * @param dto - Updated prize tier data
-   * @param userId - Admin user ID making the change
+   * @param userId - User ID making the change
+   * @param preserveCreatedBy - If true, preserve the original createdBy value (default: true)
    */
   async updatePrizeTier(
     id: string,
     dto: UpdatePrizeTierDto,
     userId: string,
+    preserveCreatedBy: boolean = true,
   ): Promise<PrizeConfigurationDto> {
     // Find existing tier
     const existingTier = await this.getPrizeTierById(id);
@@ -239,11 +458,11 @@ export class PrizeService {
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
       displayOrder: dto.displayOrder ?? existingTier.displayOrder,
-      showOnRedemptions: dto.showOnRedemptions ?? existingTier.showOnRedemptions,
-      showOnNicksNiceties: dto.showOnNicksNiceties ?? existingTier.showOnNicksNiceties,
+      showOnRedemptions:
+        dto.showOnRedemptions ?? existingTier.showOnRedemptions,
       showOnShop: dto.showOnShop ?? existingTier.showOnShop,
       isActive: true,
-      createdBy: userId,
+      createdBy: preserveCreatedBy ? existingTier.createdBy : null, // Preserve ownership for seller items
       updatedBy: userId,
     });
 
@@ -732,6 +951,13 @@ export class PrizeService {
       );
     }
 
+    const isSellerOwnedItem = await this.isSellerOwnedItem(prize);
+    if (isSellerOwnedItem && dto.paymentMethod !== 'usd') {
+      throw new BadRequestException(
+        'Seller shop items are USD-only. CadeCoins are not accepted for this item.',
+      );
+    }
+
     const SHIPPING_FEE = 5; // $5 shipping fee
 
     // Validate payment method matches amounts
@@ -1077,6 +1303,88 @@ export class PrizeService {
   }
 
   /**
+   * Get offer orders for a specific seller's shop items
+   */
+  async getSellerOffers(
+    sellerId: string,
+    filterDto?: { range?: string; status?: string },
+  ): Promise<{ data: PrizeOrderResponseDto[]; total: number }> {
+    const query = this.prizeOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.prizeConfiguration', 'prize')
+      .where('prize.createdBy = :sellerId', { sellerId })
+      .andWhere('prize.showOnShop = :showOnShop', { showOnShop: true })
+      .andWhere('order.offerAmount IS NOT NULL');
+
+    if (filterDto?.status && filterDto.status !== 'all') {
+      query.andWhere('order.status = :status', { status: filterDto.status });
+    }
+
+    const total = await query.getCount();
+    let data = await query.orderBy('order.createdAt', 'DESC').getMany();
+
+    if (filterDto?.range) {
+      try {
+        const [start, end] = JSON.parse(filterDto.range);
+        data = data.slice(start, end);
+      } catch {
+        // Invalid range format, return all
+      }
+    }
+
+    return {
+      data: data.map((order) => this.mapOrderToDto(order)),
+      total,
+    };
+  }
+
+  private async validateSellerOfferAccess(
+    sellerId: string,
+    orderId: string,
+  ): Promise<PrizeOrder> {
+    const order = await this.getPrizeOrderById(orderId);
+    const ownerId = order.prizeConfiguration?.createdBy;
+
+    if (
+      !order.prizeConfiguration?.showOnShop ||
+      !ownerId ||
+      ownerId !== sellerId
+    ) {
+      throw new ForbiddenException(
+        'You can only manage offers for your own shop items',
+      );
+    }
+
+    return order;
+  }
+
+  async sellerCounterOffer(
+    sellerId: string,
+    orderId: string,
+    dto: CounterOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    await this.validateSellerOfferAccess(sellerId, orderId);
+    return this.counterOffer(orderId, dto);
+  }
+
+  async sellerAcceptOffer(
+    sellerId: string,
+    orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    await this.validateSellerOfferAccess(sellerId, orderId);
+    return this.acceptOffer(orderId);
+  }
+
+  async sellerRejectOffer(
+    sellerId: string,
+    orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    await this.validateSellerOfferAccess(sellerId, orderId);
+    return this.rejectOffer(orderId);
+  }
+
+  /**
    * Update order status
    */
   async updateOrderStatus(
@@ -1175,18 +1483,35 @@ export class PrizeService {
 
     const saved = await this.prizeOrderRepository.save(order);
 
-    // Send email notification to admin
+    // Send email notification to seller for shop items, otherwise admin
     try {
-      const adminEmail =
-        this.configService.get<string>('ADMIN_EMAIL') || 'admin@cardcade.io';
       const frontendUrl = this.configService.get<string>(
         'CLIENT_URL',
         'http://localhost:3000',
       );
+      let recipientEmail =
+        this.configService.get<string>('ADMIN_EMAIL') || 'admin@cardcade.io';
+      let subject = `💰 New Prize Offer: ${prize.name}`;
+      let reviewUrl = `${frontendUrl}/admin/prizes/redemptions?orderId=${saved.id}`;
+      let portalLabel = 'admin panel';
+
+      if (prize.showOnShop && prize.createdBy) {
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+
+        if (seller?.email) {
+          recipientEmail = seller.email;
+          subject = `💰 New Shop Offer: ${prize.name}`;
+          reviewUrl = `${frontendUrl}/seller/shop/manage?orderId=${saved.id}`;
+          portalLabel = 'seller dashboard';
+        }
+      }
+
       await this.emailsService.sendEmailSMTP(
         {
-          toAddress: [adminEmail],
-          subject: `💰 New Prize Offer: ${prize.name}`,
+          toAddress: [recipientEmail],
+          subject,
           params: {
             orderId: saved.id,
             userId,
@@ -1194,6 +1519,8 @@ export class PrizeService {
             offerAmount: dto.offerAmount,
             notes: dto.offerNotes || '',
             adminUrl: frontendUrl,
+            reviewUrl,
+            portalLabel,
           },
         },
         'offer_made',
@@ -1462,7 +1789,6 @@ export class PrizeService {
       brand: entity.brand,
       displayOrder: entity.displayOrder,
       showOnRedemptions: entity.showOnRedemptions,
-      showOnNicksNiceties: entity.showOnNicksNiceties,
       showOnShop: entity.showOnShop,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
