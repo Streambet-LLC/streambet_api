@@ -347,6 +347,10 @@ export class CreatorService {
       const user = application.user;
       if (application.applicationType === ApplicationType.SELLER) {
         user.isSeller = true;
+        // Set default shop name if not already set
+        if (!user.shopName) {
+          user.shopName = `${user.username}'s Shop`;
+        }
         this.logger.log(`Granted seller flag to user ${user.id}`);
       } else if (application.applicationType === ApplicationType.CREATOR) {
         user.role = UserRole.CREATOR;

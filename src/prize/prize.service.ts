@@ -122,12 +122,11 @@ export class PrizeService {
       .andWhere('u.is_active = :isUserActive', { isUserActive: true })
       .select('u.id', 'id')
       .addSelect('u.username', 'username')
-      .addSelect('u.name', 'displayName')
+      .addSelect('COALESCE(u.shop_name, u.name, u.username)', 'displayName')
       .addSelect('u.profile_image_url', 'profileImageUrl')
       .addSelect('COUNT(p.id)', 'itemCount')
       .groupBy('u.id')
-      .addGroupBy('u.username')
-      .addGroupBy('u.name')
+      .addGroupBy('COALESCE(u.shop_name, u.name, u.username)')
       .addGroupBy('u.profile_image_url')
       .orderBy('RANDOM()')
       .limit(5)
@@ -182,7 +181,7 @@ export class PrizeService {
       shop: {
         id: seller.id,
         username: seller.username,
-        displayName: seller.name || seller.username,
+        displayName: seller.shopName || seller.name || seller.username,
         profileImageUrl: seller.profileImageUrl || null,
       },
       items: items.map((item) => this.mapToDto(item)),

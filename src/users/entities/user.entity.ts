@@ -157,6 +157,14 @@ export class User extends BaseEntity {
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
   promoCode: string;
 
+  @Column({
+    length: 255,
+    type: 'varchar',
+    nullable: true,
+    name: 'shop_name',
+  })
+  shopName: string;
+
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;
 
