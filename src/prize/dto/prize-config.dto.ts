@@ -172,6 +172,24 @@ export class PrizeConfigurationDto {
   })
   showOnShop: boolean;
 
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort shop page by purchase option (both first)',
+  })
+  sortByPurchaseOptionShop: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort redemptions page by purchase option (both first)',
+  })
+  sortByPurchaseOptionRedemptions: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
+  })
+  sortByPurchaseOptionNicksNiceties: boolean;
+
   @ApiProperty({ example: true })
   isActive: boolean;
 
@@ -612,6 +630,30 @@ export class PrizeDisplayOrderUpdateDto {
   @IsInt()
   @Min(1)
   featuredDisplayOrder: number | null;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort shop page by purchase option (both first)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionShop?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort redemptions page by purchase option (both first)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionRedemptions?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionNicksNiceties?: boolean;
 }
 
 /**

@@ -69,6 +69,15 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'integer', name: 'featured_display_order', nullable: true })
   featuredDisplayOrder: number | null;
 
+  @Column({ type: 'boolean', name: 'sort_by_purchase_option_shop', default: false })
+  sortByPurchaseOptionShop: boolean;
+
+  @Column({ type: 'boolean', name: 'sort_by_purchase_option_redemptions', default: false })
+  sortByPurchaseOptionRedemptions: boolean;
+
+  @Column({ type: 'boolean', name: 'sort_by_purchase_option_nicks_niceties', default: false })
+  sortByPurchaseOptionNicksNiceties: boolean;
+
   @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
   showOnRedemptions: boolean;
 

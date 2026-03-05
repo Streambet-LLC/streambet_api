@@ -192,16 +192,8 @@ export class PrizeService {
       displayOrderNicksNiceties = (maxNicks?.max || 0) + 1;
     }
 
-    // Auto-generate featured display order if featured checkbox is true
-    let featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
-    if (!featuredDisplayOrder && dto.featuredDisplayOrder !== null) {
-      const maxFeatured = await this.prizeConfigRepository
-        .createQueryBuilder('pc')
-        .select('MAX(pc.featuredDisplayOrder)', 'max')
-        .where('pc.isActive = :isActive', { isActive: true })
-        .getRawOne();
-      featuredDisplayOrder = (maxFeatured?.max || 0) + 1;
-    }
+    // Featured display order - only set if explicitly provided
+    const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
 
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
@@ -356,6 +348,18 @@ export class PrizeService {
       prize.displayOrderRedemptions = update.displayOrderRedemptions;
       prize.displayOrderNicksNiceties = update.displayOrderNicksNiceties;
       prize.featuredDisplayOrder = update.featuredDisplayOrder;
+      
+      // Update sorting preferences if provided
+      if (update.sortByPurchaseOptionShop !== undefined) {
+        prize.sortByPurchaseOptionShop = update.sortByPurchaseOptionShop;
+      }
+      if (update.sortByPurchaseOptionRedemptions !== undefined) {
+        prize.sortByPurchaseOptionRedemptions = update.sortByPurchaseOptionRedemptions;
+      }
+      if (update.sortByPurchaseOptionNicksNiceties !== undefined) {
+        prize.sortByPurchaseOptionNicksNiceties = update.sortByPurchaseOptionNicksNiceties;
+      }
+      
       prize.updatedBy = userId;
 
       const saved = await this.prizeConfigRepository.save(prize);
@@ -1562,6 +1566,9 @@ export class PrizeService {
       showOnRedemptions: entity.showOnRedemptions,
       showOnNicksNiceties: entity.showOnNicksNiceties,
       showOnShop: entity.showOnShop,
+      sortByPurchaseOptionShop: entity.sortByPurchaseOptionShop,
+      sortByPurchaseOptionRedemptions: entity.sortByPurchaseOptionRedemptions,
+      sortByPurchaseOptionNicksNiceties: entity.sortByPurchaseOptionNicksNiceties,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
