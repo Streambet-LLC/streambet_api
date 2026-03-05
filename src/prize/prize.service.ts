@@ -31,6 +31,7 @@ import {
   PrizeOrderResponseDto,
   MakeOfferDto,
   CounterOfferDto,
+  PrizeDisplayOrderUpdateDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
@@ -155,6 +156,53 @@ export class PrizeService {
       amount = dto.amount;
     }
 
+    // Auto-generate display orders for each page where item will be shown
+    const category = (dto.category || 'slab') as 'slab' | 'sealed';
+    
+    let displayOrderShop = dto.displayOrderShop ?? null;
+    if (!displayOrderShop && (dto.showOnShop ?? true)) {
+      const maxShop = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.displayOrderShop)', 'max')
+        .where('pc.category = :category', { category })
+        .andWhere('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      displayOrderShop = (maxShop?.max || 0) + 1;
+    }
+
+    let displayOrderRedemptions = dto.displayOrderRedemptions ?? null;
+    if (!displayOrderRedemptions && (dto.showOnRedemptions ?? true)) {
+      const maxRedemptions = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.displayOrderRedemptions)', 'max')
+        .where('pc.category = :category', { category })
+        .andWhere('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      displayOrderRedemptions = (maxRedemptions?.max || 0) + 1;
+    }
+
+    let displayOrderNicksNiceties = dto.displayOrderNicksNiceties ?? null;
+    if (!displayOrderNicksNiceties && (dto.showOnNicksNiceties ?? true)) {
+      const maxNicks = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.displayOrderNicksNiceties)', 'max')
+        .where('pc.category = :category', { category })
+        .andWhere('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      displayOrderNicksNiceties = (maxNicks?.max || 0) + 1;
+    }
+
+    // Auto-generate featured display order if featured checkbox is true
+    let featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
+    if (!featuredDisplayOrder && dto.featuredDisplayOrder !== null) {
+      const maxFeatured = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.featuredDisplayOrder)', 'max')
+        .where('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      featuredDisplayOrder = (maxFeatured?.max || 0) + 1;
+    }
+
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
@@ -162,11 +210,14 @@ export class PrizeService {
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
-      category: (dto.category || 'slab') as 'slab' | 'sealed',
+      category,
       stock: dto.stock ?? 0,
       purchaseOption,
       brand: dto.brand || PrizeBrand.POKEMON,
-      displayOrder: dto.displayOrder ?? 0,
+      displayOrderShop,
+      displayOrderRedemptions,
+      displayOrderNicksNiceties,
+      featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? true,
       showOnNicksNiceties: dto.showOnNicksNiceties ?? true,
       showOnShop: dto.showOnShop ?? true,
@@ -238,7 +289,10 @@ export class PrizeService {
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
-      displayOrder: dto.displayOrder ?? existingTier.displayOrder,
+      displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
+      displayOrderRedemptions: dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
+      displayOrderNicksNiceties: dto.displayOrderNicksNiceties ?? existingTier.displayOrderNicksNiceties,
+      featuredDisplayOrder: dto.featuredDisplayOrder ?? existingTier.featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? existingTier.showOnRedemptions,
       showOnNicksNiceties: dto.showOnNicksNiceties ?? existingTier.showOnNicksNiceties,
       showOnShop: dto.showOnShop ?? existingTier.showOnShop,
@@ -272,6 +326,47 @@ export class PrizeService {
     await this.prizeConfigRepository.save(tier);
 
     this.logger.log(`Prize tier ${tier.prizeTier} (ID: ${id}) deactivated`);
+  }
+
+  /**
+   * Bulk update display orders for prizes (admin only).
+   * Updates page-specific display orders and/or featuredDisplayOrder for multiple prizes.
+   *
+   * @param updates - Array of prize updates with id and all display orders
+   * @param userId - Admin user performing the update
+   * @returns Updated prize configurations
+   */
+  async bulkUpdateDisplayOrder(
+    updates: PrizeDisplayOrderUpdateDto[],
+    userId: string,
+  ): Promise<PrizeConfigurationDto[]> {
+    const updatedPrizes: PrizeConfiguration[] = [];
+
+    for (const update of updates) {
+      const prize = await this.getPrizeTierById(update.id);
+
+      if (!prize.isActive) {
+        throw new BadRequestException(
+          `Cannot update inactive prize: ${prize.name}`,
+        );
+      }
+
+      // Update all page-specific display orders
+      prize.displayOrderShop = update.displayOrderShop;
+      prize.displayOrderRedemptions = update.displayOrderRedemptions;
+      prize.displayOrderNicksNiceties = update.displayOrderNicksNiceties;
+      prize.featuredDisplayOrder = update.featuredDisplayOrder;
+      prize.updatedBy = userId;
+
+      const saved = await this.prizeConfigRepository.save(prize);
+      updatedPrizes.push(saved);
+    }
+
+    this.logger.log(
+      `Bulk updated display order for ${updates.length} prizes by user ${userId}`,
+    );
+
+    return updatedPrizes.map((p) => this.mapToDto(p));
   }
 
   /**
@@ -1460,7 +1555,10 @@ export class PrizeService {
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
       brand: entity.brand,
-      displayOrder: entity.displayOrder,
+      displayOrderShop: entity.displayOrderShop,
+      displayOrderRedemptions: entity.displayOrderRedemptions,
+      displayOrderNicksNiceties: entity.displayOrderNicksNiceties,
+      featuredDisplayOrder: entity.featuredDisplayOrder,
       showOnRedemptions: entity.showOnRedemptions,
       showOnNicksNiceties: entity.showOnNicksNiceties,
       showOnShop: entity.showOnShop,
