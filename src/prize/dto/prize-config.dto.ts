@@ -7,7 +7,10 @@ import {
   IsOptional,
   IsEnum,
   IsBoolean,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PrizeCategory } from '../enums/prize-category.enum';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
@@ -124,10 +127,32 @@ export class PrizeConfigurationDto {
   brand: PrizeBrand;
 
   @ApiProperty({
-    example: 0,
-    description: 'Order of display on frontend pages',
+    example: 1,
+    description: 'Display order on shop page (1-indexed, null if not shown)',
+    nullable: true,
   })
-  displayOrder: number;
+  displayOrderShop: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on redemptions page (1-indexed, null if not shown)',
+    nullable: true,
+  })
+  displayOrderRedemptions: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on Nick\'s Niceties page (1-indexed, null if not shown)',
+    nullable: true,
+  })
+  displayOrderNicksNiceties: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Featured carousel display order (null = not featured)',
+    nullable: true,
+  })
+  featuredDisplayOrder: number | null;
 
   @ApiProperty({
     example: true,
@@ -140,6 +165,24 @@ export class PrizeConfigurationDto {
     description: 'Whether to show this prize on the shop page',
   })
   showOnShop: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort shop page by purchase option (both first)',
+  })
+  sortByPurchaseOptionShop: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort redemptions page by purchase option (both first)',
+  })
+  sortByPurchaseOptionRedemptions: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
+  })
+  sortByPurchaseOptionNicksNiceties: boolean;
 
   @ApiProperty({ example: true })
   isActive: boolean;
@@ -248,13 +291,44 @@ export class CreatePrizeTierDto {
   imageUrl?: string;
 
   @ApiProperty({
-    example: 0,
-    description: 'Order of display on frontend pages',
+    example: 1,
+    description: 'Display order on shop page (1-indexed, auto-generated if not provided)',
     required: false,
   })
   @IsOptional()
   @IsInt()
-  displayOrder?: number;
+  @Min(1)
+  displayOrderShop?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on redemptions page (1-indexed, auto-generated if not provided)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderRedemptions?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on Nick\'s Niceties page (1-indexed, auto-generated if not provided)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderNicksNiceties?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Featured carousel display order (null = not featured)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  featuredDisplayOrder?: number | null;
 
   @ApiProperty({
     example: true,
@@ -367,13 +441,44 @@ export class UpdatePrizeTierDto {
   imageUrl?: string;
 
   @ApiProperty({
-    example: 0,
-    description: 'Order of display on frontend pages',
+    example: 1,
+    description: 'Display order on shop page (1-indexed)',
     required: false,
   })
   @IsOptional()
   @IsInt()
-  displayOrder?: number;
+  @Min(1)
+  displayOrderShop?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on redemptions page (1-indexed)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderRedemptions?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on Nick\'s Niceties page (1-indexed)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderNicksNiceties?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Featured carousel display order (null = not featured)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  featuredDisplayOrder?: number | null;
 
   @ApiProperty({
     example: true,
@@ -449,4 +554,94 @@ export class PrizeRedemptionDto {
 
   @ApiProperty({ example: '2025-01-01T00:00:00Z' })
   createdAt: Date;
+}
+
+/**
+ * DTO for a single prize display order update
+ */
+export class PrizeDisplayOrderUpdateDto {
+  @ApiProperty({
+    example: 'uuid',
+    description: 'Prize configuration ID',
+  })
+  @IsString()
+  id: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on shop page (1-indexed, null if not shown on this page)',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderShop: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on redemptions page (1-indexed, null if not shown on this page)',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderRedemptions: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on Nick\'s Niceties page (1-indexed, null if not shown on this page)',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  displayOrderNicksNiceties: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Featured carousel display order (null = not featured)',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  featuredDisplayOrder: number | null;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort shop page by purchase option (both first)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionShop?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether to sort redemptions page by purchase option (both first)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionRedemptions?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
+  })
+  @IsOptional()
+  @IsBoolean()
+  sortByPurchaseOptionNicksNiceties?: boolean;
+}
+
+/**
+ * DTO for bulk updating prize display orders
+ */
+export class BulkUpdateDisplayOrderDto {
+  @ApiProperty({
+    type: [PrizeDisplayOrderUpdateDto],
+    description: 'Array of prize display order updates',
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PrizeDisplayOrderUpdateDto)
+  updates: PrizeDisplayOrderUpdateDto[];
 }

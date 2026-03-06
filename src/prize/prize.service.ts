@@ -33,6 +33,7 @@ import {
   MakeOfferDto,
   CounterOfferDto,
   MarkAsShippedDto,
+  PrizeDisplayOrderUpdateDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
@@ -406,6 +407,36 @@ export class PrizeService {
       stripeProductId = stripeProduct;
     }
 
+
+    // Auto-generate display orders for each page where item will be shown
+    const category = (dto.category || 'slab') as 'slab' | 'sealed';
+    
+    let displayOrderShop = dto.displayOrderShop ?? null;
+    if (!displayOrderShop && (dto.showOnShop ?? true)) {
+      const maxShop = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.displayOrderShop)', 'max')
+        .where('pc.category = :category', { category })
+        .andWhere('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      displayOrderShop = (maxShop?.max || 0) + 1;
+    }
+
+    let displayOrderRedemptions = dto.displayOrderRedemptions ?? null;
+    if (!displayOrderRedemptions && (dto.showOnRedemptions ?? true)) {
+      const maxRedemptions = await this.prizeConfigRepository
+        .createQueryBuilder('pc')
+        .select('MAX(pc.displayOrderRedemptions)', 'max')
+        .where('pc.category = :category', { category })
+        .andWhere('pc.isActive = :isActive', { isActive: true })
+        .getRawOne();
+      displayOrderRedemptions = (maxRedemptions?.max || 0) + 1;
+    }
+
+
+    // Featured display order - only set if explicitly provided
+    const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
+
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
@@ -413,11 +444,14 @@ export class PrizeService {
       name: dto.name,
       description: dto.description || null,
       imageUrl: dto.imageUrl || null,
-      category: (dto.category || 'slab') as 'slab' | 'sealed',
+      category,
       stock: dto.stock ?? 0,
       purchaseOption,
       brand: dto.brand || PrizeBrand.POKEMON,
-      displayOrder: dto.displayOrder ?? 0,
+      displayOrderShop,
+      displayOrderRedemptions,
+      displayOrderNicksNiceties,
+      featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? true,
       showOnShop: dto.showOnShop ?? true,
       isActive: true,
@@ -492,8 +526,10 @@ export class PrizeService {
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
       displayOrder: dto.displayOrder ?? existingTier.displayOrder,
-      showOnRedemptions:
-        dto.showOnRedemptions ?? existingTier.showOnRedemptions,
+      displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
+      displayOrderRedemptions: dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
+      featuredDisplayOrder: dto.featuredDisplayOrder ?? existingTier.featuredDisplayOrder,
+      showOnRedemptions: dto.showOnRedemptions ?? existingTier.showOnRedemptions,
       showOnShop: dto.showOnShop ?? existingTier.showOnShop,
       isActive: true,
       createdBy: preserveCreatedBy ? existingTier.createdBy : null, // Preserve ownership for seller items
@@ -525,6 +561,59 @@ export class PrizeService {
     await this.prizeConfigRepository.save(tier);
 
     this.logger.log(`Prize tier ${tier.prizeTier} (ID: ${id}) deactivated`);
+  }
+
+  /**
+   * Bulk update display orders for prizes (admin only).
+   * Updates page-specific display orders and/or featuredDisplayOrder for multiple prizes.
+   *
+   * @param updates - Array of prize updates with id and all display orders
+   * @param userId - Admin user performing the update
+   * @returns Updated prize configurations
+   */
+  async bulkUpdateDisplayOrder(
+    updates: PrizeDisplayOrderUpdateDto[],
+    userId: string,
+  ): Promise<PrizeConfigurationDto[]> {
+    const updatedPrizes: PrizeConfiguration[] = [];
+
+    for (const update of updates) {
+      const prize = await this.getPrizeTierById(update.id);
+
+      if (!prize.isActive) {
+        throw new BadRequestException(
+          `Cannot update inactive prize: ${prize.name}`,
+        );
+      }
+
+      // Update all page-specific display orders
+      prize.displayOrderShop = update.displayOrderShop;
+      prize.displayOrderRedemptions = update.displayOrderRedemptions;
+      prize.displayOrderNicksNiceties = update.displayOrderNicksNiceties;
+      prize.featuredDisplayOrder = update.featuredDisplayOrder;
+      
+      // Update sorting preferences if provided
+      if (update.sortByPurchaseOptionShop !== undefined) {
+        prize.sortByPurchaseOptionShop = update.sortByPurchaseOptionShop;
+      }
+      if (update.sortByPurchaseOptionRedemptions !== undefined) {
+        prize.sortByPurchaseOptionRedemptions = update.sortByPurchaseOptionRedemptions;
+      }
+      if (update.sortByPurchaseOptionNicksNiceties !== undefined) {
+        prize.sortByPurchaseOptionNicksNiceties = update.sortByPurchaseOptionNicksNiceties;
+      }
+      
+      prize.updatedBy = userId;
+
+      const saved = await this.prizeConfigRepository.save(prize);
+      updatedPrizes.push(saved);
+    }
+
+    this.logger.log(
+      `Bulk updated display order for ${updates.length} prizes by user ${userId}`,
+    );
+
+    return updatedPrizes.map((p) => this.mapToDto(p));
   }
 
   /**
@@ -2006,9 +2095,15 @@ export class PrizeService {
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
       brand: entity.brand,
-      displayOrder: entity.displayOrder,
+      displayOrderShop: entity.displayOrderShop,
+      displayOrderRedemptions: entity.displayOrderRedemptions,
+      displayOrderNicksNiceties: entity.displayOrderNicksNiceties,
+      featuredDisplayOrder: entity.featuredDisplayOrder,
       showOnRedemptions: entity.showOnRedemptions,
       showOnShop: entity.showOnShop,
+      sortByPurchaseOptionShop: entity.sortByPurchaseOptionShop,
+      sortByPurchaseOptionRedemptions: entity.sortByPurchaseOptionRedemptions,
+      sortByPurchaseOptionNicksNiceties: entity.sortByPurchaseOptionNicksNiceties,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,

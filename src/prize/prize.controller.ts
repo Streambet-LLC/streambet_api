@@ -33,6 +33,7 @@ import {
   MakeOfferDto,
   CounterOfferDto,
   MarkAsShippedDto,
+  BulkUpdateDisplayOrderDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -337,6 +338,31 @@ export class AdminPrizeController {
     this.ensureAdmin(req.user);
     await this.prizeService.deletePrizeTier(id);
     return { message: 'Prize tier deactivated successfully' };
+  }
+
+  /**
+   * Admin endpoint: Bulk update display orders
+   */
+  @Patch('bulk-display-order')
+  @ApiOperation({
+    summary: 'Bulk update prize display orders (admin only)',
+    description: 'Update page-specific display orders (shop, redemptions, Nick\'s Niceties) and featuredDisplayOrder for multiple prizes at once',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Display orders updated successfully',
+    type: [PrizeConfigurationDto],
+  })
+  @ApiResponse({ status: 400, description: 'Invalid update data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'One or more prizes not found' })
+  async bulkUpdateDisplayOrder(
+    @Request() req: RequestWithUser,
+    @Body() dto: BulkUpdateDisplayOrderDto,
+  ): Promise<PrizeConfigurationDto[]> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.bulkUpdateDisplayOrder(dto.updates, req.user.id);
   }
 
   /**
