@@ -8,10 +8,11 @@ import { ReferralLink } from 'src/referral/referral-link.entity';
 import { Follower } from 'src/follower/follower.entity';
 import { FollowerService } from 'src/follower/follower.service';
 import { PrizeModule } from 'src/prize/prize.module';
+import { Transaction } from 'src/wallets/entities/transaction.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, ReferralLink, Follower]),
+    TypeOrmModule.forFeature([User, ReferralLink, Follower, Transaction]),
     forwardRef(() => PrizeModule),
   ],
   controllers: [UsersController],

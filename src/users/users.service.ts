@@ -23,6 +23,9 @@ import { MAX_CADE_COINS_FOR_BETTING } from 'src/common/constants/currency.consta
 import { UserRole } from 'src/enums/user-role.enum';
 import { Follower } from 'src/follower/follower.entity';
 import { PrizeService } from 'src/prize/prize.service';
+import { Transaction } from 'src/wallets/entities/transaction.entity';
+import { CurrencyType } from 'src/enums/currency.enum';
+import { TransactionType } from 'src/enums/transaction-type.enum';
 
 @Injectable()
 export class UsersService {
@@ -33,6 +36,8 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Follower)
     private readonly followerRepository: Repository<Follower>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepository: Repository<Transaction>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly prizeService: PrizeService,
   ) {}
@@ -592,16 +597,22 @@ export class UsersService {
   }
 
   /**
-   * Retrieves the top 20 users by gold coin balance for the leaderboard.
-   * @returns Promise<Array<{username: string, goldCoins: number, profileImageUrl: string}>>
+   * Retrieves the top 20 users by cadeCoins balance for the leaderboard.
+   * @returns Promise<Array<{username: string, cadeCoins: number, profileImageUrl: string, monthToDateCoins: number, lifetimeCadeCoins: number}>>
    */
   async getLeaderboard(): Promise<
-    Array<{ username: string; cadeCoins: number; profileImageUrl: string }>
+    Array<{ 
+      username: string; 
+      cadeCoins: number; 
+      profileImageUrl: string;
+      monthToDateCoins: number;
+      lifetimeCadeCoins: number;
+    }>
   > {
     const users = await this.usersRepository
       .createQueryBuilder('u')
       .innerJoin('u.wallet', 'w')
-      .addSelect(['w.cadeCoins'])
+      .addSelect(['w.cadeCoins', 'w.lifetimeCoinsEarned'])
       .where('u.isActive = :isActive', { isActive: true })
       .andWhere('(u.isBanned IS NULL OR u.isBanned = false)')
       .andWhere('(u.isSuspended IS NULL OR u.isSuspended = false)')
@@ -611,10 +622,60 @@ export class UsersService {
       .limit(20)
       .getMany();
 
-    return users.map((u) => ({
-      username: u.username,
-      cadeCoins: Number(u.wallet?.cadeCoins || 0),
-      profileImageUrl: u.profileImageUrl || '',
-    }));
+    // Calculate month-to-date coins for each user
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const leaderboardData = await Promise.all(
+      users.map(async (u) => {
+        // Calculate month-to-date CadeCoins from transactions
+        // Sum of all credit transactions minus debit transactions for CADE_COINS in current month
+        const monthlyTransactions = await this.transactionRepository
+          .createQueryBuilder('t')
+          .where('t.userId = :userId', { userId: u.id })
+          .andWhere('t.currencyType = :currencyType', { currencyType: CurrencyType.CADE_COINS })
+          .andWhere('t.createdAt >= :startOfMonth', { startOfMonth })
+          .getMany();
+
+        let monthToDateCoins = 0;
+        for (const transaction of monthlyTransactions) {
+          const amount = Number(transaction.amount || 0);
+          
+          // BET_WON: Only count net profit (same as lifetime logic)
+          if (transaction.type === TransactionType.BET_WON) {
+            const originalBetAmount = Number(transaction.metadata?.originalBetAmount || 0);
+            const netProfit = amount - originalBetAmount;
+            if (netProfit > 0) {
+              monthToDateCoins += netProfit;
+            }
+          }
+          // Bonuses and credits: full amount
+          else if ([
+            TransactionType.INITIAL_CREDIT,
+            TransactionType.ADMIN_CREDIT,
+            TransactionType.BONUS,
+            TransactionType.DAILY_SPIN,
+          ].includes(transaction.type)) {
+            monthToDateCoins += amount;
+          }
+          // Admin debits: subtract
+          else if (transaction.type === TransactionType.ADMIN_DEBITED) {
+            monthToDateCoins -= amount;
+          }
+          // REFUND and BET_PLACEMENT: skip (not earned)
+        }
+
+        return {
+          username: u.username,
+          cadeCoins: Number(u.wallet?.cadeCoins || 0),
+          profileImageUrl: u.profileImageUrl || '',
+          monthToDateCoins: Math.max(0, Math.floor(monthToDateCoins)),
+          lifetimeCadeCoins: Number(u.wallet?.lifetimeCoinsEarned || 0),
+        };
+      })
+    );
+
+    return leaderboardData;
   }
 }
