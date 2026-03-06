@@ -72,6 +72,9 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'uuid', name: 'updated_by', nullable: true })
   updatedBy: string | null;
 
+  @Column({ type: 'uuid', name: 'stripe_product_id', nullable: true })
+  stripeProductId: string | null;
+
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'created_by' })
   creator: User;

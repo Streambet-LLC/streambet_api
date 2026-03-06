@@ -37,6 +37,7 @@ import {
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
+import { stripe } from 'src/integrations/stripe';
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -392,6 +393,19 @@ export class PrizeService {
       amount = dto.amount;
     }
 
+    const seller = await this.userRepository.findOne({
+      where: {
+        id: userId,
+      }
+    });
+
+    let stripeProductId = null;
+
+    if (seller.stripeAccountId) {
+      const stripeProduct = await stripe.registerProduct(dto.name, dto.description, amount, seller.stripeAccountId);
+      stripeProductId = stripeProduct;
+    }
+
     // Create new tier
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
@@ -409,6 +423,7 @@ export class PrizeService {
       isActive: true,
       createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
+      stripeProductId,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1533,15 +1548,15 @@ export class PrizeService {
       updatedAt: order.updatedAt.toISOString(),
       user: order.user
         ? {
-            username: order.user.username,
-            email: order.user.email,
-          }
+          username: order.user.username,
+          email: order.user.email,
+        }
         : undefined,
       prizeConfig: order.prizeConfiguration
         ? {
-            name: order.prizeConfiguration.name,
-            category: order.prizeConfiguration.category,
-          }
+          name: order.prizeConfiguration.name,
+          category: order.prizeConfiguration.category,
+        }
         : undefined,
     };
   }
@@ -1897,6 +1912,7 @@ export class PrizeService {
       );
     }
 
+    // @ts-expect-error any
     if (order.status === 'shipped' || order.shippedAt) {
       this.logger.warn(`Order ${orderId} is already marked as shipped`);
       return this.mapOrderToDto(order);

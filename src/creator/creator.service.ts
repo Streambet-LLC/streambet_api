@@ -42,6 +42,7 @@ import { UserRole } from 'src/enums/user-role.enum';
 import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
 import { ConfigService } from '@nestjs/config';
+import { stripe } from 'src/integrations/stripe';
 
 @Injectable()
 export class CreatorService {
@@ -56,7 +57,7 @@ export class CreatorService {
     private dataSource: DataSource,
     private emailsService: EmailsService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   private formatDuration(totalSeconds: number): string {
     const hours = Math.floor(totalSeconds / 3600)
@@ -346,7 +347,11 @@ export class CreatorService {
       // Grant appropriate role/flag to user
       const user = application.user;
       if (application.applicationType === ApplicationType.SELLER) {
+        const stripeAccount = await stripe.createConnectedAccount(application.user.email);
+        console.log(stripeAccount);
+
         user.isSeller = true;
+        user.stripeAccountId = stripeAccount.accountId;
         // Set default shop name if not already set
         if (!user.shopName) {
           user.shopName = `${user.username}'s Shop`;
@@ -390,6 +395,18 @@ export class CreatorService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async createConnectLink(user) {
+    const seller = await this.userRepository.findOne({
+      where: {
+        id: user.userId,
+      }
+    });
+
+    const accountLink = await stripe.createAccountLink(seller.stripeAccountId ?? "");
+
+    return accountLink;
   }
 
   async rejectApplication(applicationId: string, adminUserId: string) {
