@@ -264,7 +264,7 @@ export class AdminPrizeController {
     @Request() req: RequestWithUser,
   ): Promise<PrizeConfigurationDto[]> {
     this.ensureAdmin(req.user);
-    return this.prizeService.getPrizeConfiguration();
+    return this.prizeService.getAdminActivePrizeConfigurations();
   }
 
   /**

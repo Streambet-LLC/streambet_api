@@ -386,15 +386,6 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  showOnNicksNiceties?: boolean;
-
-  @ApiProperty({
-    example: true,
     description: 'Whether to show this prize on the shop page',
     required: false,
   })

@@ -65,14 +65,14 @@ export class PrizeService {
   }
 
   /**
-   * Get all active prize tiers (admin redemption items only), ordered by tier number.
-   * These are used for the redemption system
+   * Get all active prize tiers visible in the redemption flow, ordered by tier number.
+   * Uses display flags (showOnRedemptions/showOnShop), not createdBy ownership.
    */
   async getActivePrizeTiers(): Promise<PrizeConfiguration[]> {
     const tiers = await this.prizeConfigRepository.find({
       where: {
         isActive: true,
-        createdBy: null, // Only admin-managed redemption items - null means has no createdBy
+        showOnRedemptions: true,
       },
       order: { prizeTier: 'ASC' },
     });
@@ -88,11 +88,30 @@ export class PrizeService {
 
   /**
    * Get all active prize tiers as DTOs (public endpoint).
-   * Returns admin-managed redemption items only, not seller shop items.
+    * Returns items configured to appear in redemptions.
    */
   async getPrizeConfiguration(): Promise<PrizeConfigurationDto[]> {
     const tiers = await this.getActivePrizeTiers();
     return tiers.map((tier) => this.mapToDto(tier));
+  }
+
+  /**
+   * Get all active prize configurations for admin management.
+   * Unlike public redemption config, this does not filter by display flags.
+   */
+  async getAdminActivePrizeConfigurations(): Promise<PrizeConfigurationDto[]> {
+    const configs = await this.prizeConfigRepository.find({
+      where: { isActive: true },
+      order: { prizeTier: 'ASC', createdAt: 'DESC' },
+    });
+
+    if (configs.length === 0) {
+      throw new NotFoundException(
+        'No active prize tiers found. Please contact an administrator.',
+      );
+    }
+
+    return configs.map((c) => this.mapToDto(c));
   }
 
   /**

@@ -32,10 +32,6 @@ export class ClearSellerOwnershipFromRedemptionItems20260303000001
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Restore the column in case of rollback
-    await queryRunner.query(`
-      ALTER TABLE "prize_configurations"
-      ADD COLUMN "show_on_nicks_niceties" boolean NOT NULL DEFAULT false
-    `);
+    // This is a data fix, not reversible - do nothing on down
   }
 }
