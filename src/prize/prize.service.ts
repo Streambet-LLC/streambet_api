@@ -164,6 +164,30 @@ export class PrizeService {
   }
 
   /**
+   * Public: get all shop items across all sellers.
+   * This is for the main "Shop" page in the navbar, showing all available shop items.
+   */
+  async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
+    this.logger.log('[SHOP] getAllShopItems() called - fetching all active shop items');
+
+    const items = await this.prizeConfigRepository.find({
+      where: {
+        isActive: true,
+        showOnShop: true,
+      },
+      order: {
+        displayOrderShop: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+    this.logger.log(`[SHOP] Found ${items.length} total shop items across all sellers`);
+    this.logger.debug(`[SHOP] Items breakdown: ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`);
+
+    return items.map((item) => this.mapToDto(item));
+  }
+
+  /**
    * Public: get one seller shop and its active items.
    */
   async getPublicShopByUsername(username: string): Promise<{
@@ -198,6 +222,9 @@ export class PrizeService {
         createdAt: 'DESC',
       },
     });
+
+    this.logger.log(`[SHOP] Found ${items.length} shop items for seller ${username}`);
+    this.logger.debug(`[SHOP] Items for ${username}: ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, stock: i.stock, showOnShop: i.showOnShop, createdBy: i.createdBy })))}`);
 
     return {
       shop: {

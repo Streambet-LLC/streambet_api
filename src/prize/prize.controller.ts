@@ -64,6 +64,17 @@ export class PrizeController {
     return this.prizeService.getPrizeConfiguration();
   }
 
+  @Get('shop-items')
+  @ApiOperation({ summary: 'Get all shop items across all sellers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all active shop items from all sellers',
+    type: [PrizeConfigurationDto],
+  })
+  async getAllShopItems() {
+    return this.prizeService.getAllShopItems();
+  }
+
   @Get('shops')
   @ApiOperation({ summary: 'Get seller shops with active inventory' })
   @ApiResponse({ status: 200, description: 'Returns seller shops' })
