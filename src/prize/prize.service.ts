@@ -194,7 +194,7 @@ export class PrizeService {
         showOnShop: true,
       },
       order: {
-        displayOrder: 'ASC',
+        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
@@ -225,7 +225,7 @@ export class PrizeService {
         showOnShop: true, // Only show items meant for shop, exclude admin redemptions
       },
       order: {
-        displayOrder: 'ASC',
+        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
@@ -524,7 +524,6 @@ export class PrizeService {
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
-      displayOrder: dto.displayOrder ?? existingTier.displayOrder,
       displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
       displayOrderRedemptions: dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
       featuredDisplayOrder: dto.featuredDisplayOrder ?? existingTier.featuredDisplayOrder,
