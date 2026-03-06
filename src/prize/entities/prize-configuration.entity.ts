@@ -81,9 +81,6 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
   showOnRedemptions: boolean;
 
-  @Column({ type: 'boolean', name: 'show_on_nicks_niceties', default: true, nullable: false })
-  showOnNicksNiceties: boolean;
-
   @Column({ type: 'boolean', name: 'show_on_shop', default: true, nullable: false })
   showOnShop: boolean;
 
@@ -92,6 +89,9 @@ export class PrizeConfiguration extends BaseEntity {
 
   @Column({ type: 'uuid', name: 'updated_by', nullable: true })
   updatedBy: string | null;
+
+  @Column({ type: 'uuid', name: 'stripe_product_id', nullable: true })
+  stripeProductId: string | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'created_by' })

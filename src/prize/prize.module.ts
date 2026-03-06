@@ -5,7 +5,11 @@ import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
-import { PrizeController, AdminPrizeController } from './prize.controller';
+import {
+  PrizeController,
+  AdminPrizeController,
+  SellerPrizeController,
+} from './prize.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
 
@@ -20,7 +24,7 @@ import { EmailsModule } from '../emails/email.module';
     forwardRef(() => WalletsModule),
     EmailsModule,
   ],
-  controllers: [PrizeController, AdminPrizeController],
+  controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
   providers: [PrizeService],
   exports: [PrizeService],
 })

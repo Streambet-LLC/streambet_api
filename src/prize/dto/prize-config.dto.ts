@@ -162,12 +162,6 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-  })
-  showOnNicksNiceties: boolean;
-
-  @ApiProperty({
-    example: true,
     description: 'Whether to show this prize on the shop page',
   })
   showOnShop: boolean;
@@ -347,15 +341,6 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  showOnNicksNiceties?: boolean;
-
-  @ApiProperty({
-    example: true,
     description: 'Whether to show this prize on the shop page',
     required: false,
   })
@@ -503,15 +488,6 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   showOnRedemptions?: boolean;
-
-  @ApiProperty({
-    example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  showOnNicksNiceties?: boolean;
 
   @ApiProperty({
     example: true,

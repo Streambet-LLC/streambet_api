@@ -180,7 +180,7 @@
                   <!-- CTA Button -->
                   <div style="margin-top: 35px">
                     <a
-                      href="<%= params.adminUrl %>/admin/prizes/redemptions?orderId=<%= params.orderId %>"
+                      href="<%= params.reviewUrl || `${params.adminUrl}/admin/prizes/redemptions?orderId=${params.orderId}` %>"
                       style="
                         display: inline-block;
                         padding: 18px 50px;
@@ -205,7 +205,7 @@
                       line-height: 1.6;
                     "
                   >
-                    Log in to the admin panel to accept, reject, or counter this offer.
+                    Log in to the <%= params.portalLabel || 'admin panel' %> to accept, reject, or counter this offer.
                   </p>
                 </td>
               </tr>

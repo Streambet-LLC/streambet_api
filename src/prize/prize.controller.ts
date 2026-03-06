@@ -32,6 +32,7 @@ import {
   PrizeOrderResponseDto,
   MakeOfferDto,
   CounterOfferDto,
+  MarkAsShippedDto,
   BulkUpdateDisplayOrderDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -61,6 +62,25 @@ export class PrizeController {
   @ApiResponse({ status: 404, description: 'No active tiers found' })
   async getPrizeConfiguration(): Promise<PrizeConfigurationDto[]> {
     return this.prizeService.getPrizeConfiguration();
+  }
+
+  @Get('shops')
+  @ApiOperation({ summary: 'Get seller shops with active inventory' })
+  @ApiResponse({ status: 200, description: 'Returns seller shops' })
+  async getSellerShops() {
+    return this.prizeService.getSellerShops();
+  }
+
+  @Get('shops/:username/items')
+  @ApiOperation({ summary: 'Get a seller shop and its active items' })
+  @ApiParam({ name: 'username', description: 'Seller username' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns seller shop details and items',
+  })
+  @ApiResponse({ status: 404, description: 'Seller shop not found' })
+  async getShopItemsByUsername(@Param('username') username: string) {
+    return this.prizeService.getPublicShopByUsername(username);
   }
 
   /**
@@ -246,7 +266,7 @@ export class AdminPrizeController {
     @Request() req: RequestWithUser,
   ): Promise<PrizeConfigurationDto[]> {
     this.ensureAdmin(req.user);
-    return this.prizeService.getPrizeConfiguration();
+    return this.prizeService.getAdminActivePrizeConfigurations();
   }
 
   /**
@@ -611,5 +631,138 @@ export class AdminPrizeController {
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     };
+  }
+}
+
+@ApiTags('seller-prizes')
+@ApiBearerAuth()
+@Controller('seller/prizes')
+@UseGuards(JwtAuthGuard)
+export class SellerPrizeController {
+  constructor(private readonly prizeService: PrizeService) {}
+
+  private ensureSeller(user: User): void {
+    if (!user.isSeller) {
+      throw new ForbiddenException('Seller access required');
+    }
+  }
+
+  @Get('items')
+  @ApiOperation({ summary: 'Get my seller shop items' })
+  @ApiResponse({ status: 200, type: [PrizeConfigurationDto] })
+  async getMyShopItems(
+    @Request() req: RequestWithUser,
+  ): Promise<PrizeConfigurationDto[]> {
+    this.ensureSeller(req.user);
+    return this.prizeService.getMySellerShopItems(req.user.id);
+  }
+
+  @Post('items')
+  @ApiOperation({ summary: 'Create a seller shop item' })
+  @ApiResponse({ status: 201, type: PrizeConfigurationDto })
+  async createShopItem(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreatePrizeTierDto,
+  ): Promise<PrizeConfigurationDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.createMySellerShopItem(req.user.id, dto);
+  }
+
+  @Put('items/:id')
+  @ApiOperation({ summary: 'Update a seller shop item' })
+  @ApiParam({ name: 'id', description: 'Shop item ID' })
+  @ApiResponse({ status: 200, type: PrizeConfigurationDto })
+  async updateShopItem(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdatePrizeTierDto,
+  ): Promise<PrizeConfigurationDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.updateMySellerShopItem(req.user.id, id, dto);
+  }
+
+  @Delete('items/:id')
+  @ApiOperation({ summary: 'Delete a seller shop item' })
+  @ApiParam({ name: 'id', description: 'Shop item ID' })
+  @ApiResponse({ status: 200, description: 'Shop item deleted' })
+  async deleteShopItem(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ) {
+    this.ensureSeller(req.user);
+    await this.prizeService.deleteMySellerShopItem(req.user.id, id);
+    return { message: 'Shop item deleted successfully' };
+  }
+
+  @Get('offers')
+  @ApiOperation({ summary: 'Get offers for my shop items' })
+  @ApiResponse({ status: 200, description: 'Returns seller shop offers' })
+  async getMyShopOffers(
+    @Request() req: RequestWithUser,
+    @Query() filterDto: { range?: string; status?: string },
+  ) {
+    this.ensureSeller(req.user);
+    return this.prizeService.getSellerOffers(req.user.id, filterDto);
+  }
+
+  @Patch('offers/:orderId/counter')
+  @ApiOperation({ summary: 'Counter an offer for my shop item' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  async counterShopOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+    @Body() dto: CounterOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.sellerCounterOffer(req.user.id, orderId, dto);
+  }
+
+  @Patch('offers/:orderId/accept-offer')
+  @ApiOperation({ summary: 'Accept an offer for my shop item' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  async acceptShopOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.sellerAcceptOffer(req.user.id, orderId);
+  }
+
+  @Patch('offers/:orderId/reject-offer')
+  @ApiOperation({ summary: 'Reject an offer for my shop item' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  async rejectShopOffer(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.sellerRejectOffer(req.user.id, orderId);
+  }
+
+  @Get('orders')
+  @ApiOperation({ summary: 'Get my shop orders' })
+  @ApiResponse({ status: 200, description: 'Returns seller shop orders' })
+  async getMyOrders(
+    @Request() req: RequestWithUser,
+    @Query() filterDto: { status?: string; range?: string },
+  ) {
+    this.ensureSeller(req.user);
+    return this.prizeService.getSellerOrders(req.user.id, filterDto);
+  }
+
+  @Patch('orders/:orderId/mark-shipped')
+  @ApiOperation({ summary: 'Mark a shop order as shipped' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  async markOrderAsShipped(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+    @Body() dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.sellerMarkAsShipped(req.user.id, orderId, dto);
   }
 }
