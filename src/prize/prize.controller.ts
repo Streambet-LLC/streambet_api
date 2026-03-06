@@ -32,6 +32,7 @@ import {
   PrizeOrderResponseDto,
   MakeOfferDto,
   CounterOfferDto,
+  MarkAsShippedDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -713,5 +714,29 @@ export class SellerPrizeController {
   ): Promise<PrizeOrderResponseDto> {
     this.ensureSeller(req.user);
     return this.prizeService.sellerRejectOffer(req.user.id, orderId);
+  }
+
+  @Get('orders')
+  @ApiOperation({ summary: 'Get my shop orders' })
+  @ApiResponse({ status: 200, description: 'Returns seller shop orders' })
+  async getMyOrders(
+    @Request() req: RequestWithUser,
+    @Query() filterDto: { status?: string; range?: string },
+  ) {
+    this.ensureSeller(req.user);
+    return this.prizeService.getSellerOrders(req.user.id, filterDto);
+  }
+
+  @Patch('orders/:orderId/mark-shipped')
+  @ApiOperation({ summary: 'Mark a shop order as shipped' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  async markOrderAsShipped(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+    @Body() dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureSeller(req.user);
+    return this.prizeService.sellerMarkAsShipped(req.user.id, orderId, dto);
   }
 }

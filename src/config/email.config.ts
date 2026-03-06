@@ -94,5 +94,13 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/seller_shop_purchase.ejs',
       schemaPath: './src/templates/seller_shop_purchase.json',
     },
+    buyer_item_shipped: {
+      templatePath: './src/templates/buyer_item_shipped.ejs',
+      schemaPath: './src/templates/buyer_item_shipped.json',
+    },
+    seller_shipping_reminder: {
+      templatePath: './src/templates/seller_shipping_reminder.ejs',
+      schemaPath: './src/templates/seller_shipping_reminder.json',
+    },
   },
 }));

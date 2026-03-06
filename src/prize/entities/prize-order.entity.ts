@@ -121,6 +121,29 @@ export class PrizeOrder extends BaseEntity {
     | 'rejected'
     | 'offer_accepted';
 
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'tracking_number',
+  })
+  trackingNumber?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    name: 'shipping_carrier',
+  })
+  shippingCarrier?: string;
+
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+    name: 'shipped_at',
+  })
+  shippedAt?: Date;
+
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;

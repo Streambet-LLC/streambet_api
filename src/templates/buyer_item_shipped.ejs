@@ -29,14 +29,14 @@
         color: #666;
         line-height: 1.6;
       }
-      .order-details {
+      .tracking-info {
         background-color: #f9f9f9;
-        border-left: 4px solid #007bff;
+        border-left: 4px solid #28a745;
         padding: 15px;
         margin: 20px 0;
         border-radius: 4px;
       }
-      .order-details p {
+      .tracking-info p {
         margin: 8px 0;
       }
       .label {
@@ -51,52 +51,40 @@
         padding-top: 20px;
         border-top: 1px solid #eee;
       }
-      .cta-button {
-        display: inline-block;
-        background-color: #007bff;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 4px;
-        text-decoration: none;
-        margin: 20px 0;
-      }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <h1>🎉 New Shop Sale!</h1>
-        <p>Someone just purchased your item</p>
+        <h1>📦 Your Item is On the Way!</h1>
+        <p>Your shop purchase has been shipped</p>
       </div>
 
       <div class="content">
-        <p>Hi <span class="label"><%= params.sellerName %></span>,</p>
+        <p>Hi <span class="label"><%= params.buyerName %></span>,</p>
 
-        <p>
-          Great news! One of your shop items has been purchased. Here are the
-          details:
-        </p>
+        <p>Great news! Your order for <span class="label"><%= params.itemName %></span> has been shipped by the seller. Here are your tracking details:</p>
 
-        <div class="order-details">
-          <p><span class="label">Item:</span> <%= params.itemName %></p>
-          <p><span class="label">Buyer:</span> <%= params.buyerName %></p>
-          <p><span class="label">Amount:</span> $<%= params.amount %></p>
+        <div class="tracking-info">
           <p><span class="label">Order ID:</span> <%= params.orderId %></p>
-          <p><span class="label">Date:</span> <%= params.purchaseDate %></p>
+          <p><span class="label">Item:</span> <%= params.itemName %></span></p>
+          <% if (params.trackingNumber) { %>
+          <p><span class="label">Tracking Number:</span> <%= params.trackingNumber %></p>
+          <% } %>
+          <% if (params.shippingCarrier) { %>
+          <p><span class="label">Carrier:</span> <%= params.shippingCarrier %></p>
+          <% } %>
+          <p><span class="label">Shipped Date:</span> <%= params.shippedDate %></p>
         </div>
 
-        <p>
-          The buyer's shipping information has been recorded. Once you ship the
-          item, you'll be able to update the tracking information through your
-          seller dashboard.
-        </p>
+        <p>You can track your package using the information above. Your item should arrive within the estimated delivery timeframe for <%= params.shippingCarrier || 'your carrier' %>.</p>
 
-        <p>Thank you for being part of the Cardcade community!</p>
+        <p>Thank you for shopping on StreamBet!</p>
       </div>
 
       <div class="footer">
         <p>This is an automated message. Please do not reply to this email.</p>
-        <p>&copy; Cardcade. All rights reserved.</p>
+        <p>&copy; StreamBet. All rights reserved.</p>
       </div>
     </div>
   </body>

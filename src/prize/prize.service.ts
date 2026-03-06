@@ -32,6 +32,7 @@ import {
   PrizeOrderResponseDto,
   MakeOfferDto,
   CounterOfferDto,
+  MarkAsShippedDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
@@ -88,7 +89,7 @@ export class PrizeService {
 
   /**
    * Get all active prize tiers as DTOs (public endpoint).
-    * Returns items configured to appear in redemptions.
+   * Returns items configured to appear in redemptions.
    */
   async getPrizeConfiguration(): Promise<PrizeConfigurationDto[]> {
     const tiers = await this.getActivePrizeTiers();
@@ -1099,7 +1100,11 @@ export class PrizeService {
             where: { id: userId },
           });
           if (buyer) {
-            await this.sendSellerShopPurchaseNotification(savedOrder, prize, buyer);
+            await this.sendSellerShopPurchaseNotification(
+              savedOrder,
+              prize,
+              buyer,
+            );
           }
         } catch (error) {
           this.logger.error(
@@ -1865,6 +1870,109 @@ export class PrizeService {
     await this.prizeOrderRepository.save(order);
 
     return { stripeSessionUrl: session.url || '' };
+  }
+
+  /**
+   * Seller marks an order as shipped
+   */
+  async sellerMarkAsShipped(
+    sellerId: string,
+    orderId: string,
+    dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+
+    // Verify the seller owns this item
+    if (prize.createdBy !== sellerId) {
+      throw new ForbiddenException(
+        'You do not have permission to update this order',
+      );
+    }
+
+    // Verify order is paid and not already shipped
+    if (order.status !== 'paid') {
+      throw new BadRequestException(
+        'Only paid orders can be marked as shipped',
+      );
+    }
+
+    if (order.status === 'shipped' || order.shippedAt) {
+      this.logger.warn(`Order ${orderId} is already marked as shipped`);
+      return this.mapOrderToDto(order);
+    }
+
+    // Update order with shipping information
+    order.status = 'shipped';
+    order.shippedAt = new Date();
+    if (dto.trackingNumber) {
+      order.trackingNumber = dto.trackingNumber;
+    }
+    if (dto.shippingCarrier) {
+      order.shippingCarrier = dto.shippingCarrier;
+    }
+
+    const updated = await this.prizeOrderRepository.save(order);
+
+    // Send notification email to buyer
+    try {
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [order.user.email],
+          subject: `Your ${prize.name} is on the way! 📦`,
+          params: {
+            buyerName: order.user.name || order.user.username,
+            itemName: prize.name,
+            orderId: order.id,
+            trackingNumber: dto.trackingNumber || '',
+            shippingCarrier: dto.shippingCarrier || '',
+            shippedDate: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+          },
+        },
+        'buyer_item_shipped',
+      );
+      this.logger.log(
+        `Shipping notification sent to buyer ${order.userId} for order ${orderId}`,
+      );
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send shipping notification email for order ${orderId}:`,
+        emailError,
+      );
+    }
+
+    return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * Get seller's orders (shop sales)
+   */
+  async getSellerOrders(
+    sellerId: string,
+    filterDto?: { status?: string; range?: string },
+  ): Promise<PrizeOrderResponseDto[]> {
+    const query = this.prizeOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.prizeConfiguration', 'prize')
+      .where('prize.created_by = :sellerId', { sellerId })
+      .andWhere('order.status IN (:...statuses)', {
+        statuses: ['paid', 'shipped', 'delivered'],
+      });
+
+    if (filterDto?.status) {
+      query.andWhere('order.status = :status', {
+        status: filterDto.status,
+      });
+    }
+
+    const orders = await query.orderBy('order.createdAt', 'DESC').getMany();
+
+    return orders.map((order) => this.mapOrderToDto(order));
   }
 
   /**
