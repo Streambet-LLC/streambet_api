@@ -450,7 +450,6 @@ export class PrizeService {
       brand: dto.brand || PrizeBrand.POKEMON,
       displayOrderShop,
       displayOrderRedemptions,
-      displayOrderNicksNiceties,
       featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? true,
       showOnShop: dto.showOnShop ?? true,
@@ -589,7 +588,6 @@ export class PrizeService {
       // Update all page-specific display orders
       prize.displayOrderShop = update.displayOrderShop;
       prize.displayOrderRedemptions = update.displayOrderRedemptions;
-      prize.displayOrderNicksNiceties = update.displayOrderNicksNiceties;
       prize.featuredDisplayOrder = update.featuredDisplayOrder;
       
       // Update sorting preferences if provided
@@ -598,9 +596,6 @@ export class PrizeService {
       }
       if (update.sortByPurchaseOptionRedemptions !== undefined) {
         prize.sortByPurchaseOptionRedemptions = update.sortByPurchaseOptionRedemptions;
-      }
-      if (update.sortByPurchaseOptionNicksNiceties !== undefined) {
-        prize.sortByPurchaseOptionNicksNiceties = update.sortByPurchaseOptionNicksNiceties;
       }
       
       prize.updatedBy = userId;
@@ -2097,13 +2092,11 @@ export class PrizeService {
       brand: entity.brand,
       displayOrderShop: entity.displayOrderShop,
       displayOrderRedemptions: entity.displayOrderRedemptions,
-      displayOrderNicksNiceties: entity.displayOrderNicksNiceties,
       featuredDisplayOrder: entity.featuredDisplayOrder,
       showOnRedemptions: entity.showOnRedemptions,
       showOnShop: entity.showOnShop,
       sortByPurchaseOptionShop: entity.sortByPurchaseOptionShop,
       sortByPurchaseOptionRedemptions: entity.sortByPurchaseOptionRedemptions,
-      sortByPurchaseOptionNicksNiceties: entity.sortByPurchaseOptionNicksNiceties,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
