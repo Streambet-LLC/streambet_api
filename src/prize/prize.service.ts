@@ -1092,6 +1092,21 @@ export class PrizeService {
         this.logger.log(
           `Prize order ${savedOrder.id} paid with coins for user ${userId}`,
         );
+
+        // Send seller notification email if this is a seller-owned item
+        try {
+          const buyer = await this.userRepository.findOne({
+            where: { id: userId },
+          });
+          if (buyer) {
+            await this.sendSellerShopPurchaseNotification(savedOrder, prize, buyer);
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to send seller notification email for order ${savedOrder.id}:`,
+            error,
+          );
+        }
       } catch (error) {
         // Revert order if coin deduction fails
         await this.prizeOrderRepository.remove(savedOrder);
@@ -1231,7 +1246,69 @@ export class PrizeService {
 
     this.logger.log(`Order ${orderId} marked as paid after Stripe success`);
 
+    // Send seller notification email if this is a seller-owned item
+    try {
+      await this.sendSellerShopPurchaseNotification(updated, prize, order.user);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send seller notification email for order ${orderId}:`,
+        error,
+      );
+    }
+
     return this.mapOrderToDto(updated);
+  }
+
+  private async sendSellerShopPurchaseNotification(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    buyer: User,
+  ): Promise<void> {
+    // Only send if this is a seller-owned item
+    if (!prize.createdBy) {
+      return;
+    }
+
+    const seller = await this.userRepository.findOne({
+      where: { id: prize.createdBy },
+    });
+
+    if (!seller || !seller.email) {
+      this.logger.warn(
+        `Seller ${prize.createdBy} not found or has no email for order ${order.id}`,
+      );
+      return;
+    }
+
+    try {
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [seller.email],
+          subject: `New Sale! ${prize.name} has been purchased 🎉`,
+          params: {
+            sellerName: seller.name || seller.username,
+            itemName: prize.name,
+            buyerName: buyer.name || buyer.username,
+            amount: order.usdCharged,
+            orderId: order.id,
+            purchaseDate: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+          },
+        },
+        'seller_shop_purchase',
+      );
+      this.logger.log(
+        `Seller shop purchase notification sent to ${seller.email} for order ${order.id}`,
+      );
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send seller shop purchase email for order ${order.id}:`,
+        emailError,
+      );
+    }
   }
 
   private async ensureRedemptionForOrder(

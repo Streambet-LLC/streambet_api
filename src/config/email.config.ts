@@ -90,5 +90,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/application_rejected.ejs',
       schemaPath: './src/templates/application_rejected.json',
     },
+    seller_shop_purchase: {
+      templatePath: './src/templates/seller_shop_purchase.ejs',
+      schemaPath: './src/templates/seller_shop_purchase.json',
+    },
   },
 }));
