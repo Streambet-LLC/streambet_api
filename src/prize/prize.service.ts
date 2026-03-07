@@ -558,11 +558,8 @@ export class PrizeService {
     // Find existing tier
     const existingTier = await this.getPrizeTierById(id);
 
-    if (!existingTier.isActive) {
-      throw new BadRequestException(
-        'Cannot update an inactive prize tier. Please create a new one instead.',
-      );
-    }
+    // Note: If the tier is inactive, we'll still create a new active version
+    // This handles the case where the same item is being updated multiple times
 
     // Determine purchase option
     const purchaseOption = dto.purchaseOption || existingTier.purchaseOption;
@@ -582,21 +579,50 @@ export class PrizeService {
       amount = dto.amount;
     }
 
-    // Convert USD to CadeCoins for seller shop items
-    // Determine the effective createdBy value to know if this is a shop item
-    const effectiveCreatedBy = createdBy !== undefined ? createdBy : existingTier.createdBy;
-    if (effectiveCreatedBy && purchaseOption !== PrizePurchaseOption.OFFERS_ONLY) {
-      // This is a seller shop item with amount in USD - convert to CadeCoins (50 coins = $1)
-      amount = Math.round(amount * 50);
-    }
+    // Amount from admin is always in CadeCoins - no conversion needed on update
+    // The frontend handles the USD-to-CadeCoins conversion before sending
+    const effectiveCreatedBy =
+      createdBy !== undefined ? createdBy : existingTier.createdBy;
 
     // Data hardening: Set old tier to inactive
     existingTier.isActive = false;
     await this.prizeConfigRepository.save(existingTier);
 
+    // If createdBy is changing and the new creator already has an item with this tier,
+    // find the next available tier for them
+    let finalTier = dto.prizeTier ?? existingTier.prizeTier;
+    const oldCreatedBy = existingTier.createdBy;
+
+    if (effectiveCreatedBy && effectiveCreatedBy !== oldCreatedBy) {
+      // Check if this seller already has an item with this tier
+      const tierExists = await this.prizeConfigRepository.findOne({
+        where: {
+          createdBy: effectiveCreatedBy,
+          prizeTier: finalTier,
+          isActive: true,
+        },
+      });
+
+      if (tierExists) {
+        // Find the next available tier for this seller
+        const existingTiers = await this.prizeConfigRepository.find({
+          where: {
+            createdBy: effectiveCreatedBy,
+            isActive: true,
+          },
+          order: { prizeTier: 'DESC' },
+        });
+
+        finalTier = (existingTiers[0]?.prizeTier ?? 0) + 1;
+        this.logger.log(
+          `Tier ${dto.prizeTier ?? existingTier.prizeTier} already exists for seller ${effectiveCreatedBy}. Assigned tier ${finalTier} instead.`,
+        );
+      }
+    }
+
     // Create new tier with updated data and new UUID
     const newTier = this.prizeConfigRepository.create({
-      prizeTier: dto.prizeTier ?? existingTier.prizeTier,
+      prizeTier: finalTier,
       amount,
       name: dto.name,
       description: dto.description || null,
@@ -606,9 +632,12 @@ export class PrizeService {
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
       displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
-      displayOrderRedemptions: dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
-      featuredDisplayOrder: dto.featuredDisplayOrder ?? existingTier.featuredDisplayOrder,
-      showOnRedemptions: dto.showOnRedemptions ?? existingTier.showOnRedemptions,
+      displayOrderRedemptions:
+        dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
+      featuredDisplayOrder:
+        dto.featuredDisplayOrder ?? existingTier.featuredDisplayOrder,
+      showOnRedemptions:
+        dto.showOnRedemptions ?? existingTier.showOnRedemptions,
       showOnShop: dto.showOnShop ?? existingTier.showOnShop,
       isActive: true,
       createdBy: effectiveCreatedBy, // Use new value if provided, otherwise preserve existing
@@ -617,7 +646,7 @@ export class PrizeService {
 
     const saved = await this.prizeConfigRepository.save(newTier);
     this.logger.log(
-      `Prize tier ${dto.prizeTier ?? existingTier.prizeTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
+      `Prize tier ${finalTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
     );
 
     return this.mapToDto(saved);
