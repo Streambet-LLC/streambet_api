@@ -370,6 +370,25 @@ export class PrizeService {
     userId: string,
     createdBy: string | null = null,
   ): Promise<PrizeConfigurationDto> {
+    // Validate that createdBy is an active seller if provided
+    if (createdBy) {
+      const seller = await this.userRepository.findOne({
+        where: { id: createdBy, isActive: true },
+      });
+
+      if (!seller) {
+        throw new BadRequestException(
+          `User with ID ${createdBy} not found or inactive`,
+        );
+      }
+
+      if (!seller.isSeller) {
+        throw new BadRequestException(
+          `User ${seller.username} is not a seller`,
+        );
+      }
+    }
+
     // Auto-generate tier number if not provided
     let prizeTier = dto.prizeTier;
     if (!prizeTier) {
@@ -507,8 +526,27 @@ export class PrizeService {
     id: string,
     dto: UpdatePrizeTierDto,
     userId: string,
-    preserveCreatedBy: boolean = true,
+    createdBy?: string,
   ): Promise<PrizeConfigurationDto> {
+    // Validate that createdBy is an active seller if provided
+    if (createdBy) {
+      const seller = await this.userRepository.findOne({
+        where: { id: createdBy, isActive: true },
+      });
+
+      if (!seller) {
+        throw new BadRequestException(
+          `User with ID ${createdBy} not found or inactive`,
+        );
+      }
+
+      if (!seller.isSeller) {
+        throw new BadRequestException(
+          `User ${seller.username} is not a seller`,
+        );
+      }
+    }
+
     // Find existing tier
     const existingTier = await this.getPrizeTierById(id);
 
@@ -557,7 +595,7 @@ export class PrizeService {
       showOnRedemptions: dto.showOnRedemptions ?? existingTier.showOnRedemptions,
       showOnShop: dto.showOnShop ?? existingTier.showOnShop,
       isActive: true,
-      createdBy: preserveCreatedBy ? existingTier.createdBy : null, // Preserve ownership for seller items
+      createdBy: createdBy !== undefined ? createdBy : existingTier.createdBy, // Use new value if provided, otherwise preserve existing
       updatedBy: userId,
     });
 

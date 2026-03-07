@@ -299,7 +299,7 @@ export class AdminPrizeController {
     @Body() dto: CreatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
     this.ensureAdmin(req.user);
-    return this.prizeService.createPrizeTier(dto, req.user.id);
+    return this.prizeService.createPrizeTier(dto, req.user.id, dto.createdBy || null);
   }
 
   /**
@@ -325,7 +325,7 @@ export class AdminPrizeController {
     @Body() dto: UpdatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
     this.ensureAdmin(req.user);
-    return this.prizeService.updatePrizeTier(id, dto, req.user.id);
+    return this.prizeService.updatePrizeTier(id, dto, req.user.id, dto.createdBy);
   }
 
   /**

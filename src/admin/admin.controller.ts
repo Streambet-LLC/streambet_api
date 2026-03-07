@@ -443,6 +443,22 @@ export class AdminController {
     };
   }
 
+  @ApiOperation({
+    summary: 'Get all sellers',
+    description: 'API to list all active sellers',
+  })
+  @ApiOkResponse()
+  @Get('sellers')
+  async getAllSellers(@Request() req: RequestWithUser) {
+    this.ensureAdmin(req.user);
+    const { data } = await this.usersService.findAllSellers();
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Listed',
+      data,
+    };
+  }
+
   @ApiOperation({ summary: 'Soft delete a user' })
   @ApiOkResponse({
     description: 'User has been successfully soft deleted',

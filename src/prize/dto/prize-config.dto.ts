@@ -324,6 +324,15 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   showOnShop?: boolean;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
 }
 
 /**
@@ -464,6 +473,15 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   showOnShop?: boolean;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
 }
 
 /**
