@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        background-color: #ffffff;
+        margin: 20px auto;
+        padding: 20px;
+        border-radius: 8px;
+        max-width: 600px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .header h1 {
+        margin: 0;
+        color: #007bff;
+      }
+      .content {
+        color: #666;
+        line-height: 1.6;
+      }
+      .tracking-info {
+        background-color: #f9f9f9;
+        border-left: 4px solid #28a745;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 4px;
+      }
+      .tracking-info p {
+        margin: 8px 0;
+      }
+      .label {
+        font-weight: bold;
+        color: #333;
+      }
+      .footer {
+        text-align: center;
+        color: #999;
+        font-size: 12px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>📦 Your Item is On the Way!</h1>
+        <p>Your shop purchase has been shipped</p>
+      </div>
+
+      <div class="content">
+        <p>Hi <span class="label"><%= params.buyerName %></span>,</p>
+
+        <p>Great news! Your order for <span class="label"><%= params.itemName %></span> has been shipped by the seller. Here are your tracking details:</p>
+
+        <div class="tracking-info">
+          <p><span class="label">Order ID:</span> <%= params.orderId %></p>
+          <p><span class="label">Item:</span> <%= params.itemName %></span></p>
+          <% if (params.trackingNumber) { %>
+          <p><span class="label">Tracking Number:</span> <%= params.trackingNumber %></p>
+          <% } %>
+          <% if (params.shippingCarrier) { %>
+          <p><span class="label">Carrier:</span> <%= params.shippingCarrier %></p>
+          <% } %>
+          <p><span class="label">Shipped Date:</span> <%= params.shippedDate %></p>
+        </div>
+
+        <p>You can track your package using the information above. Your item should arrive within the estimated delivery timeframe for <%= params.shippingCarrier || 'your carrier' %>.</p>
+
+        <p>Thank you for shopping on StreamBet!</p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated message. Please do not reply to this email.</p>
+        <p>&copy; StreamBet. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

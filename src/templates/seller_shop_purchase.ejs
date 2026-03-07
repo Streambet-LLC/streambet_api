@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        background-color: #ffffff;
+        margin: 20px auto;
+        padding: 20px;
+        border-radius: 8px;
+        max-width: 600px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .header h1 {
+        margin: 0;
+        color: #007bff;
+      }
+      .content {
+        color: #666;
+        line-height: 1.6;
+      }
+      .order-details {
+        background-color: #f9f9f9;
+        border-left: 4px solid #007bff;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 4px;
+      }
+      .order-details p {
+        margin: 8px 0;
+      }
+      .label {
+        font-weight: bold;
+        color: #333;
+      }
+      .footer {
+        text-align: center;
+        color: #999;
+        font-size: 12px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+      }
+      .cta-button {
+        display: inline-block;
+        background-color: #007bff;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        text-decoration: none;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎉 New Shop Sale!</h1>
+        <p>Someone just purchased your item</p>
+      </div>
+
+      <div class="content">
+        <p>Hi <span class="label"><%= params.sellerName %></span>,</p>
+
+        <p>
+          Great news! One of your shop items has been purchased. Here are the
+          details:
+        </p>
+
+        <div class="order-details">
+          <p><span class="label">Item:</span> <%= params.itemName %></p>
+          <p><span class="label">Buyer:</span> <%= params.buyerName %></p>
+          <p><span class="label">Amount:</span> $<%= params.amount %></p>
+          <p><span class="label">Order ID:</span> <%= params.orderId %></p>
+          <p><span class="label">Date:</span> <%= params.purchaseDate %></p>
+        </div>
+
+        <p>
+          The buyer's shipping information has been recorded. Once you ship the
+          item, you'll be able to update the tracking information through your
+          seller dashboard.
+        </p>
+
+        <p>Thank you for being part of the Cardcade community!</p>
+      </div>
+
+      <div class="footer">
+        <p>This is an automated message. Please do not reply to this email.</p>
+        <p>&copy; Cardcade. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

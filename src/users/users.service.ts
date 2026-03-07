@@ -536,6 +536,25 @@ export class UsersService {
     return { data: test };
   }
 
+  async findAllSellers(): Promise<{ data: User[] }> {
+    const sellers = await this.usersRepository.find({
+      where: {
+        isSeller: true,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        shopName: true,
+      },
+      order: {
+        username: 'ASC',
+      },
+    });
+    return { data: sellers };
+  }
+
   async updatePassword(userId: string, hashedPassword: string): Promise<void> {
     await this.usersRepository.update(userId, {
       password: hashedPassword,

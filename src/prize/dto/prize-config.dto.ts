@@ -142,13 +142,6 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on Nick\'s Niceties page (1-indexed, null if not shown)',
-    nullable: true,
-  })
-  displayOrderNicksNiceties: number | null;
-
-  @ApiProperty({
-    example: 1,
     description: 'Featured carousel display order (null = not featured)',
     nullable: true,
   })
@@ -159,12 +152,6 @@ export class PrizeConfigurationDto {
     description: 'Whether to show this prize on the redemptions page',
   })
   showOnRedemptions: boolean;
-
-  @ApiProperty({
-    example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-  })
-  showOnNicksNiceties: boolean;
 
   @ApiProperty({
     example: true,
@@ -183,12 +170,6 @@ export class PrizeConfigurationDto {
     description: 'Whether to sort redemptions page by purchase option (both first)',
   })
   sortByPurchaseOptionRedemptions: boolean;
-
-  @ApiProperty({
-    example: false,
-    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
-  })
-  sortByPurchaseOptionNicksNiceties: boolean;
 
   @ApiProperty({ example: true })
   isActive: boolean;
@@ -318,16 +299,6 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on Nick\'s Niceties page (1-indexed, auto-generated if not provided)',
-    required: false,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  displayOrderNicksNiceties?: number;
-
-  @ApiProperty({
-    example: 1,
     description: 'Featured carousel display order (null = not featured)',
     required: false,
   })
@@ -347,21 +318,21 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  showOnNicksNiceties?: boolean;
-
-  @ApiProperty({
-    example: true,
     description: 'Whether to show this prize on the shop page',
     required: false,
   })
   @IsOptional()
   @IsBoolean()
   showOnShop?: boolean;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
 }
 
 /**
@@ -477,16 +448,6 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on Nick\'s Niceties page (1-indexed)',
-    required: false,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  displayOrderNicksNiceties?: number;
-
-  @ApiProperty({
-    example: 1,
     description: 'Featured carousel display order (null = not featured)',
     required: false,
   })
@@ -506,21 +467,21 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: true,
-    description: "Whether to show this prize on Nick's Niceties page",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  showOnNicksNiceties?: boolean;
-
-  @ApiProperty({
-    example: true,
     description: 'Whether to show this prize on the shop page',
     required: false,
   })
   @IsOptional()
   @IsBoolean()
   showOnShop?: boolean;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
 }
 
 /**
@@ -613,16 +574,6 @@ export class PrizeDisplayOrderUpdateDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on Nick\'s Niceties page (1-indexed, null if not shown on this page)',
-    nullable: true,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  displayOrderNicksNiceties: number | null;
-
-  @ApiProperty({
-    example: 1,
     description: 'Featured carousel display order (null = not featured)',
     nullable: true,
   })
@@ -646,14 +597,6 @@ export class PrizeDisplayOrderUpdateDto {
   @IsOptional()
   @IsBoolean()
   sortByPurchaseOptionRedemptions?: boolean;
-
-  @ApiProperty({
-    example: false,
-    description: "Whether to sort Nick's Niceties page by purchase option (both first)",
-  })
-  @IsOptional()
-  @IsBoolean()
-  sortByPurchaseOptionNicksNiceties?: boolean;
 }
 
 /**

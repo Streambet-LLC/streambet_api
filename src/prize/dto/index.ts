@@ -6,4 +6,5 @@ export {
   PaymentMethod,
   MakeOfferDto,
   CounterOfferDto,
+  MarkAsShippedDto,
 } from './prize-purchase.dto';

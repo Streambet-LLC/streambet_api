@@ -216,3 +216,23 @@ export class CounterOfferDto {
   @IsString()
   offerNotes?: string;
 }
+
+export class MarkAsShippedDto {
+  @ApiProperty({
+    example: '1Z999AA10123456784',
+    description: 'Tracking number for the shipment',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  trackingNumber?: string;
+
+  @ApiProperty({
+    example: 'FedEx',
+    description: 'Shipping carrier name (e.g., FedEx, UPS, USPS)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  shippingCarrier?: string;
+}

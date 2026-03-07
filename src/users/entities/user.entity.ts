@@ -157,6 +157,14 @@ export class User extends BaseEntity {
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
   promoCode: string;
 
+  @Column({
+    length: 255,
+    type: 'varchar',
+    nullable: true,
+    name: 'shop_name',
+  })
+  shopName: string;
+
   @OneToOne(() => Wallet, (wallet) => wallet.user)
   wallet: Wallet;
 
@@ -168,4 +176,10 @@ export class User extends BaseEntity {
     unique: true,
   })
   refLink: string;
+
+  @Column({ length: 100, type: 'varchar', nullable: true, name: 'stripe_account_id' })
+  stripeAccountId: string;
+
+  @Column({ default: false, name: 'stripe_account_connected', type: 'boolean' })
+  stripeAccountConnecteds: boolean;
 }

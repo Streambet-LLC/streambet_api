@@ -63,9 +63,6 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'integer', name: 'display_order_redemptions', nullable: true })
   displayOrderRedemptions: number | null;
 
-  @Column({ type: 'integer', name: 'display_order_nicks_niceties', nullable: true })
-  displayOrderNicksNiceties: number | null;
-
   @Column({ type: 'integer', name: 'featured_display_order', nullable: true })
   featuredDisplayOrder: number | null;
 
@@ -75,14 +72,8 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'boolean', name: 'sort_by_purchase_option_redemptions', default: false })
   sortByPurchaseOptionRedemptions: boolean;
 
-  @Column({ type: 'boolean', name: 'sort_by_purchase_option_nicks_niceties', default: false })
-  sortByPurchaseOptionNicksNiceties: boolean;
-
   @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
   showOnRedemptions: boolean;
-
-  @Column({ type: 'boolean', name: 'show_on_nicks_niceties', default: true, nullable: false })
-  showOnNicksNiceties: boolean;
 
   @Column({ type: 'boolean', name: 'show_on_shop', default: true, nullable: false })
   showOnShop: boolean;
@@ -92,6 +83,9 @@ export class PrizeConfiguration extends BaseEntity {
 
   @Column({ type: 'uuid', name: 'updated_by', nullable: true })
   updatedBy: string | null;
+
+  @Column({ type: 'uuid', name: 'stripe_product_id', nullable: true })
+  stripeProductId: string | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'created_by' })

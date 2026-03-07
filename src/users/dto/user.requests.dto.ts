@@ -97,6 +97,13 @@ export class ProfileUpdateDto {
   profileImageUrl?: string;
 
   @ApiProperty({
+    description: 'Shop name for sellers',
+  })
+  @IsOptional()
+  @IsString()
+  shopName?: string;
+
+  @ApiProperty({
     description: 'Socials of the user',
   })
   @IsOptional()
