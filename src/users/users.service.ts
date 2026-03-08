@@ -240,9 +240,20 @@ export class UsersService {
           );
         }
       }
-      if (existingUserObj?.role !== UserRole.CREATOR) {
-        delete profileUpdateDto.socials;
-      }
+      // Allow any user to save their own socials
+      this.logger.log(
+        `[PROFILE UPDATE] User ${existingUserObj?.username} - Role: ${existingUserObj?.role}, IsSeller: ${existingUserObj?.isSeller}`,
+      );
+      this.logger.log(
+        `[PROFILE UPDATE] ProfileUpdateDto socials before filter: ${JSON.stringify(profileUpdateDto.socials)}`,
+      );
+      // Don't delete socials - allow all users to have them
+      this.logger.log(
+        `[PROFILE UPDATE] Keeping socials - allowing all users to save socials`,
+      );
+      this.logger.log(
+        `[PROFILE UPDATE] ProfileUpdateDto socials after filter: ${JSON.stringify(profileUpdateDto.socials)}`,
+      );
       await this.usersRepository.update({ id }, profileUpdateDto);
       return this.findOne(id);
     } catch (e) {
