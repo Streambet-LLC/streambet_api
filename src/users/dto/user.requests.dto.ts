@@ -46,6 +46,13 @@ export class ProfileUpdateDto {
   state?: string;
 
   @ApiProperty({
+    description: 'Country of the user',
+  })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiProperty({
     description: 'Username of the user',
     example: 'johndoe',
   })
@@ -108,6 +115,19 @@ export class ProfileUpdateDto {
   })
   @IsOptional()
   socials?: { [social: string]: string };
+
+  @ApiProperty({
+    description: 'Seller trading experience',
+  })
+  @IsOptional()
+  @IsString()
+  sellerTradingExperience?: string;
+
+  @ApiProperty({
+    description: 'Seller onboarding completed flag',
+  })
+  @IsOptional()
+  sellerOnboardingCompleted?: boolean;
 
   @Exclude()
   @IsOptional()
