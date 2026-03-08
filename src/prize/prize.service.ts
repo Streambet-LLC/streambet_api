@@ -203,6 +203,10 @@ export class PrizeService {
       displayName: string;
       profileImageUrl: string | null;
       socials: { [social: string]: string } | null;
+      sellerTradingExperience?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
     };
     items: PrizeConfigurationDto[];
   }> {
@@ -260,6 +264,10 @@ export class PrizeService {
         displayName: seller.shopName || seller.name || seller.username,
         profileImageUrl: seller.profileImageUrl || null,
         socials: seller.socials || null,
+        sellerTradingExperience: seller.sellerTradingExperience || null,
+        city: seller.city || null,
+        state: seller.state || null,
+        country: seller.country || null,
       },
       items: items.map((item) => this.mapToDto(item)),
     };
