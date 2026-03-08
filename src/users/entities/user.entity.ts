@@ -177,9 +177,29 @@ export class User extends BaseEntity {
   })
   refLink: string;
 
-  @Column({ length: 100, type: 'varchar', nullable: true, name: 'stripe_account_id' })
+  @Column({
+    length: 100,
+    type: 'varchar',
+    nullable: true,
+    name: 'stripe_account_id',
+  })
   stripeAccountId: string;
 
   @Column({ default: false, name: 'stripe_account_connected', type: 'boolean' })
   stripeAccountConnecteds: boolean;
+
+  @Column({
+    type: 'boolean',
+    default: false,
+    nullable: false,
+    name: 'seller_onboarding_completed',
+  })
+  sellerOnboardingCompleted: boolean;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+    name: 'seller_trading_experience',
+  })
+  sellerTradingExperience: string;
 }

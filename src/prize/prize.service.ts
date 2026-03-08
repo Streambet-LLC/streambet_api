@@ -168,7 +168,9 @@ export class PrizeService {
    * This is for the main "Shop" page in the navbar, showing all available shop items.
    */
   async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
-    this.logger.log('[SHOP] getAllShopItems() called - fetching all active shop items');
+    this.logger.log(
+      '[SHOP] getAllShopItems() called - fetching all active shop items',
+    );
 
     const items = await this.prizeConfigRepository.find({
       where: {
@@ -181,8 +183,12 @@ export class PrizeService {
       },
     });
 
-    this.logger.log(`[SHOP] Found ${items.length} total shop items across all sellers`);
-    this.logger.debug(`[SHOP] Items breakdown: ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`);
+    this.logger.log(
+      `[SHOP] Found ${items.length} total shop items across all sellers`,
+    );
+    this.logger.debug(
+      `[SHOP] Items breakdown: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
+    );
 
     return items.map((item) => this.mapToDto(item));
   }
@@ -196,6 +202,7 @@ export class PrizeService {
       username: string;
       displayName: string;
       profileImageUrl: string | null;
+      socials: { [social: string]: string } | null;
     };
     items: PrizeConfigurationDto[];
   }> {
@@ -223,18 +230,43 @@ export class PrizeService {
       },
     });
 
-    this.logger.log(`[SHOP] Found ${items.length} shop items for seller ${username}`);
-    this.logger.debug(`[SHOP] Items for ${username}: ${JSON.stringify(items.map(i => ({ id: i.id, name: i.name, stock: i.stock, showOnShop: i.showOnShop, createdBy: i.createdBy })))}`);
+    this.logger.log(
+      `[SHOP] Found ${items.length} shop items for seller ${username}`,
+    );
+    this.logger.debug(
+      `[SHOP] Items for ${username}: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, showOnShop: i.showOnShop, createdBy: i.createdBy })))}`,
+    );
+    this.logger.log(
+      `[SHOP] Seller data - id: ${seller.id}, username: ${seller.username}, isSeller: ${seller.isSeller}, role: ${seller.role}`,
+    );
+    this.logger.log(
+      `[SHOP] Seller socials RAW VALUE: ${JSON.stringify(seller.socials)}`,
+    );
+    this.logger.log(`[SHOP] Seller socials TYPE: ${typeof seller.socials}`);
+    this.logger.log(
+      `[SHOP] Seller socials IS NULL: ${seller.socials === null}`,
+    );
+    this.logger.log(
+      `[SHOP] Seller socials IS UNDEFINED: ${seller.socials === undefined}`,
+    );
+    this.logger.log(
+      `[SHOP] Seller socials KEYS: ${seller.socials ? Object.keys(seller.socials).join(',') : 'N/A'}`,
+    );
 
-    return {
+    const response = {
       shop: {
         id: seller.id,
         username: seller.username,
         displayName: seller.shopName || seller.name || seller.username,
         profileImageUrl: seller.profileImageUrl || null,
+        socials: seller.socials || null,
       },
       items: items.map((item) => this.mapToDto(item)),
     };
+    this.logger.log(
+      `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
+    );
+    return response;
   }
 
   /**
@@ -451,20 +483,24 @@ export class PrizeService {
     const seller = await this.userRepository.findOne({
       where: {
         id: userId,
-      }
+      },
     });
 
     let stripeProductId = null;
 
     if (seller.stripeAccountId) {
-      const stripeProduct = await stripe.registerProduct(dto.name, dto.description, amount, seller.stripeAccountId);
+      const stripeProduct = await stripe.registerProduct(
+        dto.name,
+        dto.description,
+        amount,
+        seller.stripeAccountId,
+      );
       stripeProductId = stripeProduct;
     }
 
-
     // Auto-generate display orders for each page where item will be shown
     const category = (dto.category || 'slab') as 'slab' | 'sealed';
-    
+
     let displayOrderShop = dto.displayOrderShop ?? null;
     if (!displayOrderShop && (dto.showOnShop ?? true)) {
       const maxShop = await this.prizeConfigRepository
@@ -486,7 +522,6 @@ export class PrizeService {
         .getRawOne();
       displayOrderRedemptions = (maxRedemptions?.max || 0) + 1;
     }
-
 
     // Featured display order - only set if explicitly provided
     const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
@@ -698,15 +733,16 @@ export class PrizeService {
       prize.displayOrderShop = update.displayOrderShop;
       prize.displayOrderRedemptions = update.displayOrderRedemptions;
       prize.featuredDisplayOrder = update.featuredDisplayOrder;
-      
+
       // Update sorting preferences if provided
       if (update.sortByPurchaseOptionShop !== undefined) {
         prize.sortByPurchaseOptionShop = update.sortByPurchaseOptionShop;
       }
       if (update.sortByPurchaseOptionRedemptions !== undefined) {
-        prize.sortByPurchaseOptionRedemptions = update.sortByPurchaseOptionRedemptions;
+        prize.sortByPurchaseOptionRedemptions =
+          update.sortByPurchaseOptionRedemptions;
       }
-      
+
       prize.updatedBy = userId;
 
       const saved = await this.prizeConfigRepository.save(prize);
@@ -1741,15 +1777,15 @@ export class PrizeService {
       updatedAt: order.updatedAt.toISOString(),
       user: order.user
         ? {
-          username: order.user.username,
-          email: order.user.email,
-        }
+            username: order.user.username,
+            email: order.user.email,
+          }
         : undefined,
       prizeConfig: order.prizeConfiguration
         ? {
-          name: order.prizeConfiguration.name,
-          category: order.prizeConfiguration.category,
-        }
+            name: order.prizeConfiguration.name,
+            category: order.prizeConfiguration.category,
+          }
         : undefined,
     };
   }
