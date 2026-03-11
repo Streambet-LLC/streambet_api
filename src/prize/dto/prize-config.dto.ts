@@ -135,7 +135,8 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on redemptions page (1-indexed, null if not shown)',
+    description:
+      'Display order on redemptions page (1-indexed, null if not shown)',
     nullable: true,
   })
   displayOrderRedemptions: number | null;
@@ -167,7 +168,8 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: false,
-    description: 'Whether to sort redemptions page by purchase option (both first)',
+    description:
+      'Whether to sort redemptions page by purchase option (both first)',
   })
   sortByPurchaseOptionRedemptions: boolean;
 
@@ -182,6 +184,20 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({ example: 'uuid', nullable: true })
   createdBy: string | null;
+
+  @ApiProperty({
+    example: 'aar_cade',
+    nullable: true,
+    description: 'Username of the seller who created this item',
+  })
+  createdByUsername: string | null;
+
+  @ApiProperty({
+    example: 'My Awesome Shop',
+    nullable: true,
+    description: 'Shop name set by the seller',
+  })
+  createdByShopName: string | null;
 
   @ApiProperty({ example: 'uuid', nullable: true })
   updatedBy: string | null;
