@@ -177,6 +177,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
+      relations: ['creator'],
       order: {
         displayOrderShop: 'ASC',
         createdAt: 'DESC',
@@ -2254,6 +2255,8 @@ export class PrizeService {
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       createdBy: entity.createdBy,
+      createdByUsername: entity.creator?.username ?? null,
+      createdByShopName: entity.creator?.shopName ?? null,
       updatedBy: entity.updatedBy,
     };
   }
