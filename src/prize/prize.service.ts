@@ -120,7 +120,7 @@ export class PrizeService {
   /**
    * Public: list seller shops that have active shop items.
    */
-  async getSellerShops(): Promise<
+  async getSellerShops(limit?: number): Promise<
     Array<{
       id: string;
       username: string;
@@ -129,7 +129,7 @@ export class PrizeService {
       itemCount: number;
     }>
   > {
-    const rows = await this.userRepository
+    const qb = this.userRepository
       .createQueryBuilder('u')
       .innerJoin(
         PrizeConfiguration,
@@ -149,10 +149,15 @@ export class PrizeService {
       .addSelect('COUNT(p.id)', 'itemCount')
       .groupBy('u.id')
       .addGroupBy('COALESCE(u.shop_name, u.name, u.username)')
-      .addGroupBy('u.profile_image_url')
-      .orderBy('RANDOM()')
-      .limit(5)
-      .getRawMany();
+      .addGroupBy('u.profile_image_url');
+
+    if (limit) {
+      qb.orderBy('RANDOM()').limit(limit);
+    } else {
+      qb.orderBy('COALESCE(u.shop_name, u.name, u.username)', 'ASC');
+    }
+
+    const rows = await qb.getRawMany();
 
     return rows.map((row) => ({
       id: row.id,
