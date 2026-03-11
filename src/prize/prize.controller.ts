@@ -78,8 +78,10 @@ export class PrizeController {
   @Get('shops')
   @ApiOperation({ summary: 'Get seller shops with active inventory' })
   @ApiResponse({ status: 200, description: 'Returns seller shops' })
-  async getSellerShops() {
-    return this.prizeService.getSellerShops();
+  async getSellerShops(@Query('limit') limit?: string) {
+    return this.prizeService.getSellerShops(
+      limit ? parseInt(limit, 10) : undefined,
+    );
   }
 
   @Get('shops/:username/items')
