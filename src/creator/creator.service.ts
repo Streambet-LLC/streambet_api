@@ -348,8 +348,6 @@ export class CreatorService {
       const user = application.user;
       if (application.applicationType === ApplicationType.SELLER) {
         const stripeAccount = await stripe.createConnectedAccount(application.user.email);
-        console.log(stripeAccount);
-
         user.isSeller = true;
         user.stripeAccountId = stripeAccount.accountId;
         // Set default shop name if not already set
