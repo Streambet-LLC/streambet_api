@@ -10,9 +10,11 @@ export class LiveScheduledStreamListDto extends AdminFilterDto {
   Filter params pass the data as key value pair
   eg:
   {
-    "q": <stream_name>
-   
+    "q": <stream_name>,
+    "pickStatus": ["open", "locked"]
   }
+  
+  Available pick statuses: created, open, locked, closed, cancelled, No bet round
   `,
     required: false,
     default: '{}',
