@@ -494,18 +494,6 @@ export class PrizeService {
       },
     });
 
-    let stripeProductId = null;
-
-    if (seller.stripeAccountId) {
-      const stripeProduct = await stripe.registerProduct(
-        dto.name,
-        dto.description,
-        amount,
-        seller.stripeAccountId,
-      );
-      stripeProductId = stripeProduct;
-    }
-
     // Auto-generate display orders for each page where item will be shown
     const category = (dto.category || 'slab') as 'slab' | 'sealed';
 
@@ -553,7 +541,6 @@ export class PrizeService {
       isActive: true,
       createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
-      stripeProductId,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1377,7 +1364,12 @@ export class PrizeService {
       try {
         const usdCents = Math.round(dto.usdAmount * 100);
 
-        const session = await this.stripe.checkout.sessions.create({
+        // Load seller to check for Stripe Connect account and application fee
+        const seller = prize.createdBy
+          ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+          : null;
+
+        const sessionParams = {
           payment_method_types: ['card'],
           line_items: [
             {
@@ -1406,7 +1398,24 @@ export class PrizeService {
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
           },
-        });
+          payment_intent_data: null
+        };
+
+        if (seller?.stripeAccountId) {
+          const feePercent = seller.applicationFeePercent ?? 7;
+          const application_fee_amount = Math.round(
+            usdCents * (feePercent / 100)
+          );
+          const transfer_data = { destination: seller.stripeAccountId };
+
+          sessionParams.payment_intent_data = {
+            application_fee_amount,
+            transfer_data
+          }
+        }
+
+        // @ts-expect-error any
+        const session = await this.stripe.checkout.sessions.create(sessionParams);
 
         // Save Stripe session ID to order
         savedOrder.stripeSessionId = session.id;
@@ -1785,15 +1794,15 @@ export class PrizeService {
       updatedAt: order.updatedAt.toISOString(),
       user: order.user
         ? {
-            username: order.user.username,
-            email: order.user.email,
-          }
+          username: order.user.username,
+          email: order.user.email,
+        }
         : undefined,
       prizeConfig: order.prizeConfiguration
         ? {
-            name: order.prizeConfiguration.name,
-            category: order.prizeConfiguration.category,
-          }
+          name: order.prizeConfiguration.name,
+          category: order.prizeConfiguration.category,
+        }
         : undefined,
     };
   }
@@ -1963,7 +1972,14 @@ export class PrizeService {
     // Create Stripe checkout session
     const prize = await this.getPrizeTierById(order.prizeConfigurationId);
 
-    const session = await this.stripe.checkout.sessions.create({
+    const offerAmountCents = Math.round(amountToCharge * 100);
+
+    // Load seller to check for Stripe Connect account and application fee
+    const offerSeller = prize.createdBy
+      ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+      : null;
+
+    const acceptOfferSessionParams = {
       payment_method_types: ['card'],
       line_items: [
         {
@@ -1973,7 +1989,7 @@ export class PrizeService {
               name: `${prize.name} - Accepted Offer`,
               description: `Offer accepted at $${amountToCharge}`,
             },
-            unit_amount: Math.round(amountToCharge * 100),
+            unit_amount: offerAmountCents,
           },
           quantity: 1,
         },
@@ -1986,7 +2002,22 @@ export class PrizeService {
         userId: order.userId,
         type: 'prize_offer',
       },
-    });
+      payment_intent_data: null,
+    };
+
+    if (offerSeller?.stripeAccountId) {
+      const feePercent = offerSeller.applicationFeePercent ?? 7;
+      const application_fee_amount = Math.round(offerAmountCents * (feePercent / 100));
+      const transfer_data = { destination: offerSeller.stripeAccountId };
+
+      acceptOfferSessionParams.payment_intent_data = {
+        application_fee_amount,
+        transfer_data,
+      };
+    }
+
+    // @ts-ignore
+    const session = await this.stripe.checkout.sessions.create(acceptOfferSessionParams);
 
     // Save Stripe session ID
     order.stripeSessionId = session.id;
@@ -2088,10 +2119,18 @@ export class PrizeService {
 
     const prize = await this.getPrizeTierById(order.prizeConfigurationId);
     const amountToCharge = order.counterOfferAmount || order.totalPrice;
+    const counterOfferAmountCents = Math.round(amountToCharge * 100);
+
+    // Load seller to check for Stripe Connect account and application fee
+    const counterOfferSeller = prize.createdBy
+      ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+      : null;
 
     // Create Stripe checkout session
-    const session = await this.stripe.checkout.sessions.create({
+    const counterOfferSessionParams = {
       payment_method_types: ['card'],
+      application_fee_amount: 0,
+      transfer_data: null,
       line_items: [
         {
           price_data: {
@@ -2100,7 +2139,7 @@ export class PrizeService {
               name: `${prize.name} - Counter Offer Accepted`,
               description: `Counter offer accepted at $${amountToCharge}`,
             },
-            unit_amount: Math.round(amountToCharge * 100),
+            unit_amount: counterOfferAmountCents,
           },
           quantity: 1,
         },
@@ -2113,7 +2152,22 @@ export class PrizeService {
         userId: order.userId,
         type: 'prize_counter_offer',
       },
-    });
+      payment_intent_data: null,
+    };
+
+    if (counterOfferSeller?.stripeAccountId) {
+      const feePercent = counterOfferSeller.applicationFeePercent ?? 7;
+      const application_fee_amount = Math.round(counterOfferAmountCents * (feePercent / 100));
+      const transfer_data = { destination: counterOfferSeller.stripeAccountId };
+
+      counterOfferSessionParams.payment_intent_data = {
+        application_fee_amount,
+        transfer_data,
+      };
+    }
+
+    // @ts-ignore
+    const session = await this.stripe.checkout.sessions.create(counterOfferSessionParams);
 
     // Update order with Stripe session
     order.stripeSessionId = session.id;

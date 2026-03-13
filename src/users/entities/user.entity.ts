@@ -186,7 +186,7 @@ export class User extends BaseEntity {
   stripeAccountId: string;
 
   @Column({ default: false, name: 'stripe_account_connected', type: 'boolean' })
-  stripeAccountConnecteds: boolean;
+  stripeAccountConnected: boolean;
 
   @Column({
     type: 'boolean',
@@ -202,4 +202,12 @@ export class User extends BaseEntity {
     name: 'seller_trading_experience',
   })
   sellerTradingExperience: string;
+
+  @Column({
+    type: 'decimal',
+    default: 7,
+    nullable: false,
+    name: 'application_fee_percent',
+  })
+  applicationFeePercent: number;
 }
