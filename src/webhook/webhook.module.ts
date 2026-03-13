@@ -5,11 +5,12 @@ import { forwardRef, Module } from '@nestjs/common';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Webhook } from './entities/webhook.entity';
+import { User } from 'src/users/entities/user.entity';
 import { N8nIntegrationModule } from 'src/integrations/n8n/n8n-integration.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Webhook]),
+    TypeOrmModule.forFeature([Webhook, User]),
     forwardRef(() => QueueModule),
     forwardRef(() => PaymentsModule),
     N8nIntegrationModule,

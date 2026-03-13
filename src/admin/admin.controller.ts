@@ -1110,4 +1110,59 @@ export class AdminController {
       data: application,
     };
   }
+
+  // Seller Onboarding Management
+  @ApiOperation({
+    summary: 'List sellers who have not completed Stripe onboarding (admin only)',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Sellers with pending onboarding fetched successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @Get('sellers/pending-onboarding')
+  async getSellersPendingOnboarding(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.creatorService.getSellersWithPendingOnboarding();
+    return {
+      status: HttpStatus.OK,
+      message: 'Sellers with pending onboarding fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Mark a seller as having completed Stripe onboarding (admin only)',
+  })
+  @ApiParam({ name: 'userId', description: 'User ID of the seller' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Seller onboarding marked as completed',
+  })
+  @SwaggerApiResponse({ status: 400, description: 'User is not a seller' })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Patch('sellers/:userId/complete-onboarding')
+  async markSellerOnboardingComplete(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    await this.creatorService.markSellerOnboardingComplete(userId);
+    return {
+      status: HttpStatus.OK,
+      message: 'Seller onboarding marked as completed',
+      data: true,
+    };
+  }
 }
