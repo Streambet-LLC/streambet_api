@@ -348,8 +348,6 @@ export class CreatorService {
       const user = application.user;
       if (application.applicationType === ApplicationType.SELLER) {
         const stripeAccount = await stripe.createConnectedAccount(application.user.email);
-        console.log(stripeAccount);
-
         user.isSeller = true;
         user.stripeAccountId = stripeAccount.accountId;
         // Set default shop name if not already set
@@ -395,6 +393,56 @@ export class CreatorService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async getSellersWithPendingOnboarding() {
+    try {
+      const sellers = await this.userRepository.find({
+        where: {
+          isSeller: true,
+          stripeAccountConnected: false,
+        },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          email: true,
+          shopName: true,
+          stripeAccountId: true,
+          applicationFeePercent: true,
+        },
+        order: { username: 'ASC' },
+      });
+      return sellers;
+    } catch (e) {
+      Logger.error('Unable to get sellers with pending onboarding', e);
+      throw new HttpException(
+        `Unable to get sellers with pending onboarding at the moment. Please try again later`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async markSellerOnboardingComplete(userId: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.isSeller) {
+      throw new HttpException('User is not a seller', HttpStatus.BAD_REQUEST);
+    }
+
+    if (user.stripeAccountConnected) {
+      throw new ConflictException(
+        'Seller stripe onboarding is already marked as completed',
+      );
+    }
+
+    await this.userRepository.update(userId, {
+      stripeAccountConnected: true,
+    });
   }
 
   async createConnectLink(user) {
