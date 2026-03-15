@@ -36,6 +36,16 @@ export class FilterDto {
   @IsOptional()
   streamStatus: string;
 
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Filter by pick round status',
+    required: false,
+  })
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  pickStatus?: string[];
+
   @ApiProperty({ description: 'Filter By ids', required: false })
   @IsArray()
   @IsOptional()
