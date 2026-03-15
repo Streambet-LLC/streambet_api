@@ -576,7 +576,35 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         ? (JSON.parse(streamFilterDto.range) as Range)
         : [0, 10];
       const { pagination = true, type } = streamFilterDto;
-      const { streamStatus } = filter;
+      const { streamStatus, pickStatus = [] } = filter || {};
+      
+      // Validate and normalize pickStatus array
+      const validPickStatuses = pickStatus?.filter((status: string) =>
+        Object.values(BettingRoundStatus).includes(status as BettingRoundStatus)
+      ) || [];
+
+      const bettingRoundStatusCaseExpression = `CASE
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
+    THEN '${BettingRoundStatus.OPEN}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
+    THEN '${BettingRoundStatus.LOCKED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CREATED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CLOSED}'
+
+  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
+    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
+    THEN '${BettingRoundStatus.CANCELLED}'
+
+  ELSE '${BettingRoundStatus.NO_BET_ROUND}' 
+END`;
 
       const streamQB = this.streamsRepository
         .createQueryBuilder('s')
@@ -620,32 +648,7 @@ export class StreamService implements OnModuleDestroy, OnApplicationShutdown {
         .addSelect('s.viewerCount', 'viewerCount')
         .addSelect('s.isPromoted', 'isPromoted')
         .addSelect('creator.username', 'creator')
-        .addSelect(
-          `CASE
-  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) > 0
-    THEN '${BettingRoundStatus.OPEN}'
-
-  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.LOCKED}' THEN 1 END) > 0
-    AND COUNT(CASE WHEN r.status = '${BettingRoundStatus.OPEN}' THEN 1 END) = 0
-    THEN '${BettingRoundStatus.LOCKED}'
-
-  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CREATED}' THEN 1 END) > 0
-    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}') THEN 1 END) = 0
-    THEN '${BettingRoundStatus.CREATED}'
-
-  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CLOSED}' THEN 1 END) > 0
-    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}') THEN 1 END) = 0
-    THEN '${BettingRoundStatus.CLOSED}'
-
-  WHEN COUNT(CASE WHEN r.status = '${BettingRoundStatus.CANCELLED}' THEN 1 END) > 0
-    AND COUNT(CASE WHEN r.status IN ('${BettingRoundStatus.OPEN}', '${BettingRoundStatus.LOCKED}', '${BettingRoundStatus.CREATED}', '${BettingRoundStatus.CLOSED}') THEN 1 END) = 0
-    THEN '${BettingRoundStatus.CANCELLED}'
-
-  ELSE '${BettingRoundStatus.NO_BET_ROUND}' 
-END
-          `,
-          'bettingRoundStatus',
-        )
+        .addSelect(bettingRoundStatusCaseExpression, 'bettingRoundStatus')
         .addSelect(
           `(SELECT COUNT(DISTINCT bet."user_id")
     FROM bets bet
@@ -668,10 +671,42 @@ END
           END`,
           'ASC',
         )
-
         .groupBy('s.id, creator.id');
 
-      const total = await streamQB.getCount();
+      // Apply pick status filter if provided
+      if (validPickStatuses.length > 0) {
+        const placeholderPickStatuses = validPickStatuses
+          .map((_, index) => `:pickStatus${index}`)
+          .join(', ');
+        const pickStatusParams = validPickStatuses.reduce(
+          (acc, status, index) => {
+            acc[`pickStatus${index}`] = status;
+            return acc;
+          },
+          {} as Record<string, string>
+        );
+        
+        streamQB.having(`${bettingRoundStatusCaseExpression} IN (${placeholderPickStatuses})`, pickStatusParams);
+      }
+
+      const totalCountQuery = streamQB
+        .clone()
+        .select('s.id', 'id')
+        .orderBy()
+        .offset(undefined)
+        .limit(undefined)
+        .skip(undefined)
+        .take(undefined);
+
+      const totalResult = await this.dataSource
+        .createQueryBuilder()
+        .select('COUNT(*)', 'count')
+        .from(`(${totalCountQuery.getQuery()})`, 'filtered_streams')
+        .setParameters(totalCountQuery.getParameters())
+        .getRawOne<{ count: string }>();
+
+      const total = Number(totalResult?.count || 0);
+
       if (pagination && range) {
         const [offset, limit] = range;
         streamQB.offset(offset).limit(limit);
