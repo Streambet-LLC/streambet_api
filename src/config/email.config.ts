@@ -102,5 +102,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/seller_shipping_reminder.ejs',
       schemaPath: './src/templates/seller_shipping_reminder.json',
     },
+    inbox_message: {
+      templatePath: './src/templates/inbox_message.ejs',
+      schemaPath: './src/templates/inbox_message.json',
+    },
   },
 }));
