@@ -30,10 +30,15 @@ import { Repository } from 'typeorm';
 import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
+import { PrizeService } from 'src/prize/prize.service';
+import { User } from 'src/users/entities/user.entity';
+import { Webhook } from 'src/webhook/entities/webhook.entity';
+import { EmailsService } from 'src/emails/email.service';
 
 @Injectable()
 export class PaymentsService {
   private stripe: Stripe;
+  private readonly logger = new Logger(PaymentsService.name);
   /** Coinflow API configuration values */
   private readonly coinflowApiUrl: string;
   private readonly coinflowApiKey: string;
@@ -56,6 +61,13 @@ export class PaymentsService {
     private transactionsRepository: Repository<Transaction>,
     @InjectRepository(PrizeOrder)
     private readonly prizeOrderRepository: Repository<PrizeOrder>,
+    @Inject(forwardRef(() => PrizeService))
+    private readonly prizeService: PrizeService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Webhook)
+    private readonly webhookRepository: Repository<Webhook>,
+    private readonly emailsService: EmailsService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -221,26 +233,256 @@ export class PaymentsService {
       throw new BadRequestException(`Webhook Error: ${errorMessage}`);
     }
 
+    // Store all webhook events for audit
+    try {
+      await this.webhookRepository.save({
+        provider: 'stripe',
+        data: JSON.stringify(event),
+      });
+    } catch (storeErr) {
+      this.logger.error(`Failed to store Stripe webhook event: ${storeErr}`);
+    }
+
     // Handle specific event types
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-
-      // Add sweep coins to user's wallet
-      if (session.metadata?.userId && session.metadata?.sweepCoins) {
-        const userId = session.metadata.userId;
-        const sweepCoins = parseInt(session.metadata.sweepCoins, 10);
-        const packageName = session.metadata.packageId;
-
-        await this.walletsService.addSweepCoins(
-          userId,
-          sweepCoins,
-          `Purchase of ${packageName} Stream Coin package`,
-          'purchase',
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(
+          event.data.object as Stripe.Checkout.Session,
         );
-      }
+        break;
+
+      case 'checkout.session.expired':
+        await this.handleCheckoutSessionExpired(
+          event.data.object as Stripe.Checkout.Session,
+        );
+        break;
+
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentIntentFailed(
+          event.data.object as Stripe.PaymentIntent,
+        );
+        break;
+
+      case 'account.updated':
+        await this.handleAccountUpdated(event.data.object as Stripe.Account);
+        break;
+
+      default:
+        this.logger.log(`Unhandled Stripe event type: ${event.type}`);
     }
 
     return { received: true };
+  }
+
+  /**
+   * Handle successful checkout session — coin packages & prize orders
+   */
+  private async handleCheckoutSessionCompleted(
+    session: Stripe.Checkout.Session,
+  ) {
+    // Handle coin package purchases
+    if (session.metadata?.userId && session.metadata?.sweepCoins) {
+      const userId = session.metadata.userId;
+      const sweepCoins = parseInt(session.metadata.sweepCoins, 10);
+      const packageName = session.metadata.packageId;
+
+      await this.walletsService.addSweepCoins(
+        userId,
+        sweepCoins,
+        `Purchase of ${packageName} Stream Coin package`,
+        'purchase',
+      );
+    }
+
+    // Handle prize/shop order purchases (server-side confirmation)
+    if (session.metadata?.orderId) {
+      const orderId = session.metadata.orderId;
+      try {
+        const order = await this.prizeOrderRepository.findOne({
+          where: { id: orderId },
+        });
+        if (order && order.status !== 'paid') {
+          // Store the payment intent ID for reference
+          if (session.payment_intent) {
+            const paymentIntentId =
+              typeof session.payment_intent === 'string'
+                ? session.payment_intent
+                : session.payment_intent.id;
+            await this.prizeOrderRepository.update(orderId, {
+              stripePaymentIntentId: paymentIntentId,
+            });
+          }
+          this.logger.log(
+            `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed`,
+          );
+          await this.prizeService.handlePaymentSuccess(orderId);
+          this.logger.log(
+            `Stripe webhook: prize order ${orderId} successfully confirmed`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Stripe webhook: failed to confirm prize order ${orderId}: ${error}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle expired checkout session — mark prize order as cancelled
+   */
+  private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
+    if (!session.metadata?.orderId) return;
+
+    const orderId = session.metadata.orderId;
+    try {
+      const order = await this.prizeOrderRepository.findOne({
+        where: { id: orderId },
+        relations: ['user', 'prizeConfiguration'],
+      });
+      if (!order || order.status === 'paid' || order.status === 'cancelled') {
+        return;
+      }
+
+      await this.prizeOrderRepository.update(orderId, { status: 'cancelled' });
+      this.logger.log(
+        `Stripe webhook: prize order ${orderId} cancelled (checkout session expired)`,
+      );
+
+      // Notify buyer via email
+      if (order.user?.email) {
+        const itemName = order.prizeConfiguration?.name || 'your item';
+        try {
+          await this.emailsService.sendEmailSMTP(
+            {
+              toAddress: [order.user.email],
+              subject: `Your checkout for ${itemName} has expired`,
+              params: {
+                buyerName: order.user.name || order.user.username,
+                itemName,
+                orderId: order.id,
+                message:
+                  'Your checkout session expired before payment was completed. The item is still available in the shop — feel free to try again!',
+              },
+            },
+            'buyer_payment_expired',
+          );
+        } catch (emailErr) {
+          this.logger.error(
+            `Failed to send checkout expired email for order ${orderId}: ${emailErr}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Stripe webhook: failed to handle expired session for order ${orderId}: ${error}`,
+      );
+    }
+  }
+
+  /**
+   * Handle failed payment intent — notify buyer, do NOT remove item from shop
+   */
+  private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+    // Try to find the order by stripePaymentIntentId
+    let order: PrizeOrder | null = null;
+    try {
+      order = await this.prizeOrderRepository.findOne({
+        where: { stripePaymentIntentId: paymentIntent.id },
+        relations: ['user', 'prizeConfiguration'],
+      });
+    } catch {
+      // Payment intent ID may not be stored yet
+    }
+
+    // If not found by payment intent, try finding via session metadata
+    if (!order && paymentIntent.metadata?.orderId) {
+      order = await this.prizeOrderRepository.findOne({
+        where: { id: paymentIntent.metadata.orderId },
+        relations: ['user', 'prizeConfiguration'],
+      });
+    }
+
+    if (!order) {
+      this.logger.warn(
+        `Stripe webhook: no order found for failed payment intent ${paymentIntent.id}`,
+      );
+      return;
+    }
+
+    this.logger.warn(
+      `Stripe webhook: payment failed for order ${order.id} (payment intent ${paymentIntent.id})`,
+    );
+
+    // Notify buyer via email — do NOT change stock or remove item
+    if (order.user?.email) {
+      const itemName = order.prizeConfiguration?.name || 'your item';
+      const failureMessage =
+        paymentIntent.last_payment_error?.message ||
+        'Your payment could not be processed.';
+
+      try {
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [order.user.email],
+            subject: `Payment failed for ${itemName}`,
+            params: {
+              buyerName: order.user.name || order.user.username,
+              itemName,
+              orderId: order.id,
+              message: `${failureMessage} The item is still available — please try again or use a different payment method.`,
+            },
+          },
+          'buyer_payment_failed',
+        );
+      } catch (emailErr) {
+        this.logger.error(
+          `Failed to send payment failure email for order ${order.id}: ${emailErr}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle Stripe Connect account.updated — gate seller on full verification
+   */
+  private async handleAccountUpdated(account: Stripe.Account) {
+    // Require full verification: details submitted + can accept charges + can receive payouts
+    if (
+      !account.details_submitted ||
+      !account.charges_enabled ||
+      !account.payouts_enabled
+    ) {
+      return;
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { stripeAccountId: account.id },
+    });
+
+    if (!user) {
+      this.logger.warn(`No user found for Stripe account ${account.id}`);
+      return;
+    }
+
+    const updates: Partial<{
+      sellerOnboardingCompleted: boolean;
+      stripeAccountConnected: boolean;
+    }> = {};
+
+    if (!user.sellerOnboardingCompleted) {
+      updates.sellerOnboardingCompleted = true;
+    }
+    if (!user.stripeAccountConnected) {
+      updates.stripeAccountConnected = true;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await this.userRepository.update(user.id, updates);
+      this.logger.log(
+        `Seller onboarding flags updated for user ${user.id}: ${JSON.stringify(updates)} (charges_enabled + payouts_enabled)`,
+      );
+    }
   }
 
   async createAutoReloadSession(userId: string, amount: number) {
