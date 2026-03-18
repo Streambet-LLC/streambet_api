@@ -529,9 +529,21 @@ export class CreatorService {
       },
     });
 
-    const accountLink = await stripe.createAccountLink(
-      seller.stripeAccountId ?? '',
-    );
+    if (!seller) {
+      throw new NotFoundException('Seller not found');
+    }
+
+    // If this seller doesn't have a Stripe Connect account yet (e.g. became a
+    // seller before the Stripe flow was added), create one now.
+    if (!seller.stripeAccountId) {
+      const stripeAccount = await stripe.createConnectedAccount(seller.email);
+      seller.stripeAccountId = stripeAccount.accountId;
+      await this.userRepository.update(seller.id, {
+        stripeAccountId: stripeAccount.accountId,
+      });
+    }
+
+    const accountLink = await stripe.createAccountLink(seller.stripeAccountId);
 
     return accountLink;
   }
