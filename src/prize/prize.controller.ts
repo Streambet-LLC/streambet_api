@@ -189,6 +189,28 @@ export class PrizeController {
   }
 
   /**
+   * User endpoint: Get order success details for purchase confirmation page
+   */
+  @Get('orders/:orderId/success-details')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get order details for purchase success page' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns order success details including item, price, and seller info',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderSuccessDetails(
+    @Param('orderId') orderId: string,
+    @Request() req: RequestWithUser,
+  ) {
+    return this.prizeService.getOrderSuccessDetails(orderId, req.user.id);
+  }
+
+  /**
    * Webhook: Handle Stripe payment success for prize orders
    */
   @Post('webhook/stripe-success/:orderId')
@@ -301,7 +323,11 @@ export class AdminPrizeController {
     @Body() dto: CreatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
     this.ensureAdmin(req.user);
-    return this.prizeService.createPrizeTier(dto, req.user.id, dto.createdBy || null);
+    return this.prizeService.createPrizeTier(
+      dto,
+      req.user.id,
+      dto.createdBy || null,
+    );
   }
 
   /**
@@ -327,7 +353,12 @@ export class AdminPrizeController {
     @Body() dto: UpdatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
     this.ensureAdmin(req.user);
-    return this.prizeService.updatePrizeTier(id, dto, req.user.id, dto.createdBy);
+    return this.prizeService.updatePrizeTier(
+      id,
+      dto,
+      req.user.id,
+      dto.createdBy,
+    );
   }
 
   /**
@@ -359,7 +390,8 @@ export class AdminPrizeController {
   @Patch('bulk-display-order')
   @ApiOperation({
     summary: 'Bulk update prize display orders (admin only)',
-    description: 'Update page-specific display orders (shop, redemptions, Nick\'s Niceties) and featuredDisplayOrder for multiple prizes at once',
+    description:
+      "Update page-specific display orders (shop, redemptions, Nick's Niceties) and featuredDisplayOrder for multiple prizes at once",
   })
   @ApiResponse({
     status: 200,
@@ -660,6 +692,15 @@ export class SellerPrizeController {
     }
   }
 
+  private ensureSellerVerified(user: User): void {
+    this.ensureSeller(user);
+    if (!user.sellerOnboardingCompleted) {
+      throw new ForbiddenException(
+        'Please complete Stripe onboarding before managing shop items',
+      );
+    }
+  }
+
   @Get('items')
   @ApiOperation({ summary: 'Get my seller shop items' })
   @ApiResponse({ status: 200, type: [PrizeConfigurationDto] })
@@ -677,7 +718,7 @@ export class SellerPrizeController {
     @Request() req: RequestWithUser,
     @Body() dto: CreatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.createMySellerShopItem(req.user.id, dto);
   }
 
@@ -690,7 +731,7 @@ export class SellerPrizeController {
     @Param('id') id: string,
     @Body() dto: UpdatePrizeTierDto,
   ): Promise<PrizeConfigurationDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.updateMySellerShopItem(req.user.id, id, dto);
   }
 
@@ -702,7 +743,7 @@ export class SellerPrizeController {
     @Request() req: RequestWithUser,
     @Param('id') id: string,
   ) {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     await this.prizeService.deleteMySellerShopItem(req.user.id, id);
     return { message: 'Shop item deleted successfully' };
   }
@@ -727,7 +768,7 @@ export class SellerPrizeController {
     @Param('orderId') orderId: string,
     @Body() dto: CounterOfferDto,
   ): Promise<PrizeOrderResponseDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.sellerCounterOffer(req.user.id, orderId, dto);
   }
 
@@ -739,7 +780,7 @@ export class SellerPrizeController {
     @Request() req: RequestWithUser,
     @Param('orderId') orderId: string,
   ): Promise<PrizeOrderResponseDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.sellerAcceptOffer(req.user.id, orderId);
   }
 
@@ -751,7 +792,7 @@ export class SellerPrizeController {
     @Request() req: RequestWithUser,
     @Param('orderId') orderId: string,
   ): Promise<PrizeOrderResponseDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.sellerRejectOffer(req.user.id, orderId);
   }
 
@@ -775,7 +816,7 @@ export class SellerPrizeController {
     @Param('orderId') orderId: string,
     @Body() dto: MarkAsShippedDto,
   ): Promise<PrizeOrderResponseDto> {
-    this.ensureSeller(req.user);
+    this.ensureSellerVerified(req.user);
     return this.prizeService.sellerMarkAsShipped(req.user.id, orderId, dto);
   }
 }
