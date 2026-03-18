@@ -1404,7 +1404,6 @@ export class PrizeService {
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
           },
-          payment_intent_data: null
         };
 
         if (seller?.stripeAccountId) {
@@ -1414,10 +1413,10 @@ export class PrizeService {
           );
           const transfer_data = { destination: seller.stripeAccountId };
 
-          sessionParams.payment_intent_data = {
+          (sessionParams as any).payment_intent_data = {
             application_fee_amount,
             transfer_data
-          }
+          };
         }
 
         // @ts-expect-error any
@@ -2046,7 +2045,6 @@ export class PrizeService {
         userId: order.userId,
         type: 'prize_offer',
       },
-      payment_intent_data: null,
     };
 
     if (offerSeller?.stripeAccountId) {
@@ -2054,7 +2052,7 @@ export class PrizeService {
       const application_fee_amount = Math.round(offerAmountCents * (feePercent / 100));
       const transfer_data = { destination: offerSeller.stripeAccountId };
 
-      acceptOfferSessionParams.payment_intent_data = {
+      (acceptOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };
@@ -2196,7 +2194,6 @@ export class PrizeService {
         userId: order.userId,
         type: 'prize_counter_offer',
       },
-      payment_intent_data: null,
     };
 
     if (counterOfferSeller?.stripeAccountId) {
@@ -2204,7 +2201,7 @@ export class PrizeService {
       const application_fee_amount = Math.round(counterOfferAmountCents * (feePercent / 100));
       const transfer_data = { destination: counterOfferSeller.stripeAccountId };
 
-      counterOfferSessionParams.payment_intent_data = {
+      (counterOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };
