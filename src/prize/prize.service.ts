@@ -486,13 +486,8 @@ export class PrizeService {
       amount = dto.amount;
     }
 
-    // Convert USD to CadeCoins for seller shop items
-    // Seller items come in as USD from the frontend, so convert to CadeCoins for storage
-    // Admin items come in as CadeCoins already
-    if (createdBy && purchaseOption !== PrizePurchaseOption.OFFERS_ONLY) {
-      // This is a seller shop item with amount in USD - convert to CadeCoins (50 coins = $1)
-      amount = Math.round(amount * 50);
-    }
+    // Amount is always expected in CadeCoins from the frontend
+    // Both admin and seller frontends convert USD to CadeCoins before sending
 
     const seller = await this.userRepository.findOne({
       where: {
