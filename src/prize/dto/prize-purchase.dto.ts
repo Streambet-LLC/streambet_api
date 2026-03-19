@@ -93,6 +93,9 @@ export class PrizeOrderResponseDto {
   userId: string;
 
   @ApiProperty()
+  username?: string;
+
+  @ApiProperty()
   prizeConfigId: string;
 
   @ApiProperty()
@@ -166,6 +169,7 @@ export class PrizeOrderResponseDto {
   prizeConfig?: {
     name: string;
     category: string;
+    image: string;
   };
 }
 

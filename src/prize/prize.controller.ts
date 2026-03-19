@@ -46,7 +46,7 @@ interface RequestWithUser extends Request {
 @ApiTags('prizes')
 @Controller('prizes')
 export class PrizeController {
-  constructor(private readonly prizeService: PrizeService) {}
+  constructor(private readonly prizeService: PrizeService) { }
 
   /**
    * Public endpoint: Get all active prize tiers
@@ -188,6 +188,19 @@ export class PrizeController {
     return this.prizeService.getUserOrders(req.user.id);
   }
 
+  @Get('my-shop-orders')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current seller prize orders' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns user prize orders',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getShopOrders(@Request() req: RequestWithUser) {
+    return this.prizeService.getShopOrders(req.user.id);
+  }
+
   /**
    * User endpoint: Get order success details for purchase confirmation page
    */
@@ -273,7 +286,7 @@ export class PrizeController {
 @Controller('admin/prizes')
 @UseGuards(JwtAuthGuard)
 export class AdminPrizeController {
-  constructor(private readonly prizeService: PrizeService) {}
+  constructor(private readonly prizeService: PrizeService) { }
 
   /**
    * Helper method to check if user is admin
@@ -684,7 +697,7 @@ export class AdminPrizeController {
 @Controller('seller/prizes')
 @UseGuards(JwtAuthGuard)
 export class SellerPrizeController {
-  constructor(private readonly prizeService: PrizeService) {}
+  constructor(private readonly prizeService: PrizeService) { }
 
   private ensureSeller(user: User): void {
     if (!user.isSeller) {
