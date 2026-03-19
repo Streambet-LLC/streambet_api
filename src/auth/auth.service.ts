@@ -78,7 +78,6 @@ export class AuthService {
         email,
         password,
         profileImageUrl,
-        isOlder,
         tosAccepted,
         username,
         lastKnownIp,
@@ -87,23 +86,9 @@ export class AuthService {
         promoCode,
         refLink,
       } = registerDto;
-      if (!isOlder) {
-        throw new BadRequestException(
-          'You must be over 18 years old to access this service',
-        );
-      }
       if (!tosAccepted) {
         throw new BadRequestException(
           'Please accept the Terms of Service to continue',
-        );
-      }
-
-      // Check if user is at least 8 years old
-      const age = this.calculateAge(dob);
-      if (age < 17) {
-        throw new HttpException(
-          'User must be at least 18 years old to register',
-          HttpStatus.BAD_REQUEST,
         );
       }
 
