@@ -89,7 +89,6 @@
           "name": "GOOGLE_CALLBACK_URL",
           "valueFrom": "/cardcade/non_pro_prod/GOOGLE_CALLBACK_URL"
         },
-
         {
           "name": "STRIPE_SECRET_KEY",
           "valueFrom": "/cardcade/non_pro_prod/STRIPE_SECRET_KEY"
@@ -97,6 +96,10 @@
         {
           "name": "STRIPE_WEBHOOK_SECRET",
           "valueFrom": "/cardcade/non_pro_prod/STRIPE_WEBHOOK_SECRET"
+        },
+        {
+          "name": "STRIPE_CONNECT_WEBHOOK_SECRET",
+          "valueFrom": "/cardcade/non_pro_prod/STRIPE_CONNECT_WEBHOOK_SECRET"
         },
         {
           "name": "NEW_RELIC_LICENSE_KEY",
