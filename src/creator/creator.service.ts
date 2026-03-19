@@ -458,6 +458,7 @@ export class CreatorService {
       });
 
       // Enrich each seller with live Stripe account status
+      // Auto-sync onboarding flags if Stripe says they're fully verified
       const enriched = await Promise.all(
         sellers.map(async (seller) => {
           let stripeStatus = {
@@ -476,6 +477,29 @@ export class CreatorService {
                 chargesEnabled: account.charges_enabled ?? false,
                 payoutsEnabled: account.payouts_enabled ?? false,
               };
+
+              // Auto-sync: if Stripe says fully verified but local flags are behind, update them
+              if (
+                account.details_submitted &&
+                account.charges_enabled &&
+                account.payouts_enabled
+              ) {
+                const updates: Record<string, boolean> = {};
+                if (!seller.stripeAccountConnected) {
+                  updates.stripeAccountConnected = true;
+                  seller.stripeAccountConnected = true;
+                }
+                if (!seller.sellerOnboardingCompleted) {
+                  updates.sellerOnboardingCompleted = true;
+                  seller.sellerOnboardingCompleted = true;
+                }
+                if (Object.keys(updates).length > 0) {
+                  await this.userRepository.update(seller.id, updates);
+                  Logger.log(
+                    `Auto-synced onboarding flags for seller ${seller.id} (${seller.username}): ${JSON.stringify(updates)}`,
+                  );
+                }
+              }
             } catch (err) {
               Logger.warn(
                 `Failed to retrieve Stripe account ${seller.stripeAccountId} for user ${seller.id}: ${err.message}`,
@@ -511,15 +535,13 @@ export class CreatorService {
       throw new HttpException('User is not a seller', HttpStatus.BAD_REQUEST);
     }
 
-    if (user.stripeAccountConnected) {
-      throw new ConflictException(
-        'Seller stripe onboarding is already marked as completed',
-      );
-    }
-
+    // Update both flags regardless of current state (idempotent)
     await this.userRepository.update(userId, {
       stripeAccountConnected: true,
+      sellerOnboardingCompleted: true,
     });
+
+    return { message: 'Seller marked as onboarded' };
   }
 
   async createConnectLink(user) {
