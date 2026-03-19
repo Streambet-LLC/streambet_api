@@ -1478,9 +1478,9 @@ export class PrizeService {
       paymentMethod: order.paymentMethod,
       seller: seller
         ? {
-            username: seller.username,
-            name: seller.name || seller.username,
-          }
+          username: seller.username,
+          name: seller.name || seller.username,
+        }
         : null,
       createdAt: order.createdAt.toISOString(),
     };
@@ -1671,6 +1671,20 @@ export class PrizeService {
     return orders.map((order) => this.mapOrderToDto(order));
   }
 
+  async getShopOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
+    const orders = await this.prizeOrderRepository.find({
+      where: {
+        prizeConfiguration: {
+          createdBy: userId,
+        }
+      },
+      relations: ['prizeConfiguration', 'user'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return orders.map((order) => this.mapOrderToDto(order));
+  }
+
   /**
    * Get all orders for admins
    */
@@ -1818,6 +1832,7 @@ export class PrizeService {
     return {
       id: order.id,
       userId: order.userId,
+      username: order.user?.username,
       prizeConfigId: order.prizeConfigurationId,
       shippingAddress: order.shippingAddress,
       paymentMethod: order.paymentMethod,
@@ -1845,6 +1860,7 @@ export class PrizeService {
         ? {
           name: order.prizeConfiguration.name,
           category: order.prizeConfiguration.category,
+          image: order.prizeConfiguration.imageUrl ?? ""
         }
         : undefined,
     };
