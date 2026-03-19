@@ -57,7 +57,7 @@ export class CreatorService {
     private dataSource: DataSource,
     private emailsService: EmailsService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   private formatDuration(totalSeconds: number): string {
     const hours = Math.floor(totalSeconds / 3600)
@@ -139,7 +139,8 @@ export class CreatorService {
         where: { userId, isDeleted: false },
       });
 
-      const applicationType = applicationDto.applicationType || ApplicationType.CREATOR;
+      const applicationType =
+        applicationDto.applicationType || ApplicationType.CREATOR;
       let application;
 
       if (existing) {
@@ -166,7 +167,10 @@ export class CreatorService {
           updateData.cardPreference = applicationDto.cardPreference;
         }
 
-        await this.creatorApplicationsRepository.update(existing.id, updateData);
+        await this.creatorApplicationsRepository.update(
+          existing.id,
+          updateData,
+        );
 
         return;
       }
@@ -222,9 +226,14 @@ export class CreatorService {
           };
 
           await this.emailsService.sendEmailFn(emailParams, emailHTML);
-          this.logger.log('Seller application notification email sent to info@streambet.tv');
+          this.logger.log(
+            'Seller application notification email sent to info@streambet.tv',
+          );
         } catch (emailError) {
-          this.logger.error('Failed to send seller application notification email', emailError);
+          this.logger.error(
+            'Failed to send seller application notification email',
+            emailError,
+          );
           // Don't throw - we don't want email failure to block the application
         }
       }
@@ -298,13 +307,14 @@ export class CreatorService {
         where.applicationStatus = filters.status;
       }
 
-      const [applications, total] = await this.creatorApplicationsRepository.findAndCount({
-        where,
-        relations: ['user'],
-        order: { createdAt: 'DESC' },
-        skip,
-        take: limit,
-      });
+      const [applications, total] =
+        await this.creatorApplicationsRepository.findAndCount({
+          where,
+          relations: ['user'],
+          order: { createdAt: 'DESC' },
+          skip,
+          take: limit,
+        });
 
       return {
         data: applications,
@@ -347,7 +357,9 @@ export class CreatorService {
       // Grant appropriate role/flag to user
       const user = application.user;
       if (application.applicationType === ApplicationType.SELLER) {
-        const stripeAccount = await stripe.createConnectedAccount(application.user.email);
+        const stripeAccount = await stripe.createConnectedAccount(
+          application.user.email,
+        );
         user.isSeller = true;
         user.stripeAccountId = stripeAccount.accountId;
         // Set default shop name if not already set
@@ -365,7 +377,8 @@ export class CreatorService {
 
       // Send approval email
       try {
-        const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
+        const dashboardLink =
+          this.configService.get<string>('email.HOST_URL') || '';
         const emailData = {
           toAddress: [user.email],
           subject: `Your ${application.applicationType} application has been approved!`,
@@ -375,7 +388,10 @@ export class CreatorService {
             dashboardLink,
           },
         };
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.ApplicationApproved);
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.ApplicationApproved,
+        );
         this.logger.log(`Sent approval email to ${user.email}`);
       } catch (emailError) {
         this.logger.error('Failed to send approval email', emailError);
@@ -423,6 +439,91 @@ export class CreatorService {
     }
   }
 
+  async getAllSellersStripeStatus() {
+    try {
+      const sellers = await this.userRepository.find({
+        where: { isSeller: true },
+        select: {
+          id: true,
+          username: true,
+          name: true,
+          email: true,
+          shopName: true,
+          stripeAccountId: true,
+          stripeAccountConnected: true,
+          sellerOnboardingCompleted: true,
+          applicationFeePercent: true,
+        },
+        order: { username: 'ASC' },
+      });
+
+      // Enrich each seller with live Stripe account status
+      // Auto-sync onboarding flags if Stripe says they're fully verified
+      const enriched = await Promise.all(
+        sellers.map(async (seller) => {
+          let stripeStatus = {
+            detailsSubmitted: false,
+            chargesEnabled: false,
+            payoutsEnabled: false,
+          };
+
+          if (seller.stripeAccountId) {
+            try {
+              const account = await stripe.retrieveAccount(
+                seller.stripeAccountId,
+              );
+              stripeStatus = {
+                detailsSubmitted: account.details_submitted ?? false,
+                chargesEnabled: account.charges_enabled ?? false,
+                payoutsEnabled: account.payouts_enabled ?? false,
+              };
+
+              // Auto-sync: if Stripe says fully verified but local flags are behind, update them
+              if (
+                account.details_submitted &&
+                account.charges_enabled &&
+                account.payouts_enabled
+              ) {
+                const updates: Record<string, boolean> = {};
+                if (!seller.stripeAccountConnected) {
+                  updates.stripeAccountConnected = true;
+                  seller.stripeAccountConnected = true;
+                }
+                if (!seller.sellerOnboardingCompleted) {
+                  updates.sellerOnboardingCompleted = true;
+                  seller.sellerOnboardingCompleted = true;
+                }
+                if (Object.keys(updates).length > 0) {
+                  await this.userRepository.update(seller.id, updates);
+                  Logger.log(
+                    `Auto-synced onboarding flags for seller ${seller.id} (${seller.username}): ${JSON.stringify(updates)}`,
+                  );
+                }
+              }
+            } catch (err) {
+              Logger.warn(
+                `Failed to retrieve Stripe account ${seller.stripeAccountId} for user ${seller.id}: ${err.message}`,
+              );
+            }
+          }
+
+          return {
+            ...seller,
+            stripeStatus,
+          };
+        }),
+      );
+
+      return enriched;
+    } catch (e) {
+      Logger.error('Unable to get sellers stripe status', e);
+      throw new HttpException(
+        'Unable to get seller Stripe status at the moment. Please try again later',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   async markSellerOnboardingComplete(userId: string) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
 
@@ -434,25 +535,37 @@ export class CreatorService {
       throw new HttpException('User is not a seller', HttpStatus.BAD_REQUEST);
     }
 
-    if (user.stripeAccountConnected) {
-      throw new ConflictException(
-        'Seller stripe onboarding is already marked as completed',
-      );
-    }
-
+    // Update both flags regardless of current state (idempotent)
     await this.userRepository.update(userId, {
       stripeAccountConnected: true,
+      sellerOnboardingCompleted: true,
     });
+
+    return { message: 'Seller marked as onboarded' };
   }
 
   async createConnectLink(user) {
     const seller = await this.userRepository.findOne({
       where: {
         id: user.userId,
-      }
+      },
     });
 
-    const accountLink = await stripe.createAccountLink(seller.stripeAccountId ?? "");
+    if (!seller) {
+      throw new NotFoundException('Seller not found');
+    }
+
+    // If this seller doesn't have a Stripe Connect account yet (e.g. became a
+    // seller before the Stripe flow was added), create one now.
+    if (!seller.stripeAccountId) {
+      const stripeAccount = await stripe.createConnectedAccount(seller.email);
+      seller.stripeAccountId = stripeAccount.accountId;
+      await this.userRepository.update(seller.id, {
+        stripeAccountId: stripeAccount.accountId,
+      });
+    }
+
+    const accountLink = await stripe.createAccountLink(seller.stripeAccountId);
 
     return accountLink;
   }
@@ -482,7 +595,8 @@ export class CreatorService {
       // Send rejection email
       try {
         const user = application.user;
-        const dashboardLink = this.configService.get<string>('email.HOST_URL') || '';
+        const dashboardLink =
+          this.configService.get<string>('email.HOST_URL') || '';
         const emailData = {
           toAddress: [user.email],
           subject: `Update on your ${application.applicationType} application`,
@@ -492,7 +606,10 @@ export class CreatorService {
             dashboardLink,
           },
         };
-        await this.emailsService.sendEmailSMTP(emailData, EmailType.ApplicationRejected);
+        await this.emailsService.sendEmailSMTP(
+          emailData,
+          EmailType.ApplicationRejected,
+        );
         this.logger.log(`Sent rejection email to ${user.email}`);
       } catch (emailError) {
         this.logger.error('Failed to send rejection email', emailError);

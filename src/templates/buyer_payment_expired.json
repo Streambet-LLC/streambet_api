@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "email"
+      },
+      "description": "Recipient email addresses"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject line"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "buyerName": {
+          "type": "string",
+          "description": "Name of the buyer"
+        },
+        "itemName": {
+          "type": "string",
+          "description": "Name of the item"
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Order ID"
+        },
+        "message": {
+          "type": "string",
+          "description": "Informational message"
+        }
+      },
+      "required": ["buyerName", "itemName", "orderId", "message"]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}

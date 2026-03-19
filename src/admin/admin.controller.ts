@@ -77,7 +77,7 @@ export class AdminController {
     private readonly streamService: StreamService,
     private readonly payoutService: PlatformPayoutService,
     private readonly creatorService: CreatorService,
-  ) { }
+  ) {}
 
   // Helper method to check if user is admin
   private ensureAdmin(user: User) {
@@ -1113,7 +1113,8 @@ export class AdminController {
 
   // Seller Onboarding Management
   @ApiOperation({
-    summary: 'List sellers who have not completed Stripe onboarding (admin only)',
+    summary:
+      'List sellers who have not completed Stripe onboarding (admin only)',
   })
   @SwaggerApiResponse({
     status: 200,
@@ -1133,6 +1134,31 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Sellers with pending onboarding fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Get all sellers with live Stripe account status (admin only)',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Seller Stripe status fetched successfully',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @Get('sellers/stripe-status')
+  async getSellersStripeStatus(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.creatorService.getAllSellersStripeStatus();
+    return {
+      status: HttpStatus.OK,
+      message: 'Seller Stripe status fetched successfully',
       data,
     };
   }

@@ -1390,8 +1390,8 @@ export class PrizeService {
           ],
           mode: 'payment',
           customer_email: user.email,
-          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${savedOrder.id}`,
-          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${savedOrder.id}`,
+          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
+          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
           metadata: {
             orderId: savedOrder.id,
             userId,
@@ -1399,7 +1399,6 @@ export class PrizeService {
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
           },
-          payment_intent_data: null
         };
 
         if (seller?.stripeAccountId) {
@@ -1409,10 +1408,10 @@ export class PrizeService {
           );
           const transfer_data = { destination: seller.stripeAccountId };
 
-          sessionParams.payment_intent_data = {
+          (sessionParams as any).payment_intent_data = {
             application_fee_amount,
             transfer_data
-          }
+          };
         }
 
         // @ts-expect-error any
@@ -1441,6 +1440,44 @@ export class PrizeService {
     return {
       order: this.mapOrderToDto(savedOrder),
       stripeSessionUrl,
+    };
+  }
+
+  /**
+   * Get order success details for the purchase success page.
+   * Returns item info, price, seller info, and order status.
+   */
+  async getOrderSuccessDetails(orderId: string, userId: string) {
+    const order = await this.prizeOrderRepository.findOne({
+      where: { id: orderId, userId },
+      relations: ['prizeConfiguration', 'prizeConfiguration.creator'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const prize = order.prizeConfiguration;
+    const seller = prize?.creator;
+
+    return {
+      orderId: order.id,
+      status: order.status,
+      itemName: prize?.name || 'Unknown Item',
+      itemImage: prize?.imageUrl || null,
+      itemCategory: prize?.category || null,
+      itemBrand: prize?.brand || null,
+      pricePaid: parseFloat(order.totalPrice.toString()),
+      usdCharged: parseFloat(order.usdCharged.toString()),
+      coinsDeducted: order.coinsDeducted,
+      paymentMethod: order.paymentMethod,
+      seller: seller
+        ? {
+            username: seller.username,
+            name: seller.name || seller.username,
+          }
+        : null,
+      createdAt: order.createdAt.toISOString(),
     };
   }
 
@@ -1996,14 +2033,13 @@ export class PrizeService {
         },
       ],
       mode: 'payment',
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_offer',
       },
-      payment_intent_data: null,
     };
 
     if (offerSeller?.stripeAccountId) {
@@ -2011,7 +2047,7 @@ export class PrizeService {
       const application_fee_amount = Math.round(offerAmountCents * (feePercent / 100));
       const transfer_data = { destination: offerSeller.stripeAccountId };
 
-      acceptOfferSessionParams.payment_intent_data = {
+      (acceptOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };
@@ -2146,14 +2182,13 @@ export class PrizeService {
         },
       ],
       mode: 'payment',
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_counter_offer',
       },
-      payment_intent_data: null,
     };
 
     if (counterOfferSeller?.stripeAccountId) {
@@ -2161,7 +2196,7 @@ export class PrizeService {
       const application_fee_amount = Math.round(counterOfferAmountCents * (feePercent / 100));
       const transfer_data = { destination: counterOfferSeller.stripeAccountId };
 
-      counterOfferSessionParams.payment_intent_data = {
+      (counterOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };

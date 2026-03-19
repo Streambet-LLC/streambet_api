@@ -26,43 +26,60 @@ const createConnectedAccount = async (email) => {
 }
 
 const createAccountLink = async (accountId) => {
-    console.log(accountId);
+  console.log(accountId);
 
-    const accountLink = await stripeConfig.accountLinks.create({
-        account: accountId,
-        type: "account_onboarding",
-        // return_url: process.env.CLIENT_URL + "seller/shop/manage",
-        // refresh_url: process.env.CLIENT_URL + "seller/shop/manage",
-        return_url: "https://cardcade.fun/seller/shop/manage",
-        refresh_url: "https://cardcade.fun/seller/shop/manage",
-    });
+  const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(
+    /\/+$/,
+    '',
+  );
 
-    return accountLink.url;
-}
+  const accountLink = await stripeConfig.accountLinks.create({
+    account: accountId,
+    type: 'account_onboarding',
+    return_url: `${clientUrl}/seller/shop/manage`,
+    refresh_url: `${clientUrl}/seller/shop/manage`,
+  });
 
-const registerProduct = async (productName, productDescription, price, accountId) => {
-    const product = await stripeConfig.products.create({
-        name: productName,
-        description: productDescription,
-        metadata: { stripeAccount: accountId }
-    });
+  return accountLink.url;
+};
 
-    await stripeConfig.prices.create({
-        product: product.id,
-        unit_amount: price,
-        currency: 'usd',
-    });
+const registerProduct = async (
+  productName,
+  productDescription,
+  price,
+  accountId,
+) => {
+  const product = await stripeConfig.products.create({
+    name: productName,
+    description: productDescription,
+    metadata: { stripeAccount: accountId },
+  });
 
-    return product.id;
-}
+  await stripeConfig.prices.create({
+    product: product.id,
+    unit_amount: price,
+    currency: 'usd',
+  });
 
-const constructWebhookEvent = (rawBody: Buffer, signature: string, secret: string) => {
-    return stripeConfig.webhooks.constructEvent(rawBody, signature, secret);
-}
+  return product.id;
+};
+
+const retrieveAccount = async (accountId: string): Promise<Stripe.Account> => {
+  return stripeConfig.accounts.retrieve(accountId);
+};
+
+const constructWebhookEvent = (
+  rawBody: Buffer,
+  signature: string,
+  secret: string,
+) => {
+  return stripeConfig.webhooks.constructEvent(rawBody, signature, secret);
+};
 
 export const stripe = {
-    createConnectedAccount,
-    createAccountLink,
-    registerProduct,
-    constructWebhookEvent,
+  createConnectedAccount,
+  createAccountLink,
+  registerProduct,
+  retrieveAccount,
+  constructWebhookEvent,
 };
