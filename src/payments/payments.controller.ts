@@ -123,6 +123,35 @@ export class PaymentsController {
     return this.paymentsService.handleWebhookEvent(signature, request.rawBody);
   }
 
+  @ApiOperation({
+    summary: 'Stripe Connect webhook endpoint for connected account events',
+  })
+  @ApiHeader({
+    name: 'stripe-signature',
+    description: 'Stripe webhook signature',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Connect webhook event processed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Missing or invalid data',
+  })
+  @Post('webhook/connect')
+  async handleConnectWebhook(
+    @Headers('stripe-signature') signature: string,
+    @Req() request: RawBodyRequest<Request>,
+  ) {
+    if (!request.rawBody) {
+      throw new BadRequestException('Missing request body');
+    }
+    return this.paymentsService.handleConnectWebhookEvent(
+      signature,
+      request.rawBody,
+    );
+  }
+
   @ApiOperation({ summary: 'Set up auto-reload for betting' })
   @ApiBody({
     schema: {

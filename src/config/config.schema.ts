@@ -30,6 +30,7 @@ export const configValidationSchema = Joi.object({
   // Stripe
   STRIPE_SECRET_KEY: Joi.string().required(),
   STRIPE_WEBHOOK_SECRET: Joi.string().required(),
+  STRIPE_CONNECT_WEBHOOK_SECRET: Joi.string().optional(),
 
   // Coinflow
   COINFLOW_API_URL: Joi.string().uri().optional(),

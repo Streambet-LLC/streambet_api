@@ -213,6 +213,58 @@ export class PaymentsService {
     return { sessionId: session.id, url: session.url };
   }
 
+  async handleConnectWebhookEvent(signature: string, payload: Buffer) {
+    const connectWebhookSecret = this.configService.get<string>(
+      'STRIPE_CONNECT_WEBHOOK_SECRET',
+    );
+
+    if (!connectWebhookSecret) {
+      this.logger.warn(
+        'STRIPE_CONNECT_WEBHOOK_SECRET not configured, falling back to main webhook secret',
+      );
+      return this.handleWebhookEvent(signature, payload);
+    }
+
+    let event: Stripe.Event;
+
+    // Verify webhook signature with Connect-specific secret
+    try {
+      event = this.stripe.webhooks.constructEvent(
+        payload,
+        signature,
+        connectWebhookSecret,
+      );
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Unknown webhook error';
+      throw new BadRequestException(`Connect Webhook Error: ${errorMessage}`);
+    }
+
+    // Store all webhook events for audit
+    try {
+      await this.webhookRepository.save({
+        provider: 'stripe_connect',
+        data: JSON.stringify(event),
+      });
+    } catch (storeErr) {
+      this.logger.error(
+        `Failed to store Stripe Connect webhook event: ${storeErr}`,
+      );
+    }
+
+    // Handle Connect-specific event types
+    switch (event.type) {
+      case 'account.updated':
+        await this.handleAccountUpdated(event.data.object as Stripe.Account);
+        break;
+
+      default:
+        this.logger.log(`Unhandled Stripe Connect event type: ${event.type}`);
+    }
+
+    return { received: true };
+  }
+
   async handleWebhookEvent(signature: string, payload: Buffer) {
     const webhookSecret = this.configService.get<string>(
       'STRIPE_WEBHOOK_SECRET',
