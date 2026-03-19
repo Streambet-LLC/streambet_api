@@ -94,9 +94,9 @@ export class RegisterDto {
     description: 'Confirmation that the user is older than  18 years',
     example: true,
   })
+  @IsOptional()
   @IsBoolean()
-  @IsNotEmpty()
-  isOlder: boolean;
+  isOlder?: boolean;
 
   @ApiProperty({
     description: 'Confirmation that the user accepts the Terms of Service',
@@ -114,13 +114,13 @@ export class RegisterDto {
   lastKnownIp?: string;
 
   @ApiProperty({
-    description: 'Date of birth (must be 8 years or older)',
+    description: 'Date of birth (optional)',
     example: '2010-01-01',
   })
+  @IsOptional()
   @Type(() => Date)
   @IsDate()
-  @IsNotEmpty()
-  dob: Date;
+  dob?: Date;
 
   @ApiProperty({
     description: 'redirected link',
