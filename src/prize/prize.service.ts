@@ -13,6 +13,7 @@ import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
+import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
@@ -52,6 +53,8 @@ export class PrizeService {
   constructor(
     @InjectRepository(PrizeConfiguration)
     private readonly prizeConfigRepository: Repository<PrizeConfiguration>,
+    @InjectRepository(ItemConfigurationImage)
+    private readonly itemImageRepository: Repository<ItemConfigurationImage>,
     @InjectRepository(PrizeRedemption)
     private readonly prizeRedemptionRepository: Repository<PrizeRedemption>,
     @InjectRepository(PrizeOrder)
@@ -77,6 +80,7 @@ export class PrizeService {
         isActive: true,
         showOnRedemptions: true,
       },
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC' },
     });
 
@@ -105,6 +109,7 @@ export class PrizeService {
   async getAdminActivePrizeConfigurations(): Promise<PrizeConfigurationDto[]> {
     const configs = await this.prizeConfigRepository.find({
       where: { isActive: true },
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC', createdAt: 'DESC' },
     });
 
@@ -182,7 +187,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
-      relations: ['creator'],
+      relations: ['creator', 'itemImages'],
       order: {
         displayOrderShop: 'ASC',
         createdAt: 'DESC',
@@ -234,11 +239,13 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
+      relations: ['itemImages'],
       order: {
-        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
+
+    const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
 
     this.logger.log(
       `[SHOP] Found ${items.length} shop items for seller ${username}`,
@@ -275,7 +282,7 @@ export class PrizeService {
         state: seller.state || null,
         country: seller.country || null,
       },
-      items: items.map((item) => this.mapToDto(item)),
+      items: sortedSellerItems.map((item) => this.mapToDto(item)),
     };
     this.logger.log(
       `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
@@ -297,13 +304,14 @@ export class PrizeService {
         isActive: true,
         showOnShop: true, // Only show items meant for shop, exclude admin redemptions
       },
+      relations: ['itemImages'],
       order: {
-        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
 
-    return items.map((item) => this.mapToDto(item));
+    const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+    return sortedSellerItems.map((item) => this.mapToDto(item));
   }
 
   /**
@@ -315,9 +323,14 @@ export class PrizeService {
   ): Promise<PrizeConfigurationDto> {
     await this.ensureSeller(sellerId);
 
+    const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
+    const sellerScopedDisplayOrder =
+      sellerDisplayOrderShop ?? displayOrderShop;
+
     return this.createPrizeTier(
       {
-        ...dto,
+        ...restDto,
+        sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
       },
@@ -341,10 +354,15 @@ export class PrizeService {
       throw new ForbiddenException('You can only update your own shop items');
     }
 
+    const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
+    const sellerScopedDisplayOrder =
+      sellerDisplayOrderShop ?? displayOrderShop;
+
     return this.updatePrizeTier(
       itemId,
       {
-        ...dto,
+        ...restDto,
+        sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
       },
@@ -379,6 +397,27 @@ export class PrizeService {
     }
   }
 
+  private sortSellerShopItemsBySellerOrder(
+    items: PrizeConfiguration[],
+  ): PrizeConfiguration[] {
+    return items.slice().sort((a, b) => {
+      const aOrder =
+        a.sellerDisplayOrderShop ??
+        a.displayOrderShop ??
+        Number.MAX_SAFE_INTEGER;
+      const bOrder =
+        b.sellerDisplayOrderShop ??
+        b.displayOrderShop ??
+        Number.MAX_SAFE_INTEGER;
+
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+  }
+
   private async isSellerOwnedItem(item: PrizeConfiguration): Promise<boolean> {
     if (!item.createdBy) return false;
 
@@ -402,6 +441,97 @@ export class PrizeService {
     }
 
     return tier;
+  }
+
+  private normalizeItemImageUrls(
+    imageUrls?: string[],
+    imageUrl?: string | null,
+  ): string[] {
+    const urlsFromArray = (imageUrls || [])
+      .map((url) => (url || '').trim())
+      .filter((url) => url.length > 0);
+
+    if (urlsFromArray.length > 0) {
+      return urlsFromArray;
+    }
+
+    if (imageUrl && imageUrl.trim().length > 0) {
+      return [imageUrl.trim()];
+    }
+
+    return [];
+  }
+
+  private resolveCoverImageIndex(
+    imageUrls: string[],
+    requestedCoverIndex?: number,
+  ): number {
+    if (imageUrls.length === 0) {
+      return 0;
+    }
+
+    const coverIndex = requestedCoverIndex ?? 0;
+    if (coverIndex < 0 || coverIndex >= imageUrls.length) {
+      throw new BadRequestException(
+        `coverImageIndex must be between 0 and ${imageUrls.length - 1}`,
+      );
+    }
+
+    return coverIndex;
+  }
+
+  private ensureImageLimit(imageUrls: string[]): void {
+    if (imageUrls.length > 7) {
+      throw new BadRequestException('A maximum of 7 item images is allowed');
+    }
+  }
+
+  private async getItemImagesForPrizeConfig(
+    prizeConfigurationId: string,
+  ): Promise<ItemConfigurationImage[]> {
+    return this.itemImageRepository.find({
+      where: { prizeConfigurationId },
+      order: { displayOrder: 'ASC' },
+    });
+  }
+
+  private async saveItemImagesForPrizeConfig(
+    prizeConfigurationId: string,
+    imageUrls: string[],
+    coverImageIndex: number,
+  ): Promise<ItemConfigurationImage[]> {
+    return this.itemImageRepository.manager.transaction(async (manager) => {
+      await manager.delete(ItemConfigurationImage, { prizeConfigurationId });
+
+      if (imageUrls.length === 0) {
+        await manager.update(PrizeConfiguration, prizeConfigurationId, {
+          coverImageId: null,
+          imageUrl: null,
+        });
+        return [];
+      }
+
+      const imagesToCreate = imageUrls.map((url, index) =>
+        manager.create(ItemConfigurationImage, {
+          prizeConfigurationId,
+          imageUrl: url,
+          displayOrder: index,
+        }),
+      );
+
+      const savedImages = await manager.save(ItemConfigurationImage, imagesToCreate);
+      const sortedImages = savedImages.sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+      );
+      const coverImage = sortedImages[coverImageIndex] || sortedImages[0];
+
+      await manager.update(PrizeConfiguration, prizeConfigurationId, {
+        coverImageId: coverImage.id,
+        imageUrl: coverImage.imageUrl,
+      });
+
+      return sortedImages;
+    });
   }
 
   /**
@@ -489,17 +619,47 @@ export class PrizeService {
     // Amount is always expected in CadeCoins from the frontend
     // Both admin and seller frontends convert USD to CadeCoins before sending
 
-    const seller = await this.userRepository.findOne({
-      where: {
-        id: userId,
-      },
-    });
+    const normalizedImageUrls = this.normalizeItemImageUrls(
+      dto.imageUrls,
+      dto.imageUrl,
+    );
+    this.ensureImageLimit(normalizedImageUrls);
+
+    if (normalizedImageUrls.length === 0) {
+      throw new BadRequestException(
+        'At least one image is required when creating an item',
+      );
+    }
+
+    const coverImageIndex = this.resolveCoverImageIndex(
+      normalizedImageUrls,
+      dto.coverImageIndex,
+    );
+    const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
     // Auto-generate display orders for each page where item will be shown
     const category = (dto.category || 'slab') as 'slab' | 'sealed';
+    const isSellerOwnedItem = !!createdBy;
 
     let displayOrderShop = dto.displayOrderShop ?? null;
-    if (!displayOrderShop && (dto.showOnShop ?? true)) {
+    let sellerDisplayOrderShop = dto.sellerDisplayOrderShop ?? null;
+
+    if (isSellerOwnedItem) {
+      // Seller-managed order is seller page only; global shop order remains admin-managed.
+      displayOrderShop = null;
+
+      if (!sellerDisplayOrderShop && (dto.showOnShop ?? true)) {
+        const maxSellerShop = await this.prizeConfigRepository
+          .createQueryBuilder('pc')
+          .select('MAX(pc.sellerDisplayOrderShop)', 'max')
+          .where('pc.category = :category', { category })
+          .andWhere('pc.isActive = :isActive', { isActive: true })
+          .andWhere('pc.createdBy = :createdBy', { createdBy })
+          .andWhere('pc.showOnShop = :showOnShop', { showOnShop: true })
+          .getRawOne();
+        sellerDisplayOrderShop = (maxSellerShop?.max || 0) + 1;
+      }
+    } else if (!displayOrderShop && (dto.showOnShop ?? true)) {
       const maxShop = await this.prizeConfigRepository
         .createQueryBuilder('pc')
         .select('MAX(pc.displayOrderShop)', 'max')
@@ -529,12 +689,14 @@ export class PrizeService {
       amount,
       name: dto.name,
       description: dto.description || null,
-      imageUrl: dto.imageUrl || null,
+      imageUrl: coverImageUrl,
+      coverImageId: null,
       category,
       stock: dto.stock ?? 0,
       purchaseOption,
       brand: dto.brand || PrizeBrand.POKEMON,
       displayOrderShop,
+      sellerDisplayOrderShop,
       displayOrderRedemptions,
       featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? true,
@@ -545,6 +707,16 @@ export class PrizeService {
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
+    const savedImages = await this.saveItemImagesForPrizeConfig(
+      saved.id,
+      normalizedImageUrls,
+      coverImageIndex,
+    );
+
+    saved.itemImages = savedImages;
+    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.imageUrl = coverImageUrl;
+
     this.logger.log(
       `Prize tier ${prizeTier} created by user ${userId}. New ID: ${saved.id}`,
     );
@@ -615,6 +787,44 @@ export class PrizeService {
     const effectiveCreatedBy =
       createdBy !== undefined ? createdBy : existingTier.createdBy;
 
+    const existingItemImages = await this.getItemImagesForPrizeConfig(
+      existingTier.id,
+    );
+    const existingImageUrls =
+      existingItemImages.length > 0
+        ? existingItemImages.map((img) => img.imageUrl)
+        : this.normalizeItemImageUrls(undefined, existingTier.imageUrl);
+
+    let existingCoverIndex = 0;
+    if (existingItemImages.length > 0 && existingTier.coverImageId) {
+      const coverIndex = existingItemImages.findIndex(
+        (img) => img.id === existingTier.coverImageId,
+      );
+      existingCoverIndex = coverIndex >= 0 ? coverIndex : 0;
+    }
+
+    const hasNewImagePayload =
+      dto.imageUrls !== undefined || dto.imageUrl !== undefined;
+
+    const normalizedImageUrls = hasNewImagePayload
+      ? this.normalizeItemImageUrls(dto.imageUrls, dto.imageUrl)
+      : existingImageUrls;
+
+    this.ensureImageLimit(normalizedImageUrls);
+
+    if (normalizedImageUrls.length === 0) {
+      throw new BadRequestException(
+        'At least one image is required when updating an item',
+      );
+    }
+
+    const coverImageIndex = this.resolveCoverImageIndex(
+      normalizedImageUrls,
+      dto.coverImageIndex ??
+        (hasNewImagePayload ? 0 : existingCoverIndex),
+    );
+    const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
+
     // Data hardening: Set old tier to inactive
     existingTier.isActive = false;
     await this.prizeConfigRepository.save(existingTier);
@@ -657,12 +867,17 @@ export class PrizeService {
       amount,
       name: dto.name,
       description: dto.description || null,
-      imageUrl: dto.imageUrl || null,
+      imageUrl: coverImageUrl,
+      coverImageId: null,
       category: (dto.category || existingTier.category) as 'slab' | 'sealed',
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
       displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
+      sellerDisplayOrderShop:
+        dto.sellerDisplayOrderShop ??
+        existingTier.sellerDisplayOrderShop ??
+        (effectiveCreatedBy ? existingTier.displayOrderShop : null),
       displayOrderRedemptions:
         dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
       featuredDisplayOrder:
@@ -676,6 +891,16 @@ export class PrizeService {
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
+    const savedImages = await this.saveItemImagesForPrizeConfig(
+      saved.id,
+      normalizedImageUrls,
+      coverImageIndex,
+    );
+
+    saved.itemImages = savedImages;
+    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.imageUrl = coverImageUrl;
+
     this.logger.log(
       `Prize tier ${finalTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
     );
@@ -758,6 +983,7 @@ export class PrizeService {
    */
   async getAllConfigurations(): Promise<PrizeConfigurationDto[]> {
     const configs = await this.prizeConfigRepository.find({
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC', createdAt: 'DESC' },
     });
     return configs.map((c) => this.mapToDto(c));
@@ -2338,6 +2564,27 @@ export class PrizeService {
    * Map entity to DTO
    */
   private mapToDto(entity: PrizeConfiguration): PrizeConfigurationDto {
+    const sortedItemImages = (entity.itemImages || [])
+      .slice()
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+
+    const resolvedCoverImageId =
+      entity.coverImageId || sortedItemImages[0]?.id || null;
+
+    const itemImages = sortedItemImages.map((img) => ({
+      id: img.id,
+      imageUrl: img.imageUrl,
+      displayOrder: img.displayOrder,
+      isCover: resolvedCoverImageId ? img.id === resolvedCoverImageId : false,
+    }));
+
+    const imageUrls =
+      itemImages.length > 0
+        ? itemImages.map((img) => img.imageUrl)
+        : entity.imageUrl
+          ? [entity.imageUrl]
+          : [];
+
     return {
       id: entity.id,
       prizeTier: entity.prizeTier,
@@ -2345,11 +2592,16 @@ export class PrizeService {
       name: entity.name,
       description: entity.description,
       imageUrl: entity.imageUrl,
+      imageUrls,
+      itemImages,
+      coverImageId: resolvedCoverImageId,
       category: entity.category,
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
       brand: entity.brand,
       displayOrderShop: entity.displayOrderShop,
+      sellerDisplayOrderShop:
+        entity.sellerDisplayOrderShop ?? entity.displayOrderShop,
       displayOrderRedemptions: entity.displayOrderRedemptions,
       featuredDisplayOrder: entity.featuredDisplayOrder,
       showOnRedemptions: entity.showOnRedemptions,

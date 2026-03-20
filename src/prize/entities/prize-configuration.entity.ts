@@ -1,8 +1,9 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
+import { ItemConfigurationImage } from './item-configuration-image.entity';
 
 /**
  * Entity for storing prize tier configurations.
@@ -25,6 +26,9 @@ export class PrizeConfiguration extends BaseEntity {
 
   @Column({ type: 'varchar', length: 500, name: 'image_url', nullable: true })
   imageUrl: string | null;
+
+  @Column({ type: 'uuid', name: 'cover_image_id', nullable: true })
+  coverImageId: string | null;
 
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive: boolean;
@@ -60,6 +64,9 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;
 
+  @Column({ type: 'integer', name: 'display_order_seller_shop', nullable: true })
+  sellerDisplayOrderShop: number | null;
+
   @Column({ type: 'integer', name: 'display_order_redemptions', nullable: true })
   displayOrderRedemptions: number | null;
 
@@ -94,4 +101,10 @@ export class PrizeConfiguration extends BaseEntity {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'updated_by' })
   updater: User;
+
+  @OneToMany(
+    () => ItemConfigurationImage,
+    (itemImage) => itemImage.prizeConfiguration,
+  )
+  itemImages: ItemConfigurationImage[];
 }

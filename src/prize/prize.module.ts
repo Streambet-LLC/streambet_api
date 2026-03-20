@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
+import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
 import {
@@ -17,6 +18,7 @@ import { EmailsModule } from '../emails/email.module';
   imports: [
     TypeOrmModule.forFeature([
       PrizeConfiguration,
+      ItemConfigurationImage,
       PrizeRedemption,
       PrizeOrder,
       User,
