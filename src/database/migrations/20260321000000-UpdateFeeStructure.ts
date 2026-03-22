@@ -12,7 +12,7 @@ export class UpdateFeeStructure20260321000000 implements MigrationInterface {
     await queryRunner.query(`
       UPDATE "users"
       SET "application_fee_percent" = 4
-      WHERE "isSeller" = true AND "application_fee_percent" = 7
+      WHERE "is_seller" = true AND "application_fee_percent" = 7
     `);
   }
 
@@ -27,7 +27,7 @@ export class UpdateFeeStructure20260321000000 implements MigrationInterface {
     await queryRunner.query(`
       UPDATE "users"
       SET "application_fee_percent" = 7
-      WHERE "isSeller" = true AND "application_fee_percent" = 4
+      WHERE "is_seller" = true AND "application_fee_percent" = 4
     `);
   }
 }
