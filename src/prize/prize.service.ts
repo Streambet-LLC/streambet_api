@@ -1490,15 +1490,15 @@ export class PrizeService {
       }
     }
 
-    // Create the order with shipping fee added to total
+    // Create the order (frontend amounts already include shipping)
     const order = this.prizeOrderRepository.create({
       userId,
       prizeConfigurationId: dto.prizeConfigId,
       shippingAddress: dto.shippingAddress,
       paymentMethod: dto.paymentMethod,
       coinsDeducted: dto.coinsAmount,
-      usdCharged: parseFloat((dto.usdAmount + SHIPPING_FEE).toString()),
-      totalPrice: parseFloat((dto.totalPrice + SHIPPING_FEE).toString()),
+      usdCharged: parseFloat(dto.usdAmount.toString()),
+      totalPrice: parseFloat(dto.totalPrice.toString()),
       status: 'buy_attempted', // User submitted form with shipping info
     });
 
@@ -1596,6 +1596,13 @@ export class PrizeService {
           ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
           : null;
 
+        // Add 3% buyer fee on top of the listing price (excludes shipping)
+        const BUYER_FEE_PERCENT = 3;
+        const shippingCents = SHIPPING_FEE * 100;
+        const itemUsdCents = Math.max(0, usdCents - shippingCents);
+        const buyerFeeCents = Math.round(itemUsdCents * (BUYER_FEE_PERCENT / 100));
+        const totalChargeCents = usdCents + buyerFeeCents;
+
         const sessionParams = {
           payment_method_types: ['card'],
           line_items: [
@@ -1606,10 +1613,10 @@ export class PrizeService {
                   name: `${prize.name} Prize Purchase`,
                   description:
                     dto.paymentMethod === 'combined'
-                      ? `${dto.coinsAmount} CadeCoins + $${dto.usdAmount.toFixed(2)} USD`
-                      : `$${dto.usdAmount.toFixed(2)} USD`,
+                      ? `${dto.coinsAmount} CadeCoins + $${dto.usdAmount.toFixed(2)} USD + $${(buyerFeeCents / 100).toFixed(2)} service fee`
+                      : `$${dto.usdAmount.toFixed(2)} USD + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
                 },
-                unit_amount: usdCents,
+                unit_amount: totalChargeCents,
               },
               quantity: 1,
             },
@@ -1624,14 +1631,15 @@ export class PrizeService {
             prizeId: dto.prizeConfigId,
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
+            buyerFeeCents: buyerFeeCents.toString(),
           },
         };
 
         if (seller?.stripeAccountId) {
-          const feePercent = seller.applicationFeePercent ?? 7;
-          const application_fee_amount = Math.round(
-            usdCents * (feePercent / 100)
-          );
+          const feePercent = seller.applicationFeePercent ?? 4;
+          // Seller fee (4%) applied to the base listing price, plus the buyer fee goes to platform
+          const sellerFeeAmount = Math.round(usdCents * (feePercent / 100));
+          const application_fee_amount = sellerFeeAmount + buyerFeeCents;
           const transfer_data = { destination: seller.stripeAccountId };
 
           (sessionParams as any).payment_intent_data = {
@@ -1643,8 +1651,11 @@ export class PrizeService {
         // @ts-expect-error any
         const session = await this.stripe.checkout.sessions.create(sessionParams);
 
-        // Save Stripe session ID to order
+        // Save Stripe session ID and update totals to include buyer fee
         savedOrder.stripeSessionId = session.id;
+        const buyerFeeUsd = buyerFeeCents / 100;
+        savedOrder.usdCharged = parseFloat((dto.usdAmount + buyerFeeUsd).toString());
+        savedOrder.totalPrice = parseFloat((dto.totalPrice + buyerFeeUsd).toString());
         await this.prizeOrderRepository.save(savedOrder);
 
         stripeSessionUrl = session.url;
@@ -1811,6 +1822,15 @@ export class PrizeService {
     }
 
     try {
+      // Show the seller the amount without the buyer service fee
+      const BUYER_FEE_PERCENT = 3;
+      const SHIPPING_FEE = 5;
+      const charged = parseFloat(order.usdCharged?.toString() || '0');
+      const itemPrice = Math.max(0, charged - SHIPPING_FEE);
+      const sellerVisibleAmount = charged > 0
+        ? parseFloat((itemPrice / (1 + BUYER_FEE_PERCENT / 100) + SHIPPING_FEE).toFixed(2))
+        : order.totalPrice;
+
       await this.emailsService.sendEmailSMTP(
         {
           toAddress: [seller.email],
@@ -1819,7 +1839,7 @@ export class PrizeService {
             sellerName: seller.name || seller.username,
             itemName: prize.name,
             buyerName: buyer.name || buyer.username,
-            amount: order.usdCharged,
+            amount: sellerVisibleAmount,
             orderId: order.id,
             purchaseDate: new Date().toLocaleDateString('en-US', {
               year: 'numeric',
@@ -2259,6 +2279,11 @@ export class PrizeService {
       ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
       : null;
 
+    // Add 3% buyer fee on top of the offer price
+    const BUYER_FEE_PERCENT = 3;
+    const buyerFeeCents = Math.round(offerAmountCents * (BUYER_FEE_PERCENT / 100));
+    const totalChargeCents = offerAmountCents + buyerFeeCents;
+
     const acceptOfferSessionParams = {
       payment_method_types: ['card'],
       line_items: [
@@ -2267,9 +2292,9 @@ export class PrizeService {
             currency: 'usd',
             product_data: {
               name: `${prize.name} - Accepted Offer`,
-              description: `Offer accepted at $${amountToCharge}`,
+              description: `Offer accepted at $${amountToCharge} + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
             },
-            unit_amount: offerAmountCents,
+            unit_amount: totalChargeCents,
           },
           quantity: 1,
         },
@@ -2281,12 +2306,14 @@ export class PrizeService {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_offer',
+        buyerFeeCents: buyerFeeCents.toString(),
       },
     };
 
     if (offerSeller?.stripeAccountId) {
-      const feePercent = offerSeller.applicationFeePercent ?? 7;
-      const application_fee_amount = Math.round(offerAmountCents * (feePercent / 100));
+      const feePercent = offerSeller.applicationFeePercent ?? 4;
+      const sellerFeeAmount = Math.round(offerAmountCents * (feePercent / 100));
+      const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: offerSeller.stripeAccountId };
 
       (acceptOfferSessionParams as any).payment_intent_data = {
@@ -2298,9 +2325,11 @@ export class PrizeService {
     // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(acceptOfferSessionParams);
 
-    // Save Stripe session ID
+    // Save Stripe session ID and update totals to include buyer fee
+    const offerBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
-    order.usdCharged = amountToCharge;
+    order.usdCharged = amountToCharge + offerBuyerFeeUsd;
+    order.totalPrice = parseFloat((order.totalPrice + offerBuyerFeeUsd).toString());
     await this.prizeOrderRepository.save(order);
 
     // Send email to user with Stripe checkout link
@@ -2405,20 +2434,23 @@ export class PrizeService {
       ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
       : null;
 
+    // Add 3% buyer fee on top of the counter offer price
+    const BUYER_FEE_PERCENT = 3;
+    const buyerFeeCents = Math.round(counterOfferAmountCents * (BUYER_FEE_PERCENT / 100));
+    const totalChargeCents = counterOfferAmountCents + buyerFeeCents;
+
     // Create Stripe checkout session
     const counterOfferSessionParams = {
       payment_method_types: ['card'],
-      application_fee_amount: 0,
-      transfer_data: null,
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
               name: `${prize.name} - Counter Offer Accepted`,
-              description: `Counter offer accepted at $${amountToCharge}`,
+              description: `Counter offer accepted at $${amountToCharge} + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
             },
-            unit_amount: counterOfferAmountCents,
+            unit_amount: totalChargeCents,
           },
           quantity: 1,
         },
@@ -2430,12 +2462,16 @@ export class PrizeService {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_counter_offer',
+        buyerFeeCents: buyerFeeCents.toString(),
       },
     };
 
     if (counterOfferSeller?.stripeAccountId) {
-      const feePercent = counterOfferSeller.applicationFeePercent ?? 7;
-      const application_fee_amount = Math.round(counterOfferAmountCents * (feePercent / 100));
+      const feePercent = counterOfferSeller.applicationFeePercent ?? 4;
+      const sellerFeeAmount = Math.round(
+        counterOfferAmountCents * (feePercent / 100),
+      );
+      const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: counterOfferSeller.stripeAccountId };
 
       (counterOfferSessionParams as any).payment_intent_data = {
@@ -2447,9 +2483,11 @@ export class PrizeService {
     // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(counterOfferSessionParams);
 
-    // Update order with Stripe session
+    // Update order with Stripe session and include buyer fee in totals
+    const counterOfferBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
-    order.usdCharged = amountToCharge;
+    order.usdCharged = amountToCharge + counterOfferBuyerFeeUsd;
+    order.totalPrice = parseFloat((order.totalPrice + counterOfferBuyerFeeUsd).toString());
     order.status = 'offer_accepted';
     await this.prizeOrderRepository.save(order);
 
