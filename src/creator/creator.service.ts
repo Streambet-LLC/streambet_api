@@ -377,8 +377,12 @@ export class CreatorService {
 
       // Send approval email
       try {
-        const dashboardLink =
+        const hostUrl =
           this.configService.get<string>('email.HOST_URL') || '';
+        const dashboardLink =
+          application.applicationType === ApplicationType.SELLER
+            ? `${hostUrl}/seller/shop/manage`
+            : hostUrl;
         const emailData = {
           toAddress: [user.email],
           subject: `Your ${application.applicationType} application has been approved!`,
