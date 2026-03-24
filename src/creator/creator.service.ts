@@ -377,8 +377,12 @@ export class CreatorService {
 
       // Send approval email
       try {
-        const dashboardLink =
+        const hostUrl =
           this.configService.get<string>('email.HOST_URL') || '';
+        const dashboardLink =
+          application.applicationType === ApplicationType.SELLER
+            ? `${hostUrl}/seller/shop/manage`
+            : hostUrl;
         const emailData = {
           toAddress: [user.email],
           subject: `Your ${application.applicationType} application has been approved!`,
@@ -484,7 +488,7 @@ export class CreatorService {
                 account.charges_enabled &&
                 account.payouts_enabled
               ) {
-                const updates: Record<string, boolean> = {};
+                const updates: Record<string, boolean | number> = {};
                 if (!seller.stripeAccountConnected) {
                   updates.stripeAccountConnected = true;
                   seller.stripeAccountConnected = true;
@@ -492,6 +496,10 @@ export class CreatorService {
                 if (!seller.sellerOnboardingCompleted) {
                   updates.sellerOnboardingCompleted = true;
                   seller.sellerOnboardingCompleted = true;
+                }
+                // Ensure the seller fee is always set to the current default
+                if (seller.applicationFeePercent !== 4) {
+                  updates.applicationFeePercent = 4;
                 }
                 if (Object.keys(updates).length > 0) {
                   await this.userRepository.update(seller.id, updates);
@@ -536,9 +544,11 @@ export class CreatorService {
     }
 
     // Update both flags regardless of current state (idempotent)
+    // Also ensure the seller fee is set to the current default
     await this.userRepository.update(userId, {
       stripeAccountConnected: true,
       sellerOnboardingCompleted: true,
+      applicationFeePercent: 4,
     });
 
     return { message: 'Seller marked as onboarded' };
