@@ -520,6 +520,7 @@ export class PaymentsService {
     const updates: Partial<{
       sellerOnboardingCompleted: boolean;
       stripeAccountConnected: boolean;
+      applicationFeePercent: number;
     }> = {};
 
     if (!user.sellerOnboardingCompleted) {
@@ -527,6 +528,10 @@ export class PaymentsService {
     }
     if (!user.stripeAccountConnected) {
       updates.stripeAccountConnected = true;
+    }
+    // Ensure the seller fee is always set to the current default
+    if (user.applicationFeePercent !== 4) {
+      updates.applicationFeePercent = 4;
     }
 
     if (Object.keys(updates).length > 0) {
