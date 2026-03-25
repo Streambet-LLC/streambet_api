@@ -186,13 +186,15 @@ export class PrizeService {
   /**
    * Public: get all shop items across all sellers.
    * This is for the main "Shop" page in the navbar, showing all available shop items.
+   * Also includes CardCade redemption slabs (admin-created, showOnRedemptions, category=slab).
    */
   async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
     this.logger.log(
       '[SHOP] getAllShopItems() called - fetching all active shop items',
     );
 
-    const items = await this.prizeConfigRepository.find({
+    // Fetch regular seller shop items
+    const sellerItems = await this.prizeConfigRepository.find({
       where: {
         isActive: true,
         showOnShop: true,
@@ -204,8 +206,27 @@ export class PrizeService {
       },
     });
 
+    // Fetch CardCade redemption slabs (all slab items from the redemptions page)
+    const cardcadeItems = await this.prizeConfigRepository.find({
+      where: {
+        isActive: true,
+        showOnRedemptions: true,
+        category: 'slab',
+      },
+      relations: ['itemImages'],
+      order: {
+        displayOrderShop: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+    // Merge, deduplicating by id (items that have both showOnShop and showOnRedemptions)
+    const seenIds = new Set(sellerItems.map((i) => i.id));
+    const uniqueCardcadeItems = cardcadeItems.filter((i) => !seenIds.has(i.id));
+    const items = [...sellerItems, ...uniqueCardcadeItems];
+
     this.logger.log(
-      `[SHOP] Found ${items.length} total shop items across all sellers`,
+      `[SHOP] Found ${sellerItems.length} seller shop items + ${uniqueCardcadeItems.length} CardCade redemption slabs = ${items.length} total`,
     );
     this.logger.debug(
       `[SHOP] Items breakdown: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
@@ -234,9 +255,8 @@ export class PrizeService {
     if (username === "cardcade") {
       const items = await this.prizeConfigRepository.find({
         where: {
-          createdBy: null,
           isActive: true,
-          showOnShop: true,
+          showOnRedemptions: true,
           category: "slab"
         },
         relations: ['itemImages'],
