@@ -163,14 +163,24 @@ export class PrizeService {
     }
 
     const rows = await qb.getRawMany();
+    const result = [
+      {
+        id: 0,
+        username: "cardcade",
+        displayName: "CardCade Shop",
+        profileImageUrl: null,
+        itemCount: 10,
+      },
+      ...rows.map((row) => ({
+        id: row.id,
+        username: row.username,
+        displayName: row.displayName || row.username,
+        profileImageUrl: row.profileImageUrl || null,
+        itemCount: Number(row.itemCount || 0),
+      }))
+    ]
 
-    return rows.map((row) => ({
-      id: row.id,
-      username: row.username,
-      displayName: row.displayName || row.username,
-      profileImageUrl: row.profileImageUrl || null,
-      itemCount: Number(row.itemCount || 0),
-    }));
+    return result;
   }
 
   /**
@@ -221,73 +231,109 @@ export class PrizeService {
     };
     items: PrizeConfigurationDto[];
   }> {
-    const seller = await this.userRepository.findOne({
-      where: {
-        username,
-        isSeller: true,
-        isActive: true,
-      },
-    });
+    if (username === "cardcade") {
+      const items = await this.prizeConfigRepository.find({
+        where: {
+          createdBy: null,
+          isActive: true,
+          showOnShop: true,
+          category: "slab"
+        },
+        relations: ['itemImages'],
+        order: {
+          createdAt: 'DESC',
+        },
+      });
 
-    if (!seller) {
-      throw new NotFoundException('Seller shop not found');
+      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+
+      const response = {
+        shop: {
+          id: "0",
+          username: "cardcade",
+          displayName: "CardCade's Shop",
+          profileImageUrl: null,
+          socials: null,
+          sellerTradingExperience: null,
+          city: null,
+          state: null,
+          country: null,
+        },
+        items: sortedSellerItems.map((item) => this.mapToDto(item)),
+      };
+      this.logger.log(
+        `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
+      );
+      return response;
+    } else {
+      const seller = await this.userRepository.findOne({
+        where: {
+          username,
+          isSeller: true,
+          isActive: true,
+        },
+      });
+
+      if (!seller) {
+        throw new NotFoundException('Seller shop not found');
+      }
+
+      const items = await this.prizeConfigRepository.find({
+        where: {
+          createdBy: seller.id,
+          isActive: true,
+          showOnShop: true,
+        },
+        relations: ['itemImages'],
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+
+      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+
+      this.logger.log(
+        `[SHOP] Found ${items.length} shop items for seller ${username}`,
+      );
+      this.logger.debug(
+        `[SHOP] Items for ${username}: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, showOnShop: i.showOnShop, createdBy: i.createdBy })))}`,
+      );
+      this.logger.log(
+        `[SHOP] Seller data - id: ${seller.id}, username: ${seller.username}, isSeller: ${seller.isSeller}, role: ${seller.role}`,
+      );
+      this.logger.log(
+        `[SHOP] Seller socials RAW VALUE: ${JSON.stringify(seller.socials)}`,
+      );
+      this.logger.log(`[SHOP] Seller socials TYPE: ${typeof seller.socials}`);
+      this.logger.log(
+        `[SHOP] Seller socials IS NULL: ${seller.socials === null}`,
+      );
+      this.logger.log(
+        `[SHOP] Seller socials IS UNDEFINED: ${seller.socials === undefined}`,
+      );
+      this.logger.log(
+        `[SHOP] Seller socials KEYS: ${seller.socials ? Object.keys(seller.socials).join(',') : 'N/A'}`,
+      );
+
+      const response = {
+        shop: {
+          id: seller.id,
+          username: seller.username,
+          displayName: seller.shopName || seller.name || seller.username,
+          profileImageUrl: seller.profileImageUrl || null,
+          socials: seller.socials || null,
+          sellerTradingExperience: seller.sellerTradingExperience || null,
+          city: seller.city || null,
+          state: seller.state || null,
+          country: seller.country || null,
+        },
+        items: sortedSellerItems.map((item) => this.mapToDto(item)),
+      };
+      this.logger.log(
+        `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
+      );
+      return response;
     }
-
-    const items = await this.prizeConfigRepository.find({
-      where: {
-        createdBy: seller.id,
-        isActive: true,
-        showOnShop: true,
-      },
-      relations: ['itemImages'],
-      order: {
-        createdAt: 'DESC',
-      },
-    });
-
-    const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
-
-    this.logger.log(
-      `[SHOP] Found ${items.length} shop items for seller ${username}`,
-    );
-    this.logger.debug(
-      `[SHOP] Items for ${username}: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, showOnShop: i.showOnShop, createdBy: i.createdBy })))}`,
-    );
-    this.logger.log(
-      `[SHOP] Seller data - id: ${seller.id}, username: ${seller.username}, isSeller: ${seller.isSeller}, role: ${seller.role}`,
-    );
-    this.logger.log(
-      `[SHOP] Seller socials RAW VALUE: ${JSON.stringify(seller.socials)}`,
-    );
-    this.logger.log(`[SHOP] Seller socials TYPE: ${typeof seller.socials}`);
-    this.logger.log(
-      `[SHOP] Seller socials IS NULL: ${seller.socials === null}`,
-    );
-    this.logger.log(
-      `[SHOP] Seller socials IS UNDEFINED: ${seller.socials === undefined}`,
-    );
-    this.logger.log(
-      `[SHOP] Seller socials KEYS: ${seller.socials ? Object.keys(seller.socials).join(',') : 'N/A'}`,
-    );
-
-    const response = {
-      shop: {
-        id: seller.id,
-        username: seller.username,
-        displayName: seller.shopName || seller.name || seller.username,
-        profileImageUrl: seller.profileImageUrl || null,
-        socials: seller.socials || null,
-        sellerTradingExperience: seller.sellerTradingExperience || null,
-        city: seller.city || null,
-        state: seller.state || null,
-        country: seller.country || null,
-      },
-      items: sortedSellerItems.map((item) => this.mapToDto(item)),
-    };
-    this.logger.log(
-      `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
-    );
-    return response;
   }
 
   /**
@@ -821,7 +867,7 @@ export class PrizeService {
     const coverImageIndex = this.resolveCoverImageIndex(
       normalizedImageUrls,
       dto.coverImageIndex ??
-        (hasNewImagePayload ? 0 : existingCoverIndex),
+      (hasNewImagePayload ? 0 : existingCoverIndex),
     );
     const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
