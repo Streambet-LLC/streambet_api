@@ -8,6 +8,7 @@ import {
   IsEnum,
   IsBoolean,
   IsArray,
+  ArrayMaxSize,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -59,6 +60,29 @@ export class PrizeItemDto {
   imageUrl: string | null;
 }
 
+export class ItemImageDto {
+  @ApiProperty({ example: 'uuid' })
+  id: string;
+
+  @ApiProperty({
+    example: 'https://s3.amazonaws.com/...',
+    description: 'URL to the item image',
+  })
+  imageUrl: string;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Display order for the image (0-indexed)',
+  })
+  displayOrder: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether this image is currently the cover image',
+  })
+  isCover: boolean;
+}
+
 /**
  * DTO for prize configuration response (single tier)
  */
@@ -99,6 +123,29 @@ export class PrizeConfigurationDto {
   imageUrl: string | null;
 
   @ApiProperty({
+    example: ['https://s3.amazonaws.com/...', 'https://s3.amazonaws.com/...'],
+    description: 'Ordered image URLs for this item (max 7)',
+    required: false,
+    type: [String],
+  })
+  imageUrls: string[];
+
+  @ApiProperty({
+    description: 'Detailed ordered item images including cover marker',
+    type: [ItemImageDto],
+    required: false,
+  })
+  itemImages: ItemImageDto[];
+
+  @ApiProperty({
+    example: 'uuid',
+    description: 'Cover image ID from item_configuration_images',
+    nullable: true,
+    required: false,
+  })
+  coverImageId: string | null;
+
+  @ApiProperty({
     example: 'slab',
     description: 'Prize category: slab or sealed',
     enum: ['slab', 'sealed'],
@@ -132,6 +179,13 @@ export class PrizeConfigurationDto {
     nullable: true,
   })
   displayOrderShop: number | null;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on seller-specific shop page (1-indexed, null if not set)',
+    nullable: true,
+  })
+  sellerDisplayOrderShop: number | null;
 
   @ApiProperty({
     example: 1,
@@ -294,6 +348,29 @@ export class CreatePrizeTierDto {
   imageUrl?: string;
 
   @ApiProperty({
+    example: ['uploads/items/1.png', 'uploads/items/2.png'],
+    description:
+      'Ordered image URLs for this item. Maximum 7 images. First image is cover unless coverImageIndex is provided.',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(7)
+  imageUrls?: string[];
+
+  @ApiProperty({
+    example: 0,
+    description: 'Cover image index within imageUrls (0-indexed)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  coverImageIndex?: number;
+
+  @ApiProperty({
     example: 1,
     description: 'Display order on shop page (1-indexed, auto-generated if not provided)',
     required: false,
@@ -302,6 +379,17 @@ export class CreatePrizeTierDto {
   @IsInt()
   @Min(1)
   displayOrderShop?: number;
+
+  @ApiProperty({
+    example: 1,
+    description:
+      'Display order on seller-specific shop page (1-indexed, optional)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  sellerDisplayOrderShop?: number;
 
   @ApiProperty({
     example: 1,
@@ -443,6 +531,28 @@ export class UpdatePrizeTierDto {
   imageUrl?: string;
 
   @ApiProperty({
+    example: ['uploads/items/1.png', 'uploads/items/2.png'],
+    description: 'Updated ordered image URLs for this item. Maximum 7 images.',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(7)
+  imageUrls?: string[];
+
+  @ApiProperty({
+    example: 1,
+    description: 'Cover image index within imageUrls (0-indexed)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  coverImageIndex?: number;
+
+  @ApiProperty({
     example: 1,
     description: 'Display order on shop page (1-indexed)',
     required: false,
@@ -451,6 +561,16 @@ export class UpdatePrizeTierDto {
   @IsInt()
   @Min(1)
   displayOrderShop?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Display order on seller-specific shop page (1-indexed)',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  sellerDisplayOrderShop?: number;
 
   @ApiProperty({
     example: 1,

@@ -13,6 +13,7 @@ import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
+import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
@@ -52,6 +53,8 @@ export class PrizeService {
   constructor(
     @InjectRepository(PrizeConfiguration)
     private readonly prizeConfigRepository: Repository<PrizeConfiguration>,
+    @InjectRepository(ItemConfigurationImage)
+    private readonly itemImageRepository: Repository<ItemConfigurationImage>,
     @InjectRepository(PrizeRedemption)
     private readonly prizeRedemptionRepository: Repository<PrizeRedemption>,
     @InjectRepository(PrizeOrder)
@@ -77,6 +80,7 @@ export class PrizeService {
         isActive: true,
         showOnRedemptions: true,
       },
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC' },
     });
 
@@ -105,6 +109,7 @@ export class PrizeService {
   async getAdminActivePrizeConfigurations(): Promise<PrizeConfigurationDto[]> {
     const configs = await this.prizeConfigRepository.find({
       where: { isActive: true },
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC', createdAt: 'DESC' },
     });
 
@@ -182,7 +187,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
-      relations: ['creator'],
+      relations: ['creator', 'itemImages'],
       order: {
         displayOrderShop: 'ASC',
         createdAt: 'DESC',
@@ -234,11 +239,13 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
+      relations: ['itemImages'],
       order: {
-        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
+
+    const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
 
     this.logger.log(
       `[SHOP] Found ${items.length} shop items for seller ${username}`,
@@ -275,7 +282,7 @@ export class PrizeService {
         state: seller.state || null,
         country: seller.country || null,
       },
-      items: items.map((item) => this.mapToDto(item)),
+      items: sortedSellerItems.map((item) => this.mapToDto(item)),
     };
     this.logger.log(
       `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
@@ -297,13 +304,14 @@ export class PrizeService {
         isActive: true,
         showOnShop: true, // Only show items meant for shop, exclude admin redemptions
       },
+      relations: ['itemImages'],
       order: {
-        displayOrderShop: 'ASC',
         createdAt: 'DESC',
       },
     });
 
-    return items.map((item) => this.mapToDto(item));
+    const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+    return sortedSellerItems.map((item) => this.mapToDto(item));
   }
 
   /**
@@ -315,9 +323,14 @@ export class PrizeService {
   ): Promise<PrizeConfigurationDto> {
     await this.ensureSeller(sellerId);
 
+    const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
+    const sellerScopedDisplayOrder =
+      sellerDisplayOrderShop ?? displayOrderShop;
+
     return this.createPrizeTier(
       {
-        ...dto,
+        ...restDto,
+        sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
       },
@@ -341,10 +354,15 @@ export class PrizeService {
       throw new ForbiddenException('You can only update your own shop items');
     }
 
+    const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
+    const sellerScopedDisplayOrder =
+      sellerDisplayOrderShop ?? displayOrderShop;
+
     return this.updatePrizeTier(
       itemId,
       {
-        ...dto,
+        ...restDto,
+        sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
       },
@@ -379,6 +397,27 @@ export class PrizeService {
     }
   }
 
+  private sortSellerShopItemsBySellerOrder(
+    items: PrizeConfiguration[],
+  ): PrizeConfiguration[] {
+    return items.slice().sort((a, b) => {
+      const aOrder =
+        a.sellerDisplayOrderShop ??
+        a.displayOrderShop ??
+        Number.MAX_SAFE_INTEGER;
+      const bOrder =
+        b.sellerDisplayOrderShop ??
+        b.displayOrderShop ??
+        Number.MAX_SAFE_INTEGER;
+
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+  }
+
   private async isSellerOwnedItem(item: PrizeConfiguration): Promise<boolean> {
     if (!item.createdBy) return false;
 
@@ -402,6 +441,97 @@ export class PrizeService {
     }
 
     return tier;
+  }
+
+  private normalizeItemImageUrls(
+    imageUrls?: string[],
+    imageUrl?: string | null,
+  ): string[] {
+    const urlsFromArray = (imageUrls || [])
+      .map((url) => (url || '').trim())
+      .filter((url) => url.length > 0);
+
+    if (urlsFromArray.length > 0) {
+      return urlsFromArray;
+    }
+
+    if (imageUrl && imageUrl.trim().length > 0) {
+      return [imageUrl.trim()];
+    }
+
+    return [];
+  }
+
+  private resolveCoverImageIndex(
+    imageUrls: string[],
+    requestedCoverIndex?: number,
+  ): number {
+    if (imageUrls.length === 0) {
+      return 0;
+    }
+
+    const coverIndex = requestedCoverIndex ?? 0;
+    if (coverIndex < 0 || coverIndex >= imageUrls.length) {
+      throw new BadRequestException(
+        `coverImageIndex must be between 0 and ${imageUrls.length - 1}`,
+      );
+    }
+
+    return coverIndex;
+  }
+
+  private ensureImageLimit(imageUrls: string[]): void {
+    if (imageUrls.length > 7) {
+      throw new BadRequestException('A maximum of 7 item images is allowed');
+    }
+  }
+
+  private async getItemImagesForPrizeConfig(
+    prizeConfigurationId: string,
+  ): Promise<ItemConfigurationImage[]> {
+    return this.itemImageRepository.find({
+      where: { prizeConfigurationId },
+      order: { displayOrder: 'ASC' },
+    });
+  }
+
+  private async saveItemImagesForPrizeConfig(
+    prizeConfigurationId: string,
+    imageUrls: string[],
+    coverImageIndex: number,
+  ): Promise<ItemConfigurationImage[]> {
+    return this.itemImageRepository.manager.transaction(async (manager) => {
+      await manager.delete(ItemConfigurationImage, { prizeConfigurationId });
+
+      if (imageUrls.length === 0) {
+        await manager.update(PrizeConfiguration, prizeConfigurationId, {
+          coverImageId: null,
+          imageUrl: null,
+        });
+        return [];
+      }
+
+      const imagesToCreate = imageUrls.map((url, index) =>
+        manager.create(ItemConfigurationImage, {
+          prizeConfigurationId,
+          imageUrl: url,
+          displayOrder: index,
+        }),
+      );
+
+      const savedImages = await manager.save(ItemConfigurationImage, imagesToCreate);
+      const sortedImages = savedImages.sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+      );
+      const coverImage = sortedImages[coverImageIndex] || sortedImages[0];
+
+      await manager.update(PrizeConfiguration, prizeConfigurationId, {
+        coverImageId: coverImage.id,
+        imageUrl: coverImage.imageUrl,
+      });
+
+      return sortedImages;
+    });
   }
 
   /**
@@ -486,25 +616,50 @@ export class PrizeService {
       amount = dto.amount;
     }
 
-    // Convert USD to CadeCoins for seller shop items
-    // Seller items come in as USD from the frontend, so convert to CadeCoins for storage
-    // Admin items come in as CadeCoins already
-    if (createdBy && purchaseOption !== PrizePurchaseOption.OFFERS_ONLY) {
-      // This is a seller shop item with amount in USD - convert to CadeCoins (50 coins = $1)
-      amount = Math.round(amount * 50);
+    // Amount is always expected in CadeCoins from the frontend
+    // Both admin and seller frontends convert USD to CadeCoins before sending
+
+    const normalizedImageUrls = this.normalizeItemImageUrls(
+      dto.imageUrls,
+      dto.imageUrl,
+    );
+    this.ensureImageLimit(normalizedImageUrls);
+
+    if (normalizedImageUrls.length === 0) {
+      throw new BadRequestException(
+        'At least one image is required when creating an item',
+      );
     }
 
-    const seller = await this.userRepository.findOne({
-      where: {
-        id: userId,
-      },
-    });
+    const coverImageIndex = this.resolveCoverImageIndex(
+      normalizedImageUrls,
+      dto.coverImageIndex,
+    );
+    const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
     // Auto-generate display orders for each page where item will be shown
     const category = (dto.category || 'slab') as 'slab' | 'sealed';
+    const isSellerOwnedItem = !!createdBy;
 
     let displayOrderShop = dto.displayOrderShop ?? null;
-    if (!displayOrderShop && (dto.showOnShop ?? true)) {
+    let sellerDisplayOrderShop = dto.sellerDisplayOrderShop ?? null;
+
+    if (isSellerOwnedItem) {
+      // Seller-managed order is seller page only; global shop order remains admin-managed.
+      displayOrderShop = null;
+
+      if (!sellerDisplayOrderShop && (dto.showOnShop ?? true)) {
+        const maxSellerShop = await this.prizeConfigRepository
+          .createQueryBuilder('pc')
+          .select('MAX(pc.sellerDisplayOrderShop)', 'max')
+          .where('pc.category = :category', { category })
+          .andWhere('pc.isActive = :isActive', { isActive: true })
+          .andWhere('pc.createdBy = :createdBy', { createdBy })
+          .andWhere('pc.showOnShop = :showOnShop', { showOnShop: true })
+          .getRawOne();
+        sellerDisplayOrderShop = (maxSellerShop?.max || 0) + 1;
+      }
+    } else if (!displayOrderShop && (dto.showOnShop ?? true)) {
       const maxShop = await this.prizeConfigRepository
         .createQueryBuilder('pc')
         .select('MAX(pc.displayOrderShop)', 'max')
@@ -534,12 +689,14 @@ export class PrizeService {
       amount,
       name: dto.name,
       description: dto.description || null,
-      imageUrl: dto.imageUrl || null,
+      imageUrl: coverImageUrl,
+      coverImageId: null,
       category,
       stock: dto.stock ?? 0,
       purchaseOption,
       brand: dto.brand || PrizeBrand.POKEMON,
       displayOrderShop,
+      sellerDisplayOrderShop,
       displayOrderRedemptions,
       featuredDisplayOrder,
       showOnRedemptions: dto.showOnRedemptions ?? true,
@@ -550,6 +707,16 @@ export class PrizeService {
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
+    const savedImages = await this.saveItemImagesForPrizeConfig(
+      saved.id,
+      normalizedImageUrls,
+      coverImageIndex,
+    );
+
+    saved.itemImages = savedImages;
+    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.imageUrl = coverImageUrl;
+
     this.logger.log(
       `Prize tier ${prizeTier} created by user ${userId}. New ID: ${saved.id}`,
     );
@@ -620,6 +787,44 @@ export class PrizeService {
     const effectiveCreatedBy =
       createdBy !== undefined ? createdBy : existingTier.createdBy;
 
+    const existingItemImages = await this.getItemImagesForPrizeConfig(
+      existingTier.id,
+    );
+    const existingImageUrls =
+      existingItemImages.length > 0
+        ? existingItemImages.map((img) => img.imageUrl)
+        : this.normalizeItemImageUrls(undefined, existingTier.imageUrl);
+
+    let existingCoverIndex = 0;
+    if (existingItemImages.length > 0 && existingTier.coverImageId) {
+      const coverIndex = existingItemImages.findIndex(
+        (img) => img.id === existingTier.coverImageId,
+      );
+      existingCoverIndex = coverIndex >= 0 ? coverIndex : 0;
+    }
+
+    const hasNewImagePayload =
+      dto.imageUrls !== undefined || dto.imageUrl !== undefined;
+
+    const normalizedImageUrls = hasNewImagePayload
+      ? this.normalizeItemImageUrls(dto.imageUrls, dto.imageUrl)
+      : existingImageUrls;
+
+    this.ensureImageLimit(normalizedImageUrls);
+
+    if (normalizedImageUrls.length === 0) {
+      throw new BadRequestException(
+        'At least one image is required when updating an item',
+      );
+    }
+
+    const coverImageIndex = this.resolveCoverImageIndex(
+      normalizedImageUrls,
+      dto.coverImageIndex ??
+        (hasNewImagePayload ? 0 : existingCoverIndex),
+    );
+    const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
+
     // Data hardening: Set old tier to inactive
     existingTier.isActive = false;
     await this.prizeConfigRepository.save(existingTier);
@@ -662,12 +867,17 @@ export class PrizeService {
       amount,
       name: dto.name,
       description: dto.description || null,
-      imageUrl: dto.imageUrl || null,
+      imageUrl: coverImageUrl,
+      coverImageId: null,
       category: (dto.category || existingTier.category) as 'slab' | 'sealed',
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
       displayOrderShop: dto.displayOrderShop ?? existingTier.displayOrderShop,
+      sellerDisplayOrderShop:
+        dto.sellerDisplayOrderShop ??
+        existingTier.sellerDisplayOrderShop ??
+        (effectiveCreatedBy ? existingTier.displayOrderShop : null),
       displayOrderRedemptions:
         dto.displayOrderRedemptions ?? existingTier.displayOrderRedemptions,
       featuredDisplayOrder:
@@ -681,6 +891,16 @@ export class PrizeService {
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
+    const savedImages = await this.saveItemImagesForPrizeConfig(
+      saved.id,
+      normalizedImageUrls,
+      coverImageIndex,
+    );
+
+    saved.itemImages = savedImages;
+    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.imageUrl = coverImageUrl;
+
     this.logger.log(
       `Prize tier ${finalTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
     );
@@ -763,6 +983,7 @@ export class PrizeService {
    */
   async getAllConfigurations(): Promise<PrizeConfigurationDto[]> {
     const configs = await this.prizeConfigRepository.find({
+      relations: ['itemImages'],
       order: { prizeTier: 'ASC', createdAt: 'DESC' },
     });
     return configs.map((c) => this.mapToDto(c));
@@ -1269,15 +1490,15 @@ export class PrizeService {
       }
     }
 
-    // Create the order with shipping fee added to total
+    // Create the order (frontend amounts already include shipping)
     const order = this.prizeOrderRepository.create({
       userId,
       prizeConfigurationId: dto.prizeConfigId,
       shippingAddress: dto.shippingAddress,
       paymentMethod: dto.paymentMethod,
       coinsDeducted: dto.coinsAmount,
-      usdCharged: parseFloat((dto.usdAmount + SHIPPING_FEE).toString()),
-      totalPrice: parseFloat((dto.totalPrice + SHIPPING_FEE).toString()),
+      usdCharged: parseFloat(dto.usdAmount.toString()),
+      totalPrice: parseFloat(dto.totalPrice.toString()),
       status: 'buy_attempted', // User submitted form with shipping info
     });
 
@@ -1375,6 +1596,13 @@ export class PrizeService {
           ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
           : null;
 
+        // Add 3% buyer fee on top of the listing price (excludes shipping)
+        const BUYER_FEE_PERCENT = 3;
+        const shippingCents = SHIPPING_FEE * 100;
+        const itemUsdCents = Math.max(0, usdCents - shippingCents);
+        const buyerFeeCents = Math.round(itemUsdCents * (BUYER_FEE_PERCENT / 100));
+        const totalChargeCents = usdCents + buyerFeeCents;
+
         const sessionParams = {
           payment_method_types: ['card'],
           line_items: [
@@ -1385,46 +1613,49 @@ export class PrizeService {
                   name: `${prize.name} Prize Purchase`,
                   description:
                     dto.paymentMethod === 'combined'
-                      ? `${dto.coinsAmount} CadeCoins + $${dto.usdAmount.toFixed(2)} USD`
-                      : `$${dto.usdAmount.toFixed(2)} USD`,
+                      ? `${dto.coinsAmount} CadeCoins + $${dto.usdAmount.toFixed(2)} USD + $${(buyerFeeCents / 100).toFixed(2)} service fee`
+                      : `$${dto.usdAmount.toFixed(2)} USD + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
                 },
-                unit_amount: usdCents,
+                unit_amount: totalChargeCents,
               },
               quantity: 1,
             },
           ],
           mode: 'payment',
           customer_email: user.email,
-          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${savedOrder.id}`,
-          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${savedOrder.id}`,
+          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
+          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
           metadata: {
             orderId: savedOrder.id,
             userId,
             prizeId: dto.prizeConfigId,
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
+            buyerFeeCents: buyerFeeCents.toString(),
           },
-          payment_intent_data: null
         };
 
         if (seller?.stripeAccountId) {
-          const feePercent = seller.applicationFeePercent ?? 7;
-          const application_fee_amount = Math.round(
-            usdCents * (feePercent / 100)
-          );
+          const feePercent = seller.applicationFeePercent ?? 4;
+          // Seller fee (4%) applied to the base listing price, plus the buyer fee goes to platform
+          const sellerFeeAmount = Math.round(usdCents * (feePercent / 100));
+          const application_fee_amount = sellerFeeAmount + buyerFeeCents;
           const transfer_data = { destination: seller.stripeAccountId };
 
-          sessionParams.payment_intent_data = {
+          (sessionParams as any).payment_intent_data = {
             application_fee_amount,
             transfer_data
-          }
+          };
         }
 
         // @ts-expect-error any
         const session = await this.stripe.checkout.sessions.create(sessionParams);
 
-        // Save Stripe session ID to order
+        // Save Stripe session ID and update totals to include buyer fee
         savedOrder.stripeSessionId = session.id;
+        const buyerFeeUsd = buyerFeeCents / 100;
+        savedOrder.usdCharged = parseFloat((dto.usdAmount + buyerFeeUsd).toString());
+        savedOrder.totalPrice = parseFloat((dto.totalPrice + buyerFeeUsd).toString());
         await this.prizeOrderRepository.save(savedOrder);
 
         stripeSessionUrl = session.url;
@@ -1446,6 +1677,44 @@ export class PrizeService {
     return {
       order: this.mapOrderToDto(savedOrder),
       stripeSessionUrl,
+    };
+  }
+
+  /**
+   * Get order success details for the purchase success page.
+   * Returns item info, price, seller info, and order status.
+   */
+  async getOrderSuccessDetails(orderId: string, userId: string) {
+    const order = await this.prizeOrderRepository.findOne({
+      where: { id: orderId, userId },
+      relations: ['prizeConfiguration', 'prizeConfiguration.creator'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const prize = order.prizeConfiguration;
+    const seller = prize?.creator;
+
+    return {
+      orderId: order.id,
+      status: order.status,
+      itemName: prize?.name || 'Unknown Item',
+      itemImage: prize?.imageUrl || null,
+      itemCategory: prize?.category || null,
+      itemBrand: prize?.brand || null,
+      pricePaid: parseFloat(order.totalPrice.toString()),
+      usdCharged: parseFloat(order.usdCharged.toString()),
+      coinsDeducted: order.coinsDeducted,
+      paymentMethod: order.paymentMethod,
+      seller: seller
+        ? {
+          username: seller.username,
+          name: seller.name || seller.username,
+        }
+        : null,
+      createdAt: order.createdAt.toISOString(),
     };
   }
 
@@ -1553,6 +1822,15 @@ export class PrizeService {
     }
 
     try {
+      // Show the seller the amount without the buyer service fee
+      const BUYER_FEE_PERCENT = 3;
+      const SHIPPING_FEE = 5;
+      const charged = parseFloat(order.usdCharged?.toString() || '0');
+      const itemPrice = Math.max(0, charged - SHIPPING_FEE);
+      const sellerVisibleAmount = charged > 0
+        ? parseFloat((itemPrice / (1 + BUYER_FEE_PERCENT / 100) + SHIPPING_FEE).toFixed(2))
+        : order.totalPrice;
+
       await this.emailsService.sendEmailSMTP(
         {
           toAddress: [seller.email],
@@ -1561,7 +1839,7 @@ export class PrizeService {
             sellerName: seller.name || seller.username,
             itemName: prize.name,
             buyerName: buyer.name || buyer.username,
-            amount: order.usdCharged,
+            amount: sellerVisibleAmount,
             orderId: order.id,
             purchaseDate: new Date().toLocaleDateString('en-US', {
               year: 'numeric',
@@ -1628,6 +1906,20 @@ export class PrizeService {
     const orders = await this.prizeOrderRepository.find({
       where: { userId },
       relations: ['prizeConfiguration'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return orders.map((order) => this.mapOrderToDto(order));
+  }
+
+  async getShopOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
+    const orders = await this.prizeOrderRepository.find({
+      where: {
+        prizeConfiguration: {
+          createdBy: userId,
+        }
+      },
+      relations: ['prizeConfiguration', 'user'],
       order: { createdAt: 'DESC' },
     });
 
@@ -1781,6 +2073,7 @@ export class PrizeService {
     return {
       id: order.id,
       userId: order.userId,
+      username: order.user?.username,
       prizeConfigId: order.prizeConfigurationId,
       shippingAddress: order.shippingAddress,
       paymentMethod: order.paymentMethod,
@@ -1808,6 +2101,7 @@ export class PrizeService {
         ? {
           name: order.prizeConfiguration.name,
           category: order.prizeConfiguration.category,
+          image: order.prizeConfiguration.imageUrl ?? ""
         }
         : undefined,
     };
@@ -1985,6 +2279,11 @@ export class PrizeService {
       ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
       : null;
 
+    // Add 3% buyer fee on top of the offer price
+    const BUYER_FEE_PERCENT = 3;
+    const buyerFeeCents = Math.round(offerAmountCents * (BUYER_FEE_PERCENT / 100));
+    const totalChargeCents = offerAmountCents + buyerFeeCents;
+
     const acceptOfferSessionParams = {
       payment_method_types: ['card'],
       line_items: [
@@ -1993,30 +2292,31 @@ export class PrizeService {
             currency: 'usd',
             product_data: {
               name: `${prize.name} - Accepted Offer`,
-              description: `Offer accepted at $${amountToCharge}`,
+              description: `Offer accepted at $${amountToCharge} + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
             },
-            unit_amount: offerAmountCents,
+            unit_amount: totalChargeCents,
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_offer',
+        buyerFeeCents: buyerFeeCents.toString(),
       },
-      payment_intent_data: null,
     };
 
     if (offerSeller?.stripeAccountId) {
-      const feePercent = offerSeller.applicationFeePercent ?? 7;
-      const application_fee_amount = Math.round(offerAmountCents * (feePercent / 100));
+      const feePercent = offerSeller.applicationFeePercent ?? 4;
+      const sellerFeeAmount = Math.round(offerAmountCents * (feePercent / 100));
+      const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: offerSeller.stripeAccountId };
 
-      acceptOfferSessionParams.payment_intent_data = {
+      (acceptOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };
@@ -2025,9 +2325,11 @@ export class PrizeService {
     // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(acceptOfferSessionParams);
 
-    // Save Stripe session ID
+    // Save Stripe session ID and update totals to include buyer fee
+    const offerBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
-    order.usdCharged = amountToCharge;
+    order.usdCharged = amountToCharge + offerBuyerFeeUsd;
+    order.totalPrice = parseFloat((order.totalPrice + offerBuyerFeeUsd).toString());
     await this.prizeOrderRepository.save(order);
 
     // Send email to user with Stripe checkout link
@@ -2132,41 +2434,47 @@ export class PrizeService {
       ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
       : null;
 
+    // Add 3% buyer fee on top of the counter offer price
+    const BUYER_FEE_PERCENT = 3;
+    const buyerFeeCents = Math.round(counterOfferAmountCents * (BUYER_FEE_PERCENT / 100));
+    const totalChargeCents = counterOfferAmountCents + buyerFeeCents;
+
     // Create Stripe checkout session
     const counterOfferSessionParams = {
       payment_method_types: ['card'],
-      application_fee_amount: 0,
-      transfer_data: null,
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
               name: `${prize.name} - Counter Offer Accepted`,
-              description: `Counter offer accepted at $${amountToCharge}`,
+              description: `Counter offer accepted at $${amountToCharge} + $${(buyerFeeCents / 100).toFixed(2)} service fee`,
             },
-            unit_amount: counterOfferAmountCents,
+            unit_amount: totalChargeCents,
           },
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=success&orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/prizes?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_counter_offer',
+        buyerFeeCents: buyerFeeCents.toString(),
       },
-      payment_intent_data: null,
     };
 
     if (counterOfferSeller?.stripeAccountId) {
-      const feePercent = counterOfferSeller.applicationFeePercent ?? 7;
-      const application_fee_amount = Math.round(counterOfferAmountCents * (feePercent / 100));
+      const feePercent = counterOfferSeller.applicationFeePercent ?? 4;
+      const sellerFeeAmount = Math.round(
+        counterOfferAmountCents * (feePercent / 100),
+      );
+      const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: counterOfferSeller.stripeAccountId };
 
-      counterOfferSessionParams.payment_intent_data = {
+      (counterOfferSessionParams as any).payment_intent_data = {
         application_fee_amount,
         transfer_data,
       };
@@ -2175,9 +2483,11 @@ export class PrizeService {
     // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(counterOfferSessionParams);
 
-    // Update order with Stripe session
+    // Update order with Stripe session and include buyer fee in totals
+    const counterOfferBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
-    order.usdCharged = amountToCharge;
+    order.usdCharged = amountToCharge + counterOfferBuyerFeeUsd;
+    order.totalPrice = parseFloat((order.totalPrice + counterOfferBuyerFeeUsd).toString());
     order.status = 'offer_accepted';
     await this.prizeOrderRepository.save(order);
 
@@ -2292,6 +2602,27 @@ export class PrizeService {
    * Map entity to DTO
    */
   private mapToDto(entity: PrizeConfiguration): PrizeConfigurationDto {
+    const sortedItemImages = (entity.itemImages || [])
+      .slice()
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+
+    const resolvedCoverImageId =
+      entity.coverImageId || sortedItemImages[0]?.id || null;
+
+    const itemImages = sortedItemImages.map((img) => ({
+      id: img.id,
+      imageUrl: img.imageUrl,
+      displayOrder: img.displayOrder,
+      isCover: resolvedCoverImageId ? img.id === resolvedCoverImageId : false,
+    }));
+
+    const imageUrls =
+      itemImages.length > 0
+        ? itemImages.map((img) => img.imageUrl)
+        : entity.imageUrl
+          ? [entity.imageUrl]
+          : [];
+
     return {
       id: entity.id,
       prizeTier: entity.prizeTier,
@@ -2299,11 +2630,16 @@ export class PrizeService {
       name: entity.name,
       description: entity.description,
       imageUrl: entity.imageUrl,
+      imageUrls,
+      itemImages,
+      coverImageId: resolvedCoverImageId,
       category: entity.category,
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
       brand: entity.brand,
       displayOrderShop: entity.displayOrderShop,
+      sellerDisplayOrderShop:
+        entity.sellerDisplayOrderShop ?? entity.displayOrderShop,
       displayOrderRedemptions: entity.displayOrderRedemptions,
       featuredDisplayOrder: entity.featuredDisplayOrder,
       showOnRedemptions: entity.showOnRedemptions,

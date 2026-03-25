@@ -9,6 +9,10 @@ import { QueueModule } from 'src/queue/queue.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
+import { PrizeModule } from 'src/prize/prize.module';
+import { User } from 'src/users/entities/user.entity';
+import { Webhook } from 'src/webhook/entities/webhook.entity';
+import { EmailsModule } from 'src/emails/email.module';
 
 @Module({
   imports: [
@@ -17,10 +21,12 @@ import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
     forwardRef(() => WalletsModule),
     forwardRef(() => NotificationModule),
     forwardRef(() => QueueModule),
-    TypeOrmModule.forFeature([Transaction, PrizeOrder]),
+    forwardRef(() => PrizeModule),
+    forwardRef(() => EmailsModule),
+    TypeOrmModule.forFeature([Transaction, PrizeOrder, User, Webhook]),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
   exports: [PaymentsService],
 })
-export class PaymentsModule { }
+export class PaymentsModule {}

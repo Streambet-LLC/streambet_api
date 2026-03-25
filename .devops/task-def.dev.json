@@ -80,6 +80,10 @@
           "valueFrom": "/streambet/dev/STRIPE_WEBHOOK_SECRET"
         },
         {
+          "name": "STRIPE_CONNECT_WEBHOOK_SECRET",
+          "valueFrom": "/streambet/dev/STRIPE_CONNECT_WEBHOOK_SECRET"
+        },
+        {
           "name": "AWS_SMTP_USER",
           "valueFrom": "/streambet/dev/AWS_SMTP_USER"
         },
