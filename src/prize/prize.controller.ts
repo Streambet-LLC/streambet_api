@@ -34,6 +34,7 @@ import {
   CounterOfferDto,
   MarkAsShippedDto,
   BulkUpdateDisplayOrderDto,
+  UpdateShopSettingsDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -46,7 +47,7 @@ interface RequestWithUser extends Request {
 @ApiTags('prizes')
 @Controller('prizes')
 export class PrizeController {
-  constructor(private readonly prizeService: PrizeService) { }
+  constructor(private readonly prizeService: PrizeService) {}
 
   /**
    * Public endpoint: Get all active prize tiers
@@ -286,7 +287,7 @@ export class PrizeController {
 @Controller('admin/prizes')
 @UseGuards(JwtAuthGuard)
 export class AdminPrizeController {
-  constructor(private readonly prizeService: PrizeService) { }
+  constructor(private readonly prizeService: PrizeService) {}
 
   /**
    * Helper method to check if user is admin
@@ -689,6 +690,37 @@ export class AdminPrizeController {
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     };
+  }
+
+  /**
+   * Admin endpoint: Get shop settings for a virtual shop
+   */
+  @Get('shop-settings/:shopKey')
+  @ApiOperation({ summary: 'Get shop settings (admin)' })
+  @ApiParam({ name: 'shopKey', description: 'Shop key (e.g., cardcade)' })
+  @ApiResponse({ status: 200, description: 'Returns shop settings' })
+  async getShopSettings(
+    @Request() req: RequestWithUser,
+    @Param('shopKey') shopKey: string,
+  ) {
+    this.ensureAdmin(req.user);
+    return this.prizeService.getShopSettings(shopKey);
+  }
+
+  /**
+   * Admin endpoint: Update shop settings for a virtual shop
+   */
+  @Patch('shop-settings/:shopKey')
+  @ApiOperation({ summary: 'Update shop settings (admin)' })
+  @ApiParam({ name: 'shopKey', description: 'Shop key (e.g., cardcade)' })
+  @ApiResponse({ status: 200, description: 'Shop settings updated' })
+  async updateShopSettings(
+    @Request() req: RequestWithUser,
+    @Param('shopKey') shopKey: string,
+    @Body() dto: UpdateShopSettingsDto,
+  ) {
+    this.ensureAdmin(req.user);
+    return this.prizeService.updateShopSettings(shopKey, dto);
   }
 }
 

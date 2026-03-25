@@ -8,3 +8,4 @@ export {
   CounterOfferDto,
   MarkAsShippedDto,
 } from './prize-purchase.dto';
+export { ShopSettingsDto, UpdateShopSettingsDto } from './shop-settings.dto';
