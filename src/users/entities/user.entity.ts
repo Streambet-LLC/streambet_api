@@ -197,6 +197,14 @@ export class User extends BaseEntity {
   sellerOnboardingCompleted: boolean;
 
   @Column({
+    type: 'boolean',
+    default: true,
+    nullable: false,
+    name: 'read_receipts_enabled',
+  })
+  readReceiptsEnabled: boolean;
+
+  @Column({
     type: 'text',
     nullable: true,
     name: 'seller_trading_experience',

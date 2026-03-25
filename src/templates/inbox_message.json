@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "subject": {
+      "type": "string"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "recipientName": { "type": "string" },
+        "senderName": { "type": "string" },
+        "messagePreview": { "type": "string" },
+        "conversationLink": { "type": "string" }
+      },
+      "required": ["recipientName", "senderName", "messagePreview", "conversationLink"]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}

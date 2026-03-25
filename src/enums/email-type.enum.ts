@@ -9,4 +9,5 @@ export enum EmailType {
   BettingStreamSummary = 'betting_stream_summary',
   ApplicationApproved = 'application_approved',
   ApplicationRejected = 'application_rejected',
+  InboxMessage = 'inbox_message',
 }

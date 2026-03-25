@@ -335,6 +335,31 @@ export class UsersController {
   }
 
   @ApiOperation({
+    summary: 'Gets all sellers',
+    description: 'Public endpoint that returns all active sellers',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Seller list fetched successfully',
+    type: User,
+  })
+  @Get('sellers')
+  async getSellers() {
+    const { data } = await this.usersService.findAllSellers();
+
+    return {
+      data: data.map((s) => ({
+        id: s.id,
+        username: s.username,
+        displayName: s.shopName || s.name || s.username,
+        profileImageUrl: s.profileImageUrl || null,
+      })),
+      message: 'Seller list fetched successfully',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
+  @ApiOperation({
     summary: 'Create New Referral Link',
   })
   @ApiBearerAuth()
