@@ -1787,7 +1787,7 @@ export class PrizeService {
               quantity: 1,
             },
           ],
-          mode: 'payment',
+          mode: 'payment' as const,
           customer_email: user.email,
           success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
           cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
@@ -1814,7 +1814,6 @@ export class PrizeService {
           };
         }
 
-        // @ts-expect-error any
         const session =
           await this.stripe.checkout.sessions.create(sessionParams);
 
@@ -2478,7 +2477,7 @@ export class PrizeService {
           quantity: 1,
         },
       ],
-      mode: 'payment',
+      mode: 'payment' as const,
       success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
       cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
@@ -2501,7 +2500,6 @@ export class PrizeService {
       };
     }
 
-    // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(
       acceptOfferSessionParams,
     );
@@ -2640,7 +2638,7 @@ export class PrizeService {
           quantity: 1,
         },
       ],
-      mode: 'payment',
+      mode: 'payment' as const,
       success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
       cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
@@ -2665,7 +2663,6 @@ export class PrizeService {
       };
     }
 
-    // @ts-ignore
     const session = await this.stripe.checkout.sessions.create(
       counterOfferSessionParams,
     );
