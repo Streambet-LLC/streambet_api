@@ -194,6 +194,14 @@ export class InboxService {
       }
     }
 
+    // Must have content or attachments
+    const content = dto.content?.trim() || '';
+    if (!content && (!dto.attachments || dto.attachments.length === 0)) {
+      throw new BadRequestException(
+        'Message must have content or at least one attachment',
+      );
+    }
+
     // Determine if sender has read receipts enabled
     const sender = await this.userRepo.findOne({ where: { id: senderId } });
     const hasReadReceipt = sender?.readReceiptsEnabled ?? false;
@@ -202,7 +210,7 @@ export class InboxService {
     const message = this.messageRepo.create({
       conversationId,
       senderId,
-      content: dto.content,
+      content,
       isAdminMessage,
       adminName: isAdminMessage ? adminName : null,
       hasReadReceipt: hasReadReceipt,
@@ -228,7 +236,7 @@ export class InboxService {
     await this.participantRepo.save(participant);
 
     // Send email notification to other participants
-    await this.notifyRecipients(conversationId, senderId, dto.content);
+    await this.notifyRecipients(conversationId, senderId, content || '📷 Image');
 
     return this.messageRepo.findOne({
       where: { id: savedMessage.id },
@@ -242,6 +250,7 @@ export class InboxService {
     const { tab, page, limit } = dto;
     const skip = (page - 1) * limit;
 
+    // Step 1: Get conversation IDs that this user participates in
     const qb = this.conversationRepo
       .createQueryBuilder('c')
       .innerJoin(
@@ -249,9 +258,7 @@ export class InboxService {
         'myParticipant',
         'myParticipant.userId = :userId',
         { userId },
-      )
-      .leftJoinAndSelect('c.participants', 'participants')
-      .leftJoinAndSelect('participants.user', 'participantUser');
+      );
 
     if (tab === ConversationTab.SUPPORT) {
       qb.andWhere('c.type = :type', { type: ConversationType.SUPPORT });
@@ -265,7 +272,19 @@ export class InboxService {
 
     qb.orderBy('c.updatedAt', 'DESC').skip(skip).take(limit);
 
-    const [conversations, total] = await qb.getManyAndCount();
+    const [rawConversations, total] = await qb.getManyAndCount();
+
+    if (rawConversations.length === 0) {
+      return { data: [], total: 0, page, limit };
+    }
+
+    // Step 2: Re-fetch with find() so eager relations (participants.user) load properly
+    const conversationIds = rawConversations.map((c) => c.id);
+    const conversations = await this.conversationRepo.find({
+      where: { id: In(conversationIds) },
+      relations: ['participants', 'participants.user'],
+      order: { updatedAt: 'DESC' },
+    });
 
     // For each conversation, get last message and unread count
     const enriched = await Promise.all(
@@ -285,7 +304,28 @@ export class InboxService {
         );
 
         return {
-          ...conv,
+          id: conv.id,
+          type: conv.type,
+          subject: conv.subject,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt,
+          participants: conv.participants.map((p) => ({
+            id: p.id,
+            userId: p.userId,
+            lastReadAt: p.lastReadAt,
+            isBlocked: p.isBlocked,
+            blockedAt: p.blockedAt,
+            user: p.user
+              ? {
+                  id: p.user.id,
+                  username: p.user.username,
+                  name: p.user.name,
+                  profileImageUrl: p.user.profileImageUrl,
+                  isSeller: p.user.isSeller,
+                  role: p.user.role,
+                }
+              : null,
+          })),
           lastMessage,
           unreadCount,
           isBlocked: myParticipant?.isBlocked ?? false,
@@ -324,7 +364,41 @@ export class InboxService {
       take: limit,
     });
 
-    return { data: messages, total, page, limit };
+    // Load conversation with participant user details
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+      relations: ['participants', 'participants.user'],
+    });
+
+    const enrichedConversation = conversation
+      ? {
+          id: conversation.id,
+          type: conversation.type,
+          subject: conversation.subject,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          participants: conversation.participants.map((p) => ({
+            id: p.id,
+            userId: p.userId,
+            lastReadAt: p.lastReadAt,
+            isBlocked: p.isBlocked,
+            blockedAt: p.blockedAt,
+            user: p.user
+              ? {
+                  id: p.user.id,
+                  username: p.user.username,
+                  name: p.user.name,
+                  profileImageUrl: p.user.profileImageUrl,
+                  isSeller: p.user.isSeller,
+                  role: p.user.role,
+                }
+              : null,
+          })),
+          isBlocked: participant.isBlocked,
+        }
+      : undefined;
+
+    return { data: messages, total, page, limit, conversation: enrichedConversation };
   }
 
   // ─── MARK AS READ ────────────────────────────────────────────────────
@@ -485,10 +559,11 @@ export class InboxService {
     const { tab, search, page, limit } = dto;
     const skip = (page - 1) * limit;
 
+    // Step 1: Get conversation IDs via query builder (joins needed for search)
     const qb = this.conversationRepo
       .createQueryBuilder('c')
-      .leftJoinAndSelect('c.participants', 'participants')
-      .leftJoinAndSelect('participants.user', 'participantUser');
+      .leftJoin('c.participants', 'participants')
+      .leftJoin('participants.user', 'participantUser');
 
     if (tab === AdminConversationTab.SUPPORT) {
       qb.andWhere('c.type = :type', { type: ConversationType.SUPPORT });
@@ -510,7 +585,19 @@ export class InboxService {
 
     qb.orderBy('c.updatedAt', 'DESC').skip(skip).take(limit);
 
-    const [conversations, total] = await qb.getManyAndCount();
+    const [rawConversations, total] = await qb.getManyAndCount();
+
+    if (rawConversations.length === 0) {
+      return { data: [], total: 0, page, limit };
+    }
+
+    // Step 2: Re-fetch with find() so eager relations (participants.user) load properly
+    const conversationIds = rawConversations.map((c) => c.id);
+    const conversations = await this.conversationRepo.find({
+      where: { id: In(conversationIds) },
+      relations: ['participants', 'participants.user'],
+      order: { updatedAt: 'DESC' },
+    });
 
     // Enrich with last message
     const enriched = await Promise.all(
@@ -523,7 +610,32 @@ export class InboxService {
         const totalMessages = await this.messageRepo.count({
           where: { conversationId: conv.id },
         });
-        return { ...conv, lastMessage, totalMessages };
+        return {
+          id: conv.id,
+          type: conv.type,
+          subject: conv.subject,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt,
+          participants: conv.participants.map((p) => ({
+            id: p.id,
+            userId: p.userId,
+            lastReadAt: p.lastReadAt,
+            isBlocked: p.isBlocked,
+            blockedAt: p.blockedAt,
+            user: p.user
+              ? {
+                  id: p.user.id,
+                  username: p.user.username,
+                  name: p.user.name,
+                  profileImageUrl: p.user.profileImageUrl,
+                  isSeller: p.user.isSeller,
+                  role: p.user.role,
+                }
+              : null,
+          })),
+          lastMessage,
+          totalMessages,
+        };
       }),
     );
 
@@ -536,6 +648,7 @@ export class InboxService {
   ) {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId },
+      relations: ['participants', 'participants.user'],
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
 
@@ -550,12 +663,37 @@ export class InboxService {
       take: limit,
     });
 
+    const enrichedConversation = {
+      id: conversation.id,
+      type: conversation.type,
+      subject: conversation.subject,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      participants: conversation.participants.map((p) => ({
+        id: p.id,
+        userId: p.userId,
+        lastReadAt: p.lastReadAt,
+        isBlocked: p.isBlocked,
+        blockedAt: p.blockedAt,
+        user: p.user
+          ? {
+              id: p.user.id,
+              username: p.user.username,
+              name: p.user.name,
+              profileImageUrl: p.user.profileImageUrl,
+              isSeller: p.user.isSeller,
+              role: p.user.role,
+            }
+          : null,
+      })),
+    };
+
     return {
       data: messages,
       total,
       page,
       limit,
-      conversation,
+      conversation: enrichedConversation,
     };
   }
 

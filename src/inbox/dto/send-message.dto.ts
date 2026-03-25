@@ -31,11 +31,11 @@ export class AttachmentDto {
 }
 
 export class SendMessageDto {
-  @ApiProperty({ description: 'Message content' })
+  @ApiPropertyOptional({ description: 'Message content (optional if attachments are provided)' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(5000)
-  content: string;
+  content?: string;
 
   @ApiPropertyOptional({
     description: 'Photo attachments (uploaded via /api/inbox/upload first)',

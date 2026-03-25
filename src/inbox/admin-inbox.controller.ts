@@ -22,7 +22,7 @@ import { UserRole } from '../enums/user-role.enum';
 @ApiTags('Admin Inbox')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/admin/inbox')
+@Controller('admin/inbox')
 export class AdminInboxController {
   constructor(private readonly inboxService: InboxService) {}
 

@@ -558,6 +558,7 @@ export class UsersService {
         username: true,
         name: true,
         shopName: true,
+        profileImageUrl: true,
       },
       order: {
         username: 'ASC',

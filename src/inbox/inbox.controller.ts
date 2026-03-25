@@ -31,7 +31,7 @@ const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 @ApiTags('Inbox')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/inbox')
+@Controller('inbox')
 export class InboxController {
   constructor(
     private readonly inboxService: InboxService,
