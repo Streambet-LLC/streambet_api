@@ -50,6 +50,7 @@ import { DailySpinModule } from './daily-spin/daily-spin.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
+import { InboxModule } from './inbox/inbox.module';
 
 @Module({
   imports: [
@@ -140,6 +141,7 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
     DailySpinModule,
     ScheduleModule.forRoot(),
     ScheduledTaskModule,
+    InboxModule,
   ],
   controllers: [AppController],
   providers: [

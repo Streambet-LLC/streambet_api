@@ -14,6 +14,7 @@ import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
 import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
+import { ShopSettings } from './entities/shop-settings.entity';
 import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
@@ -35,6 +36,7 @@ import {
   CounterOfferDto,
   MarkAsShippedDto,
   PrizeDisplayOrderUpdateDto,
+  UpdateShopSettingsDto,
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
@@ -61,6 +63,8 @@ export class PrizeService {
     private readonly prizeOrderRepository: Repository<PrizeOrder>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(ShopSettings)
+    private readonly shopSettingsRepository: Repository<ShopSettings>,
     private readonly walletService: WalletsService,
     private readonly configService: ConfigService,
     private readonly emailsService: EmailsService,
@@ -123,6 +127,65 @@ export class PrizeService {
   }
 
   /**
+   * Get shop settings for a virtual shop by key.
+   * Returns defaults if no settings exist yet.
+   */
+  async getShopSettings(shopKey: string): Promise<ShopSettings> {
+    const settings = await this.shopSettingsRepository.findOne({
+      where: { shopKey },
+    });
+
+    if (settings) {
+      return settings;
+    }
+
+    // Return defaults for known shops
+    if (shopKey === 'cardcade') {
+      const defaults = this.shopSettingsRepository.create({
+        shopKey: 'cardcade',
+        displayName: "CardCade's Shop",
+        profileImageUrl: null,
+        socials: null,
+        sellerTradingExperience: null,
+        city: null,
+        state: null,
+        country: null,
+      });
+      return defaults;
+    }
+
+    throw new NotFoundException(`Shop settings not found for key: ${shopKey}`);
+  }
+
+  /**
+   * Update shop settings for a virtual shop. Creates the row if it doesn't exist.
+   */
+  async updateShopSettings(
+    shopKey: string,
+    dto: UpdateShopSettingsDto,
+  ): Promise<ShopSettings> {
+    let settings = await this.shopSettingsRepository.findOne({
+      where: { shopKey },
+    });
+
+    if (!settings) {
+      settings = this.shopSettingsRepository.create({ shopKey });
+    }
+
+    if (dto.shopName !== undefined) settings.displayName = dto.shopName;
+    if (dto.profileImageUrl !== undefined)
+      settings.profileImageUrl = dto.profileImageUrl;
+    if (dto.socials !== undefined) settings.socials = dto.socials;
+    if (dto.sellerTradingExperience !== undefined)
+      settings.sellerTradingExperience = dto.sellerTradingExperience;
+    if (dto.city !== undefined) settings.city = dto.city;
+    if (dto.state !== undefined) settings.state = dto.state;
+    if (dto.country !== undefined) settings.country = dto.country;
+
+    return this.shopSettingsRepository.save(settings);
+  }
+
+  /**
    * Public: list seller shops that have active shop items.
    */
   async getSellerShops(limit?: number): Promise<
@@ -163,12 +226,25 @@ export class PrizeService {
     }
 
     const rows = await qb.getRawMany();
+
+    // Load CardCade shop settings from DB (or use defaults)
+    let cardcadeSettings: ShopSettings;
+    try {
+      cardcadeSettings = await this.getShopSettings('cardcade');
+    } catch {
+      cardcadeSettings = {
+        shopKey: 'cardcade',
+        displayName: 'CardCade Shop',
+        profileImageUrl: null,
+      } as ShopSettings;
+    }
+
     const result = [
       {
         id: 0,
-        username: "cardcade",
-        displayName: "CardCade Shop",
-        profileImageUrl: null,
+        username: 'cardcade',
+        displayName: cardcadeSettings.displayName || 'CardCade Shop',
+        profileImageUrl: cardcadeSettings.profileImageUrl || null,
         itemCount: 10,
       },
       ...rows.map((row) => ({
@@ -177,8 +253,8 @@ export class PrizeService {
         displayName: row.displayName || row.username,
         profileImageUrl: row.profileImageUrl || null,
         itemCount: Number(row.itemCount || 0),
-      }))
-    ]
+      })),
+    ];
 
     return result;
   }
@@ -186,13 +262,15 @@ export class PrizeService {
   /**
    * Public: get all shop items across all sellers.
    * This is for the main "Shop" page in the navbar, showing all available shop items.
+   * Also includes CardCade redemption slabs (admin-created, showOnRedemptions, category=slab).
    */
   async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
     this.logger.log(
       '[SHOP] getAllShopItems() called - fetching all active shop items',
     );
 
-    const items = await this.prizeConfigRepository.find({
+    // Fetch regular seller shop items
+    const sellerItems = await this.prizeConfigRepository.find({
       where: {
         isActive: true,
         showOnShop: true,
@@ -204,8 +282,27 @@ export class PrizeService {
       },
     });
 
+    // Fetch CardCade redemption slabs (all slab items from the redemptions page)
+    const cardcadeItems = await this.prizeConfigRepository.find({
+      where: {
+        isActive: true,
+        showOnRedemptions: true,
+        category: 'slab',
+      },
+      relations: ['itemImages'],
+      order: {
+        displayOrderShop: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
+
+    // Merge, deduplicating by id (items that have both showOnShop and showOnRedemptions)
+    const seenIds = new Set(sellerItems.map((i) => i.id));
+    const uniqueCardcadeItems = cardcadeItems.filter((i) => !seenIds.has(i.id));
+    const items = [...sellerItems, ...uniqueCardcadeItems];
+
     this.logger.log(
-      `[SHOP] Found ${items.length} total shop items across all sellers`,
+      `[SHOP] Found ${sellerItems.length} seller shop items + ${uniqueCardcadeItems.length} CardCade redemption slabs = ${items.length} total`,
     );
     this.logger.debug(
       `[SHOP] Items breakdown: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
@@ -231,13 +328,12 @@ export class PrizeService {
     };
     items: PrizeConfigurationDto[];
   }> {
-    if (username === "cardcade") {
+    if (username === 'cardcade') {
       const items = await this.prizeConfigRepository.find({
         where: {
-          createdBy: null,
           isActive: true,
-          showOnShop: true,
-          category: "slab"
+          showOnRedemptions: true,
+          category: 'slab',
         },
         relations: ['itemImages'],
         order: {
@@ -247,10 +343,13 @@ export class PrizeService {
 
       const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
 
-      const response = {
-        shop: {
-          id: "0",
-          username: "cardcade",
+      // Load CardCade shop settings from DB (or use defaults)
+      let cardcadeSettings: ShopSettings;
+      try {
+        cardcadeSettings = await this.getShopSettings('cardcade');
+      } catch {
+        cardcadeSettings = {
+          shopKey: 'cardcade',
           displayName: "CardCade's Shop",
           profileImageUrl: null,
           socials: null,
@@ -258,6 +357,21 @@ export class PrizeService {
           city: null,
           state: null,
           country: null,
+        } as ShopSettings;
+      }
+
+      const response = {
+        shop: {
+          id: '0',
+          username: 'cardcade',
+          displayName: cardcadeSettings.displayName || "CardCade's Shop",
+          profileImageUrl: cardcadeSettings.profileImageUrl || null,
+          socials: cardcadeSettings.socials || null,
+          sellerTradingExperience:
+            cardcadeSettings.sellerTradingExperience || null,
+          city: cardcadeSettings.city || null,
+          state: cardcadeSettings.state || null,
+          country: cardcadeSettings.country || null,
         },
         items: sortedSellerItems.map((item) => this.mapToDto(item)),
       };
@@ -370,8 +484,7 @@ export class PrizeService {
     await this.ensureSeller(sellerId);
 
     const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
-    const sellerScopedDisplayOrder =
-      sellerDisplayOrderShop ?? displayOrderShop;
+    const sellerScopedDisplayOrder = sellerDisplayOrderShop ?? displayOrderShop;
 
     return this.createPrizeTier(
       {
@@ -401,8 +514,7 @@ export class PrizeService {
     }
 
     const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
-    const sellerScopedDisplayOrder =
-      sellerDisplayOrderShop ?? displayOrderShop;
+    const sellerScopedDisplayOrder = sellerDisplayOrderShop ?? displayOrderShop;
 
     return this.updatePrizeTier(
       itemId,
@@ -565,7 +677,10 @@ export class PrizeService {
         }),
       );
 
-      const savedImages = await manager.save(ItemConfigurationImage, imagesToCreate);
+      const savedImages = await manager.save(
+        ItemConfigurationImage,
+        imagesToCreate,
+      );
       const sortedImages = savedImages.sort(
         (a, b) => a.displayOrder - b.displayOrder,
       );
@@ -760,7 +875,8 @@ export class PrizeService {
     );
 
     saved.itemImages = savedImages;
-    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.coverImageId =
+      savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
     saved.imageUrl = coverImageUrl;
 
     this.logger.log(
@@ -866,8 +982,7 @@ export class PrizeService {
 
     const coverImageIndex = this.resolveCoverImageIndex(
       normalizedImageUrls,
-      dto.coverImageIndex ??
-      (hasNewImagePayload ? 0 : existingCoverIndex),
+      dto.coverImageIndex ?? (hasNewImagePayload ? 0 : existingCoverIndex),
     );
     const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
@@ -944,7 +1059,8 @@ export class PrizeService {
     );
 
     saved.itemImages = savedImages;
-    saved.coverImageId = savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
+    saved.coverImageId =
+      savedImages[coverImageIndex]?.id || savedImages[0]?.id || null;
     saved.imageUrl = coverImageUrl;
 
     this.logger.log(
@@ -1639,18 +1755,22 @@ export class PrizeService {
 
         // Load seller to check for Stripe Connect account and application fee
         const seller = prize.createdBy
-          ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+          ? await this.userRepository.findOne({
+              where: { id: prize.createdBy },
+            })
           : null;
 
         // Add 3% buyer fee on top of the listing price (excludes shipping)
         const BUYER_FEE_PERCENT = 3;
         const shippingCents = SHIPPING_FEE * 100;
         const itemUsdCents = Math.max(0, usdCents - shippingCents);
-        const buyerFeeCents = Math.round(itemUsdCents * (BUYER_FEE_PERCENT / 100));
+        const buyerFeeCents = Math.round(
+          itemUsdCents * (BUYER_FEE_PERCENT / 100),
+        );
         const totalChargeCents = usdCents + buyerFeeCents;
 
         const sessionParams = {
-          payment_method_types: ['card'],
+          payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
           line_items: [
             {
               price_data: {
@@ -1667,7 +1787,7 @@ export class PrizeService {
               quantity: 1,
             },
           ],
-          mode: 'payment',
+          mode: 'payment' as const,
           customer_email: user.email,
           success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
           cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
@@ -1690,18 +1810,22 @@ export class PrizeService {
 
           (sessionParams as any).payment_intent_data = {
             application_fee_amount,
-            transfer_data
+            transfer_data,
           };
         }
 
-        // @ts-expect-error any
-        const session = await this.stripe.checkout.sessions.create(sessionParams);
+        const session =
+          await this.stripe.checkout.sessions.create(sessionParams);
 
         // Save Stripe session ID and update totals to include buyer fee
         savedOrder.stripeSessionId = session.id;
         const buyerFeeUsd = buyerFeeCents / 100;
-        savedOrder.usdCharged = parseFloat((dto.usdAmount + buyerFeeUsd).toString());
-        savedOrder.totalPrice = parseFloat((dto.totalPrice + buyerFeeUsd).toString());
+        savedOrder.usdCharged = parseFloat(
+          (dto.usdAmount + buyerFeeUsd).toString(),
+        );
+        savedOrder.totalPrice = parseFloat(
+          (dto.totalPrice + buyerFeeUsd).toString(),
+        );
         await this.prizeOrderRepository.save(savedOrder);
 
         stripeSessionUrl = session.url;
@@ -1756,9 +1880,9 @@ export class PrizeService {
       paymentMethod: order.paymentMethod,
       seller: seller
         ? {
-          username: seller.username,
-          name: seller.name || seller.username,
-        }
+            username: seller.username,
+            name: seller.name || seller.username,
+          }
         : null,
       createdAt: order.createdAt.toISOString(),
     };
@@ -1873,9 +1997,15 @@ export class PrizeService {
       const SHIPPING_FEE = 5;
       const charged = parseFloat(order.usdCharged?.toString() || '0');
       const itemPrice = Math.max(0, charged - SHIPPING_FEE);
-      const sellerVisibleAmount = charged > 0
-        ? parseFloat((itemPrice / (1 + BUYER_FEE_PERCENT / 100) + SHIPPING_FEE).toFixed(2))
-        : order.totalPrice;
+      const sellerVisibleAmount =
+        charged > 0
+          ? parseFloat(
+              (
+                itemPrice / (1 + BUYER_FEE_PERCENT / 100) +
+                SHIPPING_FEE
+              ).toFixed(2),
+            )
+          : order.totalPrice;
 
       await this.emailsService.sendEmailSMTP(
         {
@@ -1963,7 +2093,7 @@ export class PrizeService {
       where: {
         prizeConfiguration: {
           createdBy: userId,
-        }
+        },
       },
       relations: ['prizeConfiguration', 'user'],
       order: { createdAt: 'DESC' },
@@ -2139,16 +2269,16 @@ export class PrizeService {
       updatedAt: order.updatedAt.toISOString(),
       user: order.user
         ? {
-          username: order.user.username,
-          email: order.user.email,
-        }
+            username: order.user.username,
+            email: order.user.email,
+          }
         : undefined,
       prizeConfig: order.prizeConfiguration
         ? {
-          name: order.prizeConfiguration.name,
-          category: order.prizeConfiguration.category,
-          image: order.prizeConfiguration.imageUrl ?? ""
-        }
+            name: order.prizeConfiguration.name,
+            category: order.prizeConfiguration.category,
+            image: order.prizeConfiguration.imageUrl ?? '',
+          }
         : undefined,
     };
   }
@@ -2327,11 +2457,13 @@ export class PrizeService {
 
     // Add 3% buyer fee on top of the offer price
     const BUYER_FEE_PERCENT = 3;
-    const buyerFeeCents = Math.round(offerAmountCents * (BUYER_FEE_PERCENT / 100));
+    const buyerFeeCents = Math.round(
+      offerAmountCents * (BUYER_FEE_PERCENT / 100),
+    );
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
     const acceptOfferSessionParams = {
-      payment_method_types: ['card'],
+      payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
           price_data: {
@@ -2345,7 +2477,7 @@ export class PrizeService {
           quantity: 1,
         },
       ],
-      mode: 'payment',
+      mode: 'payment' as const,
       success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
       cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
@@ -2368,14 +2500,17 @@ export class PrizeService {
       };
     }
 
-    // @ts-ignore
-    const session = await this.stripe.checkout.sessions.create(acceptOfferSessionParams);
+    const session = await this.stripe.checkout.sessions.create(
+      acceptOfferSessionParams,
+    );
 
     // Save Stripe session ID and update totals to include buyer fee
     const offerBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
     order.usdCharged = amountToCharge + offerBuyerFeeUsd;
-    order.totalPrice = parseFloat((order.totalPrice + offerBuyerFeeUsd).toString());
+    order.totalPrice = parseFloat(
+      (order.totalPrice + offerBuyerFeeUsd).toString(),
+    );
     await this.prizeOrderRepository.save(order);
 
     // Send email to user with Stripe checkout link
@@ -2482,12 +2617,16 @@ export class PrizeService {
 
     // Add 3% buyer fee on top of the counter offer price
     const BUYER_FEE_PERCENT = 3;
-    const buyerFeeCents = Math.round(counterOfferAmountCents * (BUYER_FEE_PERCENT / 100));
+    const buyerFeeCents = Math.round(
+      counterOfferAmountCents * (BUYER_FEE_PERCENT / 100),
+    );
     const totalChargeCents = counterOfferAmountCents + buyerFeeCents;
 
     // Create Stripe checkout session
     const counterOfferSessionParams = {
-      payment_method_types: ['card'],
+      payment_method_types: [
+        'card',
+      ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
           price_data: {
@@ -2501,7 +2640,7 @@ export class PrizeService {
           quantity: 1,
         },
       ],
-      mode: 'payment',
+      mode: 'payment' as const,
       success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
       cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
@@ -2526,14 +2665,17 @@ export class PrizeService {
       };
     }
 
-    // @ts-ignore
-    const session = await this.stripe.checkout.sessions.create(counterOfferSessionParams);
+    const session = await this.stripe.checkout.sessions.create(
+      counterOfferSessionParams,
+    );
 
     // Update order with Stripe session and include buyer fee in totals
     const counterOfferBuyerFeeUsd = buyerFeeCents / 100;
     order.stripeSessionId = session.id;
     order.usdCharged = amountToCharge + counterOfferBuyerFeeUsd;
-    order.totalPrice = parseFloat((order.totalPrice + counterOfferBuyerFeeUsd).toString());
+    order.totalPrice = parseFloat(
+      (order.totalPrice + counterOfferBuyerFeeUsd).toString(),
+    );
     order.status = 'offer_accepted';
     await this.prizeOrderRepository.save(order);
 
