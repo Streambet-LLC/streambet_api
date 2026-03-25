@@ -1770,7 +1770,7 @@ export class PrizeService {
         const totalChargeCents = usdCents + buyerFeeCents;
 
         const sessionParams = {
-          payment_method_types: ['card'],
+          payment_method_types: ['card'] as const,
           line_items: [
             {
               price_data: {
@@ -2463,7 +2463,7 @@ export class PrizeService {
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
     const acceptOfferSessionParams = {
-      payment_method_types: ['card'],
+      payment_method_types: ['card'] as const,
       line_items: [
         {
           price_data: {
@@ -2624,7 +2624,7 @@ export class PrizeService {
 
     // Create Stripe checkout session
     const counterOfferSessionParams = {
-      payment_method_types: ['card'],
+      payment_method_types: ['card'] as const,
       line_items: [
         {
           price_data: {
