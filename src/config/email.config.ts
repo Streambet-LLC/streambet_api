@@ -105,6 +105,7 @@ export default registerAs('email', () => ({
     inbox_message: {
       templatePath: './src/templates/inbox_message.ejs',
       schemaPath: './src/templates/inbox_message.json',
+    },
     buyer_payment_expired: {
       templatePath: './src/templates/buyer_payment_expired.ejs',
       schemaPath: './src/templates/buyer_payment_expired.json',
