@@ -1864,8 +1864,8 @@ export class PrizeService {
   }
 
   /**
-   * Get order success details for the purchase success page.
-   * Returns item info, price, seller info, and order status.
+   * Get order success details - authenticated version.
+   * Validates user owns the order.
    */
   async getOrderSuccessDetails(orderId: string, userId: string) {
     const order = await this.prizeOrderRepository.findOne({
@@ -1877,6 +1877,30 @@ export class PrizeService {
       throw new NotFoundException('Order not found');
     }
 
+    return this.formatOrderSuccessDetails(order);
+  }
+
+  /**
+   * Get order success details - public version for Stripe redirects.
+   * Does not validate ownership since Stripe redirects unauthenticated users.
+   */
+  async getOrderSuccessDetailsPublic(orderId: string) {
+    const order = await this.prizeOrderRepository.findOne({
+      where: { id: orderId },
+      relations: ['prizeConfiguration', 'prizeConfiguration.creator'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return this.formatOrderSuccessDetails(order);
+  }
+
+  /**
+   * Format order details for success page display.
+   */
+  private formatOrderSuccessDetails(order: PrizeOrder) {
     const prize = order.prizeConfiguration;
     const seller = prize?.creator;
 
