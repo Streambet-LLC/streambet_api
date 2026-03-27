@@ -26,6 +26,7 @@ import { PrizeService } from 'src/prize/prize.service';
 import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
+import { getEffectiveSellerFeePercent } from 'src/common/utils/fee-utils';
 
 @Injectable()
 export class UsersService {
@@ -453,7 +454,16 @@ export class UsersService {
     // Fetch paginated or full data
     const users = await usersQB.getMany();
     const data = users.map((item) => {
-      console.log(item);
+      const effectiveSellerFeePercent = item.isSeller
+        ? getEffectiveSellerFeePercent({
+            lifetimeCadeCoins: Number(item.wallet?.lifetimeCoinsEarned || 0),
+            adminFeeOverridePercent:
+              item.adminFeeOverridePercent !== null &&
+              item.adminFeeOverridePercent !== undefined
+                ? Number(item.adminFeeOverridePercent)
+                : null,
+          })
+        : null;
       const returnData = {
         // ...item,
         id: item.id,
@@ -466,8 +476,28 @@ export class UsersService {
         name: item.name,
         state: item.state,
         role: item.role,
+        isSeller: item.isSeller,
         profileImageUrl: item.profileImageUrl,
         revShare: item.revShare,
+        applicationFeePercent:
+          item.applicationFeePercent !== null &&
+          item.applicationFeePercent !== undefined
+            ? Number(item.applicationFeePercent)
+            : null,
+        adminFeeOverridePercent:
+          item.adminFeeOverridePercent !== null &&
+          item.adminFeeOverridePercent !== undefined
+            ? Number(item.adminFeeOverridePercent)
+            : null,
+        effectiveSellerFeePercent,
+        sellerFeeSource:
+          item.isSeller &&
+          item.adminFeeOverridePercent !== null &&
+          item.adminFeeOverridePercent !== undefined
+            ? 'override'
+            : item.isSeller
+              ? 'milestone'
+              : null,
         wallet: item.wallet
           ? {
               id: item.wallet.id,
