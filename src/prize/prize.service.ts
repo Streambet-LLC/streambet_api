@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
@@ -270,14 +270,15 @@ export class PrizeService {
   /**
    * Public: get all shop items across all sellers.
    * This is for the main "Shop" page in the navbar, showing all available shop items.
-   * Also includes CardCade redemption slabs (admin-created, showOnRedemptions, category=slab).
    */
   async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
     this.logger.log(
       '[SHOP] getAllShopItems() called - fetching all active shop items',
     );
 
-    // Fetch regular seller shop items
+    // Shop visibility is now controlled only by showOnShop.
+    // We intentionally no longer include showOnRedemptions here so redeem-only
+    // items can stay off the shop page.
     const sellerItems = await this.prizeConfigRepository.find({
       where: {
         isActive: true,
@@ -290,33 +291,14 @@ export class PrizeService {
       },
     });
 
-    // Fetch CardCade redemption slabs (all slab items from the redemptions page)
-    const cardcadeItems = await this.prizeConfigRepository.find({
-      where: {
-        isActive: true,
-        showOnRedemptions: true,
-        category: 'slab',
-      },
-      relations: ['itemImages'],
-      order: {
-        displayOrderShop: 'ASC',
-        createdAt: 'DESC',
-      },
-    });
-
-    // Merge, deduplicating by id (items that have both showOnShop and showOnRedemptions)
-    const seenIds = new Set(sellerItems.map((i) => i.id));
-    const uniqueCardcadeItems = cardcadeItems.filter((i) => !seenIds.has(i.id));
-    const items = [...sellerItems, ...uniqueCardcadeItems];
-
     this.logger.log(
-      `[SHOP] Found ${sellerItems.length} seller shop items + ${uniqueCardcadeItems.length} CardCade redemption slabs = ${items.length} total`,
+      `[SHOP] Found ${sellerItems.length} active shop items`,
     );
     this.logger.debug(
-      `[SHOP] Items breakdown: ${JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
+      `[SHOP] Items breakdown: ${JSON.stringify(sellerItems.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
     );
 
-    return items.map((item) => this.mapToDto(item));
+    return sellerItems.map((item) => this.mapToDto(item));
   }
 
   /**
@@ -337,11 +319,14 @@ export class PrizeService {
     items: PrizeConfigurationDto[];
   }> {
     if (username === 'cardcade') {
+      // CardCade shop only includes admin-owned shop items.
+      // This intentionally decouples CardCade shop from showOnRedemptions so
+      // an item can be redeem-only, shop-only, or both.
       const items = await this.prizeConfigRepository.find({
         where: {
           isActive: true,
-          showOnRedemptions: true,
-          category: 'slab',
+          showOnShop: true,
+          createdBy: IsNull(),
         },
         relations: ['itemImages'],
         order: {
