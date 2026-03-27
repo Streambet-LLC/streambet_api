@@ -51,6 +51,7 @@ import {
   StreamAnalyticsResponseDto,
 } from './dto/analytics.dto';
 import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
+import { UpdateUserFeeOverrideDto } from './dto/update-user-fee-override.dto';
 import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
 import { PayoutReportFilterDto } from 'src/platform-payout/dto/payout-report/payout-report.requests.dto';
@@ -403,6 +404,66 @@ export class AdminController {
       statusCode: HttpStatus.OK,
       message,
       data: result,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Set permanent seller fee override',
+    description:
+      'Sets the seller fee override percent (2-4). This override takes precedence over milestone-based fee tiers.',
+  })
+  @ApiParam({ name: 'id', description: 'Seller user ID' })
+  @ApiBody({ type: UpdateUserFeeOverrideDto })
+  @Patch('users/:id/fee-override')
+  async updateSellerFeeOverride(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserFeeOverrideDto,
+  ) {
+    this.ensureAdmin(req.user);
+    const user = await this.adminService.updateSellerFeeOverride(
+      id,
+      dto.feePercent,
+    );
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Seller fee override updated successfully',
+      data: {
+        id: user.id,
+        applicationFeePercent: Number(user.applicationFeePercent),
+        adminFeeOverridePercent:
+          user.adminFeeOverridePercent !== null &&
+          user.adminFeeOverridePercent !== undefined
+            ? Number(user.adminFeeOverridePercent)
+            : null,
+      },
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Clear permanent seller fee override',
+    description:
+      'Removes the seller fee override and restores milestone-driven fee behavior.',
+  })
+  @ApiParam({ name: 'id', description: 'Seller user ID' })
+  @Delete('users/:id/fee-override')
+  @HttpCode(HttpStatus.OK)
+  async clearSellerFeeOverride(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ) {
+    this.ensureAdmin(req.user);
+    const user = await this.adminService.clearSellerFeeOverride(id);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Seller fee override cleared successfully',
+      data: {
+        id: user.id,
+        applicationFeePercent: Number(user.applicationFeePercent),
+        adminFeeOverridePercent: null,
+      },
     };
   }
 

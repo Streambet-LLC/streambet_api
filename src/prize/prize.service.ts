@@ -19,6 +19,7 @@ import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
 import { CurrencyType } from '../enums/currency.enum';
+import { TransactionType } from '../enums/transaction-type.enum';
 import {
   PrizeConfigurationDto,
   CreatePrizeTierDto,
@@ -42,6 +43,13 @@ import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
+import {
+  BUYER_PROCESSING_FEE_PERCENT,
+  calculateBuyerItemFeeCents,
+  calculateRewardCadeCoinsFromCents,
+  calculateSellerFeeCents,
+  getEffectiveSellerFeePercent,
+} from 'src/common/utils/fee-utils';
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -1693,6 +1701,13 @@ export class PrizeService {
         });
         await this.ensureRedemptionForOrder(savedOrder, prize);
 
+        await this.awardCadeCoinTransactionRewards(
+          savedOrder,
+          prize,
+          Math.round(Number(savedOrder.totalPrice || 0) * 100),
+          'coins_checkout',
+        );
+
         // Decrement stock
         this.logger.log(
           `About to decrement stock for prize ${dto.prizeConfigId}`,
@@ -1751,23 +1766,23 @@ export class PrizeService {
     ) {
       // Create Stripe checkout session for USD portion
       try {
-        const usdCents = Math.round(dto.usdAmount * 100);
+        const subtotalCents = Math.round(dto.usdAmount * 100);
 
         // Load seller to check for Stripe Connect account and application fee
         const seller = prize.createdBy
           ? await this.userRepository.findOne({
-              where: { id: prize.createdBy },
-            })
+            where: { id: prize.createdBy },
+            relations: ['wallet'],
+          })
           : null;
 
-        // Add 3% buyer fee on top of the listing price (excludes shipping)
-        const BUYER_FEE_PERCENT = 3;
-        const shippingCents = SHIPPING_FEE * 100;
-        const itemUsdCents = Math.max(0, usdCents - shippingCents);
-        const buyerFeeCents = Math.round(
-          itemUsdCents * (BUYER_FEE_PERCENT / 100),
+        // Buyer fee applies to item subtotal only (shipping excluded).
+        const shippingCents = Math.round(SHIPPING_FEE * 100);
+        const buyerFeeCents = calculateBuyerItemFeeCents(
+          subtotalCents,
+          shippingCents,
         );
-        const totalChargeCents = usdCents + buyerFeeCents;
+        const totalChargeCents = subtotalCents + buyerFeeCents;
 
         const sessionParams = {
           payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
@@ -1797,14 +1812,27 @@ export class PrizeService {
             prizeId: dto.prizeConfigId,
             paymentMethod: dto.paymentMethod,
             coinsAmount: dto.coinsAmount.toString(),
+            transactionSubtotalCents: subtotalCents.toString(),
             buyerFeeCents: buyerFeeCents.toString(),
           },
         };
 
         if (seller?.stripeAccountId) {
-          const feePercent = seller.applicationFeePercent ?? 4;
-          // Seller fee (4%) applied to the base listing price, plus the buyer fee goes to platform
-          const sellerFeeAmount = Math.round(usdCents * (feePercent / 100));
+          const sellerLifetimeCadeCoins = Number(
+            seller.wallet?.lifetimeCoinsEarned || 0,
+          );
+          const sellerFeePercent = getEffectiveSellerFeePercent({
+            lifetimeCadeCoins: sellerLifetimeCadeCoins,
+            adminFeeOverridePercent:
+              seller.adminFeeOverridePercent !== null &&
+              seller.adminFeeOverridePercent !== undefined
+                ? Number(seller.adminFeeOverridePercent)
+                : null,
+          });
+          const sellerFeeAmount = calculateSellerFeeCents(
+            subtotalCents,
+            sellerFeePercent,
+          );
           const application_fee_amount = sellerFeeAmount + buyerFeeCents;
           const transfer_data = { destination: seller.stripeAccountId };
 
@@ -1891,7 +1919,10 @@ export class PrizeService {
   /**
    * Handle Stripe checkout success and deduct coins if combined payment
    */
-  async handlePaymentSuccess(orderId: string): Promise<PrizeOrderResponseDto> {
+  async handlePaymentSuccess(
+    orderId: string,
+    transactionSubtotalCents?: number,
+  ): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
 
     if (order.status === 'paid') {
@@ -1932,6 +1963,17 @@ export class PrizeService {
       country: order.shippingAddress.country,
     });
     await this.ensureRedemptionForOrder(updated, prize);
+
+    const subtotalCents =
+      transactionSubtotalCents !== undefined
+        ? transactionSubtotalCents
+        : Math.round(Number(updated.totalPrice || 0) * 100);
+    await this.awardCadeCoinTransactionRewards(
+      updated,
+      prize,
+      subtotalCents,
+      'stripe_checkout',
+    );
 
     // Decrement stock
     try {
@@ -1993,19 +2035,11 @@ export class PrizeService {
 
     try {
       // Show the seller the amount without the buyer service fee
-      const BUYER_FEE_PERCENT = 3;
-      const SHIPPING_FEE = 5;
+      const BUYER_FEE_PERCENT = BUYER_PROCESSING_FEE_PERCENT;
       const charged = parseFloat(order.usdCharged?.toString() || '0');
-      const itemPrice = Math.max(0, charged - SHIPPING_FEE);
-      const sellerVisibleAmount =
-        charged > 0
-          ? parseFloat(
-              (
-                itemPrice / (1 + BUYER_FEE_PERCENT / 100) +
-                SHIPPING_FEE
-              ).toFixed(2),
-            )
-          : order.totalPrice;
+      const sellerVisibleAmount = charged > 0
+        ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
+        : order.totalPrice;
 
       await this.emailsService.sendEmailSMTP(
         {
@@ -2437,10 +2471,15 @@ export class PrizeService {
 
     // Determine amount to charge before updating status
     const wasCountered = order.status === 'countered';
-    const amountToCharge =
+    const SHIPPING_FEE = 5;
+    const negotiatedAmount =
       wasCountered && order.counterOfferAmount
         ? order.counterOfferAmount
         : order.offerAmount || order.totalPrice;
+    const amountToCharge =
+      negotiatedAmount === order.totalPrice
+        ? negotiatedAmount
+        : negotiatedAmount + SHIPPING_FEE;
 
     order.status = 'offer_accepted';
     const updated = await this.prizeOrderRepository.save(order);
@@ -2452,13 +2491,17 @@ export class PrizeService {
 
     // Load seller to check for Stripe Connect account and application fee
     const offerSeller = prize.createdBy
-      ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+      ? await this.userRepository.findOne({
+        where: { id: prize.createdBy },
+        relations: ['wallet'],
+      })
       : null;
 
-    // Add 3% buyer fee on top of the offer price
-    const BUYER_FEE_PERCENT = 3;
-    const buyerFeeCents = Math.round(
-      offerAmountCents * (BUYER_FEE_PERCENT / 100),
+    // Buyer fee applies to item subtotal only (shipping excluded).
+    const offerShippingCents = Math.round(SHIPPING_FEE * 100);
+    const buyerFeeCents = calculateBuyerItemFeeCents(
+      offerAmountCents,
+      offerShippingCents,
     );
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
@@ -2484,13 +2527,27 @@ export class PrizeService {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_offer',
+        transactionSubtotalCents: offerAmountCents.toString(),
         buyerFeeCents: buyerFeeCents.toString(),
       },
     };
 
     if (offerSeller?.stripeAccountId) {
-      const feePercent = offerSeller.applicationFeePercent ?? 4;
-      const sellerFeeAmount = Math.round(offerAmountCents * (feePercent / 100));
+      const sellerLifetimeCadeCoins = Number(
+        offerSeller.wallet?.lifetimeCoinsEarned || 0,
+      );
+      const sellerFeePercent = getEffectiveSellerFeePercent({
+        lifetimeCadeCoins: sellerLifetimeCadeCoins,
+        adminFeeOverridePercent:
+          offerSeller.adminFeeOverridePercent !== null &&
+          offerSeller.adminFeeOverridePercent !== undefined
+            ? Number(offerSeller.adminFeeOverridePercent)
+            : null,
+      });
+      const sellerFeeAmount = calculateSellerFeeCents(
+        offerAmountCents,
+        sellerFeePercent,
+      );
       const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: offerSeller.stripeAccountId };
 
@@ -2607,18 +2664,27 @@ export class PrizeService {
     }
 
     const prize = await this.getPrizeTierById(order.prizeConfigurationId);
-    const amountToCharge = order.counterOfferAmount || order.totalPrice;
+    const SHIPPING_FEE = 5;
+    const negotiatedAmount = order.counterOfferAmount || order.totalPrice;
+    const amountToCharge =
+      negotiatedAmount === order.totalPrice
+        ? negotiatedAmount
+        : negotiatedAmount + SHIPPING_FEE;
     const counterOfferAmountCents = Math.round(amountToCharge * 100);
 
     // Load seller to check for Stripe Connect account and application fee
     const counterOfferSeller = prize.createdBy
-      ? await this.userRepository.findOne({ where: { id: prize.createdBy } })
+      ? await this.userRepository.findOne({
+        where: { id: prize.createdBy },
+        relations: ['wallet'],
+      })
       : null;
 
-    // Add 3% buyer fee on top of the counter offer price
-    const BUYER_FEE_PERCENT = 3;
-    const buyerFeeCents = Math.round(
-      counterOfferAmountCents * (BUYER_FEE_PERCENT / 100),
+    // Buyer fee applies to item subtotal only (shipping excluded).
+    const counterOfferShippingCents = Math.round(SHIPPING_FEE * 100);
+    const buyerFeeCents = calculateBuyerItemFeeCents(
+      counterOfferAmountCents,
+      counterOfferShippingCents,
     );
     const totalChargeCents = counterOfferAmountCents + buyerFeeCents;
 
@@ -2647,14 +2713,26 @@ export class PrizeService {
         orderId: order.id,
         userId: order.userId,
         type: 'prize_counter_offer',
+        transactionSubtotalCents: counterOfferAmountCents.toString(),
         buyerFeeCents: buyerFeeCents.toString(),
       },
     };
 
     if (counterOfferSeller?.stripeAccountId) {
-      const feePercent = counterOfferSeller.applicationFeePercent ?? 4;
-      const sellerFeeAmount = Math.round(
-        counterOfferAmountCents * (feePercent / 100),
+      const sellerLifetimeCadeCoins = Number(
+        counterOfferSeller.wallet?.lifetimeCoinsEarned || 0,
+      );
+      const sellerFeePercent = getEffectiveSellerFeePercent({
+        lifetimeCadeCoins: sellerLifetimeCadeCoins,
+        adminFeeOverridePercent:
+          counterOfferSeller.adminFeeOverridePercent !== null &&
+          counterOfferSeller.adminFeeOverridePercent !== undefined
+            ? Number(counterOfferSeller.adminFeeOverridePercent)
+            : null,
+      });
+      const sellerFeeAmount = calculateSellerFeeCents(
+        counterOfferAmountCents,
+        sellerFeePercent,
       );
       const application_fee_amount = sellerFeeAmount + buyerFeeCents;
       const transfer_data = { destination: counterOfferSeller.stripeAccountId };
@@ -2680,6 +2758,79 @@ export class PrizeService {
     await this.prizeOrderRepository.save(order);
 
     return { stripeSessionUrl: session.url || '' };
+  }
+
+  private async awardCadeCoinTransactionRewards(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    transactionSubtotalCents: number,
+    source: 'coins_checkout' | 'stripe_checkout',
+  ): Promise<void> {
+    if (transactionSubtotalCents <= 0) {
+      return;
+    }
+
+    const rewardCoins = calculateRewardCadeCoinsFromCents(
+      transactionSubtotalCents,
+    );
+
+    if (rewardCoins <= 0) {
+      return;
+    }
+
+    const rewardEntityType = 'prize_order_reward';
+
+    try {
+      await this.walletService.updateBalance(
+        order.userId,
+        rewardCoins,
+        CurrencyType.CADE_COINS,
+        TransactionType.BONUS,
+        `Transaction reward for order ${order.id}`,
+        {
+          source,
+          role: 'buyer',
+          rewardCoins,
+          transactionSubtotalCents,
+        },
+        {
+          relatedEntityId: `${order.id}:buyer`,
+          relatedEntityType: rewardEntityType,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to award buyer reward coins for order ${order.id}: ${error}`,
+      );
+    }
+
+    if (!prize.createdBy) {
+      return;
+    }
+
+    try {
+      await this.walletService.updateBalance(
+        prize.createdBy,
+        rewardCoins,
+        CurrencyType.CADE_COINS,
+        TransactionType.BONUS,
+        `Transaction reward for sale ${order.id}`,
+        {
+          source,
+          role: 'seller',
+          rewardCoins,
+          transactionSubtotalCents,
+        },
+        {
+          relatedEntityId: `${order.id}:seller`,
+          relatedEntityType: rewardEntityType,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to award seller reward coins for order ${order.id}: ${error}`,
+      );
+    }
   }
 
   /**

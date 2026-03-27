@@ -218,4 +218,13 @@ export class User extends BaseEntity {
     name: 'application_fee_percent',
   })
   applicationFeePercent: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 1,
+    nullable: true,
+    name: 'admin_fee_override_percent',
+  })
+  adminFeeOverridePercent?: number | null;
 }

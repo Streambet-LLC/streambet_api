@@ -150,4 +150,55 @@ export class AdminService {
       throw new NotFoundException((e as Error).message);
     }
   }
+
+  async updateSellerFeeOverride(
+    userId: string,
+    feePercent: number,
+  ): Promise<User> {
+    if (feePercent < 2 || feePercent > 4) {
+      throw new BadRequestException('Fee override must be between 2 and 4');
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.isSeller) {
+      throw new BadRequestException('Fee override can only be set for sellers');
+    }
+
+    user.adminFeeOverridePercent = feePercent;
+    // Keep compatibility with existing UI/queries that still read application_fee_percent.
+    user.applicationFeePercent = feePercent;
+
+    return this.usersRepository.save(user);
+  }
+
+  async clearSellerFeeOverride(userId: string): Promise<User> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['wallet'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.isSeller) {
+      throw new BadRequestException('Fee override can only be cleared for sellers');
+    }
+
+    user.adminFeeOverridePercent = null;
+
+    // Revert compatibility field to current milestone-driven fee.
+    const lifetimeCadeCoins = Number(user.wallet?.lifetimeCoinsEarned || 0);
+    const milestoneLevel = Math.min(4, Math.floor(lifetimeCadeCoins / 25000));
+    user.applicationFeePercent = Math.max(2, 4 - milestoneLevel * 0.5);
+
+    return this.usersRepository.save(user);
+  }
 }
