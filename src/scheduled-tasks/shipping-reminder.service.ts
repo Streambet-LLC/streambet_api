@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, LessThan } from 'typeorm';
+import { Repository, Brackets } from 'typeorm';
 import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import { EmailsService } from '../emails/email.service';
 
@@ -21,17 +21,30 @@ export class ShippingReminderService {
 
     try {
       // Find orders that are 4+ days old, paid, but not yet shipped
+      // and have not already been reminded in the last 24 hours
       const fourDaysAgo = new Date();
       fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
 
-      const ordersToRemind = await this.prizeOrderRepository.find({
-        where: {
-          status: 'paid',
-          shippedAt: IsNull(),
-          createdAt: LessThan(fourDaysAgo),
-        },
-        relations: ['user', 'prizeConfiguration', 'prizeConfiguration.creator'],
-      });
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      const ordersToRemind = await this.prizeOrderRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.user', 'user')
+        .leftJoinAndSelect('order.prizeConfiguration', 'prizeConfiguration')
+        .leftJoinAndSelect('prizeConfiguration.creator', 'creator')
+        .where('order.status = :status', { status: 'paid' })
+        .andWhere('order.shippedAt IS NULL')
+        .andWhere('order.createdAt < :fourDaysAgo', { fourDaysAgo })
+        .andWhere(
+          new Brackets((qb) => {
+            qb.where('order.lastReminderSentAt IS NULL').orWhere(
+              'order.lastReminderSentAt < :twentyFourHoursAgo',
+              { twentyFourHoursAgo },
+            );
+          }),
+        )
+        .getMany();
 
       this.logger.debug(
         `Found ${ordersToRemind.length} orders needing shipping reminders`,
@@ -87,6 +100,11 @@ export class ShippingReminderService {
       this.logger.log(
         `Shipping reminder sent to seller ${seller.email} for order ${order.id}`,
       );
+
+      // Mark the order so we don't send another reminder for 24 hours
+      await this.prizeOrderRepository.update(order.id, {
+        lastReminderSentAt: new Date(),
+      });
     } catch (emailError) {
       this.logger.error(
         `Failed to send shipping reminder for order ${order.id}:`,
