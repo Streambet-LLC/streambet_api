@@ -1789,8 +1789,8 @@ export class PrizeService {
           ],
           mode: 'payment' as const,
           customer_email: user.email,
-          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
-          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
+          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${savedOrder.id}`,
+          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${savedOrder.id}`,
           metadata: {
             orderId: savedOrder.id,
             userId,
@@ -2530,8 +2530,8 @@ export class PrizeService {
         },
       ],
       mode: 'payment' as const,
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
@@ -2716,8 +2716,8 @@ export class PrizeService {
         },
       ],
       mode: 'payment' as const,
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
