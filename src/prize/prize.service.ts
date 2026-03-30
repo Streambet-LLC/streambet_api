@@ -2050,6 +2050,19 @@ export class PrizeService {
         ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
         : order.totalPrice;
 
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+      const markShippedUrl = `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+      const shipping: PrizeOrder['shippingAddress'] = order.shippingAddress || {
+        addressLine1: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: '',
+      };
+
       await this.emailsService.sendEmailSMTP(
         {
           toAddress: [seller.email],
@@ -2065,6 +2078,14 @@ export class PrizeService {
               month: 'long',
               day: 'numeric',
             }),
+            buyerFullName: buyer.name || buyer.username,
+            shippingAddressLine1: shipping.addressLine1 || '',
+            shippingAddressLine2: shipping.addressLine2 || '',
+            shippingCity: shipping.city || '',
+            shippingState: shipping.state || '',
+            shippingZipCode: shipping.zipCode || '',
+            shippingCountry: shipping.country || '',
+            markShippedUrl,
           },
         },
         'seller_shop_purchase',
