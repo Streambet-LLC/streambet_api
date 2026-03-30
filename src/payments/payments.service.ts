@@ -367,7 +367,13 @@ export class PaymentsService {
           this.logger.log(
             `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed`,
           );
-          await this.prizeService.handlePaymentSuccess(orderId);
+          const transactionSubtotalCents = session.metadata?.transactionSubtotalCents
+            ? parseInt(session.metadata.transactionSubtotalCents, 10)
+            : undefined;
+          await this.prizeService.handlePaymentSuccess(
+            orderId,
+            transactionSubtotalCents,
+          );
           this.logger.log(
             `Stripe webhook: prize order ${orderId} successfully confirmed`,
           );

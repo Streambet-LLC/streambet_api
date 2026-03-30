@@ -203,25 +203,22 @@ export class PrizeController {
   }
 
   /**
-   * User endpoint: Get order success details for purchase confirmation page
+   * Public endpoint: Get order success details for purchase confirmation page
+   * Allows unauthenticated access since Stripe redirects without JWT token
    */
   @Get('orders/:orderId/success-details')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get order details for purchase success page' })
+  @ApiOperation({ summary: 'Get order details for purchase success page (public)' })
   @ApiParam({ name: 'orderId', description: 'Prize order ID' })
   @ApiResponse({
     status: 200,
     description:
       'Returns order success details including item, price, and seller info',
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getOrderSuccessDetails(
     @Param('orderId') orderId: string,
-    @Request() req: RequestWithUser,
   ) {
-    return this.prizeService.getOrderSuccessDetails(orderId, req.user.id);
+    return this.prizeService.getOrderSuccessDetailsPublic(orderId);
   }
 
   /**
