@@ -2092,7 +2092,7 @@ export class PrizeService {
             buyerName: buyer.name || buyer.username,
             itemName: prize.name,
             sellerName,
-            amount: order.totalPrice,
+            amount: parseFloat(order.totalPrice?.toString() || '0'),
             orderId: order.id,
             purchaseDate: new Date().toLocaleDateString('en-US', {
               year: 'numeric',
