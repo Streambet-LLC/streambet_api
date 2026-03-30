@@ -114,5 +114,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/buyer_payment_failed.ejs',
       schemaPath: './src/templates/buyer_payment_failed.json',
     },
+    buyer_shop_purchase: {
+      templatePath: './src/templates/buyer_shop_purchase.ejs',
+      schemaPath: './src/templates/buyer_shop_purchase.json',
+    },
   },
 }));
