@@ -1707,7 +1707,7 @@ export class PrizeService {
           `Prize order ${savedOrder.id} paid with coins for user ${userId}`,
         );
 
-        // Send seller notification email if this is a seller-owned item
+        // Send notification emails
         try {
           const buyer = await this.userRepository.findOne({
             where: { id: userId },
@@ -1718,10 +1718,15 @@ export class PrizeService {
               prize,
               buyer,
             );
+            await this.sendBuyerShopPurchaseNotification(
+              savedOrder,
+              prize,
+              buyer,
+            );
           }
         } catch (error) {
           this.logger.error(
-            `Failed to send seller notification email for order ${savedOrder.id}:`,
+            `Failed to send notification emails for order ${savedOrder.id}:`,
             error,
           );
         }
@@ -1942,12 +1947,21 @@ export class PrizeService {
 
     this.logger.log(`Order ${orderId} marked as paid after Stripe success`);
 
-    // Send seller notification email if this is a seller-owned item
+    // Send notification emails
     try {
       await this.sendSellerShopPurchaseNotification(updated, prize, order.user);
     } catch (error) {
       this.logger.error(
         `Failed to send seller notification email for order ${orderId}:`,
+        error,
+      );
+    }
+
+    try {
+      await this.sendBuyerShopPurchaseNotification(updated, prize, order.user);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send buyer notification email for order ${orderId}:`,
         error,
       );
     }
@@ -2038,6 +2052,64 @@ export class PrizeService {
     } catch (emailError) {
       this.logger.error(
         `Failed to send seller shop purchase email for order ${order.id}:`,
+        emailError,
+      );
+    }
+  }
+
+  private async sendBuyerShopPurchaseNotification(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    buyer: User,
+  ): Promise<void> {
+    if (!buyer.email) {
+      this.logger.warn(`Buyer ${buyer.id} has no email for order ${order.id}`);
+      return;
+    }
+
+    try {
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+
+      // Look up seller name
+      let sellerName = 'CardCade';
+      if (prize.createdBy) {
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (seller) {
+          sellerName = seller.name || seller.username;
+        }
+      }
+
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [buyer.email],
+          subject: `Purchase Confirmed! ${prize.name} 🎉`,
+          params: {
+            buyerName: buyer.name || buyer.username,
+            itemName: prize.name,
+            sellerName,
+            amount: order.totalPrice,
+            orderId: order.id,
+            purchaseDate: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            shopUrl: `${frontendUrl}/shop`,
+          },
+        },
+        'buyer_shop_purchase',
+      );
+      this.logger.log(
+        `Buyer shop purchase notification sent to ${buyer.email} for order ${order.id}`,
+      );
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send buyer shop purchase email for order ${order.id}:`,
         emailError,
       );
     }
