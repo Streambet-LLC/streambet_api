@@ -1,114 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Shop Sale! 🎉</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #f5f5f5;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        background-color: #ffffff;
-        margin: 20px auto;
-        padding: 20px;
-        border-radius: 8px;
-        max-width: 600px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-      .header {
-        text-align: center;
-        color: #333;
-        margin-bottom: 20px;
-      }
-      .header h1 {
-        margin: 0;
-        color: #007bff;
-      }
-      .content {
-        color: #666;
-        line-height: 1.6;
-      }
-      .order-details {
-        background-color: #f9f9f9;
-        border-left: 4px solid #007bff;
-        padding: 15px;
-        margin: 20px 0;
-        border-radius: 4px;
-      }
-      .order-details p {
-        margin: 8px 0;
-      }
-      .label {
-        font-weight: bold;
-        color: #333;
-      }
-      .footer {
-        text-align: center;
-        color: #999;
-        font-size: 12px;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-      }
-      .cta-button {
-        display: inline-block;
-        background-color: #007bff;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 4px;
-        text-decoration: none;
-        margin: 20px 0;
-      }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
   </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1>🎉 New Shop Sale!</h1>
-        <p>Someone just purchased your item</p>
-      </div>
+  <body style="margin:0;padding:0;background-color:#000000;font-family:'Inter',sans-serif;color:#FFFFFF;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#000000;margin:0;padding:0;width:100%;">
+      <tr>
+        <td>
+          <div style="max-width:100%;margin:0 auto;padding:40px 20px;">
+            <!-- Logo -->
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:40px;">
+              <tr>
+                <td align="center">
+                  <img src="https://cardcades3prod.s3.us-east-1.amazonaws.com/cardcade-machine-wordmark.png" alt="CardCade Logo" width="280" style="display:block;width:280px;height:auto;" />
+                </td>
+              </tr>
+            </table>
 
-      <div class="content">
-        <p>Hi <span class="label"><%= params.sellerName %></span>,</p>
+            <!-- Heading -->
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+              <tr>
+                <td align="center">
+                  <h1 style="font-size:28px;font-weight:700;color:#bdff00;margin:0;font-family:'Inter',sans-serif;">🎉 New Shop Sale!</h1>
+                  <p style="font-size:16px;color:#FFFFFF;opacity:0.7;margin-top:8px;font-family:'Inter',sans-serif;"><%= params.buyerName %> just purchased your item</p>
+                </td>
+              </tr>
+            </table>
 
-        <p>
-          Great news! One of your shop items has been purchased. Here are the
-          details:
-        </p>
+            <!-- Main Box -->
+            <div style="background-color:#181818;border-radius:16px;border:1px solid #2C2C2C;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
+              <div style="max-width:700px;margin:0 auto;color:#FFFFFF;">
+                <p style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform:capitalize;color:#FFFFFF;">
+                  Hi <%= params.sellerName %>,
+                </p>
+                <p style="font-size:18px;line-height:1.6;margin-bottom:24px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                  Great news! One of your shop items has been purchased. Here are the details:
+                </p>
 
-        <div class="order-details">
-          <p><span class="label">Item:</span> <%= params.itemName %></p>
-          <p><span class="label">Buyer:</span> <%= params.buyerName %></p>
-          <p><span class="label">Amount:</span> $<%= params.amount %></p>
-          <p><span class="label">Order ID:</span> <%= params.orderId %></p>
-          <p><span class="label">Date:</span> <%= params.purchaseDate %></p>
-        </div>
+                <!-- Order Details -->
+                <div style="background-color:#222222;border-left:4px solid #bdff00;padding:16px 20px;margin:0 0 28px 0;border-radius:8px;">
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Item:</span> <span style="opacity:0.8;"><%= params.itemName %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Buyer:</span> <span style="opacity:0.8;"><%= params.buyerName %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Amount:</span> <span style="opacity:0.8;">$<%= params.amount %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Order ID:</span> <span style="opacity:0.8;"><%= params.orderId %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Date:</span> <span style="opacity:0.8;"><%= params.purchaseDate %></span></p>
+                </div>
 
-        <h3 style="color: #333; margin-top: 24px;">📦 Ship To:</h3>
-        <div class="order-details">
-          <p><span class="label">Name:</span> <%= params.buyerFullName %></p>
-          <p><span class="label">Address:</span> <%= params.shippingAddressLine1 %><% if (params.shippingAddressLine2) { %>, <%= params.shippingAddressLine2 %><% } %></p>
-          <p><span class="label">City:</span> <%= params.shippingCity %>, <%= params.shippingState %> <%= params.shippingZipCode %></p>
-          <p><span class="label">Country:</span> <%= params.shippingCountry %></p>
-        </div>
+                <!-- Shipping Details -->
+                <p style="font-size:20px;font-weight:700;color:#bdff00;margin:0 0 12px 0;font-family:'Inter',sans-serif;">📦 Ship To:</p>
+                <div style="background-color:#222222;border-left:4px solid #bdff00;padding:16px 20px;margin:0 0 28px 0;border-radius:8px;">
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Name:</span> <span style="opacity:0.8;"><%= params.buyerFullName %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Address:</span> <span style="opacity:0.8;"><%= params.shippingAddressLine1 %><% if (params.shippingAddressLine2) { %>, <%= params.shippingAddressLine2 %><% } %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">City:</span> <span style="opacity:0.8;"><%= params.shippingCity %>, <%= params.shippingState %> <%= params.shippingZipCode %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Country:</span> <span style="opacity:0.8;"><%= params.shippingCountry %></span></p>
+                </div>
 
-        <p>
-          Once you've shipped the item, please mark it as shipped and add
-          tracking information so the buyer can follow their delivery.
-        </p>
+                <p style="font-size:18px;line-height:1.6;margin-bottom:24px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                  Once you've shipped the item, please mark it as shipped and add tracking information so the buyer can follow their delivery.
+                </p>
 
-        <div style="text-align: center;">
-          <a href="<%= params.markShippedUrl %>" class="cta-button" style="color: white;">Mark as Shipped</a>
-        </div>
+                <!-- CTA Button -->
+                <a href="<%= params.markShippedUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:20px !important;margin-bottom:20px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Mark as Shipped</a>
 
-        <p>Thank you for being part of the Cardcade community!</p>
-      </div>
+                <p style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
+                  Cheers,<br /><b style="font-size:20px;">The CardCade Team</b>
+                </p>
+              </div>
+            </div>
 
-      <div class="footer">
-        <p>This is an automated message. Please do not reply to this email.</p>
-        <p>&copy; Cardcade. All rights reserved.</p>
-      </div>
-    </div>
+            <!-- Footer -->
+            <div style="margin-top:60px;font-size:14px;text-align:center;color:#FFFFFF;font-family:'Inter',sans-serif;">
+              © CardCade 2026
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
