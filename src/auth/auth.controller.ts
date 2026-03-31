@@ -255,9 +255,11 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     try {
-      // Log the user object for debugging
-      // this.logger.log('Google callback user:', req.user);
-      // this.logger.log('Available keys:', Object.keys(req.user || {}));
+      this.logger.log(
+        'Google callback reached. User object present:',
+        !!req.user,
+      );
+      this.logger.log('Available keys:', Object.keys(req.user || {}));
 
       // Verify tokens exist
       if (!req.user?.accessToken || !req.user?.refreshToken) {
@@ -284,7 +286,11 @@ export class AuthController {
       const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
       return res.redirect(redirectUrl);
     } catch (error) {
-      this.logger.error('Google OAuth callback error:', error);
+      this.logger.error('Google OAuth callback error:', {
+        message: (error as Error)?.message,
+        stack: (error as Error)?.stack,
+        name: (error as Error)?.name,
+      });
 
       const clientUrl = this.configService.get<string>(
         'app.clientUrl',
@@ -294,7 +300,10 @@ export class AuthController {
       const baseUrl = clientUrl.endsWith('/')
         ? clientUrl.slice(0, -1)
         : clientUrl;
-      const errorUrl = `${baseUrl}/auth/google-callback?error=oauth_failed`;
+      const errorMessage = encodeURIComponent(
+        (error as Error)?.message || 'oauth_failed',
+      );
+      const errorUrl = `${baseUrl}/auth/google-callback?error=${errorMessage}`;
 
       return res.redirect(errorUrl);
     }
