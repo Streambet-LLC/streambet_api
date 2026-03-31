@@ -9,7 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 
-@Catch(HttpException)
+@Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
@@ -29,17 +29,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
   }
 
-  catch(exception: HttpException, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const httpStatus =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const isHttpException = exception instanceof HttpException;
 
-    const errorResponse = exception.getResponse();
+    const httpStatus = isHttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    const errorResponse = isHttpException ? exception.getResponse() : null;
     const er =
       typeof errorResponse === 'object' && errorResponse !== null
         ? (errorResponse as Record<string, any>)
@@ -49,7 +50,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      message: er?.message ?? exception.message ?? 'Internal server error',
+      message:
+        er?.message ??
+        (isHttpException ? exception.message : (exception as Error)?.message) ??
+        'Internal server error',
     };
     if (er && 'isForcedLogout' in er) {
       error.isForcedLogout = Boolean(er.isForcedLogout);
@@ -57,7 +61,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (httpStatus === HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url}`,
-        exception.stack,
+        exception instanceof Error ? exception.stack : String(exception),
         'HttpExceptionFilter',
       );
       this.newRelic?.noticeError?.(exception);

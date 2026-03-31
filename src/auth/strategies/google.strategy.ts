@@ -34,12 +34,20 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const clientSecret = configService.get<string>('auth.google.clientSecret');
     const callbackURL = configService.get<string>('auth.google.callbackURL');
 
-    // Log Google OAuth config for debugging (mask clientSecret)
+    // Log Google OAuth config for debugging
     Logger.log('Google OAuth config:', {
-      clientID,
-      clientSecret,
-      callbackURL,
+      clientID: clientID ? `${clientID.substring(0, 10)}...` : 'MISSING',
+      clientSecret: clientSecret ? `****${clientSecret.slice(-4)}` : 'MISSING',
+      callbackURL: callbackURL || 'MISSING',
     });
+
+    if (!clientID || !clientSecret || !callbackURL) {
+      Logger.error('Google OAuth MISCONFIGURED - missing required env vars:', {
+        hasClientID: !!clientID,
+        hasClientSecret: !!clientSecret,
+        hasCallbackURL: !!callbackURL,
+      });
+    }
 
     super({
       clientID: clientID || '',
