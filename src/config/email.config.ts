@@ -118,5 +118,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/buyer_shop_purchase.ejs',
       schemaPath: './src/templates/buyer_shop_purchase.json',
     },
+    concierge_assigned: {
+      templatePath: './src/templates/concierge_assigned.ejs',
+      schemaPath: './src/templates/concierge_assigned.json',
+    },
   },
 }));
