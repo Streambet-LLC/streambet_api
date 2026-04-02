@@ -10,4 +10,7 @@ export enum EmailType {
   ApplicationApproved = 'application_approved',
   ApplicationRejected = 'application_rejected',
   InboxMessage = 'inbox_message',
+  ProSubscriptionActivated = 'pro_subscription_activated',
+  ProSubscriptionCancelled = 'pro_subscription_cancelled',
+  ConciergeAssigned = 'concierge_assigned',
 }
