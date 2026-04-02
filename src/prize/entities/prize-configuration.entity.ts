@@ -64,25 +64,51 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;
 
-  @Column({ type: 'integer', name: 'display_order_seller_shop', nullable: true })
+  @Column({
+    type: 'integer',
+    name: 'display_order_seller_shop',
+    nullable: true,
+  })
   sellerDisplayOrderShop: number | null;
 
-  @Column({ type: 'integer', name: 'display_order_redemptions', nullable: true })
+  @Column({
+    type: 'integer',
+    name: 'display_order_redemptions',
+    nullable: true,
+  })
   displayOrderRedemptions: number | null;
 
   @Column({ type: 'integer', name: 'featured_display_order', nullable: true })
   featuredDisplayOrder: number | null;
 
-  @Column({ type: 'boolean', name: 'sort_by_purchase_option_shop', default: false })
+  @Column({
+    type: 'boolean',
+    name: 'sort_by_purchase_option_shop',
+    default: false,
+  })
   sortByPurchaseOptionShop: boolean;
 
-  @Column({ type: 'boolean', name: 'sort_by_purchase_option_redemptions', default: false })
+  @Column({
+    type: 'boolean',
+    name: 'sort_by_purchase_option_redemptions',
+    default: false,
+  })
   sortByPurchaseOptionRedemptions: boolean;
 
-  @Column({ type: 'boolean', name: 'show_on_redemptions', default: true, nullable: false })
+  @Column({
+    type: 'boolean',
+    name: 'show_on_redemptions',
+    default: true,
+    nullable: false,
+  })
   showOnRedemptions: boolean;
 
-  @Column({ type: 'boolean', name: 'show_on_shop', default: true, nullable: false })
+  @Column({
+    type: 'boolean',
+    name: 'show_on_shop',
+    default: true,
+    nullable: false,
+  })
   showOnShop: boolean;
 
   @Column({ type: 'boolean', name: 'is_pro_only', default: false })

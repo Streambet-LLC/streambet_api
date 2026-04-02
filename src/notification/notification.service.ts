@@ -388,10 +388,7 @@ export class NotificationService {
   /**
    * Send email when a concierge is assigned to a user
    */
-  async sendConciergeAssignedEmail(
-    user: User,
-    conciergeName: string,
-  ) {
+  async sendConciergeAssignedEmail(user: User, conciergeName: string) {
     try {
       if (!user.email || user.email.includes('@example.com')) return;
 
