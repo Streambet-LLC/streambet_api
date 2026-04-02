@@ -269,6 +269,7 @@ export class PrizeConfigurationDto {
   })
   proEarlyAccessUntil: Date | null;
 }
+/**
  * DTO for creating a new prize tier (admin only)
  */
 export class CreatePrizeTierDto {
@@ -458,6 +459,7 @@ export class CreatePrizeTierDto {
   @IsBoolean()
   isProOnly?: boolean;
 }
+/**
  * Updates create a new row with is_active=true and set old row to is_active=false
  */
 export class UpdatePrizeTierDto {
