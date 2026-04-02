@@ -85,6 +85,12 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'boolean', name: 'show_on_shop', default: true, nullable: false })
   showOnShop: boolean;
 
+  @Column({ type: 'boolean', name: 'is_pro_only', default: false })
+  isProOnly: boolean;
+
+  @Column({ type: 'timestamp', name: 'pro_early_access_until', nullable: true })
+  proEarlyAccessUntil: Date | null;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

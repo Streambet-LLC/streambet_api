@@ -838,6 +838,7 @@ export class PrizeService {
     const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
 
     // Create new tier
+    const proEarlyAccessUntil = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
       amount,
@@ -858,6 +859,8 @@ export class PrizeService {
       isActive: true,
       createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
+      isProOnly: dto.isProOnly ?? false,
+      proEarlyAccessUntil,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -3094,6 +3097,8 @@ export class PrizeService {
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
       updatedBy: entity.updatedBy,
+      isProOnly: entity.isProOnly ?? false,
+      proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
     };
   }
 }

@@ -342,4 +342,76 @@ export class NotificationService {
       );
     }
   }
+
+  /**
+   * Send email for CardCade Pro subscription events
+   */
+  async sendProSubscriptionEmail(
+    user: User,
+    plan: string,
+    event: 'activated' | 'cancelled',
+  ) {
+    try {
+      if (!user.email || user.email.includes('@example.com')) return;
+
+      const subject =
+        event === 'activated'
+          ? 'Welcome to CardCade Pro! 🎉'
+          : 'CardCade Pro Subscription Cancelled';
+
+      const message =
+        event === 'activated'
+          ? `Hi ${user.username}, welcome to CardCade Pro! You now have access to exclusive items, 48-hour early access to new drops, and concierge support. Your ${plan} plan is now active.`
+          : `Hi ${user.username}, your CardCade Pro subscription has been cancelled. You will retain access until the end of your current billing period.`;
+
+      const emailType =
+        event === 'activated'
+          ? EmailType.ProSubscriptionActivated
+          : EmailType.ProSubscriptionCancelled;
+
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [user.email],
+          subject,
+          params: {
+            fullName: user.username,
+            message,
+          },
+        },
+        emailType,
+      );
+    } catch (e) {
+      Logger.error('Failed to send pro subscription email', e);
+    }
+  }
+
+  /**
+   * Send email when a concierge is assigned to a user
+   */
+  async sendConciergeAssignedEmail(
+    user: User,
+    conciergeName: string,
+  ) {
+    try {
+      if (!user.email || user.email.includes('@example.com')) return;
+
+      const subject = 'Your CardCade Pro Concierge Has Been Assigned!';
+      const message = `Your concierge is ${conciergeName} and they will be reaching out shortly!`;
+
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [user.email],
+          subject,
+          params: {
+            fullName: user.username,
+            conciergeName,
+            message,
+          },
+        },
+        EmailType.ConciergeAssigned,
+      );
+    } catch (e) {
+      Logger.error('Failed to send concierge assigned email', e);
+    }
+  }
 }

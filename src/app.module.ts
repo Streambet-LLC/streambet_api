@@ -51,6 +51,8 @@ import { DailySpinModule } from './daily-spin/daily-spin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
 import { InboxModule } from './inbox/inbox.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { ConciergeModule } from './concierge/concierge.module';
 
 @Module({
   imports: [
@@ -142,6 +144,8 @@ import { InboxModule } from './inbox/inbox.module';
     ScheduleModule.forRoot(),
     ScheduledTaskModule,
     InboxModule,
+    SubscriptionModule,
+    ConciergeModule,
   ],
   controllers: [AppController],
   providers: [
