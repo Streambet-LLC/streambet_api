@@ -102,33 +102,49 @@ export class SubscriptionService {
 
     const customerId = await this.getOrCreateStripeCustomer(user);
     const priceId = this.getPriceId(plan);
-    const clientUrl = this.configService.get<string>(
-      'CLIENT_URL',
-      'http://localhost:3000',
+    const clientUrl =
+      this.configService.get<string>('CLIENT_URL') ||
+      this.configService.get<string>('APPLICATION_HOST') ||
+      'http://localhost:3000';
+
+    this.logger.log(
+      `Creating checkout session: user=${userId}, plan=${plan}, priceId=${priceId}, clientUrl=${clientUrl}`,
     );
 
-    const session = await this.stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
-      success_url: `${clientUrl}/settings?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${clientUrl}/settings?subscription=cancel`,
-      metadata: {
-        userId,
-        plan,
-        type: 'cardcade_pro',
-      },
-      subscription_data: {
+    try {
+      const session = await this.stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: 'subscription',
+        success_url: `${clientUrl}/settings?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${clientUrl}/settings?subscription=cancel`,
         metadata: {
           userId,
           plan,
           type: 'cardcade_pro',
         },
-      },
-    });
+        subscription_data: {
+          metadata: {
+            userId,
+            plan,
+            type: 'cardcade_pro',
+          },
+        },
+      });
 
-    return { sessionId: session.id, url: session.url };
+      return { sessionId: session.id, url: session.url };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to create Stripe checkout session: ${message}`,
+        stack,
+      );
+      throw new BadRequestException(
+        `Failed to create checkout session: ${message}`,
+      );
+    }
   }
 
   /**
