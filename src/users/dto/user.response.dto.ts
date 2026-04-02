@@ -63,6 +63,13 @@ export class PublicUserProfileDto {
     description: 'Whether user is a creator',
   })
   isCreator?: boolean;
+
+  @ApiProperty({
+    required: false,
+    example: false,
+    description: 'Whether user has an active CardCade Pro subscription',
+  })
+  isProSubscriber?: boolean;
 }
 
 export class UserProfileResponseDto {

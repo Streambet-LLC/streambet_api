@@ -50,31 +50,6 @@ export class PrizeController {
   constructor(private readonly prizeService: PrizeService) {}
 
   /**
-   * Filter items based on pro subscription status.
-   * - Pro-only items are hidden from non-pro users
-   * - Items in the 48-hour early access window are hidden from non-pro users
-   */
-  private filterProItems(
-    items: PrizeConfigurationDto[],
-    isProUser: boolean,
-  ): PrizeConfigurationDto[] {
-    if (isProUser) return items; // Pro users see everything
-    const now = new Date();
-    return items.filter((item) => {
-      // Hide pro-only items from non-pro users
-      if (item.isProOnly) return false;
-      // Hide items still in the 48-hour early access window
-      if (
-        item.proEarlyAccessUntil &&
-        new Date(item.proEarlyAccessUntil) > now
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  /**
    * Public endpoint: Get all active prize tiers
    * Used by frontend to display prize tiers and images
    */
@@ -86,11 +61,8 @@ export class PrizeController {
     type: [PrizeConfigurationDto],
   })
   @ApiResponse({ status: 404, description: 'No active tiers found' })
-  async getPrizeConfiguration(
-    @Query('pro') pro?: string,
-  ): Promise<PrizeConfigurationDto[]> {
-    const items = await this.prizeService.getPrizeConfiguration();
-    return this.filterProItems(items, pro === 'true');
+  async getPrizeConfiguration(): Promise<PrizeConfigurationDto[]> {
+    return this.prizeService.getPrizeConfiguration();
   }
 
   @Get('shop-items')
@@ -100,9 +72,8 @@ export class PrizeController {
     description: 'Returns all active shop items from all sellers',
     type: [PrizeConfigurationDto],
   })
-  async getAllShopItems(@Query('pro') pro?: string) {
-    const items = await this.prizeService.getAllShopItems();
-    return this.filterProItems(items, pro === 'true');
+  async getAllShopItems() {
+    return this.prizeService.getAllShopItems();
   }
 
   @Get('shops')
@@ -122,15 +93,9 @@ export class PrizeController {
     description: 'Returns seller shop details and items',
   })
   @ApiResponse({ status: 404, description: 'Seller shop not found' })
-  async getShopItemsByUsername(
-    @Param('username') username: string,
-    @Query('pro') pro?: string,
-  ) {
+  async getShopItemsByUsername(@Param('username') username: string) {
     const result = await this.prizeService.getPublicShopByUsername(username);
-    return {
-      ...result,
-      items: this.filterProItems(result.items, pro === 'true'),
-    };
+    return result;
   }
 
   /**

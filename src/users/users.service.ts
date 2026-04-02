@@ -373,6 +373,9 @@ export class UsersService {
         ...(user.role === UserRole.CREATOR && {
           isCreator: true,
         }),
+        ...(user.isProSubscriber && {
+          isProSubscriber: true,
+        }),
       };
 
       return response;
