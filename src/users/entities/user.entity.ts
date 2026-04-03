@@ -43,7 +43,7 @@ export class User extends BaseEntity {
   country: string;
 
   @Column({
-    length: 255,
+    length: 2048,
     type: 'varchar',
     nullable: true,
     name: 'profile_image_url',
