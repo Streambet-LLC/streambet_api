@@ -480,6 +480,7 @@ export class UsersService {
         state: item.state,
         role: item.role,
         isSeller: item.isSeller,
+        isProSubscriber: item.isProSubscriber,
         profileImageUrl: item.profileImageUrl,
         revShare: item.revShare,
         applicationFeePercent:
