@@ -255,8 +255,20 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({ example: 'uuid', nullable: true })
   updatedBy: string | null;
-}
 
+  @ApiProperty({
+    example: false,
+    description: 'Whether this item is exclusive to CardCade Pro subscribers',
+  })
+  isProOnly: boolean;
+
+  @ApiProperty({
+    example: '2025-06-01T00:00:00Z',
+    nullable: true,
+    description: 'Pro early access deadline (48h after creation). Item is only visible to Pro subscribers until this time.',
+  })
+  proEarlyAccessUntil: Date | null;
+}
 /**
  * DTO for creating a new prize tier (admin only)
  */
@@ -437,10 +449,17 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsString()
   createdBy?: string;
-}
 
+  @ApiProperty({
+    example: false,
+    description: 'Whether this item is exclusive to CardCade Pro subscribers only',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isProOnly?: boolean;
+}
 /**
- * DTO for updating an existing prize tier (admin only)
  * Updates create a new row with is_active=true and set old row to is_active=false
  */
 export class UpdatePrizeTierDto {
@@ -618,6 +637,15 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsString()
   createdBy?: string;
+
+  @ApiProperty({
+    example: false,
+    description: 'Whether this item is exclusive to CardCade Pro subscribers only',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isProOnly?: boolean;
 }
 
 /**

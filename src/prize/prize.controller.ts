@@ -94,7 +94,8 @@ export class PrizeController {
   })
   @ApiResponse({ status: 404, description: 'Seller shop not found' })
   async getShopItemsByUsername(@Param('username') username: string) {
-    return this.prizeService.getPublicShopByUsername(username);
+    const result = await this.prizeService.getPublicShopByUsername(username);
+    return result;
   }
 
   /**
@@ -207,7 +208,9 @@ export class PrizeController {
    * Allows unauthenticated access since Stripe redirects without JWT token
    */
   @Get('orders/:orderId/success-details')
-  @ApiOperation({ summary: 'Get order details for purchase success page (public)' })
+  @ApiOperation({
+    summary: 'Get order details for purchase success page (public)',
+  })
   @ApiParam({ name: 'orderId', description: 'Prize order ID' })
   @ApiResponse({
     status: 200,
@@ -215,9 +218,7 @@ export class PrizeController {
       'Returns order success details including item, price, and seller info',
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async getOrderSuccessDetails(
-    @Param('orderId') orderId: string,
-  ) {
+  async getOrderSuccessDetails(@Param('orderId') orderId: string) {
     return this.prizeService.getOrderSuccessDetailsPublic(orderId);
   }
 

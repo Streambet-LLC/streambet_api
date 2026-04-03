@@ -838,6 +838,7 @@ export class PrizeService {
     const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
 
     // Create new tier
+    const proEarlyAccessUntil = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
       amount,
@@ -858,6 +859,8 @@ export class PrizeService {
       isActive: true,
       createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
+      isProOnly: dto.isProOnly ?? false,
+      proEarlyAccessUntil,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1591,6 +1594,25 @@ export class PrizeService {
       );
     }
 
+    // Block non-Pro users from purchasing Pro-only or early-access items
+    const buyer = await this.userRepository.findOne({ where: { id: userId } });
+    if (!buyer?.isProSubscriber) {
+      const now = new Date();
+      if (prize.isProOnly) {
+        throw new ForbiddenException(
+          'This item is exclusive to CardCade Pro members.',
+        );
+      }
+      if (
+        prize.proEarlyAccessUntil &&
+        new Date(prize.proEarlyAccessUntil as unknown as string) > now
+      ) {
+        throw new ForbiddenException(
+          'This item is in the 48-hour early access window for CardCade Pro members.',
+        );
+      }
+    }
+
     const isSellerOwnedItem = await this.isSellerOwnedItem(prize);
     if (isSellerOwnedItem && dto.paymentMethod !== 'usd') {
       throw new BadRequestException(
@@ -1761,9 +1783,9 @@ export class PrizeService {
         // Load seller to check for Stripe Connect account and application fee
         const seller = prize.createdBy
           ? await this.userRepository.findOne({
-            where: { id: prize.createdBy },
-            relations: ['wallet'],
-          })
+              where: { id: prize.createdBy },
+              relations: ['wallet'],
+            })
           : null;
 
         // Buyer fee applies to item subtotal only (shipping excluded).
@@ -1775,7 +1797,9 @@ export class PrizeService {
         const totalChargeCents = subtotalCents + buyerFeeCents;
 
         const sessionParams = {
-          payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+          payment_method_types: [
+            'card',
+          ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
           line_items: [
             {
               price_data: {
@@ -2437,6 +2461,25 @@ export class PrizeService {
       );
     }
 
+    // Block non-Pro users from making offers on Pro-only or early-access items
+    const buyer = await this.userRepository.findOne({ where: { id: userId } });
+    if (!buyer?.isProSubscriber) {
+      const now = new Date();
+      if (prize.isProOnly) {
+        throw new ForbiddenException(
+          'This item is exclusive to CardCade Pro members.',
+        );
+      }
+      if (
+        prize.proEarlyAccessUntil &&
+        new Date(prize.proEarlyAccessUntil as unknown as string) > now
+      ) {
+        throw new ForbiddenException(
+          'This item is in the 48-hour early access window for CardCade Pro members.',
+        );
+      }
+    }
+
     const SHIPPING_FEE = 5; // $5 shipping fee
     const totalWithShipping = dto.offerAmount + SHIPPING_FEE;
 
@@ -3094,6 +3137,8 @@ export class PrizeService {
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
       updatedBy: entity.updatedBy,
+      isProOnly: entity.isProOnly ?? false,
+      proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
     };
   }
 }

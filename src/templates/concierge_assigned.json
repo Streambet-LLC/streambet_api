@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "subject": {
+      "type": "string"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "conciergeName": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "required": ["fullName", "conciergeName", "message"]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}

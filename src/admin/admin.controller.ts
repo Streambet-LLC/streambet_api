@@ -59,6 +59,8 @@ import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.servic
 import { ViewBetDto } from 'src/betting/dto/view-bet.dto';
 import { CreatorService } from 'src/creator/creator.service';
 import { ApplicationFilterDto } from 'src/creator/dto/application-filter.dto';
+import { SubscriptionService } from 'src/subscription/subscription.service';
+import { SubscriptionPlan } from 'src/enums/subscription-plan.enum';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -78,6 +80,7 @@ export class AdminController {
     private readonly streamService: StreamService,
     private readonly payoutService: PlatformPayoutService,
     private readonly creatorService: CreatorService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   // Helper method to check if user is admin
@@ -1249,6 +1252,47 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Seller onboarding marked as completed',
+      data: true,
+    };
+  }
+
+  // CardCade Pro Management
+
+  @ApiOperation({ summary: 'Grant CardCade Pro to a user' })
+  @SwaggerApiResponse({ status: 200, description: 'Pro granted successfully' })
+  @SwaggerApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Post('pro/grant/:userId')
+  async grantPro(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+    @Body() body: { plan?: SubscriptionPlan },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const subscription = await this.subscriptionService.adminGrantPro(
+      userId,
+      body.plan || SubscriptionPlan.MONTHLY,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'CardCade Pro granted successfully',
+      data: subscription,
+    };
+  }
+
+  @ApiOperation({ summary: 'Revoke CardCade Pro from a user' })
+  @SwaggerApiResponse({ status: 200, description: 'Pro revoked successfully' })
+  @SwaggerApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @Post('pro/revoke/:userId')
+  async revokePro(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    await this.subscriptionService.adminRevokePro(userId);
+    return {
+      status: HttpStatus.OK,
+      message: 'CardCade Pro revoked successfully',
       data: true,
     };
   }

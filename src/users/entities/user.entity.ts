@@ -227,4 +227,12 @@ export class User extends BaseEntity {
     name: 'admin_fee_override_percent',
   })
   adminFeeOverridePercent?: number | null;
+
+  @Column({
+    type: 'boolean',
+    default: false,
+    nullable: false,
+    name: 'is_pro_subscriber',
+  })
+  isProSubscriber: boolean;
 }
