@@ -102,6 +102,18 @@
           "valueFrom": "/cardcade/non_pro_prod/STRIPE_CONNECT_WEBHOOK_SECRET"
         },
         {
+          "name": "STRIPE_PRO_MONTHLY_PRICE_ID",
+          "valueFrom": "/cardcade/non_pro_prod/STRIPE_PRO_MONTHLY_PRICE_ID"
+        },
+        {
+          "name": "STRIPE_PRO_YEARLY_PRICE_ID",
+          "valueFrom": "/cardcade/non_pro_prod/STRIPE_PRO_YEARLY_PRICE_ID"
+        },
+        {
+          "name": "STRIPE_SUBSCRIPTION_WEBHOOK_SECRET",
+          "valueFrom": "/cardcade/non_pro_prod/STRIPE_SUBSCRIPTION_WEBHOOK_SECRET"
+        },
+        {
           "name": "NEW_RELIC_LICENSE_KEY",
           "valueFrom": "/cardcade/non_pro_prod/NEW_RELIC_LICENSE_KEY"
         },
