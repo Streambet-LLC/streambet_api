@@ -13,6 +13,7 @@ import { PrizeModule } from 'src/prize/prize.module';
 import { User } from 'src/users/entities/user.entity';
 import { Webhook } from 'src/webhook/entities/webhook.entity';
 import { EmailsModule } from 'src/emails/email.module';
+import { CartModule } from 'src/cart/cart.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { EmailsModule } from 'src/emails/email.module';
     forwardRef(() => QueueModule),
     forwardRef(() => PrizeModule),
     forwardRef(() => EmailsModule),
+    forwardRef(() => CartModule),
     TypeOrmModule.forFeature([Transaction, PrizeOrder, User, Webhook]),
   ],
   controllers: [PaymentsController],
