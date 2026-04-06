@@ -35,6 +35,13 @@ import { TransactionType } from '../enums/transaction-type.enum';
 
 const SHIPPING_FEE = 5;
 
+/** Resolve a relative image path to a full S3 URL for Stripe */
+const resolveImageUrl = (imageUrl: string | null | undefined): string | null => {
+  if (!imageUrl) return null;
+  if (imageUrl.startsWith('http')) return imageUrl;
+  return `https://streambets3prod.s3.us-east-1.amazonaws.com/${imageUrl}`;
+};
+
 interface SellerGroup {
   sellerId: string | null;
   sellerName: string;
@@ -568,8 +575,8 @@ export class CartService {
             currency: 'usd',
             product_data: {
               name: item.prizeConfiguration.name,
-              ...(item.prizeConfiguration.imageUrl
-                ? { images: [item.prizeConfiguration.imageUrl] }
+              ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
+                ? { images: [resolveImageUrl(item.prizeConfiguration.imageUrl)] }
                 : {}),
             },
             unit_amount: Math.round(
@@ -648,8 +655,8 @@ export class CartService {
             currency: 'usd',
             product_data: {
               name: item.prizeConfiguration.name,
-              ...(item.prizeConfiguration.imageUrl
-                ? { images: [item.prizeConfiguration.imageUrl] }
+              ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
+                ? { images: [resolveImageUrl(item.prizeConfiguration.imageUrl)] }
                 : {}),
             },
             unit_amount: Math.round(
