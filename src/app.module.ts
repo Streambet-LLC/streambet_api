@@ -53,6 +53,7 @@ import { ScheduledTaskModule } from './scheduled-tasks/scheduled-tasks.module';
 import { InboxModule } from './inbox/inbox.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { ConciergeModule } from './concierge/concierge.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -146,6 +147,7 @@ import { ConciergeModule } from './concierge/concierge.module';
     InboxModule,
     SubscriptionModule,
     ConciergeModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [
