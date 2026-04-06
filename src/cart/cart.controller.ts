@@ -53,18 +53,33 @@ export class CartController {
           items: group.items.map((item) => ({
             id: item.id,
             quantity: item.quantity,
-            prizeConfiguration: {
-              id: item.prizeConfiguration.id,
-              name: item.prizeConfiguration.name,
-              amount: item.prizeConfiguration.amount,
-              imageUrl: item.prizeConfiguration.imageUrl,
-              coverImageId: item.prizeConfiguration.coverImageId,
-              stock: item.prizeConfiguration.stock,
-              purchaseOption: item.prizeConfiguration.purchaseOption,
-              category: item.prizeConfiguration.category,
-              brand: item.prizeConfiguration.brand,
-              createdBy: item.prizeConfiguration.createdBy,
-            },
+            prizeConfiguration: (() => {
+              const sortedImages = (item.prizeConfiguration.itemImages || [])
+                .slice()
+                .sort((a, b) => a.displayOrder - b.displayOrder);
+              const resolvedCoverId =
+                item.prizeConfiguration.coverImageId ||
+                sortedImages[0]?.id ||
+                null;
+              return {
+                id: item.prizeConfiguration.id,
+                name: item.prizeConfiguration.name,
+                amount: item.prizeConfiguration.amount,
+                imageUrl: item.prizeConfiguration.imageUrl,
+                coverImageId: resolvedCoverId,
+                stock: item.prizeConfiguration.stock,
+                purchaseOption: item.prizeConfiguration.purchaseOption,
+                category: item.prizeConfiguration.category,
+                brand: item.prizeConfiguration.brand,
+                createdBy: item.prizeConfiguration.createdBy,
+                itemImages: sortedImages.map((img) => ({
+                  id: img.id,
+                  imageUrl: img.imageUrl,
+                  displayOrder: img.displayOrder,
+                  isCover: resolvedCoverId ? img.id === resolvedCoverId : false,
+                })),
+              };
+            })(),
           })),
           itemSubtotal: (group.itemSubtotalCents / 100).toFixed(2),
           shipping: (group.shippingCents / 100).toFixed(2),

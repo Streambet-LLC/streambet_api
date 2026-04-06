@@ -35,31 +35,6 @@ export class UpdateCartItemDto {
   quantity: number;
 }
 
-export class CartCheckoutDto {
-  @ApiProperty({ description: 'Shipping address' })
-  @ValidateNested()
-  @Type(() => ShippingAddressDto)
-  shippingAddress: ShippingAddressDto;
-
-  @ApiPropertyOptional({
-    description:
-      'Payment method for CardCade items. Seller items are always USD.',
-    enum: ['coins', 'usd', 'combined'],
-    default: 'usd',
-  })
-  @IsOptional()
-  @IsEnum(['coins', 'usd', 'combined'])
-  cardcadePaymentMethod?: 'coins' | 'usd' | 'combined';
-
-  @ApiPropertyOptional({
-    description: 'Coins to apply towards CardCade items (if combined)',
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  coinsToApply?: number;
-}
-
 export class ShippingAddressDto {
   @ApiProperty()
   @IsString()
@@ -85,6 +60,31 @@ export class ShippingAddressDto {
   @ApiProperty()
   @IsString()
   country: string;
+}
+
+export class CartCheckoutDto {
+  @ApiProperty({ description: 'Shipping address' })
+  @ValidateNested()
+  @Type(() => ShippingAddressDto)
+  shippingAddress: ShippingAddressDto;
+
+  @ApiPropertyOptional({
+    description:
+      'Payment method for CardCade items. Seller items are always USD.',
+    enum: ['coins', 'usd', 'combined'],
+    default: 'usd',
+  })
+  @IsOptional()
+  @IsEnum(['coins', 'usd', 'combined'])
+  cardcadePaymentMethod?: 'coins' | 'usd' | 'combined';
+
+  @ApiPropertyOptional({
+    description: 'Coins to apply towards CardCade items (if combined)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  coinsToApply?: number;
 }
 
 export class BundleOfferDto {

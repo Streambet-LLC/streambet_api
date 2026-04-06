@@ -103,6 +103,7 @@ export class CartService {
         'items',
         'items.prizeConfiguration',
         'items.prizeConfiguration.creator',
+        'items.prizeConfiguration.itemImages',
       ],
     });
 
@@ -193,7 +194,9 @@ export class CartService {
       const group = groupMap.get(key);
       group.items.push(item);
       const itemCents = Math.round(
-        Number(item.prizeConfiguration.amount) * 100 * item.quantity,
+        (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+          100 *
+          item.quantity,
       );
       group.itemSubtotalCents += itemCents;
     }
@@ -398,7 +401,9 @@ export class CartService {
           (sum, item) =>
             sum +
             Math.round(
-              Number(item.prizeConfiguration.amount) * 100 * item.quantity,
+              (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+                100 *
+                item.quantity,
             ),
           0,
         );
@@ -481,12 +486,7 @@ export class CartService {
             item,
             dto.shippingAddress,
             'coins',
-            Math.round(
-              Number(item.prizeConfiguration.amount) *
-                100 *
-                item.quantity *
-                (CADECOINS_PER_USD / 100),
-            ),
+            Math.round(Number(item.prizeConfiguration.amount) * item.quantity),
             0,
           );
           order.status = 'paid';
@@ -547,7 +547,9 @@ export class CartService {
     for (const group of sellerGroups) {
       for (const item of group.items) {
         const _itemCents = Math.round(
-          Number(item.prizeConfiguration.amount) * 100 * item.quantity,
+          (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+            100 *
+            item.quantity,
         );
         const order = await this.createOrder(
           userId,
@@ -555,7 +557,8 @@ export class CartService {
           dto.shippingAddress,
           'usd',
           0,
-          Number(item.prizeConfiguration.amount) * item.quantity,
+          (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+            item.quantity,
         );
         cartOrderIds.push(order.id);
         allOrderIds.push(order.id);
@@ -570,7 +573,8 @@ export class CartService {
                 : {}),
             },
             unit_amount: Math.round(
-              Number(item.prizeConfiguration.amount) * 100,
+              (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+                100,
             ),
           },
           quantity: item.quantity,
@@ -633,7 +637,8 @@ export class CartService {
           dto.shippingAddress,
           dto.cardcadePaymentMethod || 'usd',
           0,
-          Number(item.prizeConfiguration.amount) * item.quantity,
+          (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+            item.quantity,
         );
         cartOrderIds.push(order.id);
         allOrderIds.push(order.id);
@@ -648,7 +653,8 @@ export class CartService {
                 : {}),
             },
             unit_amount: Math.round(
-              Number(item.prizeConfiguration.amount) * 100,
+              (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+                100,
             ),
           },
           quantity: item.quantity,
@@ -956,7 +962,9 @@ export class CartService {
     usdCharged: number,
   ): Promise<PrizeOrder> {
     const totalPrice =
-      Number(item.prizeConfiguration.amount) * item.quantity + SHIPPING_FEE;
+      (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
+        item.quantity +
+      SHIPPING_FEE;
 
     const order = this.prizeOrderRepository.create({
       userId,
