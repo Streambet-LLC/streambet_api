@@ -35,11 +35,20 @@ import { TransactionType } from '../enums/transaction-type.enum';
 
 const SHIPPING_FEE = 5;
 
-/** Resolve a relative image path to a full S3 URL for Stripe */
+/** Resolve a relative image path to a full S3 URL for Stripe.
+ *  Returns null for any value that cannot form a valid absolute URL
+ *  so Stripe never receives a malformed images[] entry. */
 const resolveImageUrl = (imageUrl: string | null | undefined): string | null => {
-  if (!imageUrl) return null;
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `https://streambets3prod.s3.us-east-1.amazonaws.com/${imageUrl}`;
+  if (!imageUrl || !imageUrl.trim()) return null;
+  const raw = imageUrl.startsWith('http')
+    ? imageUrl
+    : `https://streambets3prod.s3.us-east-1.amazonaws.com/${encodeURI(imageUrl)}`;
+  try {
+    new URL(raw); // validate
+    return raw;
+  } catch {
+    return null; // skip invalid URLs rather than breaking the Stripe call
+  }
 };
 
 interface SellerGroup {
@@ -395,12 +404,27 @@ export class CartService {
       });
     }
 
+    // Cancel any stale buy_attempted orders from previous abandoned checkouts
+    const staleOrders = await this.prizeOrderRepository.find({
+      where: { userId, status: 'buy_attempted' },
+    });
+    if (staleOrders.length > 0) {
+      for (const stale of staleOrders) {
+        stale.status = 'cancelled';
+        await this.prizeOrderRepository.save(stale);
+      }
+      this.logger.log(
+        `Cancelled ${staleOrders.length} stale buy_attempted order(s) for user ${userId}`,
+      );
+    }
+
     // Filter to only buy-eligible items (not offer-only)
     const buyableGroups: SellerGroup[] = [];
     for (const group of summary.sellerGroups) {
       const buyableItems = group.items.filter(
         (item) =>
-          item.prizeConfiguration.purchaseOption !== PrizePurchaseOption.OFFERS_ONLY,
+          item.prizeConfiguration.purchaseOption !==
+          PrizePurchaseOption.OFFERS_ONLY,
       );
       if (buyableItems.length > 0) {
         // Recalculate group with only buyable items
@@ -574,9 +598,11 @@ export class CartService {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: item.prizeConfiguration.name,
+              name: `${group.shopName} — ${item.prizeConfiguration.name}`,
               ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
-                ? { images: [resolveImageUrl(item.prizeConfiguration.imageUrl)] }
+                ? {
+                    images: [resolveImageUrl(item.prizeConfiguration.imageUrl)],
+                  }
                 : {}),
             },
             unit_amount: Math.round(
@@ -617,9 +643,7 @@ export class CartService {
       // Calculate transfer to seller (items + shipping - seller fee)
       if (group.stripeAccountId) {
         const sellerTransferAmount =
-          group.itemSubtotalCents +
-          group.shippingCents -
-          group.sellerFeeCents;
+          group.itemSubtotalCents + group.shippingCents - group.sellerFeeCents;
 
         transferInstructions.push({
           orderId: cartOrderIds[cartOrderIds.length - 1],
@@ -654,9 +678,11 @@ export class CartService {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: item.prizeConfiguration.name,
+              name: `CardCade's Shop — ${item.prizeConfiguration.name}`,
               ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
-                ? { images: [resolveImageUrl(item.prizeConfiguration.imageUrl)] }
+                ? {
+                    images: [resolveImageUrl(item.prizeConfiguration.imageUrl)],
+                  }
                 : {}),
             },
             unit_amount: Math.round(
@@ -682,26 +708,52 @@ export class CartService {
     }
 
     // Create Stripe session
-    const clientUrl = this.configService.get<string>('CLIENT_URL');
-    const stripeSession = await this.stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: lineItems,
-      success_url: `${clientUrl}/cart/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${clientUrl}/cart`,
-      metadata: {
-        type: 'cart_checkout',
-        userId,
-        orderIds: cartOrderIds.join(','),
-        transferInstructions: JSON.stringify(transferInstructions),
-      },
-      payment_intent_data: {
+    const clientUrl =
+      this.configService.get<string>('CLIENT_URL') ||
+      this.configService.get<string>('app.clientUrl') ||
+      'http://localhost:8080';
+    const successUrl = `${clientUrl}/cart/checkout-success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${clientUrl}/cart`;
+
+    let stripeSession: Stripe.Checkout.Session;
+    try {
+      stripeSession = await this.stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: lineItems,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: {
           type: 'cart_checkout',
           userId,
           orderIds: cartOrderIds.join(','),
+          transferInstructions: JSON.stringify(transferInstructions),
         },
-      },
-    });
+        payment_intent_data: {
+          metadata: {
+            type: 'cart_checkout',
+            userId,
+            orderIds: cartOrderIds.join(','),
+          },
+        },
+      });
+    } catch (err: unknown) {
+      const errMsg =
+        err instanceof Error ? err.message : 'Unknown Stripe error';
+      const errStack = err instanceof Error ? err.stack : undefined;
+      this.logger.error(
+        `Stripe checkout session creation failed: ${errMsg}`,
+        errStack,
+      );
+      this.logger.error(
+        `Stripe params — success_url: ${successUrl}, cancel_url: ${cancelUrl}, ` +
+          `line_items count: ${lineItems.length}`,
+      );
+      // Clean up created orders since payment session failed
+      for (const orderId of cartOrderIds) {
+        await this.prizeOrderRepository.delete(orderId);
+      }
+      throw new BadRequestException(`Payment session failed: ${errMsg}`);
+    }
 
     // Save stripe session ID on all orders
     for (const orderId of cartOrderIds) {
@@ -710,12 +762,6 @@ export class CartService {
         status: 'buy_attempted',
       });
     }
-
-    // Remove purchased items from cart
-    const purchasedItemIds = buyableGroups.flatMap((g) =>
-      g.items.map((i) => i.id),
-    );
-    await this.cartItemRepository.delete({ id: In(purchasedItemIds) });
 
     return {
       stripeSessionUrl: stripeSession.url,
@@ -756,6 +802,34 @@ export class CartService {
       );
     }
 
+    // Remove purchased items from the user's cart now that payment is confirmed
+    try {
+      const cart = await this.cartRepository.findOne({
+        where: { userId },
+        relations: ['items'],
+      });
+      if (cart) {
+        const paidPrizeConfigIds = orderIds.length
+          ? (
+              await this.prizeOrderRepository.find({
+                where: { id: In(orderIds) },
+                select: ['prizeConfigurationId'],
+              })
+            ).map((o) => o.prizeConfigurationId)
+          : [];
+        const itemsToRemove = cart.items.filter((ci) =>
+          paidPrizeConfigIds.includes(ci.prizeConfigurationId),
+        );
+        if (itemsToRemove.length > 0) {
+          await this.cartItemRepository.remove(itemsToRemove);
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to remove cart items after payment: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
     // Process transfers to sellers
     if (metadata.transferInstructions) {
       try {
@@ -773,7 +847,8 @@ export class CartService {
         for (const transfer of transfers) {
           try {
             const chargeId = paymentIntentId
-              ? (await this.stripe.paymentIntents.retrieve(paymentIntentId)).latest_charge as string
+              ? ((await this.stripe.paymentIntents.retrieve(paymentIntentId))
+                  .latest_charge as string)
               : undefined;
             await this.stripe.transfers.create({
               amount: transfer.amountCents,
