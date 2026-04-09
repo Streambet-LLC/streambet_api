@@ -34,6 +34,7 @@ import { PrizeService } from 'src/prize/prize.service';
 import { User } from 'src/users/entities/user.entity';
 import { Webhook } from 'src/webhook/entities/webhook.entity';
 import { EmailsService } from 'src/emails/email.service';
+import { CartService } from 'src/cart/cart.service';
 
 @Injectable()
 export class PaymentsService {
@@ -68,6 +69,8 @@ export class PaymentsService {
     @InjectRepository(Webhook)
     private readonly webhookRepository: Repository<Webhook>,
     private readonly emailsService: EmailsService,
+    @Inject(forwardRef(() => CartService))
+    private readonly cartService: CartService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -381,6 +384,23 @@ export class PaymentsService {
       } catch (error) {
         this.logger.error(
           `Stripe webhook: failed to confirm prize order ${orderId}: ${error}`,
+        );
+      }
+    }
+
+    // Handle cart checkout purchases
+    if (session.metadata?.type === 'cart_checkout') {
+      try {
+        this.logger.log(
+          `Stripe webhook: processing cart checkout session ${session.id}`,
+        );
+        await this.cartService.handleCheckoutSuccess(session);
+        this.logger.log(
+          `Stripe webhook: cart checkout session ${session.id} successfully processed`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Stripe webhook: failed to process cart checkout session ${session.id}: ${error}`,
         );
       }
     }
