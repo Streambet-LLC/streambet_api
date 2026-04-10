@@ -356,26 +356,35 @@ export class PaymentsService {
         const order = await this.prizeOrderRepository.findOne({
           where: { id: orderId },
         });
-        if (order && order.status !== 'paid') {
-          // Store the payment intent ID for reference
-          if (session.payment_intent) {
-            const paymentIntentId =
-              typeof session.payment_intent === 'string'
-                ? session.payment_intent
-                : session.payment_intent.id;
+        // Store the payment intent ID for reference (even if already paid)
+        if (order && session.payment_intent) {
+          const paymentIntentId =
+            typeof session.payment_intent === 'string'
+              ? session.payment_intent
+              : session.payment_intent.id;
+          if (!order.stripePaymentIntentId) {
             await this.prizeOrderRepository.update(orderId, {
               stripePaymentIntentId: paymentIntentId,
             });
           }
+        }
+
+        if (order) {
           this.logger.log(
-            `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed`,
+            `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed (status=${order.status})`,
           );
-          const transactionSubtotalCents = session.metadata?.transactionSubtotalCents
+          const transactionSubtotalCents = session.metadata
+            ?.transactionSubtotalCents
             ? parseInt(session.metadata.transactionSubtotalCents, 10)
             : undefined;
+          const discountCodeId = session.metadata?.discountCodeId || undefined;
+          const discountCents = session.metadata?.discountCents || undefined;
           await this.prizeService.handlePaymentSuccess(
             orderId,
             transactionSubtotalCents,
+            discountCodeId,
+            discountCents,
+            session.id,
           );
           this.logger.log(
             `Stripe webhook: prize order ${orderId} successfully confirmed`,

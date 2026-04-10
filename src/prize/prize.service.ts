@@ -21,6 +21,10 @@ import { EmailsService } from '../emails/email.service';
 import { CurrencyType } from '../enums/currency.enum';
 import { TransactionType } from '../enums/transaction-type.enum';
 import {
+  PromoCodeService,
+  DiscountValidationResult,
+} from '../promo-code/promo-code.service';
+import {
   PrizeConfigurationDto,
   CreatePrizeTierDto,
   UpdatePrizeTierDto,
@@ -76,6 +80,7 @@ export class PrizeService {
     private readonly walletService: WalletsService,
     private readonly configService: ConfigService,
     private readonly emailsService: EmailsService,
+    private readonly promoCodeService: PromoCodeService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -291,9 +296,7 @@ export class PrizeService {
       },
     });
 
-    this.logger.log(
-      `[SHOP] Found ${sellerItems.length} active shop items`,
-    );
+    this.logger.log(`[SHOP] Found ${sellerItems.length} active shop items`);
     this.logger.debug(
       `[SHOP] Items breakdown: ${JSON.stringify(sellerItems.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
     );
@@ -1796,6 +1799,43 @@ export class PrizeService {
         );
         const totalChargeCents = subtotalCents + buyerFeeCents;
 
+        // Validate and apply discount code if provided
+        let discountValidation: DiscountValidationResult | undefined;
+        let stripeCouponId: string | undefined;
+        let discountCents = 0;
+        if (dto.discountCode) {
+          discountValidation = await this.promoCodeService.validateForCart(
+            dto.discountCode,
+            userId,
+          );
+          if (!discountValidation.valid) {
+            await this.prizeOrderRepository.remove(savedOrder);
+            throw new BadRequestException(discountValidation.message);
+          }
+          discountCents = this.promoCodeService.calculateDiscountCents(
+            discountValidation,
+            subtotalCents,
+            subtotalCents, // single item = cheapest item
+          );
+          if (discountCents > 0) {
+            const couponParams: Stripe.CouponCreateParams = {
+              duration: 'once',
+              name: `Discount ${discountValidation.code}`,
+            };
+            if (
+              discountValidation.discountType === 'percent' &&
+              discountValidation.scope !== 'cheapest_item'
+            ) {
+              couponParams.percent_off = discountValidation.discountPercent;
+            } else {
+              couponParams.amount_off = discountCents;
+              couponParams.currency = 'usd';
+            }
+            const stripeCoupon = await this.stripe.coupons.create(couponParams);
+            stripeCouponId = stripeCoupon.id;
+          }
+        }
+
         const sessionParams = {
           payment_method_types: [
             'card',
@@ -1818,8 +1858,8 @@ export class PrizeService {
           ],
           mode: 'payment' as const,
           customer_email: user.email,
-          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${savedOrder.id}`,
-          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${savedOrder.id}`,
+          success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${savedOrder.id}`,
+          cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${savedOrder.id}`,
           metadata: {
             orderId: savedOrder.id,
             userId,
@@ -1828,8 +1868,16 @@ export class PrizeService {
             coinsAmount: dto.coinsAmount.toString(),
             transactionSubtotalCents: subtotalCents.toString(),
             buyerFeeCents: buyerFeeCents.toString(),
+            ...(discountValidation?.discountCodeId && {
+              discountCodeId: discountValidation.discountCodeId,
+              discountCents: String(discountCents),
+            }),
           },
         };
+
+        if (stripeCouponId) {
+          (sessionParams as any).discounts = [{ coupon: stripeCouponId }];
+        }
 
         if (seller?.stripeAccountId) {
           const sellerLifetimeCadeCoins = Number(
@@ -1960,8 +2008,30 @@ export class PrizeService {
   async handlePaymentSuccess(
     orderId: string,
     transactionSubtotalCents?: number,
+    discountCodeId?: string,
+    discountCentsStr?: string,
+    stripeSessionId?: string,
   ): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
+
+    // Record discount code redemption if one was used.
+    // This runs BEFORE the paid-check so that webhooks arriving
+    // after the client-side confirm still record the redemption.
+    if (discountCodeId) {
+      try {
+        const dc = parseInt(discountCentsStr || '0', 10);
+        await this.promoCodeService.recordRedemption(
+          discountCodeId,
+          order.userId,
+          dc,
+          stripeSessionId,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to record discount redemption for order ${orderId}: ${err}`,
+        );
+      }
+    }
 
     if (order.status === 'paid') {
       return this.mapOrderToDto(order);
@@ -2084,9 +2154,10 @@ export class PrizeService {
       // Show the seller the amount without the buyer service fee
       const BUYER_FEE_PERCENT = BUYER_PROCESSING_FEE_PERCENT;
       const charged = parseFloat(order.usdCharged?.toString() || '0');
-      const sellerVisibleAmount = charged > 0
-        ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
-        : order.totalPrice;
+      const sellerVisibleAmount =
+        charged > 0
+          ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
+          : order.totalPrice;
 
       const frontendUrl = this.configService.get<string>(
         'CLIENT_URL',
@@ -2637,9 +2708,9 @@ export class PrizeService {
     // Load seller to check for Stripe Connect account and application fee
     const offerSeller = prize.createdBy
       ? await this.userRepository.findOne({
-        where: { id: prize.createdBy },
-        relations: ['wallet'],
-      })
+          where: { id: prize.createdBy },
+          relations: ['wallet'],
+        })
       : null;
 
     // Buyer fee applies to item subtotal only (shipping excluded).
@@ -2651,7 +2722,9 @@ export class PrizeService {
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
     const acceptOfferSessionParams = {
-      payment_method_types: ['card'] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+      payment_method_types: [
+        'card',
+      ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
           price_data: {
@@ -2666,8 +2739,8 @@ export class PrizeService {
         },
       ],
       mode: 'payment' as const,
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
@@ -2820,9 +2893,9 @@ export class PrizeService {
     // Load seller to check for Stripe Connect account and application fee
     const counterOfferSeller = prize.createdBy
       ? await this.userRepository.findOne({
-        where: { id: prize.createdBy },
-        relations: ['wallet'],
-      })
+          where: { id: prize.createdBy },
+          relations: ['wallet'],
+        })
       : null;
 
     // Buyer fee applies to item subtotal only (shipping excluded).
@@ -2852,8 +2925,8 @@ export class PrizeService {
         },
       ],
       mode: 'payment' as const,
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}purchase-success?orderId=${order.id}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}shop?status=cancel&orderId=${order.id}`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?orderId=${order.id}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop?status=cancel&orderId=${order.id}`,
       metadata: {
         orderId: order.id,
         userId: order.userId,
