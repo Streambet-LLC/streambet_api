@@ -14,6 +14,7 @@ import {
 } from './prize.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
+import { PromoCodeModule } from '../promo-code/promo-code.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { EmailsModule } from '../emails/email.module';
     ]),
     forwardRef(() => WalletsModule),
     EmailsModule,
+    PromoCodeModule,
   ],
   controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
   providers: [PrizeService],

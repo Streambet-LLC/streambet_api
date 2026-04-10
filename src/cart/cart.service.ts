@@ -32,13 +32,19 @@ import {
 import { EmailsService } from '../emails/email.service';
 import { CurrencyType } from '../enums/currency.enum';
 import { TransactionType } from '../enums/transaction-type.enum';
+import {
+  PromoCodeService,
+  DiscountValidationResult,
+} from '../promo-code/promo-code.service';
 
 const SHIPPING_FEE = 5;
 
 /** Resolve a relative image path to a full S3 URL for Stripe.
  *  Returns null for any value that cannot form a valid absolute URL
  *  so Stripe never receives a malformed images[] entry. */
-const resolveImageUrl = (imageUrl: string | null | undefined): string | null => {
+const resolveImageUrl = (
+  imageUrl: string | null | undefined,
+): string | null => {
   if (!imageUrl || !imageUrl.trim()) return null;
   const raw = imageUrl.startsWith('http')
     ? imageUrl
@@ -103,6 +109,7 @@ export class CartService {
     private walletsService: WalletsService,
     private emailsService: EmailsService,
     private configService: ConfigService,
+    private promoCodeService: PromoCodeService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY'),
@@ -245,14 +252,8 @@ export class CartService {
         (sum, g) => sum + g.itemSubtotalCents,
         0,
       ),
-      shippingCents: sellerGroups.reduce(
-        (sum, g) => sum + g.shippingCents,
-        0,
-      ),
-      buyerFeeCents: sellerGroups.reduce(
-        (sum, g) => sum + g.buyerFeeCents,
-        0,
-      ),
+      shippingCents: sellerGroups.reduce((sum, g) => sum + g.shippingCents, 0),
+      buyerFeeCents: sellerGroups.reduce((sum, g) => sum + g.buyerFeeCents, 0),
       totalCents: sellerGroups.reduce((sum, g) => sum + g.totalCents, 0),
       itemCount: validItems.reduce((sum, item) => sum + item.quantity, 0),
     };
@@ -282,9 +283,7 @@ export class CartService {
 
     const quantity = dto.quantity || 1;
     if (prize.stock < quantity) {
-      throw new BadRequestException(
-        `Only ${prize.stock} available in stock`,
-      );
+      throw new BadRequestException(`Only ${prize.stock} available in stock`);
     }
 
     const cart = await this.getOrCreateCart(userId);
@@ -385,6 +384,17 @@ export class CartService {
   }
 
   /**
+   * Validate a discount code for a given user.
+   * Delegates to PromoCodeService.validateForCart.
+   */
+  async validateDiscountCode(
+    userId: string,
+    code: string,
+  ): Promise<DiscountValidationResult> {
+    return this.promoCodeService.validateForCart(code, userId);
+  }
+
+  /**
    * Checkout: validate stock, create orders, create Stripe session
    */
   async checkout(
@@ -416,6 +426,18 @@ export class CartService {
       this.logger.log(
         `Cancelled ${staleOrders.length} stale buy_attempted order(s) for user ${userId}`,
       );
+    }
+
+    // Validate discount code if provided
+    let discountValidation: DiscountValidationResult | null = null;
+    if (dto.discountCode) {
+      discountValidation = await this.promoCodeService.validateForCart(
+        dto.discountCode,
+        userId,
+      );
+      if (!discountValidation.valid) {
+        throw new BadRequestException(discountValidation.message);
+      }
     }
 
     // Filter to only buy-eligible items (not offer-only)
@@ -715,9 +737,61 @@ export class CartService {
     const successUrl = `${clientUrl}/cart/checkout-success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${clientUrl}/cart`;
 
+    // Create a one-time Stripe coupon if a discount code was validated
+    let stripeCouponId: string | undefined;
+    let discountCents = 0;
+    if (discountValidation?.valid) {
+      const itemSubtotalCents = buyableGroups.reduce(
+        (sum, g) => sum + g.itemSubtotalCents,
+        0,
+      );
+
+      // Find the cheapest individual item across all buyable groups
+      let cheapestItemCents: number | undefined;
+      for (const group of buyableGroups) {
+        for (const item of group.items) {
+          const unitPriceCents = Math.round(
+            (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) * 100,
+          );
+          if (
+            cheapestItemCents === undefined ||
+            unitPriceCents < cheapestItemCents
+          ) {
+            cheapestItemCents = unitPriceCents;
+          }
+        }
+      }
+
+      discountCents = this.promoCodeService.calculateDiscountCents(
+        discountValidation,
+        itemSubtotalCents,
+        cheapestItemCents,
+      );
+      if (discountCents > 0) {
+        const couponParams: Stripe.CouponCreateParams = {
+          duration: 'once',
+          name: `Discount ${discountValidation.code}`,
+        };
+        // For cheapest_item scope or fixed_amount, always use amount_off
+        // so Stripe deducts the exact pre-computed amount.
+        // percent_off only makes sense for whole-cart percent codes.
+        if (
+          discountValidation.discountType === 'percent' &&
+          discountValidation.scope !== 'cheapest_item'
+        ) {
+          couponParams.percent_off = discountValidation.discountPercent;
+        } else {
+          couponParams.amount_off = discountCents;
+          couponParams.currency = 'usd';
+        }
+        const stripeCoupon = await this.stripe.coupons.create(couponParams);
+        stripeCouponId = stripeCoupon.id;
+      }
+    }
+
     let stripeSession: Stripe.Checkout.Session;
     try {
-      stripeSession = await this.stripe.checkout.sessions.create({
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'payment',
         line_items: lineItems,
         success_url: successUrl,
@@ -727,6 +801,10 @@ export class CartService {
           userId,
           orderIds: cartOrderIds.join(','),
           transferInstructions: JSON.stringify(transferInstructions),
+          ...(discountValidation?.discountCodeId && {
+            discountCodeId: discountValidation.discountCodeId,
+            discountCents: String(discountCents),
+          }),
         },
         payment_intent_data: {
           metadata: {
@@ -735,7 +813,11 @@ export class CartService {
             orderIds: cartOrderIds.join(','),
           },
         },
-      });
+      };
+      if (stripeCouponId) {
+        sessionParams.discounts = [{ coupon: stripeCouponId }];
+      }
+      stripeSession = await this.stripe.checkout.sessions.create(sessionParams);
     } catch (err: unknown) {
       const errMsg =
         err instanceof Error ? err.message : 'Unknown Stripe error';
@@ -800,6 +882,26 @@ export class CartService {
         'stock',
         order.coinsDeducted > 0 ? 1 : 1, // quantity is always per-order
       );
+    }
+
+    // Record discount code redemption if one was applied
+    if (metadata.discountCodeId) {
+      try {
+        const discountCents = parseInt(metadata.discountCents || '0', 10);
+        await this.promoCodeService.recordRedemption(
+          metadata.discountCodeId,
+          userId,
+          discountCents,
+          session.id,
+        );
+        this.logger.log(
+          `Recorded discount code redemption: code=${metadata.discountCodeId}, user=${userId}, discount=${discountCents}c`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to record discount code redemption: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
 
     // Remove purchased items from the user's cart now that payment is confirmed
