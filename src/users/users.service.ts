@@ -352,6 +352,11 @@ export class UsersService {
       const lifetimeCoins = Number(user.wallet?.lifetimeCoinsEarned ?? 0);
       const prizeData = await this.prizeService.getPrizeInfo(lifetimeCoins);
 
+      // Get listed item count for sellers
+      const listedItemCount = user.isSeller
+        ? await this.prizeService.getSellerListedItemCount(user.id)
+        : 0;
+
       // Base response combining both follower and gamification features
       const response: PublicUserProfileDto = {
         id: user.id,
@@ -370,6 +375,10 @@ export class UsersService {
         title: prizeData.title,
         badgeLevel: prizeData.badgeLevel,
         prizeProgress: prizeData.prizeProgress,
+        ...(user.isSeller && {
+          isSeller: true,
+          listedItemCount,
+        }),
         ...(user.role === UserRole.CREATOR && {
           isCreator: true,
         }),

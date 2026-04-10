@@ -199,6 +199,19 @@ export class PrizeService {
   }
 
   /**
+   * Get the count of active listed items for a seller.
+   */
+  async getSellerListedItemCount(sellerId: string): Promise<number> {
+    return this.prizeConfigRepository
+      .createQueryBuilder('p')
+      .where('p.created_by = :sellerId', { sellerId })
+      .andWhere('p.is_active = :isActive', { isActive: true })
+      .andWhere('p.show_on_shop = :showOnShop', { showOnShop: true })
+      .andWhere('p.stock > 0')
+      .getCount();
+  }
+
+  /**
    * Public: list seller shops that have active shop items.
    */
   async getSellerShops(limit?: number): Promise<
