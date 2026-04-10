@@ -1048,6 +1048,8 @@ export class PrizeService {
       isActive: true,
       createdBy: effectiveCreatedBy, // Use new value if provided, otherwise preserve existing
       updatedBy: userId,
+      isProOnly: dto.isProOnly ?? existingTier.isProOnly ?? false,
+      proEarlyAccessUntil: existingTier.proEarlyAccessUntil,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
