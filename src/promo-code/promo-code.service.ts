@@ -184,11 +184,16 @@ export class PromoCodeService {
       );
     }
 
+    // Enforce maxUses=1 for single_use codes
+    const maxUses =
+      data.usageType === 'single_use' ? 1 : (data.maxUses ?? null);
+
     const entity = this.promoCodeRepository.create({
       ...data,
       code,
       currency: 'usd',
       timesUsed: 0,
+      maxUses,
     });
     return this.promoCodeRepository.save(entity);
   }
@@ -204,6 +209,11 @@ export class PromoCodeService {
 
     // Don't allow changing the code string itself
     delete (data as any).code;
+
+    // Enforce maxUses=1 for single_use codes
+    if (data.usageType === 'single_use') {
+      data.maxUses = 1;
+    }
 
     Object.assign(promo, data);
     return this.promoCodeRepository.save(promo);
