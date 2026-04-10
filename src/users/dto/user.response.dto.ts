@@ -70,6 +70,20 @@ export class PublicUserProfileDto {
     description: 'Whether user has an active CardCade Pro subscription',
   })
   isProSubscriber?: boolean;
+
+  @ApiProperty({
+    required: false,
+    example: true,
+    description: 'Whether user is an approved seller',
+  })
+  isSeller?: boolean;
+
+  @ApiProperty({
+    required: false,
+    example: 5,
+    description: 'Number of currently listed items (sellers only)',
+  })
+  listedItemCount?: number;
 }
 
 export class UserProfileResponseDto {
