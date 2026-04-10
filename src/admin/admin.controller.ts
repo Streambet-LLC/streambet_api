@@ -61,6 +61,11 @@ import { CreatorService } from 'src/creator/creator.service';
 import { ApplicationFilterDto } from 'src/creator/dto/application-filter.dto';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import { SubscriptionPlan } from 'src/enums/subscription-plan.enum';
+import { PromoCodeService } from 'src/promo-code/promo-code.service';
+import {
+  CreateDiscountCodeDto,
+  UpdateDiscountCodeDto,
+} from './dto/discount-code.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -81,6 +86,7 @@ export class AdminController {
     private readonly payoutService: PlatformPayoutService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly promoCodeService: PromoCodeService,
   ) {}
 
   // Helper method to check if user is admin
@@ -1260,7 +1266,10 @@ export class AdminController {
 
   @ApiOperation({ summary: 'Grant CardCade Pro to a user' })
   @SwaggerApiResponse({ status: 200, description: 'Pro granted successfully' })
-  @SwaggerApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @SwaggerApiResponse({ status: 404, description: 'User not found' })
   @Post('pro/grant/:userId')
   async grantPro(
@@ -1282,7 +1291,10 @@ export class AdminController {
 
   @ApiOperation({ summary: 'Revoke CardCade Pro from a user' })
   @SwaggerApiResponse({ status: 200, description: 'Pro revoked successfully' })
-  @SwaggerApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @Post('pro/revoke/:userId')
   async revokePro(
     @Request() req: RequestWithUser,
@@ -1294,6 +1306,79 @@ export class AdminController {
       status: HttpStatus.OK,
       message: 'CardCade Pro revoked successfully',
       data: true,
+    };
+  }
+
+  // ── Discount Code Management ──
+
+  @ApiOperation({ summary: 'List all discount codes' })
+  @SwaggerApiResponse({ status: 200, description: 'Discount codes fetched' })
+  @Get('discount-codes')
+  async getDiscountCodes(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.promoCodeService.findAllDiscountCodes();
+    return {
+      status: HttpStatus.OK,
+      message: 'Discount codes fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Create a new discount code' })
+  @SwaggerApiResponse({ status: 201, description: 'Discount code created' })
+  @Post('discount-codes')
+  async createDiscountCode(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateDiscountCodeDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.promoCodeService.createDiscountCode({
+      code: dto.code,
+      discountType: dto.discountType,
+      discountPercent: dto.discountPercent,
+      discountAmountCents: dto.discountAmountCents,
+      usageType: dto.usageType,
+      maxUses: dto.maxUses,
+      scope: dto.scope,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+    });
+    return {
+      status: HttpStatus.CREATED,
+      message: 'Discount code created successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update an existing discount code' })
+  @SwaggerApiResponse({ status: 200, description: 'Discount code updated' })
+  @ApiParam({ name: 'id', description: 'Discount code ID' })
+  @Patch('discount-codes/:id')
+  async updateDiscountCode(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateDiscountCodeDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const updates: Record<string, any> = {};
+    if (dto.discountType !== undefined) updates.discountType = dto.discountType;
+    if (dto.discountPercent !== undefined)
+      updates.discountPercent = dto.discountPercent;
+    if (dto.discountAmountCents !== undefined)
+      updates.discountAmountCents = dto.discountAmountCents;
+    if (dto.usageType !== undefined) updates.usageType = dto.usageType;
+    if (dto.maxUses !== undefined) updates.maxUses = dto.maxUses;
+    if (dto.scope !== undefined) updates.scope = dto.scope;
+    if (dto.isActive !== undefined) updates.isActive = dto.isActive;
+    if (dto.expiresAt !== undefined) {
+      updates.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    }
+    const data = await this.promoCodeService.updateDiscountCode(id, updates);
+    return {
+      status: HttpStatus.OK,
+      message: 'Discount code updated successfully',
+      data,
     };
   }
 }

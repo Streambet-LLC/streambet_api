@@ -10,6 +10,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
 import { CreatorModule } from 'src/creator/creator.module';
 import { SubscriptionModule } from 'src/subscription/subscription.module';
+import { PromoCodeModule } from 'src/promo-code/promo-code.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SubscriptionModule } from 'src/subscription/subscription.module';
     PlatformPayoutModule,
     CreatorModule,
     SubscriptionModule,
+    PromoCodeModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

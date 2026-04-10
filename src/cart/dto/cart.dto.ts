@@ -85,6 +85,19 @@ export class CartCheckoutDto {
   @IsInt()
   @Min(0)
   coinsToApply?: number;
+
+  @ApiPropertyOptional({
+    description: 'Discount code to apply to the order',
+  })
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
+}
+
+export class ValidateDiscountCodeDto {
+  @ApiProperty({ description: 'Discount code to validate' })
+  @IsString()
+  code: string;
 }
 
 export class BundleOfferDto {

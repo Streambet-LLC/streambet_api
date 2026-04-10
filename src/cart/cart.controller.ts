@@ -24,6 +24,7 @@ import {
   UpdateCartItemDto,
   CartCheckoutDto,
   BundleOfferDto,
+  ValidateDiscountCodeDto,
 } from './dto/cart.dto';
 import { User } from '../users/entities/user.entity';
 
@@ -115,10 +116,7 @@ export class CartController {
   @Post('items')
   @ApiOperation({ summary: 'Add item to cart' })
   @ApiResponse({ status: 201, description: 'Item added to cart' })
-  async addToCart(
-    @Request() req: RequestWithUser,
-    @Body() dto: AddToCartDto,
-  ) {
+  async addToCart(@Request() req: RequestWithUser, @Body() dto: AddToCartDto) {
     await this.cartService.addToCart(req.user.id, dto);
     const summary = await this.cartService.getCartSummary(req.user.id);
     return {
@@ -170,9 +168,28 @@ export class CartController {
     };
   }
 
+  @Post('validate-discount-code')
+  @ApiOperation({ summary: 'Validate a discount code for cart checkout' })
+  @ApiResponse({ status: 200, description: 'Discount code validation result' })
+  async validateDiscountCode(
+    @Request() req: RequestWithUser,
+    @Body() dto: ValidateDiscountCodeDto,
+  ) {
+    const result = await this.cartService.validateDiscountCode(
+      req.user.id,
+      dto.code,
+    );
+    return {
+      data: result,
+      message: result.valid ? 'Discount code is valid' : result.message,
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   @Post('checkout')
   @ApiOperation({
-    summary: 'Checkout cart — validates stock, creates orders and Stripe session',
+    summary:
+      'Checkout cart — validates stock, creates orders and Stripe session',
   })
   @ApiResponse({ status: 200, description: 'Checkout initiated' })
   async checkout(

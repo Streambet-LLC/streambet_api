@@ -83,6 +83,14 @@ export class CreatePrizeOrderDto {
   @IsNumber()
   @Min(0)
   totalPrice: number;
+
+  @ApiProperty({
+    description: 'Optional discount code to apply',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
 }
 
 export class PrizeOrderResponseDto {
