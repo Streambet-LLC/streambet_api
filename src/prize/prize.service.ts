@@ -246,7 +246,8 @@ export class PrizeService {
       .addGroupBy('u.profile_image_url');
 
     if (limit) {
-      qb.orderBy('RANDOM()').limit(limit);
+      // Reserve one slot for the CardCade shop that is prepended below
+      qb.orderBy('RANDOM()').limit(Math.max(limit - 1, 0));
     } else {
       qb.orderBy('COALESCE(u.shop_name, u.name, u.username)', 'ASC');
     }
