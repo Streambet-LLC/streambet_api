@@ -99,6 +99,21 @@ export class PrizeController {
   }
 
   /**
+   * Public endpoint: Get global sales feed (all completed orders)
+   */
+  @Get('global-sales')
+  @ApiOperation({
+    summary: 'Get all completed sales across the platform (public)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns paginated list of completed sales',
+  })
+  async getGlobalSales(@Query() filterDto: { range?: string; q?: string }) {
+    return this.prizeService.getGlobalSales(filterDto);
+  }
+
+  /**
    * User endpoint: Submit prize redemption
    */
   @Post('redeem')
