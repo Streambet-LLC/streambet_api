@@ -3,6 +3,7 @@ import { Transform, TransformFnParams } from 'class-transformer';
 import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 import { AdminFilterDto } from 'src/common/filters/filter.dto';
 import { HistoryType } from 'src/enums/history-type.enum';
+import { CurrencyType } from 'src/enums/currency.enum';
 
 export class TransactionFilterDto extends AdminFilterDto {
   @ApiProperty({
@@ -34,11 +35,20 @@ export class TransactionFilterDto extends AdminFilterDto {
   )
   pagination?: boolean;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     enum: HistoryType,
     default: HistoryType.Bet,
-    description: `available  bet  and transaction`,
+    description: `available  bet  and transaction. If omitted, all transaction types are returned.`,
   })
+  @IsOptional()
   @IsEnum(HistoryType)
-  historyType: HistoryType;
+  historyType?: HistoryType;
+
+  @ApiPropertyOptional({
+    enum: CurrencyType,
+    description: 'Filter transactions by currency type (e.g. cade_coins)',
+  })
+  @IsOptional()
+  @IsEnum(CurrencyType)
+  currencyType?: CurrencyType;
 }

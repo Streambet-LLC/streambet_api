@@ -2328,7 +2328,7 @@ export class PrizeService {
   async getUserOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
     const orders = await this.prizeOrderRepository.find({
       where: { userId },
-      relations: ['prizeConfiguration'],
+      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'prizeConfiguration.creator'],
       order: { createdAt: 'DESC' },
     });
 
@@ -2342,7 +2342,7 @@ export class PrizeService {
           createdBy: userId,
         },
       },
-      relations: ['prizeConfiguration', 'user'],
+      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'user'],
       order: { createdAt: 'DESC' },
     });
 
@@ -2382,6 +2382,76 @@ export class PrizeService {
       data: data.map((order) => this.mapOrderToDto(order)),
       total,
     };
+  }
+
+  /**
+   * Get global sales feed (all completed orders, public endpoint).
+   * Returns paginated completed sales with item, buyer, and seller info.
+   */
+  async getGlobalSales(filterDto?: {
+    range?: string;
+    q?: string;
+  }): Promise<{ data: any[]; total: number }> {
+    const query = this.prizeOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.prizeConfiguration', 'prize')
+      .leftJoinAndSelect('prize.itemImages', 'itemImages')
+      .leftJoin('prize.creator', 'seller')
+      .addSelect([
+        'seller.id',
+        'seller.username',
+        'seller.shopName',
+        'seller.name',
+      ])
+      .where('order.status IN (:...statuses)', {
+        statuses: ['paid', 'shipped', 'delivered'],
+      });
+
+    if (filterDto?.q) {
+      query.andWhere(
+        '(LOWER(prize.name) ILIKE LOWER(:q) OR LOWER(user.username) ILIKE LOWER(:q) OR LOWER(seller.username) ILIKE LOWER(:q))',
+        { q: `%${filterDto.q}%` },
+      );
+    }
+
+    query.orderBy('order.createdAt', 'DESC');
+
+    const total = await query.getCount();
+
+    // Parse range for pagination
+    const range: [number, number] = filterDto?.range
+      ? JSON.parse(filterDto.range)
+      : [0, 10];
+    const [offset, limit] = range;
+    query.skip(offset).take(limit);
+
+    const orders = await query.getMany();
+
+    const data = orders.map((order) => ({
+      id: order.id,
+      createdAt: order.createdAt.toISOString(),
+      itemName: order.prizeConfiguration?.name || 'Unknown Item',
+      itemImage: order.prizeConfiguration?.imageUrl || null,
+      itemImages: order.prizeConfiguration?.itemImages
+        ? order.prizeConfiguration.itemImages
+            .sort((a, b) => a.displayOrder - b.displayOrder)
+            .map((img) => img.imageUrl)
+        : [],
+      itemCategory: order.prizeConfiguration?.category || null,
+      totalPrice: parseFloat(order.totalPrice?.toString() || '0'),
+      paymentMethod: order.paymentMethod,
+      buyerUsername: order.user?.username || 'Unknown',
+      sellerUsername: order.prizeConfiguration?.creator?.username || 'CardCade',
+      sellerDisplayName:
+        order.prizeConfiguration?.creator?.shopName ||
+        order.prizeConfiguration?.creator?.name ||
+        order.prizeConfiguration?.creator?.username ||
+        'CardCade',
+      status: order.status,
+    }));
+
+    return { data, total };
   }
 
   /**
@@ -2525,6 +2595,12 @@ export class PrizeService {
             name: order.prizeConfiguration.name,
             category: order.prizeConfiguration.category,
             image: order.prizeConfiguration.imageUrl ?? '',
+            images: order.prizeConfiguration.itemImages
+              ? order.prizeConfiguration.itemImages
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map((img) => img.imageUrl)
+              : [],
+            sellerUsername: order.prizeConfiguration.creator?.username,
           }
         : undefined,
     };
