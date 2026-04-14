@@ -3096,7 +3096,7 @@ export class PrizeService {
         rewardCoins,
         CurrencyType.CADE_COINS,
         TransactionType.BONUS,
-        `Transaction reward for order ${order.id}`,
+        `Transaction reward for purchase: ${prize.name}`,
         {
           source,
           role: 'buyer',
@@ -3124,7 +3124,7 @@ export class PrizeService {
         rewardCoins,
         CurrencyType.CADE_COINS,
         TransactionType.BONUS,
-        `Transaction reward for sale ${order.id}`,
+        `Transaction reward for sale: ${prize.name}`,
         {
           source,
           role: 'seller',
