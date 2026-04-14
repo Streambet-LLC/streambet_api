@@ -178,6 +178,8 @@ export class PrizeOrderResponseDto {
     name: string;
     category: string;
     image: string;
+    images: string[];
+    sellerUsername?: string;
   };
 }
 

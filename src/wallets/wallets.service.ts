@@ -630,11 +630,20 @@ export class WalletsService {
         throw new BadRequestException('Invalid filter format');
       }
 
-      const { pagination = true, historyType } = transactionFilterDto;
+      const {
+        pagination = true,
+        historyType,
+        currencyType,
+      } = transactionFilterDto;
 
       const transactionQB = this.transactionsRepository
         .createQueryBuilder('t')
         .where('t.userId = :userId', { userId });
+      if (currencyType) {
+        transactionQB.andWhere('t.currencyType = :currencyType', {
+          currencyType,
+        });
+      }
       if (historyType === HistoryType.Transaction) {
         transactionQB.andWhere('t.type  IN (:...includedTypes)', {
           includedTypes: [
