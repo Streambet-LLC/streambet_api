@@ -2328,7 +2328,7 @@ export class PrizeService {
   async getUserOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
     const orders = await this.prizeOrderRepository.find({
       where: { userId },
-      relations: ['prizeConfiguration'],
+      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'prizeConfiguration.creator'],
       order: { createdAt: 'DESC' },
     });
 
@@ -2342,7 +2342,7 @@ export class PrizeService {
           createdBy: userId,
         },
       },
-      relations: ['prizeConfiguration', 'user'],
+      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'user'],
       order: { createdAt: 'DESC' },
     });
 
@@ -2396,6 +2396,7 @@ export class PrizeService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.prizeConfiguration', 'prize')
+      .leftJoinAndSelect('prize.itemImages', 'itemImages')
       .leftJoin('prize.creator', 'seller')
       .addSelect([
         'seller.id',
@@ -2432,6 +2433,11 @@ export class PrizeService {
       createdAt: order.createdAt.toISOString(),
       itemName: order.prizeConfiguration?.name || 'Unknown Item',
       itemImage: order.prizeConfiguration?.imageUrl || null,
+      itemImages: order.prizeConfiguration?.itemImages
+        ? order.prizeConfiguration.itemImages
+            .sort((a, b) => a.displayOrder - b.displayOrder)
+            .map((img) => img.imageUrl)
+        : [],
       itemCategory: order.prizeConfiguration?.category || null,
       totalPrice: parseFloat(order.totalPrice?.toString() || '0'),
       paymentMethod: order.paymentMethod,
@@ -2589,6 +2595,12 @@ export class PrizeService {
             name: order.prizeConfiguration.name,
             category: order.prizeConfiguration.category,
             image: order.prizeConfiguration.imageUrl ?? '',
+            images: order.prizeConfiguration.itemImages
+              ? order.prizeConfiguration.itemImages
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map((img) => img.imageUrl)
+              : [],
+            sellerUsername: order.prizeConfiguration.creator?.username,
           }
         : undefined,
     };
