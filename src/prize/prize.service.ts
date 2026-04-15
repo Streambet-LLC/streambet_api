@@ -2204,6 +2204,8 @@ export class PrizeService {
       );
       const markShippedUrl = `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
       const shipping: PrizeOrder['shippingAddress'] = order.shippingAddress || {
+        firstName: '',
+        lastName: '',
         addressLine1: '',
         city: '',
         state: '',
@@ -2669,6 +2671,8 @@ export class PrizeService {
         ? {
             username: order.user.username,
             email: order.user.email,
+            firstName: order.shippingAddress?.firstName,
+            lastName: order.shippingAddress?.lastName,
           }
         : undefined,
       prizeConfig: order.prizeConfiguration

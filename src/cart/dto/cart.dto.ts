@@ -36,6 +36,14 @@ export class UpdateCartItemDto {
 }
 
 export class ShippingAddressDto {
+  @ApiProperty({ example: 'John' })
+  @IsString()
+  firstName: string;
+
+  @ApiProperty({ example: 'Doe' })
+  @IsString()
+  lastName: string;
+
   @ApiProperty()
   @IsString()
   addressLine1: string;
