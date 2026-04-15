@@ -14,6 +14,16 @@ export type PaymentMethod = 'coins' | 'usd' | 'combined';
 
 // DTO for prize purchase (creating a prize order) adding comment to force rebuild of prize service
 export class ShippingAddressDto {
+  @ApiProperty({ example: 'John' })
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @ApiProperty({ example: 'Doe' })
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+
   @ApiProperty({ example: '123 Main St' })
   @IsString()
   @IsNotEmpty()
@@ -171,6 +181,8 @@ export class PrizeOrderResponseDto {
   user?: {
     username: string;
     email: string;
+    firstName?: string;
+    lastName?: string;
   };
 
   @ApiProperty({ nullable: true })

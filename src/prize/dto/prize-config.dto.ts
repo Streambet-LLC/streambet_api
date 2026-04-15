@@ -9,6 +9,7 @@ import {
   IsBoolean,
   IsArray,
   ArrayMaxSize,
+  IsUUID,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -182,7 +183,8 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on seller-specific shop page (1-indexed, null if not set)',
+    description:
+      'Display order on seller-specific shop page (1-indexed, null if not set)',
     nullable: true,
   })
   sellerDisplayOrderShop: number | null;
@@ -258,6 +260,12 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: false,
+    description: 'Whether this item is featured on the seller profile page',
+  })
+  profileFeatured: boolean;
+
+  @ApiProperty({
+    example: false,
     description: 'Whether this item is exclusive to CardCade Pro subscribers',
   })
   isProOnly: boolean;
@@ -265,7 +273,8 @@ export class PrizeConfigurationDto {
   @ApiProperty({
     example: '2025-06-01T00:00:00Z',
     nullable: true,
-    description: 'Pro early access deadline (48h after creation). Item is only visible to Pro subscribers until this time.',
+    description:
+      'Pro early access deadline (48h after creation). Item is only visible to Pro subscribers until this time.',
   })
   proEarlyAccessUntil: Date | null;
 }
@@ -384,7 +393,8 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on shop page (1-indexed, auto-generated if not provided)',
+    description:
+      'Display order on shop page (1-indexed, auto-generated if not provided)',
     required: false,
   })
   @IsOptional()
@@ -405,7 +415,8 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on redemptions page (1-indexed, auto-generated if not provided)',
+    description:
+      'Display order on redemptions page (1-indexed, auto-generated if not provided)',
     required: false,
   })
   @IsOptional()
@@ -443,7 +454,8 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
-    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    description:
+      'Seller user ID who created this prize (null for admin-created prizes)',
     required: false,
   })
   @IsOptional()
@@ -452,12 +464,23 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: false,
-    description: 'Whether this item is exclusive to CardCade Pro subscribers only',
+    description:
+      'Whether this item is exclusive to CardCade Pro subscribers only',
     required: false,
   })
   @IsOptional()
   @IsBoolean()
   isProOnly?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Whether this item is featured on the seller profile page (Pro sellers only)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  profileFeatured?: boolean;
 }
 /**
  * Updates create a new row with is_active=true and set old row to is_active=false
@@ -631,7 +654,8 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
-    description: 'Seller user ID who created this prize (null for admin-created prizes)',
+    description:
+      'Seller user ID who created this prize (null for admin-created prizes)',
     required: false,
   })
   @IsOptional()
@@ -640,12 +664,23 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: false,
-    description: 'Whether this item is exclusive to CardCade Pro subscribers only',
+    description:
+      'Whether this item is exclusive to CardCade Pro subscribers only',
     required: false,
   })
   @IsOptional()
   @IsBoolean()
   isProOnly?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Whether this item is featured on the seller profile page (Pro sellers only)',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  profileFeatured?: boolean;
 }
 
 /**
