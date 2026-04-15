@@ -20,6 +20,8 @@ export class PrizeOrder extends BaseEntity {
     name: 'shipping_address',
   })
   shippingAddress: {
+    firstName: string;
+    lastName: string;
     addressLine1: string;
     addressLine2?: string;
     city: string;
