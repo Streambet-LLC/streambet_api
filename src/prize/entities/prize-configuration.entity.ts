@@ -111,6 +111,9 @@ export class PrizeConfiguration extends BaseEntity {
   })
   showOnShop: boolean;
 
+  @Column({ type: 'boolean', name: 'profile_featured', default: false })
+  profileFeatured: boolean;
+
   @Column({ type: 'boolean', name: 'is_pro_only', default: false })
   isProOnly: boolean;
 

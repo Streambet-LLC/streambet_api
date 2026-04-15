@@ -98,6 +98,22 @@ export class PrizeController {
     return result;
   }
 
+  @Get('purchases/:username')
+  @ApiOperation({ summary: 'Get recent purchases by username (public)' })
+  @ApiParam({ name: 'username', description: 'Username to get purchases for' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns recent purchases for the user',
+  })
+  async getRecentPurchasesByUsername(
+    @Param('username') username: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.prizeService.getRecentPurchasesByUsername(
+      username,
+      limit ? parseInt(limit, 10) : 6,
+    );
+  }
   /**
    * Public endpoint: Get global sales feed (all completed orders)
    */
@@ -876,5 +892,19 @@ export class SellerPrizeController {
   ): Promise<PrizeOrderResponseDto> {
     this.ensureSellerVerified(req.user);
     return this.prizeService.sellerMarkAsShipped(req.user.id, orderId, dto);
+  }
+
+  @Patch('profile-featured')
+  @ApiOperation({ summary: 'Update which items are featured on profile (max 10, PRO only)' })
+  @ApiResponse({ status: 200, description: 'Featured items updated' })
+  async updateProfileFeatured(
+    @Request() req: RequestWithUser,
+    @Body() body: { featuredItemIds: string[] },
+  ) {
+    this.ensureSellerVerified(req.user);
+    return this.prizeService.updateProfileFeaturedItems(
+      req.user.id,
+      body.featuredItemIds || [],
+    );
   }
 }

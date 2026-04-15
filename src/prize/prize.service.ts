@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, In, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
@@ -493,12 +493,20 @@ export class PrizeService {
   ): Promise<PrizeConfigurationDto> {
     await this.ensureSeller(sellerId);
 
+    // Only PRO sellers can feature items on their profile
+    const seller = await this.userRepository.findOne({
+      where: { id: sellerId, isActive: true },
+    });
+    const profileFeatured =
+      dto.profileFeatured && seller?.isProSubscriber ? true : false;
+
     const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
     const sellerScopedDisplayOrder = sellerDisplayOrderShop ?? displayOrderShop;
 
     return this.createPrizeTier(
       {
         ...restDto,
+        profileFeatured,
         sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
@@ -523,6 +531,17 @@ export class PrizeService {
       throw new ForbiddenException('You can only update your own shop items');
     }
 
+    // Only PRO sellers can feature items on their profile
+    const seller = await this.userRepository.findOne({
+      where: { id: sellerId, isActive: true },
+    });
+    const profileFeatured =
+      dto.profileFeatured !== undefined
+        ? dto.profileFeatured && seller?.isProSubscriber
+          ? true
+          : false
+        : existing.profileFeatured;
+
     const { displayOrderShop, sellerDisplayOrderShop, ...restDto } = dto;
     const sellerScopedDisplayOrder = sellerDisplayOrderShop ?? displayOrderShop;
 
@@ -530,6 +549,7 @@ export class PrizeService {
       itemId,
       {
         ...restDto,
+        profileFeatured,
         sellerDisplayOrderShop: sellerScopedDisplayOrder,
         showOnShop: true,
         showOnRedemptions: false,
@@ -876,6 +896,7 @@ export class PrizeService {
       isActive: true,
       createdBy: createdBy, // null for admin items, sellerId for seller items
       updatedBy: userId,
+      profileFeatured: dto.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? false,
       proEarlyAccessUntil,
     });
@@ -1062,6 +1083,8 @@ export class PrizeService {
       isActive: true,
       createdBy: effectiveCreatedBy, // Use new value if provided, otherwise preserve existing
       updatedBy: userId,
+      profileFeatured:
+        dto.profileFeatured ?? existingTier.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? existingTier.isProOnly ?? false,
       proEarlyAccessUntil: existingTier.proEarlyAccessUntil,
     });
@@ -2328,11 +2351,65 @@ export class PrizeService {
   async getUserOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
     const orders = await this.prizeOrderRepository.find({
       where: { userId },
-      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'prizeConfiguration.creator'],
+      relations: [
+        'prizeConfiguration',
+        'prizeConfiguration.itemImages',
+        'prizeConfiguration.creator',
+      ],
       order: { createdAt: 'DESC' },
     });
 
     return orders.map((order) => this.mapOrderToDto(order));
+  }
+
+  /**
+   * Get recent purchases by username (public endpoint).
+   * Returns limited purchase info suitable for public profile display.
+   */
+  async getRecentPurchasesByUsername(
+    username: string,
+    limit: number = 6,
+  ): Promise<any[]> {
+    const user = await this.userRepository.findOne({
+      where: { username, isActive: true },
+    });
+
+    if (!user) {
+      return [];
+    }
+
+    const orders = await this.prizeOrderRepository.find({
+      where: {
+        userId: user.id,
+        status: In(['paid', 'shipped', 'delivered']),
+      },
+      relations: [
+        'prizeConfiguration',
+        'prizeConfiguration.itemImages',
+        'prizeConfiguration.creator',
+      ],
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+
+    return orders.map((order) => ({
+      id: order.id,
+      createdAt: order.createdAt,
+      status: order.status,
+      prizeConfig: {
+        name: order.prizeConfiguration?.name || 'Unknown Item',
+        category: order.prizeConfiguration?.category || null,
+        image: order.prizeConfiguration?.imageUrl || null,
+        images: (order.prizeConfiguration?.itemImages || [])
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((img) => img.imageUrl),
+        sellerUsername: order.prizeConfiguration?.creator?.username || null,
+        sellerShopName:
+          order.prizeConfiguration?.creator?.shopName ||
+          order.prizeConfiguration?.creator?.username ||
+          null,
+      },
+    }));
   }
 
   async getShopOrders(userId: string): Promise<PrizeOrderResponseDto[]> {
@@ -2342,7 +2419,11 @@ export class PrizeService {
           createdBy: userId,
         },
       },
-      relations: ['prizeConfiguration', 'prizeConfiguration.itemImages', 'user'],
+      relations: [
+        'prizeConfiguration',
+        'prizeConfiguration.itemImages',
+        'user',
+      ],
       order: { createdAt: 'DESC' },
     });
 
@@ -3302,8 +3383,72 @@ export class PrizeService {
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
       updatedBy: entity.updatedBy,
+      profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
       proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
     };
+  }
+
+  /**
+   * Seller: bulk-update which items are profile-featured.
+   * Accepts an array of item IDs to feature (max 10). All other seller items get un-featured.
+   * Only PRO subscribers can use this.
+   */
+  async updateProfileFeaturedItems(
+    sellerId: string,
+    featuredItemIds: string[],
+  ): Promise<{ featuredCount: number }> {
+    await this.ensureSeller(sellerId);
+
+    // Check PRO status
+    const seller = await this.userRepository.findOne({
+      where: { id: sellerId, isActive: true },
+    });
+    if (!seller?.isProSubscriber) {
+      throw new ForbiddenException('PRO subscription required to feature items on your profile');
+    }
+
+    if (featuredItemIds.length > 10) {
+      throw new ForbiddenException('You can feature a maximum of 10 items on your profile');
+    }
+
+    // Get all active seller items
+    const allItems = await this.prizeConfigRepository.find({
+      where: {
+        createdBy: sellerId,
+        isActive: true,
+        showOnShop: true,
+      },
+    });
+
+    // Validate all requested IDs belong to this seller
+    const sellerItemIds = new Set(allItems.map(item => item.id));
+    for (const id of featuredItemIds) {
+      if (!sellerItemIds.has(id)) {
+        throw new ForbiddenException(`Item ${id} not found or does not belong to you`);
+      }
+    }
+
+    const featuredSet = new Set(featuredItemIds);
+
+    // Un-feature items not in the new list
+    const toUnfeature = allItems.filter(item => item.profileFeatured && !featuredSet.has(item.id));
+    if (toUnfeature.length > 0) {
+      await this.prizeConfigRepository.update(
+        toUnfeature.map(i => i.id),
+        { profileFeatured: false },
+      );
+    }
+
+    // Feature items in the new list
+    const toFeature = allItems.filter(item => !item.profileFeatured && featuredSet.has(item.id));
+    if (toFeature.length > 0) {
+      await this.prizeConfigRepository.update(
+        toFeature.map(i => i.id),
+        { profileFeatured: true },
+      );
+    }
+
+    return { featuredCount: featuredItemIds.length };
   }
 }
