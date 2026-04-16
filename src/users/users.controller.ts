@@ -95,6 +95,8 @@ export class UsersController {
   async getOwnAddress(@Request() req: RequestWithUser) {
     const user = await this.usersService.findOneWithAddress(req.user.id);
     const addressData: UserAddressDto = {
+      firstName: user.firstName || null,
+      lastName: user.lastName || null,
       address: user.address || null,
       address2: user.address2 || null,
       city: user.city || null,

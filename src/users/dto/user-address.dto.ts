@@ -6,6 +6,20 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class UserAddressDto {
   @ApiProperty({
+    example: 'John',
+    description: 'First name',
+    nullable: true,
+  })
+  firstName: string | null;
+
+  @ApiProperty({
+    example: 'Doe',
+    description: 'Last name',
+    nullable: true,
+  })
+  lastName: string | null;
+
+  @ApiProperty({
     example: '123 Main Street, Apt 4B',
     description: 'Street address',
     nullable: true,

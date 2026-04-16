@@ -575,6 +575,8 @@ export class CartService {
       // Everything was paid with coins
       // Update user address
       await this.userRepository.update(userId, {
+        firstName: dto.shippingAddress.firstName || null,
+        lastName: dto.shippingAddress.lastName || null,
         address: dto.shippingAddress.addressLine1,
         address2: dto.shippingAddress.addressLine2 || null,
         city: dto.shippingAddress.city,
@@ -997,6 +999,8 @@ export class CartService {
     });
     if (firstOrder?.shippingAddress) {
       const addr = firstOrder.shippingAddress as {
+        firstName?: string;
+        lastName?: string;
         addressLine1?: string;
         addressLine2?: string;
         city?: string;
@@ -1005,6 +1009,8 @@ export class CartService {
         country?: string;
       };
       await this.userRepository.update(userId, {
+        firstName: addr.firstName || null,
+        lastName: addr.lastName || null,
         address: addr.addressLine1 || null,
         address2: addr.addressLine2 || null,
         city: addr.city || null,
