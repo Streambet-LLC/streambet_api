@@ -204,8 +204,8 @@ export class PaymentsService {
         },
       ],
       mode: 'payment',
-      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/payment/cancel`,
+      success_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${this.configService.get<string>('CLIENT_URL', 'http://localhost:3000')}/shop`,
       metadata: {
         userId,
         packageId,
