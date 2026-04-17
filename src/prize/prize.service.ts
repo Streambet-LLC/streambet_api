@@ -829,7 +829,7 @@ export class PrizeService {
     const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
     // Auto-generate display orders for each page where item will be shown
-    const category = (dto.category || 'slab') as 'slab' | 'sealed';
+    const category = (dto.category || 'slab') as 'raw' | 'slab' | 'sealed';
     const isSellerOwnedItem = !!createdBy;
 
     let displayOrderShop = dto.displayOrderShop ?? null;
@@ -884,6 +884,7 @@ export class PrizeService {
       imageUrl: coverImageUrl,
       coverImageId: null,
       category,
+      grade: dto.grade || null,
       stock: dto.stock ?? 0,
       purchaseOption,
       brand: dto.brand || PrizeBrand.POKEMON,
@@ -1064,7 +1065,8 @@ export class PrizeService {
       description: dto.description || null,
       imageUrl: coverImageUrl,
       coverImageId: null,
-      category: (dto.category || existingTier.category) as 'slab' | 'sealed',
+      category: (dto.category || existingTier.category) as 'raw' | 'slab' | 'sealed',
+      grade: dto.grade !== undefined ? (dto.grade || null) : existingTier.grade,
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
@@ -2316,6 +2318,8 @@ export class PrizeService {
     let prizeCategory: PrizeCategory = PrizeCategory.SLAB;
     if (prize.category === 'sealed') {
       prizeCategory = PrizeCategory.SEALED;
+    } else if (prize.category === 'raw') {
+      prizeCategory = PrizeCategory.RAW;
     }
     const redemption = this.prizeRedemptionRepository.create({
       userId: order.userId,
@@ -3368,6 +3372,7 @@ export class PrizeService {
       itemImages,
       coverImageId: resolvedCoverImageId,
       category: entity.category,
+      grade: (entity as any).grade || null,
       stock: entity.stock,
       purchaseOption: entity.purchaseOption,
       brand: entity.brand,
