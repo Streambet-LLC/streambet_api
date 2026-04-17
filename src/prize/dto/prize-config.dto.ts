@@ -148,10 +148,18 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: slab or sealed',
-    enum: ['slab', 'sealed'],
+    description: 'Prize category: raw, slab or sealed',
+    enum: ['raw', 'slab', 'sealed'],
   })
   category: string;
+
+  @ApiProperty({
+    example: 'NM',
+    description: 'Grade/condition of the item (e.g. MT, NM, EX for raw; 10, 9, 8 for slabs)',
+    nullable: true,
+    required: false,
+  })
+  grade: string | null;
 
   @ApiProperty({
     example: 100,
@@ -312,13 +320,23 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: slab or sealed',
-    enum: ['slab', 'sealed'],
+    description: 'Prize category: raw, slab or sealed',
+    enum: ['raw', 'slab', 'sealed'],
     required: false,
   })
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiProperty({
+    example: 'NM',
+    description: 'Grade/condition of the item',
+    nullable: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  grade?: string | null;
 
   @ApiProperty({
     example: 100,
@@ -516,13 +534,23 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: slab or sealed',
-    enum: ['slab', 'sealed'],
+    description: 'Prize category: raw, slab or sealed',
+    enum: ['raw', 'slab', 'sealed'],
     required: false,
   })
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiProperty({
+    example: 'NM',
+    description: 'Grade/condition of the item',
+    nullable: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  grade?: string | null;
 
   @ApiProperty({
     example: 100,

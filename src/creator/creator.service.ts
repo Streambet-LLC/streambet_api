@@ -221,13 +221,13 @@ export class CreatorService {
           `;
 
           const emailParams = {
-            to: 'info@streambet.tv',
+            to: 'contact@cardcade.fun',
             subject: 'New Seller Application Submitted',
           };
 
           await this.emailsService.sendEmailFn(emailParams, emailHTML);
           this.logger.log(
-            'Seller application notification email sent to info@streambet.tv',
+            'Seller application notification email sent to contact@cardcade.fun',
           );
         } catch (emailError) {
           this.logger.error(
