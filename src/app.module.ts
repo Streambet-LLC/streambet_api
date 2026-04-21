@@ -43,9 +43,11 @@ import coinflowConfig from './config/coinflow.config';
 import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
 import personaConfig from './config/persona.config';
+import psaConfig from './config/psa.config';
 import { WebhookModule } from './webhook/webhook.module';
 import { CreatorModule } from './creator/creator.module';
 import { PrizeModule } from './prize/prize.module';
+import { PsaModule } from './integrations/psa/psa.module';
 import { DailySpinModule } from './daily-spin/daily-spin.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -77,6 +79,7 @@ import { CartModule } from './cart/cart.module';
         geoFencingConfig,
         coinflowConfig,
         personaConfig,
+        psaConfig,
       ] as ConfigFactory[],
       envFilePath: ['./.env'],
     }),
@@ -148,6 +151,7 @@ import { CartModule } from './cart/cart.module';
     SubscriptionModule,
     ConciergeModule,
     CartModule,
+    PsaModule,
   ],
   controllers: [AppController],
   providers: [
