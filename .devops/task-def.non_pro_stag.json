@@ -221,6 +221,10 @@
         {
           "name": "PERSONA_API_URL",
           "valueFrom": "/cardcade/non_pro_stag/PERSONA_API_URL"
+        },
+        {
+          "name": "PSA_ACCESS_TOKEN",
+          "valueFrom": "/cardcade/non_pro_stag/PSA_ACCESS_TOKEN"
         }
       ],
       "mountPoints": [],
