@@ -153,6 +153,13 @@ export class PrizeOrder extends BaseEntity {
   })
   lastReminderSentAt?: Date;
 
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+    name: 'review_reminder_sent_at',
+  })
+  reviewReminderSentAt?: Date;
+
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;

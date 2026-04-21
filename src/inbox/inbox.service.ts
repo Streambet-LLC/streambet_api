@@ -825,4 +825,110 @@ export class InboxService {
       this.logger.error('Failed to send inbox notification email', error);
     }
   }
+
+  // ─── SYSTEM / AUTOMATED MESSAGES ─────────────────────────────────────
+
+  private static readonly SYSTEM_BOT_USERNAME = 'cardcade';
+  private static readonly SYSTEM_BOT_EMAIL = 'noreply-bot@cardcade.local';
+  private cachedSystemBotId: string | null = null;
+
+  /**
+   * Lazily ensure a singleton "system bot" user exists and return its id.
+   * Used as the sender for automated in-app messages (review reminders,
+   * future announcements, etc.). The bot is never logged into — its
+   * password column is filled with an unusable random string.
+   */
+  private async getOrCreateSystemBotUserId(): Promise<string> {
+    if (this.cachedSystemBotId) return this.cachedSystemBotId;
+    const existing = await this.userRepo.findOne({
+      where: [
+        { username: InboxService.SYSTEM_BOT_USERNAME },
+        { email: InboxService.SYSTEM_BOT_EMAIL },
+      ],
+      select: ['id'],
+    });
+    if (existing) {
+      this.cachedSystemBotId = existing.id;
+      return existing.id;
+    }
+    const bot = this.userRepo.create({
+      username: InboxService.SYSTEM_BOT_USERNAME,
+      email: InboxService.SYSTEM_BOT_EMAIL,
+      // Login is impossible — password is never compared via login flow.
+      password: `!disabled!${Math.random().toString(36).slice(2)}`,
+      name: 'CardCade',
+      isSeller: false,
+      isCreator: false,
+    });
+    const saved = await this.userRepo.save(bot);
+    this.cachedSystemBotId = saved.id;
+    this.logger.log(`Created system bot user ${saved.id}`);
+    return saved.id;
+  }
+
+  /**
+   * Get the existing system-bot DIRECT thread for a recipient, or create one.
+   * Always reused on subsequent calls so all automated notifications land in
+   * the same thread instead of spawning a new conversation per event.
+   */
+  private async getOrCreateSystemThread(
+    recipientId: string,
+  ): Promise<Conversation> {
+    const botId = await this.getOrCreateSystemBotUserId();
+    if (recipientId === botId) {
+      throw new BadRequestException('Cannot send a system message to the bot');
+    }
+    const existing = await this.findExistingDirectConversation(
+      botId,
+      recipientId,
+    );
+    if (existing) return existing;
+    const convo = await this.conversationRepo.save(
+      this.conversationRepo.create({
+        type: ConversationType.DIRECT,
+        subject: 'CardCade Notifications',
+      }),
+    );
+    await this.participantRepo.save([
+      this.participantRepo.create({
+        conversationId: convo.id,
+        userId: botId,
+      }),
+      this.participantRepo.create({
+        conversationId: convo.id,
+        userId: recipientId,
+      }),
+    ]);
+    return convo;
+  }
+
+  /**
+   * Send an automated message to a user from the CardCade system bot. The
+   * message is appended to a single shared thread per recipient so we don't
+   * spawn a new conversation for every reminder. Markdown link syntax
+   * `[label](url)` is rendered as a clickable link by the frontend.
+   *
+   * Returns the conversationId of the thread the message was added to, so
+   * callers can deep-link to it if useful.
+   */
+  async sendSystemMessageToUser(
+    recipientId: string,
+    content: string,
+    opts: { adminName?: string } = {},
+  ): Promise<{ conversationId: string }> {
+    const trimmed = content?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('System message content cannot be empty');
+    }
+    const botId = await this.getOrCreateSystemBotUserId();
+    const thread = await this.getOrCreateSystemThread(recipientId);
+    await this.sendMessage(
+      botId,
+      thread.id,
+      { content: trimmed },
+      true, // isAdminMessage — gives it the system/admin badge in the UI
+      opts.adminName ?? 'CardCade',
+    );
+    return { conversationId: thread.id };
+  }
 }
