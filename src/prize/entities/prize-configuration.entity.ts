@@ -35,12 +35,12 @@ export class PrizeConfiguration extends BaseEntity {
 
   @Column({
     type: 'enum',
-    enum: ['raw', 'slab', 'sealed'],
+    enum: ['raw', 'slab', 'sealed', 'other'],
     name: 'category',
     nullable: false,
     default: 'slab',
   })
-  category: 'raw' | 'slab' | 'sealed';
+  category: 'raw' | 'slab' | 'sealed' | 'other';
 
   @Column({ type: 'varchar', length: 10, name: 'grade', nullable: true })
   grade: string | null;
