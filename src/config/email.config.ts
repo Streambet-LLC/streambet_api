@@ -122,5 +122,13 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/concierge_assigned.ejs',
       schemaPath: './src/templates/concierge_assigned.json',
     },
+    review_reminder_buyer: {
+      templatePath: './src/templates/review_reminder_buyer.ejs',
+      schemaPath: './src/templates/review_reminder_buyer.json',
+    },
+    review_reminder_seller: {
+      templatePath: './src/templates/review_reminder_seller.ejs',
+      schemaPath: './src/templates/review_reminder_seller.json',
+    },
   },
 }));
