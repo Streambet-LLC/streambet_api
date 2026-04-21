@@ -148,8 +148,8 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: raw, slab or sealed',
-    enum: ['raw', 'slab', 'sealed'],
+    description: 'Prize category: raw, slab, sealed or other',
+    enum: ['raw', 'slab', 'sealed', 'other'],
   })
   category: string;
 
@@ -320,8 +320,8 @@ export class CreatePrizeTierDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: raw, slab or sealed',
-    enum: ['raw', 'slab', 'sealed'],
+    description: 'Prize category: raw, slab, sealed or other',
+    enum: ['raw', 'slab', 'sealed', 'other'],
     required: false,
   })
   @IsOptional()
@@ -534,8 +534,8 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: 'slab',
-    description: 'Prize category: raw, slab or sealed',
-    enum: ['raw', 'slab', 'sealed'],
+    description: 'Prize category: raw, slab, sealed or other',
+    enum: ['raw', 'slab', 'sealed', 'other'],
     required: false,
   })
   @IsOptional()

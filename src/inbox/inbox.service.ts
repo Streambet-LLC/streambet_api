@@ -236,7 +236,11 @@ export class InboxService {
     await this.participantRepo.save(participant);
 
     // Send email notification to other participants
-    await this.notifyRecipients(conversationId, senderId, content || '📷 Image');
+    await this.notifyRecipients(
+      conversationId,
+      senderId,
+      content || '📷 Image',
+    );
 
     return this.messageRepo.findOne({
       where: { id: savedMessage.id },
@@ -398,7 +402,13 @@ export class InboxService {
         }
       : undefined;
 
-    return { data: messages, total, page, limit, conversation: enrichedConversation };
+    return {
+      data: messages,
+      total,
+      page,
+      limit,
+      conversation: enrichedConversation,
+    };
   }
 
   // ─── MARK AS READ ────────────────────────────────────────────────────
@@ -455,9 +465,7 @@ export class InboxService {
     }
 
     // Create block record
-    await this.blockRepo.save(
-      this.blockRepo.create({ blockerId, blockedId }),
-    );
+    await this.blockRepo.save(this.blockRepo.create({ blockerId, blockedId }));
 
     // Mark conversation participants as blocked
     const sharedConversations = await this.conversationRepo
@@ -784,8 +792,7 @@ export class InboxService {
         where: { id: senderId },
       });
 
-      const hostUrl =
-        this.configService.get<string>('email.HOST_URL') || '';
+      const hostUrl = this.configService.get<string>('email.HOST_URL') || '';
 
       for (const participant of participants) {
         if (participant.userId === senderId) continue;
@@ -816,10 +823,7 @@ export class InboxService {
           },
         };
 
-        await this.queueService.addEmailJob(
-          emailData,
-          EmailType.InboxMessage,
-        );
+        await this.queueService.addEmailJob(emailData, EmailType.InboxMessage);
       }
     } catch (error) {
       this.logger.error('Failed to send inbox notification email', error);

@@ -829,7 +829,7 @@ export class PrizeService {
     const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
     // Auto-generate display orders for each page where item will be shown
-    const category = (dto.category || 'slab') as 'raw' | 'slab' | 'sealed';
+    const category = (dto.category || 'slab') as 'raw' | 'slab' | 'sealed' | 'other';
     const isSellerOwnedItem = !!createdBy;
 
     let displayOrderShop = dto.displayOrderShop ?? null;
@@ -1065,7 +1065,7 @@ export class PrizeService {
       description: dto.description || null,
       imageUrl: coverImageUrl,
       coverImageId: null,
-      category: (dto.category || existingTier.category) as 'raw' | 'slab' | 'sealed',
+      category: (dto.category || existingTier.category) as 'raw' | 'slab' | 'sealed' | 'other',
       grade: dto.grade !== undefined ? (dto.grade || null) : existingTier.grade,
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
