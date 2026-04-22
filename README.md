@@ -1,265 +1,359 @@
-# Streambet Backend
+# CardCade API (`streambet_api`)
 
-This is the backend for the Streambet platform, a live betting application that combines livestreamed entertainment with real-time wagering using virtual tokens.
+NestJS backend that powers **CardCade** — a sports-card / TCG marketplace bolted onto a live-streamed betting and entertainment platform. The legacy "Streambet" naming still appears in repo paths, image names, and a handful of configs; the product is CardCade.
 
-## Tech Stack
+The API serves:
 
-- NestJS with TypeScript
-- PostgreSQL with TypeORM
-- Redis for caching
-- WebSockets for real-time communication
-- JWT for authentication
-- Stripe for payments
-- Google OAuth for social login
+- A **marketplace**: shops, prizes (slabs / sealed / raw / other), cart, Stripe Checkout, offers / counter-offers, reviews, shipping, and seller payouts.
+- A **live-betting layer**: streams, betting rounds, betting variables, real-time updates over WebSockets, daily spin / promo / referral mechanics.
+- A **wallet system**: dual-currency (CadeCoins purchased via Stripe / Coinflow + Sweep/Gold tokens earned via promotions), with auto-reload and platform payouts.
+- **Pro subscriptions**, creator tooling, follower / inbox / notifications, geo-fencing, and an admin surface for everything above.
 
-## Getting Started
+---
+
+## Tech stack
+
+| Layer | Stack |
+| --- | --- |
+| Runtime | Node.js 18+, NestJS 11, TypeScript |
+| HTTP / Realtime | Express adapter, `@nestjs/websockets` (Socket.IO), `@nestjs/swagger` |
+| Data | PostgreSQL (TypeORM 11), Redis (cache + BullMQ queues) |
+| Background jobs | BullMQ (`@nestjs/bullmq`), `@nestjs/schedule` cron |
+| Auth | JWT access + refresh tokens, Passport, Google OAuth |
+| Payments | Stripe (Checkout, Connect, Subscriptions), Coinflow (crypto on-ramp) |
+| Email | Nodemailer over AWS SES (`@nestjs-modules/mailer`) |
+| Storage | AWS S3 (`@aws-sdk/client-s3` + presigned URLs) |
+| Streaming | AWS Kinesis Video Streams |
+| Identity | Persona (KYC), Abstract API (geolocation / VPN check) |
+| Observability | New Relic, structured logging |
+| Workflows | n8n webhooks (outbound automation) |
+
+---
+
+## Repository layout
+
+```
+streambet_api/streambet_api/
+├── src/
+│   ├── admin/              # Admin endpoints (users, streams, prizes, orders, payouts)
+│   ├── auth/               # Local + Google OAuth, JWT issuance, refresh tokens
+│   ├── awsmethods/         # S3 / SES / Kinesis helpers
+│   ├── bet-round-history/  # Persisted history of completed betting rounds
+│   ├── betting/            # Place / cancel bets, betting variables, lock + settle
+│   ├── cart/               # Shopping cart for marketplace items
+│   ├── chat/               # Per-stream chat persistence
+│   ├── coin-package/       # CadeCoin SKUs sold via Stripe / Coinflow
+│   ├── common/             # Shared decorators, guards, interceptors, pipes
+│   ├── concierge/          # White-glove / high-value buyer support
+│   ├── creator/            # Creator application + creator-only features
+│   ├── daily-spin/         # Daily reward wheel
+│   ├── database/           # TypeORM data source, migrations, seeders
+│   ├── emails/             # SES transport + transactional template senders
+│   ├── follower/           # Follow / unfollow shops & creators
+│   ├── geo-fencing/        # Region + VPN gating for restricted jurisdictions
+│   ├── inbox/              # In-app message threads (DMs + system notifications)
+│   ├── integrations/       # 3rd-party adapters (PSA card lookup, Coinflow, Persona…)
+│   ├── live-feed-update/   # Push events to the live activity feed
+│   ├── notification/       # Notification dispatch (inbox + email + websocket)
+│   ├── payments/           # Stripe Checkout / Connect, payouts, webhooks
+│   ├── platform-payout/    # Seller payout calculations & ledger
+│   ├── prize/              # Marketplace items: configurations, offers, orders, shipping
+│   ├── promo-code/         # Promo / discount codes
+│   ├── queue/              # BullMQ queue + worker registration
+│   ├── redis/              # Redis client + cache module
+│   ├── referral/           # Referral codes & rewards
+│   ├── reviews/            # Buyer / seller post-transaction reviews
+│   ├── scheduled-tasks/    # Cron jobs (review reminders, payout sweeps, cleanup)
+│   ├── stream/             # Stream CRUD + live state
+│   ├── subscription/       # Pro subscription (Stripe recurring)
+│   ├── users/              # User profile, shop profile, settings
+│   ├── wallets/            # Dual-currency wallet, transactions, auto-reload
+│   ├── webhook/            # Inbound webhooks (Stripe, Coinflow, Persona, n8n)
+│   └── ws/                 # Socket.IO gateways (betting, chat, presence)
+├── test/                   # E2E test harness
+├── docker-compose.yml      # Local Postgres + Redis
+├── Dockerfile              # Production image (used by ECS)
+├── docker-entrypoint.sh    # Pulls SSM params at container start
+├── typeorm.config.ts       # CLI data-source for migrations
+└── package.json
+```
+
+---
+
+## Getting started
 
 ### Prerequisites
 
-- Node.js(v18+)
-- PostgreSQL
-- Redis
-- Docker (optional, for containerization)
-
-### Environment Setup
-
-Create a `.env.development` file in the root directory with the following variables:
-
-```
-# Server
-NODE_ENV=development
-PORT=3000
-CLIENT_URL=http://localhost:3000
-
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_DATABASE=streambet_dev
-
-# JWT
-JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRES_IN=1d
-
-# Refresh Token
-REFRESH_TOKEN_SECRET=your_refresh_token_secret_key
-REFRESH_TOKEN_EXPIRES_IN=30d
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
-
-# Stripe
-STRIPE_SECRET_KEY=your_stripe_secret_key
-STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-```
+- Node.js 18+ and npm
+- PostgreSQL 14+ (the staging schema is a useful starting point — see "Database" below)
+- Redis 6+
+- Docker (optional, for local Postgres / Redis)
+- AWS credentials with read access to the SSM Parameter Store paths and S3 bucket (only required for environments that use SSM at boot — local dev runs from `.env`)
 
 ### Installation
 
 ```bash
-# Install dependencies
+cd streambet_api/streambet_api
 npm install
-
-# Run the development server
-npm run start:dev
 ```
 
-### Docker Setup
+### Local environment
 
-To run the application using Docker:
+Create `.env` in `streambet_api/streambet_api/`. The repo's `.env` already contains a working **local + staging-DB** template you can copy from. The variables actually consumed by the app are:
 
 ```bash
-# Build and start containers
-docker-compose up -d
+# Server
+NODE_ENV=development
+PORT=3000
+CLIENT_URL=http://localhost:8080            # Frontend origin. NO trailing slash.
+APPLICATION_HOST=https://stag.cardcade.fun  # Used in some absolute-link emails
 
-# Stop containers
+# Database (Postgres)
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_DATABASE=streambet_db_local
+DB_SYNC=false                # Leave false. Use migrations.
+DB_LOGGING=false
+
+# Redis
+REDIS_ENABLED=true
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USERNAME=default
+REDIS_PASSWORD=password
+REDIS_DB=0
+REDIS_KEY_PREFIX=STREAMBET_LOCAL
+REDIS_TLS=false
+
+# JWT
+JWT_SECRET=<random>
+JWT_EXPIRES_IN=1d
+REFRESH_TOKEN_SECRET=<random, different from JWT_SECRET>
+REFRESH_TOKEN_EXPIRES_IN=30d
+
+# Google OAuth
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+
+# Stripe (use test keys locally)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_CONNECT_WEBHOOK_SECRET=whsec_...
+STRIPE_PRO_MONTHLY_PRICE_ID=price_...
+STRIPE_PRO_YEARLY_PRICE_ID=price_...
+STRIPE_SUBSCRIPTION_WEBHOOK_SECRET=whsec_...
+
+# AWS S3 + SES
+FILE_DRIVER=s3
+ACCESS_KEY_ID=...
+SECRET_ACCESS_KEY=...
+AWS_DEFAULT_S3_BUCKET=streambets3prod
+AWS_S3_REGION=us-east-1
+
+AWS_SMTP_USER=...
+AWS_SMTP_PASSWORD=...
+AWS_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+AWS_SMTP_PORT=465
+MAIL_SECURE=true
+MAIL_REQUIRE_TLS=true
+AWS_SMTP_REGION=us-east-1
+AWS_EMAIL_FROM=contact@cardcade.fun
+MAIL_DEFAULT_NAME=CardCade
+MAIL_DEFAULT_EMAIL=contact@cardcade.fun
+HOSTED=false
+
+# Coinflow (crypto on-ramp)
+COINFLOW_API_URL=https://api.coinflow.cash
+COINFLOW_API_KEY=...
+COINFLOW_DEFAULT_TOKEN=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+COINFLOW_MERCHANT_ID=streambet
+COINFLOW_BLOCKCHAIN=solana
+COINFLOW_WEBHOOK_SECRET=...
+COINFLOW_WEBHOOK_ENV=stag
+
+# Geo-fencing
+ABSTRACT_API_KEY=...
+BLOCKED_REGION=Connecticut,Delaware,Louisiana,Michigan,Montana,Washington,West Virginia
+GEOFENCE_FAIL_CLOSED=true
+DENY_ON_NO_IP=false
+BLOCK_VPN=false
+TRUST_PROXY=true
+
+# Persona (KYC)
+PERSONA_API_URL=https://withpersona.com/api/v1
+PERSONA_API_KEY=...
+
+# n8n outbound webhooks
+N8N_ENABLED=true
+N8N_WEBHOOK_URL=https://n8n.example.com/webhook/...
+N8N_WEBHOOK_SECRET=...
+N8N_RETRIES=3
+N8N_RETRY_DELAY_MS=1000
+N8N_TIMEOUT_MS=5000
+
+# PSA card lookup
+PSA_ACCESS_TOKEN=...
+
+# Tooling
+IS_SWAGGER_ENABLED=true
+IS_BULLMQ_UI_ENABLED=true
+NEW_RELIC_ENABLED=false
+NEW_RELIC_APP_NAME=Streambet
+NEW_RELIC_LICENSE_KEY=...
+```
+
+> ⚠️ **`CLIENT_URL` must not have a trailing slash.** The app concatenates paths directly (`${CLIENT_URL}/transactions?leave=...`), and React Router does not normalise `//`. A trailing slash will produce `https://cardcade.fun//transactions` → 404 in the browser.
+
+### Run
+
+```bash
+# Dev (watch mode)
+npm run start:dev
+
+# Debug
+npm run start:debug
+
+# Production build
+npm run build && npm run start:prod
+```
+
+By default the API listens on `http://localhost:3000` with the global prefix `/api`.
+
+### Docker (Postgres + Redis only)
+
+```bash
+docker-compose up -d   # Postgres on 5432, Redis on 6379
 docker-compose down
 ```
 
-## API Documentation
+The application itself is normally run with `npm run start:dev` against those containers; the included `Dockerfile` is the production image used by ECS.
 
-The API documentation is automatically generated using Swagger/OpenAPI.
+---
 
-After starting the application, visit:
+## Database
+
+### Migrations (the supported workflow)
+
+```bash
+# Create a new empty migration
+npm run migration:create -- src/database/migrations/AddSomething
+
+# Generate from entity diffs
+npm run migration:generate -- src/database/migrations/AddSomething
+
+# Apply
+npm run migration:run
+
+# Rollback the most recent
+npm run migration:revert
+```
+
+`typeorm.config.ts` reads the same env vars as the app and is what the CLI uses.
+
+### `DB_SYNC` (auto-schema)
+
+`DB_SYNC=true` makes TypeORM diff entities against the live schema on boot and apply changes. Convenient for throwaway local DBs:
+
+```bash
+npm run db:sync          # dev with sync
+npm run db:reset         # dev with sync + DB_DROP_SCHEMA=true (NUKES the database)
+npm run db:sync:prod     # built artifact with sync
+```
+
+Do **not** enable `DB_SYNC` against shared (staging / prod) databases — migrations are the source of truth there.
+
+See [src/database/README.md](./src/database/README.md) for more.
+
+---
+
+## API documentation (Swagger)
+
+When `IS_SWAGGER_ENABLED=true`, interactive docs are served at:
 
 ```
 http://localhost:3000/api/docs
 ```
 
-This interactive documentation provides:
+Auth header (`Authorization: Bearer <accessToken>`) is configured via `@nestjs/swagger`'s bearer auth, so you can paste a token in the "Authorize" dialog and call protected endpoints directly.
 
-- Detailed endpoint descriptions
-- Request/response schemas
-- Ability to test endpoints directly from the browser
-- Authentication support
+---
 
-## Database Management
+## Modules at a glance
 
-### Setup
+The route prefix on every endpoint is `/api`. All paths below omit it.
 
-Before running the application, make sure you have PostgreSQL running with a database created matching your configuration:
+| Prefix | Module | What lives here |
+| --- | --- | --- |
+| `/auth` | `auth/` | Email/password + Google OAuth login, JWT issuance, refresh, logout, `me` |
+| `/users` | `users/` | Profile, shop profile, settings, public lookups by username |
+| `/wallets` | `wallets/` | Dual-currency balance, transaction history, auto-reload config |
+| `/cart` | `cart/` | Add / update / remove marketplace items, multi-seller cart |
+| `/prizes` | `prize/` | Public marketplace browse, item detail, offers, orders, reviews flow |
+| `/seller/prizes` | `prize/` | Seller-side: my shop items CRUD, my orders, my offers, mark-shipped |
+| `/seller/prizes/psa` | `integrations/psa/` | PSA cert lookup for seller listing flow |
+| `/admin/prizes` | `prize/` | Admin-side prize / order / offer management |
+| `/reviews` | `reviews/` | Submit and list buyer / seller reviews |
+| `/inbox` | `inbox/` | DM threads, system messages, mark-read |
+| `/admin/inbox` | `inbox/` | Admin broadcast + per-user message tools |
+| `/payments` | `payments/` | Stripe Checkout sessions, Connect onboarding, payout queries |
+| `/coin-package` | `coin-package/` | CadeCoin SKUs (purchasable bundles) |
+| `/subscription` | `subscription/` | Pro subscription start / cancel / portal links |
+| `/daily-spin` | `daily-spin/` | Spin status + claim |
+| `/concierge` | `concierge/` | High-value buyer concierge requests |
+| `/creator` | `creator/` | Creator application + creator-only data |
+| `/stream` | `stream/` | Stream metadata, schedule, public detail |
+| `/betting` | `betting/` | Place / cancel bets, get betting state for a stream |
+| `/chat` | `chat/` | Persisted stream chat |
+| `/notification` | `notification/` | Push notifications |
+| `/emails` | `emails/` | (Internal) re-trigger transactional emails |
+| `/assets` | `assets/` | Presigned S3 upload URLs |
+| `/admin` | `admin/` | Cross-cutting admin (users, streams, betting, wallet adjustments) |
+| `/webhook` | `webhook/` | Inbound webhooks (Stripe core + Connect, Coinflow, Persona, n8n) |
 
-```sql
-CREATE DATABASE streambet_dev;
+Use Swagger (`/api/docs`) for the canonical, always-current per-route reference — handler-level `@ApiOperation` / `@ApiResponse` decorators document the shapes.
+
+---
+
+## Authentication
+
+JWT access + refresh tokens with full rotation.
+
+### Tokens
+
+| Token | Default TTL | Where it lives |
+| --- | --- | --- |
+| Access | `JWT_EXPIRES_IN` (1d) | Sent as `Authorization: Bearer <token>` |
+| Refresh | `REFRESH_TOKEN_EXPIRES_IN` (30d) | Stored client-side; also persisted in DB for revocation |
+
+The two token types use **separate secrets** (`JWT_SECRET` vs `REFRESH_TOKEN_SECRET`).
+
+### Flow
+
+1. `POST /api/auth/register` or `POST /api/auth/login` returns `{ accessToken, refreshToken, ...user }`.
+2. Client sends `Authorization: Bearer <accessToken>` with every request.
+3. On 401, client calls `POST /api/auth/refresh` with the refresh token; the server issues a new pair and invalidates the old refresh row.
+4. `POST /api/auth/logout` deletes the refresh row server-side.
+
+The refresh endpoint is guarded by `RefreshTokenGuard`, which:
+
+1. Pulls the refresh token from the request body
+2. Verifies the JWT signature + expiry
+3. Looks up the row by user + token in Postgres (rejects if missing → reuse / revoked)
+4. Loads the user (rejects if disabled / deleted)
+5. Attaches `request.user` for the controller
+
+### Google OAuth
+
+`GET /api/auth/google` → `GET /api/auth/google/callback` → redirect to:
+
+```
+${CLIENT_URL}/auth/google-callback?token=<accessToken>&refreshToken=<refreshToken>
 ```
 
-### Automatic Database Synchronization
-
-The application supports automatic database schema synchronization, which automatically creates/updates database tables based on your entity definitions without requiring manual migrations.
-
-#### Environment Variables
-
-Add these to your `.env` file:
-
-```bash
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_NAME=streambet_dev
-DB_SYNC=true          # Enable automatic schema synchronization
-DB_LOGGING=true       # Enable SQL query logging
-DB_DROP_SCHEMA=false  # Drop and recreate schema (use with caution!)
-```
-
-#### Available Commands
-
-```bash
-# Start development server with auto-sync enabled
-npm run db:sync
-
-# Start production server with auto-sync enabled
-npm run db:sync:prod
-
-# Reset database (drops all tables and recreates them)
-npm run db:reset
-```
-
-#### How It Works
-
-When `DB_SYNC=true`:
-
-1. **Entity Changes**: Any changes to your TypeORM entities (adding fields, changing types, etc.) will automatically be reflected in the database
-2. **Table Creation**: New entities will automatically create corresponding tables
-3. **Column Updates**: Modified entity properties will update existing table columns
-4. **Index Updates**: Changes to entity decorators will update database indexes
-
-#### When to Use Auto-Sync
-
-✅ **Development**: Perfect for rapid development and prototyping
-✅ **Testing**: Great for test environments where you need fresh schemas
-✅ **Small Projects**: Suitable for projects with simple database requirements
-
-❌ **Production**: Not recommended for production environments
-❌ **Complex Migrations**: Not suitable for complex data transformations
-❌ **Team Development**: Can cause conflicts in team environments
-
-#### Example: Adding a New Field
-
-1. **Update Entity**:
-
-```typescript
-// src/users/entities/user.entity.ts
-@Entity()
-export class User extends BaseEntity {
-  // ... existing fields
-
-  @Column({ nullable: true })
-  phoneNumber: string; // New field
-}
-```
-
-2. **Start Server**:
-
-```bash
-npm run db:sync
-```
-
-3. **Result**: The `phoneNumber` column is automatically added to the `users` table!
-
-#### Safety Features
-
-- **Logging**: When `DB_LOGGING=true`, all SQL operations are logged
-- **Validation**: TypeORM validates entity definitions before applying changes
-- **Error Handling**: Invalid schema changes will prevent the application from starting
-
-### Migrations (Alternative Approach)
-
-For production environments or when you need more control, you can use traditional migrations:
-
-```bash
-# Generate a migration from entity changes
-npm run migration:generate --name=YourMigrationName
-
-# Create an empty migration file
-npm run migration:create --name=YourMigrationName
-
-# Run pending migrations
-npm run migration:run
-
-# Revert the most recent migration
-npm run migration:revert
-```
-
-See `src/database/README.md` for more detailed instructions on working with migrations.
-
-## API Endpoints
-
-### Authentication
-
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login with email and password
-- `POST /api/auth/refresh` - Refresh access token using refresh token
-- `POST /api/auth/logout` - Logout and invalidate refresh token
-- `GET /api/auth/me` - Get current user profile
-- `GET /api/auth/google` - Google OAuth login
-- `GET /api/auth/google/callback` - Google OAuth callback
-
-## Authentication & Refresh Tokens
-
-The application uses JWT (JSON Web Tokens) for authentication with JWT refresh token support for enhanced security.
-
-### Token Types
-
-1. **Access Token**: Short-lived JWT token (default: 7 days) used for API authentication
-2. **Refresh Token**: Long-lived JWT token (default: 30 days) used to obtain new access tokens
-
-### Authentication Flow
-
-1. **Login/Register**: User receives both access token and refresh token (both are JWT tokens)
-2. **API Requests**: Include access token in Authorization header: `Bearer <access_token>`
-3. **Token Refresh**: When access token expires, use refresh token to get new tokens
-4. **Logout**: Invalidates refresh token on server side
-
-### Security Features
-
-- **Separate Secrets**: Access tokens and refresh tokens use different JWT secrets
-- **Database Validation**: Refresh tokens are validated against the database to prevent reuse
-- **Automatic Expiration**: Expired refresh tokens are automatically cleaned up
-- **Token Rotation**: Each refresh operation generates new access and refresh tokens
-- **Guard Protection**: Refresh token endpoint is protected by RefreshTokenGuard for enhanced security
-
-### Guard Architecture
-
-The refresh token endpoint uses a dedicated `RefreshTokenGuard` that:
-
-1. **Extracts Token**: Gets the refresh token from the request body
-2. **JWT Verification**: Validates the JWT refresh token signature and expiration
-3. **User Validation**: Ensures the user exists and is active
-4. **Database Check**: Verifies the token matches the one stored in the database
-5. **Expiration Check**: Validates the database expiration timestamp
-6. **User Injection**: Attaches the validated user to the request for use in the controller
-
-This approach provides multiple layers of security and ensures that only valid, non-expired refresh tokens can be used to obtain new access tokens.
-
-### Example Usage
+### Example
 
 ```bash
 # Login
@@ -267,179 +361,210 @@ curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"identifier": "user@example.com", "password": "password123"}'
 
-# Response includes both tokens
-{
-  "data": {
-    "id": "user-id",
-    "username": "username",
-    "email": "user@example.com",
-    "role": "user",
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "abc123def456..."
-  },
-  "message": "User logged in successfully",
-  "statusCode": 200
-}
+# Authenticated request
+curl http://localhost:3000/api/auth/me \
+  -H "Authorization: Bearer eyJhbGciOi..."
 
-# Use access token for API requests
-curl -X GET http://localhost:3000/api/auth/me \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-
-# Refresh tokens when access token expires
+# Refresh
 curl -X POST http://localhost:3000/api/auth/refresh \
   -H "Content-Type: application/json" \
-  -d '{"refreshToken": "abc123def456..."}'
-
-# Logout (invalidates refresh token)
-curl -X POST http://localhost:3000/api/auth/logout \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  -d '{"refreshToken": "eyJhbGciOi..."}'
 ```
 
-### Google OAuth
+---
 
-Google OAuth also supports refresh tokens. After successful Google authentication, users receive both access and refresh tokens via the callback URL:
+## Payments
 
-```
-http://localhost:8080/auth/google-callback?token=<access_token>&refreshToken=<refresh_token>
-```
+### Stripe
 
-### Betting
+Three webhook secrets are configured because three different Stripe surfaces post to us:
 
-- `GET /api/betting/streams` - Get all active streams
-- `GET /api/betting/streams/:id` - Get stream details
-- `GET /api/betting/streams/:id/betting-variables` - Get betting options for a stream
-- `POST /api/betting/place-bet` - Place a bet
-- `DELETE /api/betting/bets/:id` - Cancel a bet
-- `GET /api/betting/user-bets` - Get user's betting history
+| Secret | Webhook source | Endpoint |
+| --- | --- | --- |
+| `STRIPE_WEBHOOK_SECRET` | Core account (Checkout, payment intents) | `POST /api/webhook/stripe` |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Connect platform (seller onboarding, transfers) | `POST /api/webhook/stripe-connect` |
+| `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` | Pro recurring subscription events | `POST /api/webhook/stripe-subscription` |
+
+Buy-flow `success_url` and `cancel_url` are built from `CLIENT_URL`; remember the no-trailing-slash rule.
+
+### Coinflow
+
+Card / crypto on-ramp for purchasing CadeCoins. Inbound webhook lands at `POST /api/webhook/coinflow`, validated against `COINFLOW_WEBHOOK_SECRET`. Set `COINFLOW_WEBHOOK_ENV=stag` or `prod` to match the dashboard env.
 
 ### Wallets
 
-- `GET /api/wallets/balance` - Get user's wallet balance
-- `GET /api/wallets/transactions` - Get user's transaction history
+Dual currency:
 
-### Payments
+- **CadeCoins** — purchased with real money (Stripe / Coinflow). `50 coins = $1 USD` (used for marketplace pricing display).
+- **Sweep / Gold tokens** — earned via daily spin, promo codes, referrals; used for live betting under per-round limits exposed by `/auth/me` (`maxSweepCoinsBet`, `maxGoldCoinsBet`, `maxCadeCoinsBet`).
 
-- `POST /api/payments/create-checkout-session` - Create a Stripe checkout session
-- `POST /api/payments/webhook` - Stripe webhook endpoint
-- `POST /api/payments/auto-reload` - Set up auto-reload for betting
+Auto-reload (`POST /api/payments/auto-reload`) charges the user's saved Stripe payment method when balance dips below a threshold.
 
-### Admin
+---
 
-- `POST /api/admin/streams` - Create a new stream
-- `PATCH /api/admin/streams/:id/status` - Update stream status
-- `POST /api/admin/betting-variables` - Create betting options
-- `PATCH /api/admin/betting-variables/:id/lock` - Lock betting
-- `POST /api/admin/betting-variables/:id/declare-winner` - Declare a winner
-- `GET /api/admin/users` - Get all users
-- `PATCH /api/admin/users/:id/wallet` - Adjust user's wallet balance
+## WebSockets
 
-## WebSocket Events
+Gateways live in `src/ws/`. Clients connect to the same port as HTTP (`/socket.io/`) and authenticate by passing the JWT in the connection `auth` payload.
 
-### Client to Server
+### Client → server
 
-- `joinStream` - Join a stream room
-- `leaveStream` - Leave a stream room
-- `placeBet` - Place a bet in real-time
-- `sendChatMessage` - Send a chat message
+| Event | Purpose |
+| --- | --- |
+| `joinStream` | Join a stream room (chat + betting updates) |
+| `leaveStream` | Leave a stream room |
+| `placeBet` | Place a bet without an HTTP round-trip |
+| `sendChatMessage` | Send a chat message in the stream room |
 
-### Server to Client
+### Server → client
 
-- `joinedStream` - Confirmation of joining a stream
-- `bettingUpdate` - Updates on betting statistics
-- `chatMessage` - New chat message
-- `bettingLocked` - Betting has been locked
-- `winnerDeclared` - Winner has been declared
-- `notification` - User-specific notifications
+| Event | Purpose |
+| --- | --- |
+| `joinedStream` | Ack of a successful join |
+| `bettingUpdate` | Pool sizes, leaderboards, odds updates |
+| `bettingLocked` | Round is locked; no new bets |
+| `winnerDeclared` | Round resolved; payouts dispatched |
+| `chatMessage` | New chat message in the room |
+| `notification` | Per-user push (offer received, order shipped, payout sent…) |
+| `liveFeedUpdate` | Global activity feed entries (sales, big wins) |
 
-## CI/CD Pipeline
+The marketplace also dispatches notification events to the user's personal room (`user:<id>`) for inbox / order / offer activity.
 
-The application uses GitLab CI/CD for automated testing, building, and deployment to AWS ECS. The pipeline is configured to deploy to different environments based on the branch:
+---
 
-- `dev` branch → Development environment
-- `qa` branch → QA environment
-- `staging` branch → Staging environment
-- `prod` branch → Production environment (manual deployment)
+## Background jobs
 
-### Pipeline Stages
+BullMQ powers async work; queues are registered in `src/queue/` and consumed by the workers in each owning module.
 
-1. **Validate**: Runs linting to ensure code quality
-2. **Test**: Runs unit tests with temporary PostgreSQL and Redis instances
-3. **Build**: Builds Docker image and pushes to AWS ECR
-4. **Deploy**: Updates ECS task definition and deploys to the corresponding environment
+Notable queues:
 
-### AWS Integration
+- **email** — transactional sends via SES (review reminders, order updates, payout notifications).
+- **payouts** — schedules and ledgers seller payouts.
+- **n8n** — outbound webhook dispatch (with retry/backoff using `N8N_RETRIES` + `N8N_RETRY_DELAY_MS`).
+- **scheduled-tasks** — cron-driven (`@nestjs/schedule`) jobs in `src/scheduled-tasks/` (e.g. review reminders 48h after delivery).
 
-The pipeline integrates with AWS services:
+When `IS_BULLMQ_UI_ENABLED=true`, the Bull Board dashboard is mounted at `/api/admin/queues` (admin-guarded).
 
-- **AWS Parameter Store**: Fetches environment-specific configuration (database credentials, API keys, etc.)
-- **AWS ECR**: Stores Docker images for each environment
-- **AWS ECS**: Runs the application containers
+---
 
-### Required AWS Resources
+## Geo-fencing
 
-Before using the pipeline, ensure the following AWS resources are set up:
+`geo-fencing/` resolves the request IP via Abstract API and blocks any region listed in `BLOCKED_REGION`. Behaviour knobs:
 
-1. **ECR Repository**: `streambet-backend`
-2. **ECS Clusters**: One for each environment (`streambet-dev`, `streambet-qa`, `streambet-staging`, `streambet-prod`)
-3. **ECS Task Definitions**: One for each environment (`streambet-backend-dev`, `streambet-backend-qa`, etc.)
-4. **ECS Services**: One for each environment
+| Var | Effect |
+| --- | --- |
+| `GEOFENCE_FAIL_CLOSED=true` | If lookup fails → block (recommended). |
+| `DENY_ON_NO_IP=true` | Block requests with no resolvable IP. |
+| `BLOCK_VPN=true` | Block requests detected as VPN / proxy. |
+| `TRUST_PROXY=true` | Honour `X-Forwarded-For` (required behind ALB / CloudFront). |
 
-### Required GitLab Variables
+---
 
-Set the following variables in GitLab CI/CD settings:
+## Deployment
 
-- `AWS_ACCESS_KEY_ID`: AWS access key with necessary permissions
-- `AWS_SECRET_ACCESS_KEY`: AWS secret key
-- `AWS_ACCOUNT_ID`: Your AWS account ID
+Production is deployed to **AWS ECS Fargate** behind an ALB. The container fetches its env from **AWS Systems Manager Parameter Store** at boot via `docker-entrypoint.sh`.
 
-### Parameter Store Structure
-
-Parameters should be organized in the Parameter Store with the following path structure:
+### Parameter Store layout
 
 ```
-/streambet/dev/DB_HOST
-/streambet/dev/DB_PORT
-/streambet/dev/DB_USERNAME
-...and so on
+/cardcade/non_pro_dev/<KEY>      # dev
+/cardcade/non_pro_stag/<KEY>     # staging
+/cardcade/non_pro_prod/<KEY>     # production
 ```
 
-For each environment (dev, qa, staging, prod).
+…where `<KEY>` matches the env var name (e.g. `CLIENT_URL`, `STRIPE_SECRET_KEY`). Updating a parameter requires restarting the ECS task for the new value to take effect.
 
-## AWS Infrastructure Setup
+> 🪤 **Watch out:** if `/cardcade/non_pro_prod/CLIENT_URL` ends in a `/`, every transactional URL will be `https://cardcade.fun//path` and React Router will 404 it.
 
-The AWS infrastructure is currently set up manually. The following resources are required:
+### Image registry
 
-### ECR Repository
+- ECR repo: `streambet-backend` (legacy name, keep as-is).
+- One ECS cluster per env: `streambet-dev`, `streambet-stag`, `streambet-prod`.
+- One task definition per env: `streambet-backend-dev` etc.
+- Container port: `3000`.
+- IAM:
+  - **Execution role** — pull from ECR, write CloudWatch logs.
+  - **Task role** — read SSM parameters under the env's prefix, R/W to the S3 bucket, send via SES.
 
-- Create a repository named `streambet-backend` to store Docker images
+### Pipeline
 
-### ECS Clusters
+CI/CD lives in `.gitlab-ci.yml` (legacy) and / or GitHub Actions in `.github/workflows/`. Stages:
 
-- Create clusters for each environment: `streambet-dev`, `streambet-qa`, `streambet-staging`, `streambet-prod`
+1. **Validate** — `npm run lint`
+2. **Test** — `npm test` against ephemeral Postgres + Redis
+3. **Build** — `docker build` → push to ECR with the commit SHA tag
+4. **Deploy** — render task definition → `aws ecs update-service` (force-new-deployment)
 
-### ECS Task Definitions
+Branch → environment mapping:
 
-- Create task definitions for each environment with the following configuration:
-  - Family: `streambet-backend-{env}` (e.g., `streambet-backend-dev`)
-  - Network mode: `awsvpc`
-  - CPU: `256`
-  - Memory: `512`
-  - Container name: `streambet-backend`
-  - Container port: `3000`
-  - Environment variables:
-    - `NODE_ENV`: environment name (`dev`, `qa`, `staging`, `prod`)
-    - `AWS_REGION`: your AWS region
+- `dev` → dev
+- `staging` / `stag` → staging
+- `prod` / `main` → production (manual gate)
 
-### ECS Services
+### Required CI variables
 
-- Create services for each environment linked to the corresponding task definition and cluster
-- Configure networking with appropriate security groups and subnets
+| Var | Purpose |
+| --- | --- |
+| `AWS_ACCESS_KEY_ID` | Deploy user with ECR push + ECS update perms |
+| `AWS_SECRET_ACCESS_KEY` | ↑ |
+| `AWS_ACCOUNT_ID` | Used to construct the ECR registry URL |
+| `AWS_DEFAULT_REGION` | Usually `us-east-1` |
 
-### IAM Roles
+---
 
-- Create an execution role for ECS tasks with permissions to pull from ECR and access CloudWatch logs
-- Create a task role with permissions to access AWS Parameter Store
+## Testing & quality
 
-### Parameter Store
+```bash
+npm test               # unit
+npm run test:watch     # unit, watch
+npm run test:cov       # unit + coverage
+npm run test:e2e       # E2E (requires Postgres + Redis)
+npm run lint           # ESLint --fix
+npm run format         # Prettier write
+```
 
-- Create parameters for each environment (see Parameter Store Structure above)
+Husky runs lint on commit. See [TYPESCRIPT-SAFETY.md](./TYPESCRIPT-SAFETY.md) for the project's TS conventions.
+
+---
+
+## Useful scripts (cheat sheet)
+
+```bash
+npm run start:dev               # dev w/ watch
+npm run start:debug             # dev + node --inspect
+npm run build                   # nest build → dist/
+npm run start:prod              # node dist/src/main
+
+npm run migration:create -- src/database/migrations/<Name>
+npm run migration:generate -- src/database/migrations/<Name>
+npm run migration:run
+npm run migration:revert
+
+npm run db:sync                 # dev w/ TypeORM sync (local only)
+npm run db:reset                # dev w/ sync + drop schema (DESTRUCTIVE)
+
+npm test
+npm run test:e2e
+npm run lint
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| Email links return 404 in browser (e.g. `https://cardcade.fun//transactions`) | `CLIENT_URL` SSM param has a trailing slash. Fix the param, restart the ECS task. Already-sent emails are baked-in and stay broken. |
+| Stripe Checkout success page 404s | Same — `success_url` is built from `CLIENT_URL`. Existing checkout sessions retain the old URL until they expire. |
+| `EAUTH` from SES on send | `AWS_SMTP_USER` / `AWS_SMTP_PASSWORD` are SMTP creds (generated from an IAM user), not raw IAM access keys. |
+| `RefreshTokenGuard` rejects a valid-looking refresh token | The token row was rotated by another login or `logout`. The client must re-authenticate. |
+| Webhooks 400 with `Webhook signature verification failed` | Wrong secret for the surface (core vs Connect vs Subscription). Each Stripe webhook has its own `whsec_`. |
+| Local Stripe webhooks never fire | Run `stripe listen --forward-to localhost:3000/api/webhook/stripe` and use the `whsec_` it prints. |
+| `redis: NOAUTH Authentication required` | `REDIS_USERNAME` / `REDIS_PASSWORD` mismatch with the cluster, or ACL not granted. |
+
+---
+
+## Related
+
+- Frontend: [`streambet_web`](../../streambet_web) — React + Vite + Tailwind app at `cardcade.fun`.
+- Database guide: [src/database/README.md](./src/database/README.md)
+- TS conventions: [TYPESCRIPT-SAFETY.md](./TYPESCRIPT-SAFETY.md)

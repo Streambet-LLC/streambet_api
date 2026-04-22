@@ -155,7 +155,8 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: 'NM',
-    description: 'Grade/condition of the item (e.g. MT, NM, EX for raw; 10, 9, 8 for slabs)',
+    description:
+      'Grade/condition of the item (e.g. MT, NM, EX for raw; 10, 9, 8 for slabs)',
     nullable: true,
     required: false,
   })
