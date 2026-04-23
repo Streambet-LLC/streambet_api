@@ -130,5 +130,13 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/review_reminder_seller.ejs',
       schemaPath: './src/templates/review_reminder_seller.json',
     },
+    watcher_price_change: {
+      templatePath: './src/templates/watcher_price_change.ejs',
+      schemaPath: './src/templates/watcher_price_change.json',
+    },
+    watcher_sold_out: {
+      templatePath: './src/templates/watcher_sold_out.ejs',
+      schemaPath: './src/templates/watcher_sold_out.json',
+    },
   },
 }));

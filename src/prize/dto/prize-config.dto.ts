@@ -286,6 +286,26 @@ export class PrizeConfigurationDto {
       'Pro early access deadline (48h after creation). Item is only visible to Pro subscribers until this time.',
   })
   proEarlyAccessUntil: Date | null;
+
+  @ApiProperty({
+    example: 142,
+    description:
+      'Cached unique-viewer count (deduped per user/anon per day). 0 if never viewed.',
+  })
+  viewCount: number;
+
+  @ApiProperty({
+    example: 12,
+    description: 'Number of users currently watching this item.',
+  })
+  watcherCount: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'True when the requesting user is currently watching this item. Always false for anonymous requests.',
+  })
+  isWatching: boolean;
 }
 /**
  * DTO for creating a new prize tier (admin only)

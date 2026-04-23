@@ -832,7 +832,7 @@ export class InboxService {
 
   // ─── SYSTEM / AUTOMATED MESSAGES ─────────────────────────────────────
 
-  private static readonly SYSTEM_BOT_USERNAME = 'cardcade';
+  private static readonly SYSTEM_BOT_USERNAME = 'CardCade';
   private static readonly SYSTEM_BOT_EMAIL = 'noreply-bot@cardcade.local';
   private cachedSystemBotId: string | null = null;
 
@@ -844,14 +844,28 @@ export class InboxService {
    */
   private async getOrCreateSystemBotUserId(): Promise<string> {
     if (this.cachedSystemBotId) return this.cachedSystemBotId;
-    const existing = await this.userRepo.findOne({
-      where: [
-        { username: InboxService.SYSTEM_BOT_USERNAME },
-        { email: InboxService.SYSTEM_BOT_EMAIL },
-      ],
-      select: ['id'],
-    });
+    // Look up by email (stable) or by username case-insensitively so we pick
+    // up legacy bots that were created with the lowercase 'cardcade' username.
+    const existing = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.email = :email', { email: InboxService.SYSTEM_BOT_EMAIL })
+      .orWhere('LOWER(u.username) = LOWER(:username)', {
+        username: InboxService.SYSTEM_BOT_USERNAME,
+      })
+      .select(['u.id', 'u.username', 'u.name'])
+      .getOne();
     if (existing) {
+      // One-time normalization: ensure the public-facing username/name match
+      // the canonical "CardCade" capitalization used in the UI.
+      if (
+        existing.username !== InboxService.SYSTEM_BOT_USERNAME ||
+        existing.name !== 'CardCade'
+      ) {
+        await this.userRepo.update(existing.id, {
+          username: InboxService.SYSTEM_BOT_USERNAME,
+          name: 'CardCade',
+        });
+      }
       this.cachedSystemBotId = existing.id;
       return existing.id;
     }
