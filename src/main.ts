@@ -25,6 +25,10 @@ import { SocketIoAdapter } from './ws/socket-io.adapter';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
+  // Allow larger JSON payloads for image-based integration requests (e.g. base64 uploads).
+  app.useBodyParser('json', { limit: '10mb' });
+  app.useBodyParser('urlencoded', { limit: '10mb', extended: true });
+
   const logger = new Logger('HTTP');
   app.setViewEngine('ejs');
 

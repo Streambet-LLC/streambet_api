@@ -44,10 +44,12 @@ import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
 import personaConfig from './config/persona.config';
 import psaConfig from './config/psa.config';
+import ebayConfig from './config/ebay.config';
 import { WebhookModule } from './webhook/webhook.module';
 import { CreatorModule } from './creator/creator.module';
 import { PrizeModule } from './prize/prize.module';
 import { PsaModule } from './integrations/psa/psa.module';
+import { EbayModule } from './integrations/ebay/ebay.module';
 import { DailySpinModule } from './daily-spin/daily-spin.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -81,6 +83,7 @@ import { ReviewsModule } from './reviews/reviews.module';
         coinflowConfig,
         personaConfig,
         psaConfig,
+        ebayConfig,
       ] as ConfigFactory[],
       envFilePath: ['./.env'],
     }),
@@ -154,6 +157,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     CartModule,
     PsaModule,
     ReviewsModule,
+    EbayModule,
   ],
   controllers: [AppController],
   providers: [
