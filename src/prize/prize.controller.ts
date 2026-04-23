@@ -11,6 +11,8 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,6 +22,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { PrizeService } from './prize.service';
+import { PrizeEngagementService } from './prize-engagement.service';
 import {
   PrizeConfigurationDto,
   CreatePrizeTierDto,
@@ -37,6 +40,7 @@ import {
   UpdateShopSettingsDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from 'src/enums/user-role.enum';
 
@@ -44,10 +48,17 @@ interface RequestWithUser extends Request {
   user: User;
 }
 
+interface RequestMaybeUser extends Request {
+  user?: User;
+}
+
 @ApiTags('prizes')
 @Controller('prizes')
 export class PrizeController {
-  constructor(private readonly prizeService: PrizeService) {}
+  constructor(
+    private readonly prizeService: PrizeService,
+    private readonly engagementService: PrizeEngagementService,
+  ) {}
 
   /**
    * Public endpoint: Get all active prize tiers
@@ -66,14 +77,15 @@ export class PrizeController {
   }
 
   @Get('shop-items')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get all shop items across all sellers' })
   @ApiResponse({
     status: 200,
     description: 'Returns all active shop items from all sellers',
     type: [PrizeConfigurationDto],
   })
-  async getAllShopItems() {
-    return this.prizeService.getAllShopItems();
+  async getAllShopItems(@Request() req: RequestMaybeUser) {
+    return this.prizeService.getAllShopItems(req.user?.id);
   }
 
   @Get('shops')
@@ -85,7 +97,80 @@ export class PrizeController {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Engagement: views + watchlist
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Public: record a batch of item card views. Logged-in users are tracked
+   * by user id; anonymous users by the `x-anon-id` header (the client
+   * generates and persists a uuid for this in localStorage). Dedupes per
+   * (item, viewer, day) so calling this on every render is safe.
+   */
+  @Post('views')
+  @UseGuards(OptionalJwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Record item-card views (batched)' })
+  @ApiResponse({ status: 204, description: 'Views accepted' })
+  async trackViews(
+    @Request() req: RequestMaybeUser,
+    @Body() body: { itemIds?: string[] },
+  ): Promise<void> {
+    const itemIds = Array.isArray(body?.itemIds) ? body.itemIds : [];
+    const userId = req.user?.id ?? null;
+    const anonHeader: unknown = req.headers['x-anon-id'];
+    const anonId =
+      typeof anonHeader === 'string'
+        ? anonHeader.slice(0, 64)
+        : Array.isArray(anonHeader)
+          ? String(anonHeader[0]).slice(0, 64)
+          : null;
+    await this.engagementService.trackViews(itemIds, { userId, anonId });
+  }
+
+  /**
+   * Current user's watchlist (most recent first).
+   */
+  @Get('watchlist')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the current user's watchlist" })
+  getWatchlist(@Request() req: RequestWithUser) {
+    return this.prizeService.getUserWatchlist(req.user.id);
+  }
+
+  /**
+   * Add an item to the current user's watchlist.
+   */
+  @Post(':id/watch')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Watch an item' })
+  @ApiParam({ name: 'id', description: 'Prize item id' })
+  async watchItem(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<{ watching: true; watcherCount: number }> {
+    return this.engagementService.watchItem(req.user.id, id);
+  }
+
+  /**
+   * Remove an item from the current user's watchlist.
+   */
+  @Delete(':id/watch')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stop watching an item' })
+  @ApiParam({ name: 'id', description: 'Prize item id' })
+  async unwatchItem(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<{ watching: false; watcherCount: number }> {
+    return this.engagementService.unwatchItem(req.user.id, id);
+  }
+
   @Get('shops/:username/items')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get a seller shop and its active items' })
   @ApiParam({ name: 'username', description: 'Seller username' })
   @ApiResponse({
@@ -93,8 +178,14 @@ export class PrizeController {
     description: 'Returns seller shop details and items',
   })
   @ApiResponse({ status: 404, description: 'Seller shop not found' })
-  async getShopItemsByUsername(@Param('username') username: string) {
-    const result = await this.prizeService.getPublicShopByUsername(username);
+  async getShopItemsByUsername(
+    @Param('username') username: string,
+    @Request() req: RequestMaybeUser,
+  ) {
+    const result = await this.prizeService.getPublicShopByUsername(
+      username,
+      req.user?.id,
+    );
     return result;
   }
 
