@@ -50,7 +50,6 @@ interface RequestWithUser extends Request {
 
 interface RequestMaybeUser extends Request {
   user?: User;
-  headers: Record<string, string | string[] | undefined>;
 }
 
 @ApiTags('prizes')
@@ -119,7 +118,7 @@ export class PrizeController {
   ): Promise<void> {
     const itemIds = Array.isArray(body?.itemIds) ? body.itemIds : [];
     const userId = req.user?.id ?? null;
-    const anonHeader = req.headers['x-anon-id'];
+    const anonHeader: unknown = req.headers['x-anon-id'];
     const anonId =
       typeof anonHeader === 'string'
         ? anonHeader.slice(0, 64)
@@ -136,7 +135,7 @@ export class PrizeController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get the current user's watchlist" })
-  async getWatchlist(@Request() req: RequestWithUser) {
+  getWatchlist(@Request() req: RequestWithUser) {
     return this.prizeService.getUserWatchlist(req.user.id);
   }
 
