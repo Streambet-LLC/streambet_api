@@ -15,6 +15,7 @@ import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
 import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { ShopSettings } from './entities/shop-settings.entity';
+import { PrizeEngagementService } from './prize-engagement.service';
 import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
@@ -81,6 +82,7 @@ export class PrizeService {
     private readonly configService: ConfigService,
     private readonly emailsService: EmailsService,
     private readonly promoCodeService: PromoCodeService,
+    private readonly engagementService: PrizeEngagementService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -224,6 +226,8 @@ export class PrizeService {
       displayName: string;
       profileImageUrl: string | null;
       itemCount: number;
+      totalViews: number;
+      totalWatchers: number;
     }>
   > {
     // Count items the same way the public shop page lists them.
@@ -247,6 +251,8 @@ export class PrizeService {
       .addSelect('COALESCE(u.shop_name, u.name, u.username)', 'displayName')
       .addSelect('u.profile_image_url', 'profileImageUrl')
       .addSelect('COUNT(p.id)', 'itemCount')
+      .addSelect('COALESCE(SUM(p.view_count), 0)', 'totalViews')
+      .addSelect('COALESCE(SUM(p.watcher_count), 0)', 'totalWatchers')
       .groupBy('u.id')
       .addGroupBy('COALESCE(u.shop_name, u.name, u.username)')
       .addGroupBy('u.profile_image_url');
@@ -275,13 +281,19 @@ export class PrizeService {
     // CardCade items are admin-owned (created_by IS NULL). Use the same
     // visibility rules as the public shop page (which also hides items
     // with stock <= 0) so the count matches what the user actually sees.
-    const cardcadeItemCount = await this.prizeConfigRepository
+    const cardcadeAgg = await this.prizeConfigRepository
       .createQueryBuilder('p')
       .where('p.created_by IS NULL')
       .andWhere('p.is_active = :isActive', { isActive: true })
       .andWhere('p.show_on_shop = :showOnShop', { showOnShop: true })
       .andWhere('p.stock > 0')
-      .getCount();
+      .select('COUNT(p.id)', 'itemCount')
+      .addSelect('COALESCE(SUM(p.view_count), 0)', 'totalViews')
+      .addSelect('COALESCE(SUM(p.watcher_count), 0)', 'totalWatchers')
+      .getRawOne<{ itemCount: string; totalViews: string; totalWatchers: string }>();
+    const cardcadeItemCount = Number(cardcadeAgg?.itemCount || 0);
+    const cardcadeTotalViews = Number(cardcadeAgg?.totalViews || 0);
+    const cardcadeTotalWatchers = Number(cardcadeAgg?.totalWatchers || 0);
 
     const result = [
       {
@@ -290,6 +302,8 @@ export class PrizeService {
         displayName: cardcadeSettings.displayName || 'CardCade Shop',
         profileImageUrl: cardcadeSettings.profileImageUrl || null,
         itemCount: cardcadeItemCount,
+        totalViews: cardcadeTotalViews,
+        totalWatchers: cardcadeTotalWatchers,
       },
       ...rows.map((row) => ({
         id: row.id,
@@ -297,6 +311,8 @@ export class PrizeService {
         displayName: row.displayName || row.username,
         profileImageUrl: row.profileImageUrl || null,
         itemCount: Number(row.itemCount || 0),
+        totalViews: Number(row.totalViews || 0),
+        totalWatchers: Number(row.totalWatchers || 0),
       })),
     ];
 
@@ -307,7 +323,9 @@ export class PrizeService {
    * Public: get all shop items across all sellers.
    * This is for the main "Shop" page in the navbar, showing all available shop items.
    */
-  async getAllShopItems(): Promise<PrizeConfigurationDto[]> {
+  async getAllShopItems(
+    requesterId?: string | null,
+  ): Promise<PrizeConfigurationDto[]> {
     this.logger.log(
       '[SHOP] getAllShopItems() called - fetching all active shop items',
     );
@@ -332,13 +350,25 @@ export class PrizeService {
       `[SHOP] Items breakdown: ${JSON.stringify(sellerItems.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
     );
 
-    return sellerItems.map((item) => this.mapToDto(item));
+    const watched = requesterId
+      ? await this.engagementService.getWatchedItemIds(
+          requesterId,
+          sellerItems.map((i) => i.id),
+        )
+      : new Set<string>();
+
+    return sellerItems.map((item) =>
+      this.mapToDto(item, { isWatching: watched.has(item.id) }),
+    );
   }
 
   /**
    * Public: get one seller shop and its active items.
    */
-  async getPublicShopByUsername(username: string): Promise<{
+  async getPublicShopByUsername(
+    username: string,
+    requesterId?: string | null,
+  ): Promise<{
     shop: {
       id: string;
       username: string;
@@ -387,6 +417,13 @@ export class PrizeService {
         } as ShopSettings;
       }
 
+      const watched = requesterId
+        ? await this.engagementService.getWatchedItemIds(
+            requesterId,
+            sortedSellerItems.map((i) => i.id),
+          )
+        : new Set<string>();
+
       const response = {
         shop: {
           id: '0',
@@ -400,7 +437,9 @@ export class PrizeService {
           state: cardcadeSettings.state || null,
           country: cardcadeSettings.country || null,
         },
-        items: sortedSellerItems.map((item) => this.mapToDto(item)),
+        items: sortedSellerItems.map((item) =>
+          this.mapToDto(item, { isWatching: watched.has(item.id) }),
+        ),
       };
       this.logger.log(
         `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
@@ -468,7 +507,7 @@ export class PrizeService {
           state: seller.state || null,
           country: seller.country || null,
         },
-        items: sortedSellerItems.map((item) => this.mapToDto(item)),
+        items: await this.attachIsWatching(sortedSellerItems, requesterId),
       };
       this.logger.log(
         `[SHOP] Final shop.socials in response: ${JSON.stringify(response.shop.socials)}`,
@@ -1131,6 +1170,54 @@ export class PrizeService {
     this.logger.log(
       `Prize tier ${finalTier} updated by user ${userId}. Old ID: ${id}, New ID: ${saved.id}`,
     );
+
+    // Data hardening creates a brand-new row for every update, so the
+    // watchlist + view records that point at the old id need to be moved
+    // to the new id, otherwise users who watched the item would silently
+    // lose their watch (and notifications) every time the seller edits it.
+    try {
+      await this.prizeConfigRepository.manager.query(
+        `UPDATE prize_item_watchers SET item_id = $1 WHERE item_id = $2`,
+        [saved.id, id],
+      );
+      await this.prizeConfigRepository.manager.query(
+        `UPDATE prize_item_views SET item_id = $1 WHERE item_id = $2`,
+        [saved.id, id],
+      );
+      // Mirror the cached counters onto the new row.
+      saved.watcherCount = existingTier.watcherCount ?? 0;
+      saved.viewCount = existingTier.viewCount ?? 0;
+      await this.prizeConfigRepository.save(saved);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to migrate watchers/views from ${id} -> ${saved.id}: ${(err as Error).message}`,
+      );
+    }
+
+    // If the price actually changed, notify everyone who was watching it.
+    if (Number(existingTier.amount) !== Number(saved.amount)) {
+      // Make sure the creator relation is populated so the notification can
+      // build a correct shop URL.
+      let itemForNotify: PrizeConfiguration = saved;
+      if (saved.createdBy && !saved.creator) {
+        const withCreator = await this.prizeConfigRepository.findOne({
+          where: { id: saved.id },
+          relations: ['creator'],
+        });
+        if (withCreator) itemForNotify = withCreator;
+      }
+      this.engagementService
+        .notifyWatchersOfPriceChange(
+          itemForNotify,
+          Number(existingTier.amount),
+          Number(saved.amount),
+        )
+        .catch((err) =>
+          this.logger.warn(
+            `Failed to notify watchers of price change for ${saved.id}: ${(err as Error).message}`,
+          ),
+        );
+    }
 
     return this.mapToDto(saved);
   }
@@ -1798,6 +1885,15 @@ export class PrizeService {
             this.logger.log(
               `Stock decremented for prize ${dto.prizeConfigId}. New stock: ${prizeToUpdate.stock}`,
             );
+            if (prizeToUpdate.stock === 0) {
+              this.engagementService
+                .notifyWatchersOfSoldOut(prizeToUpdate)
+                .catch((err) =>
+                  this.logger.warn(
+                    `Failed to notify watchers of sold out for ${prizeToUpdate.id}: ${err?.message ?? err}`,
+                  ),
+                );
+            }
           } else {
             this.logger.error(
               `Prize ${dto.prizeConfigId} not found for stock decrement`,
@@ -2160,6 +2256,15 @@ export class PrizeService {
         this.logger.log(
           `Stock decremented for prize ${order.prizeConfigurationId}. New stock: ${prizeToUpdate.stock}`,
         );
+        if (prizeToUpdate.stock === 0) {
+          this.engagementService
+            .notifyWatchersOfSoldOut(prizeToUpdate)
+            .catch((err) =>
+              this.logger.warn(
+                `Failed to notify watchers of sold out for ${prizeToUpdate.id}: ${err?.message ?? err}`,
+              ),
+            );
+        }
       } else {
         this.logger.error(
           `Prize ${order.prizeConfigurationId} not found for stock decrement`,
@@ -3362,9 +3467,48 @@ export class PrizeService {
   }
 
   /**
+   * Helper: hydrate a list of prize entities into DTOs with the correct
+   * `isWatching` flag for the given (optional) requester.
+   */
+  private async attachIsWatching(
+    items: PrizeConfiguration[],
+    requesterId?: string | null,
+  ): Promise<PrizeConfigurationDto[]> {
+    const watched = requesterId
+      ? await this.engagementService.getWatchedItemIds(
+          requesterId,
+          items.map((i) => i.id),
+        )
+      : new Set<string>();
+    return items.map((item) =>
+      this.mapToDto(item, { isWatching: watched.has(item.id) }),
+    );
+  }
+
+  /**
+   * Returns the current user's watchlist (most-recently-watched first).
+   * Inactive items and items the seller has hidden from the shop are
+   * filtered out so the watchlist only shows things the user can still
+   * see and interact with.
+   */
+  async getUserWatchlist(userId: string): Promise<PrizeConfigurationDto[]> {
+    const { items } =
+      await this.engagementService.getWatchlistEntities(userId);
+    const visible = items.filter(
+      (item) => item.isActive && item.showOnShop !== false,
+    );
+    // Everything in this list is by definition watched, so skip the extra
+    // round-trip to fetch the watcher set.
+    return visible.map((item) => this.mapToDto(item, { isWatching: true }));
+  }
+
+  /**
    * Map entity to DTO
    */
-  private mapToDto(entity: PrizeConfiguration): PrizeConfigurationDto {
+  private mapToDto(
+    entity: PrizeConfiguration,
+    opts: { isWatching?: boolean } = {},
+  ): PrizeConfigurationDto {
     const sortedItemImages = (entity.itemImages || [])
       .slice()
       .sort((a, b) => a.displayOrder - b.displayOrder);
@@ -3420,6 +3564,9 @@ export class PrizeService {
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
       proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
+      viewCount: Number(entity.viewCount ?? 0),
+      watcherCount: Number(entity.watcherCount ?? 0),
+      isWatching: opts.isWatching ?? false,
     };
   }
 

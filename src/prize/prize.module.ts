@@ -5,8 +5,11 @@ import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
 import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { ShopSettings } from './entities/shop-settings.entity';
+import { PrizeItemView } from './entities/prize-item-view.entity';
+import { PrizeItemWatcher } from './entities/prize-item-watcher.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
+import { PrizeEngagementService } from './prize-engagement.service';
 import {
   PrizeController,
   AdminPrizeController,
@@ -15,6 +18,7 @@ import {
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
 import { PromoCodeModule } from '../promo-code/promo-code.module';
+import { InboxModule } from '../inbox/inbox.module';
 
 @Module({
   imports: [
@@ -24,14 +28,17 @@ import { PromoCodeModule } from '../promo-code/promo-code.module';
       PrizeRedemption,
       PrizeOrder,
       ShopSettings,
+      PrizeItemView,
+      PrizeItemWatcher,
       User,
     ]),
     forwardRef(() => WalletsModule),
     EmailsModule,
     PromoCodeModule,
+    InboxModule,
   ],
   controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
-  providers: [PrizeService],
-  exports: [PrizeService],
+  providers: [PrizeService, PrizeEngagementService],
+  exports: [PrizeService, PrizeEngagementService],
 })
 export class PrizeModule {}

@@ -132,6 +132,22 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'uuid', name: 'stripe_product_id', nullable: true })
   stripeProductId: string | null;
 
+  /**
+   * Cached count of distinct (user|anon) views, deduped per day. Maintained
+   * incrementally by the views service; the source of truth lives in
+   * `prize_item_views`.
+   */
+  @Column({ type: 'integer', name: 'view_count', default: 0 })
+  viewCount: number;
+
+  /**
+   * Cached count of users currently watching this item. Maintained
+   * incrementally by the watchers service; the source of truth lives in
+   * `prize_item_watchers`.
+   */
+  @Column({ type: 'integer', name: 'watcher_count', default: 0 })
+  watcherCount: number;
+
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'created_by' })
   creator: User;
