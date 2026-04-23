@@ -200,6 +200,9 @@ export class PrizeService {
 
   /**
    * Get the count of active listed items for a seller.
+   * Mirrors the visibility rules used by the public shop page (which also
+   * hides items with stock <= 0) so the count shown on profiles / shop
+   * cards matches what the user sees when they open the shop.
    */
   async getSellerListedItemCount(sellerId: string): Promise<number> {
     return this.prizeConfigRepository
@@ -223,6 +226,9 @@ export class PrizeService {
       itemCount: number;
     }>
   > {
+    // Count items the same way the public shop page lists them.
+    // The frontend hides items with stock <= 0, so the count must too,
+    // otherwise the number on the shop card won't match the items shown.
     const qb = this.userRepository
       .createQueryBuilder('u')
       .innerJoin(
@@ -266,13 +272,24 @@ export class PrizeService {
       } as ShopSettings;
     }
 
+    // CardCade items are admin-owned (created_by IS NULL). Use the same
+    // visibility rules as the public shop page (which also hides items
+    // with stock <= 0) so the count matches what the user actually sees.
+    const cardcadeItemCount = await this.prizeConfigRepository
+      .createQueryBuilder('p')
+      .where('p.created_by IS NULL')
+      .andWhere('p.is_active = :isActive', { isActive: true })
+      .andWhere('p.show_on_shop = :showOnShop', { showOnShop: true })
+      .andWhere('p.stock > 0')
+      .getCount();
+
     const result = [
       {
         id: 0,
         username: 'cardcade',
         displayName: cardcadeSettings.displayName || 'CardCade Shop',
         profileImageUrl: cardcadeSettings.profileImageUrl || null,
-        itemCount: 10,
+        itemCount: cardcadeItemCount,
       },
       ...rows.map((row) => ({
         id: row.id,
@@ -829,7 +846,11 @@ export class PrizeService {
     const coverImageUrl = normalizedImageUrls[coverImageIndex] || null;
 
     // Auto-generate display orders for each page where item will be shown
-    const category = (dto.category || 'slab') as 'raw' | 'slab' | 'sealed' | 'other';
+    const category = (dto.category || 'slab') as
+      | 'raw'
+      | 'slab'
+      | 'sealed'
+      | 'other';
     const isSellerOwnedItem = !!createdBy;
 
     let displayOrderShop = dto.displayOrderShop ?? null;
@@ -1065,8 +1086,12 @@ export class PrizeService {
       description: dto.description || null,
       imageUrl: coverImageUrl,
       coverImageId: null,
-      category: (dto.category || existingTier.category) as 'raw' | 'slab' | 'sealed' | 'other',
-      grade: dto.grade !== undefined ? (dto.grade || null) : existingTier.grade,
+      category: (dto.category || existingTier.category) as
+        | 'raw'
+        | 'slab'
+        | 'sealed'
+        | 'other',
+      grade: dto.grade !== undefined ? dto.grade || null : existingTier.grade,
       stock: dto.stock ?? existingTier.stock,
       purchaseOption: dto.purchaseOption || existingTier.purchaseOption,
       brand: dto.brand || existingTier.brand,
@@ -3414,11 +3439,15 @@ export class PrizeService {
       where: { id: sellerId, isActive: true },
     });
     if (!seller?.isProSubscriber) {
-      throw new ForbiddenException('PRO subscription required to feature items on your profile');
+      throw new ForbiddenException(
+        'PRO subscription required to feature items on your profile',
+      );
     }
 
     if (featuredItemIds.length > 10) {
-      throw new ForbiddenException('You can feature a maximum of 10 items on your profile');
+      throw new ForbiddenException(
+        'You can feature a maximum of 10 items on your profile',
+      );
     }
 
     // Get all active seller items
@@ -3431,29 +3460,35 @@ export class PrizeService {
     });
 
     // Validate all requested IDs belong to this seller
-    const sellerItemIds = new Set(allItems.map(item => item.id));
+    const sellerItemIds = new Set(allItems.map((item) => item.id));
     for (const id of featuredItemIds) {
       if (!sellerItemIds.has(id)) {
-        throw new ForbiddenException(`Item ${id} not found or does not belong to you`);
+        throw new ForbiddenException(
+          `Item ${id} not found or does not belong to you`,
+        );
       }
     }
 
     const featuredSet = new Set(featuredItemIds);
 
     // Un-feature items not in the new list
-    const toUnfeature = allItems.filter(item => item.profileFeatured && !featuredSet.has(item.id));
+    const toUnfeature = allItems.filter(
+      (item) => item.profileFeatured && !featuredSet.has(item.id),
+    );
     if (toUnfeature.length > 0) {
       await this.prizeConfigRepository.update(
-        toUnfeature.map(i => i.id),
+        toUnfeature.map((i) => i.id),
         { profileFeatured: false },
       );
     }
 
     // Feature items in the new list
-    const toFeature = allItems.filter(item => !item.profileFeatured && featuredSet.has(item.id));
+    const toFeature = allItems.filter(
+      (item) => !item.profileFeatured && featuredSet.has(item.id),
+    );
     if (toFeature.length > 0) {
       await this.prizeConfigRepository.update(
-        toFeature.map(i => i.id),
+        toFeature.map((i) => i.id),
         { profileFeatured: true },
       );
     }
