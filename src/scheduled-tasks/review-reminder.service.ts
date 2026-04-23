@@ -98,6 +98,10 @@ export class ReviewReminderService {
 
     if (!buyerHasReviewed && buyer.email) {
       const reviewUrl = `${frontendUrl}/transactions?leave=${order.id}`;
+      const sellerUrl = `${frontendUrl}/${seller.username}`;
+      const imageMd = prize.imageUrl
+        ? `![${prize.name}](${prize.imageUrl})\n`
+        : '';
       sentTasks.push(
         this.emailsService
           .sendEmailSMTP(
@@ -123,7 +127,7 @@ export class ReviewReminderService {
         this.inboxService
           .sendSystemMessageToUser(
             buyer.id,
-            `How was your purchase of **${prize.name}** from @${seller.username}? Share your experience to help other collectors. [Leave a review](${reviewUrl})`,
+            `${imageMd}How was your purchase of ${prize.name} from [@${seller.username}](${sellerUrl})? Share your experience to help other collectors.\n[Leave a review](${reviewUrl})`,
           )
           .catch((err) =>
             this.logger.warn(
@@ -135,6 +139,10 @@ export class ReviewReminderService {
 
     if (!sellerHasReviewed && seller.email) {
       const reviewUrl = `${frontendUrl}/transactions?leave=${order.id}`;
+      const buyerUrl = `${frontendUrl}/${buyer.username}`;
+      const imageMd = prize.imageUrl
+        ? `![${prize.name}](${prize.imageUrl})\n`
+        : '';
       sentTasks.push(
         this.emailsService
           .sendEmailSMTP(
@@ -162,7 +170,7 @@ export class ReviewReminderService {
         this.inboxService
           .sendSystemMessageToUser(
             seller.id,
-            `Your sale of **${prize.name}** to @${buyer.username} is complete — how was the buyer? [Leave a review](${reviewUrl})`,
+            `${imageMd}Your sale of ${prize.name} to [@${buyer.username}](${buyerUrl}) is complete — how was the buyer?\n[Leave a review](${reviewUrl})`,
           )
           .catch((err) =>
             this.logger.warn(
