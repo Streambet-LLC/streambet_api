@@ -1297,8 +1297,11 @@ export class AuctionsService implements OnModuleInit {
 
   /**
    * Create a `prize_orders` row for an auction win. Shipping address is
-   * left empty — the post-close checkout flow collects it from the
-   * winner. `payment_method` is `'usd'` since auctions are pure-USD.
+   * snapshotted from the winner's profile address (the same address
+   * shown to them in the bid modal). Bidders are required to keep their
+   * profile address current — they can update it inline from the bid
+   * modal before placing a bid. `payment_method` is `'usd'` since
+   * auctions are pure-USD.
    */
   private async createOrderForWinner(params: {
     auction: Auction;
@@ -1307,17 +1310,30 @@ export class AuctionsService implements OnModuleInit {
     paymentIntentId: string;
   }): Promise<PrizeOrder> {
     const { auction, winnerUserId, fees, paymentIntentId } = params;
+
+    // Snapshot the address now so subsequent profile edits don't
+    // retroactively change where the prize was meant to ship. If the
+    // user has somehow ended up with a partially-empty address (legacy
+    // accounts pre-bid) we still create the order — admins can fill in
+    // the gaps from the Auctions tab. Stripe charge succeeded so we'd
+    // rather have a paid order with a half-empty address than refuse
+    // to record the sale.
+    const winner = await this.userRepository.findOne({
+      where: { id: winnerUserId },
+    });
+
     const order = this.orderRepository.create({
       userId: winnerUserId,
       prizeConfigurationId: auction.prizeConfigurationId,
       shippingAddress: {
-        firstName: '',
-        lastName: '',
-        addressLine1: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: '',
+        firstName: winner?.firstName ?? '',
+        lastName: winner?.lastName ?? '',
+        addressLine1: winner?.address ?? '',
+        addressLine2: winner?.address2 ?? '',
+        city: winner?.city ?? '',
+        state: winner?.state ?? '',
+        zipCode: winner?.zipCode ?? '',
+        country: winner?.country ?? 'United States',
       },
       paymentMethod: 'usd' as const,
       coinsDeducted: 0,
