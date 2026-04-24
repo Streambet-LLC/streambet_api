@@ -1204,6 +1204,13 @@ export class PrizeService {
         dto.shippingCostUsd != null
           ? dto.shippingCostUsd.toFixed(2)
           : existingTier.shippingCostUsd,
+      // Data-hardening creates a brand-new row on every edit. Fields the
+      // edit dialog doesn't surface still need to be carried over verbatim
+      // or the item silently changes shape (e.g. an auction item flips back
+      // to fixed_price and disappears from the Auctions tab).
+      saleType: existingTier.saleType,
+      cardValueUsd: existingTier.cardValueUsd,
+      stripeProductId: existingTier.stripeProductId,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1235,13 +1242,23 @@ export class PrizeService {
         `UPDATE prize_item_views SET item_id = $1 WHERE item_id = $2`,
         [saved.id, id],
       );
+      // Re-point the auction (if any) at the new prize_configurations row.
+      // Auction.prize_configuration_id has a UNIQUE constraint and a
+      // CASCADE FK back to prize_configurations, so the old (now inactive)
+      // tier row would orphan the auction otherwise — and the new active
+      // tier would have no `auction` relation, making the item silently
+      // disappear from the Auctions tab.
+      await this.prizeConfigRepository.manager.query(
+        `UPDATE auctions SET prize_configuration_id = $1 WHERE prize_configuration_id = $2`,
+        [saved.id, id],
+      );
       // Mirror the cached counters onto the new row.
       saved.watcherCount = existingTier.watcherCount ?? 0;
       saved.viewCount = existingTier.viewCount ?? 0;
       await this.prizeConfigRepository.save(saved);
     } catch (err) {
       this.logger.warn(
-        `Failed to migrate watchers/views from ${id} -> ${saved.id}: ${(err as Error).message}`,
+        `Failed to migrate watchers/views/auction from ${id} -> ${saved.id}: ${(err as Error).message}`,
       );
     }
 
