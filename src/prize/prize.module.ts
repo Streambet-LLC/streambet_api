@@ -21,6 +21,7 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
 import { PromoCodeModule } from '../promo-code/promo-code.module';
 import { InboxModule } from '../inbox/inbox.module';
+import { AuctionsModule } from '../auctions/auctions.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { InboxModule } from '../inbox/inbox.module';
     EmailsModule,
     PromoCodeModule,
     InboxModule,
+    forwardRef(() => AuctionsModule),
   ],
   controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
   providers: [PrizeService, PrizeEngagementService],

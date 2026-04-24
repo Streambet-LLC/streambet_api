@@ -4,6 +4,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
   Index,
   Unique,
 } from 'typeorm';
@@ -37,7 +38,7 @@ export class Auction extends BaseEntity {
   @Column({ type: 'uuid', name: 'prize_configuration_id' })
   prizeConfigurationId: string;
 
-  @ManyToOne(() => PrizeConfiguration, { onDelete: 'CASCADE' })
+  @OneToOne(() => PrizeConfiguration, (p) => p.auction, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'prize_configuration_id' })
   prizeConfiguration: PrizeConfiguration;
 

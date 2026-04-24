@@ -76,6 +76,38 @@ export class AuctionSummaryDto {
 
   @ApiProperty({ example: false, description: 'True when the requesting user has placed at least one bid on this auction.' })
   isBidder: boolean;
+
+  @ApiProperty({
+    example: 3,
+    description: 'Buyer processing fee percent applied on top of the winning bid (matches sales fee policy).',
+  })
+  buyerProcessingFeePercent: number;
+
+  @ApiProperty({
+    example: 1.41,
+    nullable: true,
+    description: 'Buyer processing fee in USD computed against the current bid (or starting price if no bids). Does not include shipping.',
+  })
+  buyerProcessingFeeUsd: number | null;
+
+  @ApiProperty({
+    example: 48.41,
+    nullable: true,
+    description: 'Total amount the winner would be charged at close based on the current bid + buyer processing fee. Excludes shipping (calculated at close).',
+  })
+  totalDueIfWonUsd: number | null;
+
+  @ApiProperty({
+    example: 1.5,
+    description: 'Buyer processing fee in USD computed against the minimum next bid. Helps the bid form show a clean total before submit.',
+  })
+  minNextBidProcessingFeeUsd: number;
+
+  @ApiProperty({
+    example: 51.5,
+    description: 'Total the bidder would be charged if their bid wins at the minimum next bid amount.',
+  })
+  minNextBidTotalUsd: number;
 }
 
 /**
@@ -596,6 +628,17 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   profileFeatured?: boolean;
+
+  @ApiProperty({
+    enum: PrizeSaleType,
+    example: PrizeSaleType.FIXED_PRICE,
+    description:
+      'How this item is sold. Set to `auction` to mark the item as auction-eligible (an auction must then be created via /admin/auctions).',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizeSaleType)
+  saleType?: PrizeSaleType;
 }
 /**
  * Updates create a new row with is_active=true and set old row to is_active=false

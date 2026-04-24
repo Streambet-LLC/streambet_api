@@ -24,6 +24,8 @@ export class AddAuctionsAndStripeCustomer20260423120000
          WHERE "stripe_customer_id" IS NOT NULL;`,
     );
     // Backfill from existing subscriptions if present (best-effort).
+    // NOTE: subscriptions uses snake_case for most columns but the
+    // CreateDateColumn defaults to camelCase ("createdAt").
     await queryRunner.query(`
       UPDATE "users" u
          SET "stripe_customer_id" = sub.cust
@@ -32,7 +34,7 @@ export class AddAuctionsAndStripeCustomer20260423120000
             FROM "subscriptions"
            WHERE "stripe_customer_id" IS NOT NULL
              AND "stripe_customer_id" NOT LIKE 'admin_grant_%'
-           ORDER BY "user_id", "created_at" DESC
+           ORDER BY "user_id", "createdAt" DESC
         ) sub
        WHERE u."id" = sub."user_id"
          AND u."stripe_customer_id" IS NULL;

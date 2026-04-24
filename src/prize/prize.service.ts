@@ -5,6 +5,8 @@ import {
   Logger,
   ConflictException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, In, Repository } from 'typeorm';
@@ -48,6 +50,7 @@ import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
+import { AuctionsService } from '../auctions/auctions.service';
 import {
   BUYER_PROCESSING_FEE_PERCENT,
   calculateBuyerItemFeeCents,
@@ -83,6 +86,8 @@ export class PrizeService {
     private readonly emailsService: EmailsService,
     private readonly promoCodeService: PromoCodeService,
     private readonly engagementService: PrizeEngagementService,
+    @Inject(forwardRef(() => AuctionsService))
+    private readonly auctionsService: AuctionsService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -960,6 +965,7 @@ export class PrizeService {
       profileFeatured: dto.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? false,
       proEarlyAccessUntil,
+      saleType: dto.saleType ?? undefined,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -3568,10 +3574,14 @@ export class PrizeService {
       watcherCount: Number(entity.watcherCount ?? 0),
       isWatching: opts.isWatching ?? false,
       saleType: entity.saleType,
-      // Auction summary is populated in a follow-up step once the
-      // AuctionService is wired in. For now we expose `null` so the
-      // frontend can branch on saleType without needing the full block yet.
-      auction: null,
+      // Auction summary derived from the eager-loaded `auction` relation.
+      // Per-user fields (isLeader/isBidder) are populated only when a
+      // userId is threaded through the calling chain. List endpoints
+      // currently render the public view (isLeader=isBidder=false); the
+      // detail endpoint surfaces the user-specific fields.
+      auction: entity.auction
+        ? this.auctionsService.buildSummary(entity.auction)
+        : null,
     };
   }
 

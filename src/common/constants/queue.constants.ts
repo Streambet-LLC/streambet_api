@@ -11,3 +11,8 @@ export const SEND_EMAIL_JOB = 'send-mail';
 
 export const COINFLOW_WEBHOOK_QUEUE = `${prefix}COINFLOW_WEBHOOK`;
 export const QUEUE_COINFLOW_WEBHOOK = 'queue-coinflow-webhook';
+
+export const AUCTION_QUEUE = `${prefix}AUCTION`;
+export const AUCTION_CLOSE_JOB = 'auction-close';
+export const AUCTION_CLOSING_SOON_JOB = 'auction-closing-soon';
+export const AUCTION_AUTOPAY_RETRY_JOB = 'auction-autopay-retry';

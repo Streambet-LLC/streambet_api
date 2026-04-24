@@ -1,10 +1,18 @@
-import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
 import { PrizeSaleType } from '../enums/prize-sale-type.enum';
 import { ItemConfigurationImage } from './item-configuration-image.entity';
+import { Auction } from './auction.entity';
 
 /**
  * Entity for storing prize tier configurations.
@@ -182,6 +190,15 @@ export class PrizeConfiguration extends BaseEntity {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'updated_by' })
   updater: User;
+
+  /**
+   * 1:1 inverse-side link to the auction (if `saleType === 'auction'`).
+   * Eager-loaded so list endpoints can return auction state without a
+   * second round-trip. Auctions table is small (one row per auction item)
+   * so the LEFT JOIN cost is negligible.
+   */
+  @OneToOne(() => Auction, (a) => a.prizeConfiguration, { eager: true })
+  auction: Auction | null;
 
   @OneToMany(
     () => ItemConfigurationImage,
