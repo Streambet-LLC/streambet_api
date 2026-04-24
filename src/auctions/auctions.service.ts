@@ -559,6 +559,20 @@ export class AuctionsService implements OnModuleInit {
     }
     const proxyMax = +dto.proxyMaxUsd.toFixed(2);
 
+    // Self-bid guard: a seller cannot bid on their own item. Mirrors the
+    // shop's "you can't buy your own item" rule. We resolve the seller via
+    // PrizeConfiguration.createdBy. CardCade-seeded items have a null /
+    // 'cardcade' creator and are always biddable by everyone.
+    const auctionPrecheck = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+      relations: ['prizeConfiguration'],
+    });
+    if (!auctionPrecheck) throw new NotFoundException('Auction not found');
+    const sellerId = auctionPrecheck.prizeConfiguration?.createdBy ?? null;
+    if (sellerId && sellerId !== 'cardcade' && sellerId === userId) {
+      throw new BadRequestException('You cannot bid on your own item.');
+    }
+
     // Resolve a saved card up front (outside tx). The bidder must either
     // pass an explicit `stripePaymentMethodId` or already have at least
     // one saved card — the controller pre-checks for nicer UX.
