@@ -10,7 +10,6 @@ import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
 import { QueueService } from '../queue/queue.service';
 import { InboxService } from '../inbox/inbox.service';
-import { RedisService } from '../redis/redis.service';
 
 /**
  * Centralized auction notification dispatch.
@@ -22,16 +21,12 @@ import { RedisService } from '../redis/redis.service';
  * Both channels are best-effort and isolated via Promise.allSettled so a
  * single recipient's failure never poisons the rest of the batch.
  *
- * Outbid emails are debounced with a 5-minute Redis TTL key per
- * (auctionId, userId) so a flurry of competing proxy bids does not
- * spam the previous leader's inbox.
+ * Outbid notifications fire on every outbid event (no debounce) so bidders
+ * can react in real time to fast proxy-bid wars.
  */
 @Injectable()
 export class AuctionsNotificationsService {
   private readonly logger = new Logger(AuctionsNotificationsService.name);
-
-  /** Outbid email debounce TTL in seconds. */
-  private static readonly OUTBID_DEBOUNCE_SECONDS = 300;
 
   constructor(
     @InjectRepository(Auction)
@@ -46,7 +41,6 @@ export class AuctionsNotificationsService {
     private readonly userRepository: Repository<User>,
     private readonly queueService: QueueService,
     private readonly inboxService: InboxService,
-    private readonly redisService: RedisService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -85,30 +79,16 @@ export class AuctionsNotificationsService {
   // ─────────────────────────────────────────────────────────────────────
 
   /**
-   * Notify the previous leader they were outbid. Debounced by Redis to
-   * 1 message per 5 minutes per (auction, user).
+   * Notify the previous leader they were outbid. Sent on EVERY outbid
+   * event (no debounce) so bidders can react in real time during fast
+   * proxy-bid wars. The matching inbox message + email both fire on each
+   * call.
    */
   async notifyOutbid(params: {
     previousLeaderUserId: string;
     auctionId: string;
   }): Promise<void> {
     const { previousLeaderUserId, auctionId } = params;
-    const key = `auction:outbid:${auctionId}:${previousLeaderUserId}`;
-
-    // SET with EX. If the key already exists we still SET (no NX in the
-    // wrapper) so we use GET first to enforce debounce semantics.
-    const existing = await this.redisService.get(key).catch(() => null);
-    if (existing) {
-      this.logger.debug(
-        `Outbid debounce hit for user=${previousLeaderUserId} auction=${auctionId}`,
-      );
-      return;
-    }
-    await this.redisService
-      .set(key, '1', AuctionsNotificationsService.OUTBID_DEBOUNCE_SECONDS)
-      .catch((err) =>
-        this.logger.warn(`Outbid debounce SET failed: ${err?.message}`),
-      );
 
     const auction = await this.auctionRepository.findOne({
       where: { id: auctionId },
