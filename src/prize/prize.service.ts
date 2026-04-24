@@ -3567,6 +3567,11 @@ export class PrizeService {
       viewCount: Number(entity.viewCount ?? 0),
       watcherCount: Number(entity.watcherCount ?? 0),
       isWatching: opts.isWatching ?? false,
+      saleType: entity.saleType,
+      // Auction summary is populated in a follow-up step once the
+      // AuctionService is wired in. For now we expose `null` so the
+      // frontend can branch on saleType without needing the full block yet.
+      auction: null,
     };
   }
 

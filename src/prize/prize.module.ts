@@ -7,6 +7,8 @@ import { ItemConfigurationImage } from './entities/item-configuration-image.enti
 import { ShopSettings } from './entities/shop-settings.entity';
 import { PrizeItemView } from './entities/prize-item-view.entity';
 import { PrizeItemWatcher } from './entities/prize-item-watcher.entity';
+import { Auction } from './entities/auction.entity';
+import { AuctionBid } from './entities/auction-bid.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
 import { PrizeEngagementService } from './prize-engagement.service';
@@ -30,6 +32,8 @@ import { InboxModule } from '../inbox/inbox.module';
       ShopSettings,
       PrizeItemView,
       PrizeItemWatcher,
+      Auction,
+      AuctionBid,
       User,
     ]),
     forwardRef(() => WalletsModule),

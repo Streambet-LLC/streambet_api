@@ -3,6 +3,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
+import { PrizeSaleType } from '../enums/prize-sale-type.enum';
 import { ItemConfigurationImage } from './item-configuration-image.entity';
 
 /**
@@ -63,6 +64,32 @@ export class PrizeConfiguration extends BaseEntity {
     default: PrizeBrand.POKEMON,
   })
   brand: PrizeBrand;
+
+  /**
+   * How this item is sold. Defaults to fixed_price (existing behavior).
+   * `auction` items are managed via the `auctions` table and are excluded
+   * from CadeCoin purchase flows and from the redemptions page.
+   */
+  @Column({
+    type: 'enum',
+    enum: PrizeSaleType,
+    name: 'sale_type',
+    default: PrizeSaleType.FIXED_PRICE,
+  })
+  saleType: PrizeSaleType;
+
+  /**
+   * Internal card value (USD) recorded by admin at auction setup time.
+   * Not surfaced to end users — used for analytics / accounting.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'card_value_usd',
+    nullable: true,
+  })
+  cardValueUsd: string | null;
 
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;

@@ -16,6 +16,67 @@ import { Type } from 'class-transformer';
 import { PrizeCategory } from '../enums/prize-category.enum';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
+import { PrizeSaleType } from '../enums/prize-sale-type.enum';
+import { AuctionStatus } from '../enums/auction-status.enum';
+
+/**
+ * Lightweight auction summary embedded on PrizeConfigurationDto when
+ * `saleType === 'auction'`. Reserve price is intentionally NOT exposed here
+ * (only `reserveMet`); admins get the raw value via the admin DTO.
+ */
+export class AuctionSummaryDto {
+  @ApiProperty({ example: 'uuid' })
+  id: string;
+
+  @ApiProperty({ enum: AuctionStatus })
+  status: AuctionStatus;
+
+  @ApiProperty({ example: '2026-04-25T12:00:00Z' })
+  startsAt: string;
+
+  @ApiProperty({ example: '2026-04-30T12:00:00Z' })
+  endsAt: string;
+
+  @ApiProperty({ example: 1, description: 'Auction length in days (1|3|5|7).' })
+  durationDays: number;
+
+  @ApiProperty({ example: 25.0 })
+  startingPriceUsd: number;
+
+  @ApiProperty({ example: 47.0, nullable: true, description: 'Current high bid (USD).' })
+  currentBidUsd: number | null;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Minimum increment for the next bid based on dynamic tiers.',
+  })
+  minNextBidIncrement: number;
+
+  @ApiProperty({
+    example: 50,
+    description: 'Minimum amount required for the next bid (currentBidUsd + increment, or startingPriceUsd).',
+  })
+  minNextBidUsd: number;
+
+  @ApiProperty({ example: 7, description: 'Total bid actions including auto-bids.' })
+  bidCount: number;
+
+  @ApiProperty({ example: 2, description: 'How many times the close was extended by the anti-snipe rule.' })
+  extensionCount: number;
+
+  @ApiProperty({
+    example: false,
+    description: 'True when a reserve exists and the current bid meets it. False when reserve exists and is unmet. Null when no reserve was set.',
+    nullable: true,
+  })
+  reserveMet: boolean | null;
+
+  @ApiProperty({ example: false, description: 'True when the requesting user is the current high bidder.' })
+  isLeader: boolean;
+
+  @ApiProperty({ example: false, description: 'True when the requesting user has placed at least one bid on this auction.' })
+  isBidder: boolean;
+}
 
 /**
  * DTO for individual prize tier information
@@ -306,6 +367,21 @@ export class PrizeConfigurationDto {
       'True when the requesting user is currently watching this item. Always false for anonymous requests.',
   })
   isWatching: boolean;
+
+  @ApiProperty({
+    enum: PrizeSaleType,
+    example: PrizeSaleType.FIXED_PRICE,
+    description:
+      'How this item is sold. `auction` items are bid-based and excluded from CadeCoin / redemptions.',
+  })
+  saleType: PrizeSaleType;
+
+  @ApiProperty({
+    type: () => AuctionSummaryDto,
+    nullable: true,
+    description: 'Present when saleType === auction.',
+  })
+  auction: AuctionSummaryDto | null;
 }
 /**
  * DTO for creating a new prize tier (admin only)
