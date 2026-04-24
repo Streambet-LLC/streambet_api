@@ -538,14 +538,14 @@ export class CreatePrizeTierDto {
   @ApiProperty({
     example: ['uploads/items/1.png', 'uploads/items/2.png'],
     description:
-      'Ordered image URLs for this item. Maximum 7 images. First image is cover unless coverImageIndex is provided.',
+      'Ordered image URLs for this item. Maximum 6 images. First image is cover unless coverImageIndex is provided.',
     required: false,
     type: [String],
   })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(7)
+  @ArrayMaxSize(6)
   imageUrls?: string[];
 
   @ApiProperty({
@@ -773,14 +773,14 @@ export class UpdatePrizeTierDto {
 
   @ApiProperty({
     example: ['uploads/items/1.png', 'uploads/items/2.png'],
-    description: 'Updated ordered image URLs for this item. Maximum 7 images.',
+    description: 'Updated ordered image URLs for this item. Maximum 6 images.',
     required: false,
     type: [String],
   })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(7)
+  @ArrayMaxSize(6)
   imageUrls?: string[];
 
   @ApiProperty({
