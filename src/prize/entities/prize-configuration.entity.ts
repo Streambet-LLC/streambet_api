@@ -1,9 +1,18 @@
-import { Entity, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { User } from '../../users/entities/user.entity';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
+import { PrizeSaleType } from '../enums/prize-sale-type.enum';
 import { ItemConfigurationImage } from './item-configuration-image.entity';
+import { Auction } from './auction.entity';
 
 /**
  * Entity for storing prize tier configurations.
@@ -63,6 +72,46 @@ export class PrizeConfiguration extends BaseEntity {
     default: PrizeBrand.POKEMON,
   })
   brand: PrizeBrand;
+
+  /**
+   * How this item is sold. Defaults to fixed_price (existing behavior).
+   * `auction` items are managed via the `auctions` table and are excluded
+   * from CadeCoin purchase flows and from the redemptions page.
+   */
+  @Column({
+    type: 'enum',
+    enum: PrizeSaleType,
+    name: 'sale_type',
+    default: PrizeSaleType.FIXED_PRICE,
+  })
+  saleType: PrizeSaleType;
+
+  /**
+   * Internal card value (USD) recorded by admin at auction setup time.
+   * Not surfaced to end users — used for analytics / accounting.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'card_value_usd',
+    nullable: true,
+  })
+  cardValueUsd: string | null;
+
+  /**
+   * Per-item shipping fee in USD. Defaults to $5.00 (matches the legacy
+   * hard-coded constant). Currently surfaced in the auction bidder UX
+   * so winners see the full "if I win" total before placing a bid.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'shipping_cost_usd',
+    default: 5,
+  })
+  shippingCostUsd: string;
 
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;
@@ -155,6 +204,15 @@ export class PrizeConfiguration extends BaseEntity {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'updated_by' })
   updater: User;
+
+  /**
+   * 1:1 inverse-side link to the auction (if `saleType === 'auction'`).
+   * Eager-loaded so list endpoints can return auction state without a
+   * second round-trip. Auctions table is small (one row per auction item)
+   * so the LEFT JOIN cost is negligible.
+   */
+  @OneToOne(() => Auction, (a) => a.prizeConfiguration, { eager: true })
+  auction: Auction | null;
 
   @OneToMany(
     () => ItemConfigurationImage,

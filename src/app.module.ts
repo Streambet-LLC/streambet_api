@@ -57,6 +57,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { ConciergeModule } from './concierge/concierge.module';
 import { CartModule } from './cart/cart.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { AuctionsModule } from './auctions/auctions.module';
 
 @Module({
   imports: [
@@ -154,6 +155,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     CartModule,
     PsaModule,
     ReviewsModule,
+    AuctionsModule,
   ],
   controllers: [AppController],
   providers: [
