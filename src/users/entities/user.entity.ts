@@ -191,6 +191,19 @@ export class User extends BaseEntity {
   })
   stripeAccountId: string;
 
+  /**
+   * Stripe Customer id used for auction autopay (saved card off-session
+   * charges). Backfilled from any existing subscription row on migration;
+   * lazily created by the auctions service for new bidders.
+   */
+  @Column({
+    length: 100,
+    type: 'varchar',
+    nullable: true,
+    name: 'stripe_customer_id',
+  })
+  stripeCustomerId: string | null;
+
   @Column({ default: false, name: 'stripe_account_connected', type: 'boolean' })
   stripeAccountConnected: boolean;
 

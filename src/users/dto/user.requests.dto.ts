@@ -31,6 +31,31 @@ export class ProfileUpdateDto {
   @IsString()
   name?: string;
 
+  @ApiPropertyOptional({ description: 'First name of the user' })
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @ApiPropertyOptional({ description: 'Last name of the user' })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @ApiPropertyOptional({ description: 'Street address line 1' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiPropertyOptional({ description: 'Street address line 2 (optional)' })
+  @IsOptional()
+  @IsString()
+  address2?: string;
+
+  @ApiPropertyOptional({ description: 'ZIP / postal code' })
+  @IsOptional()
+  @IsString()
+  zipCode?: string;
+
   @ApiProperty({
     description: 'City of the user',
   })

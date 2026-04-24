@@ -138,5 +138,21 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/watcher_sold_out.ejs',
       schemaPath: './src/templates/watcher_sold_out.json',
     },
+    auction_outbid: {
+      templatePath: './src/templates/auction_outbid.ejs',
+      schemaPath: './src/templates/auction_outbid.json',
+    },
+    auction_closing_soon: {
+      templatePath: './src/templates/auction_closing_soon.ejs',
+      schemaPath: './src/templates/auction_closing_soon.json',
+    },
+    auction_won: {
+      templatePath: './src/templates/auction_won.ejs',
+      schemaPath: './src/templates/auction_won.json',
+    },
+    auction_lost: {
+      templatePath: './src/templates/auction_lost.ejs',
+      schemaPath: './src/templates/auction_lost.json',
+    },
   },
 }));

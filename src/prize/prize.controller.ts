@@ -140,6 +140,20 @@ export class PrizeController {
   }
 
   /**
+   * Current user's bid history grouped by item, most-recent bid first.
+   * Powers the "My Bids" page. Each item includes its full auction
+   * summary with `isLeader` and `currentUserProxyMaxUsd` populated for
+   * the requesting user.
+   */
+  @Get('my-bids')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get items the current user has bid on' })
+  getMyBids(@Request() req: RequestWithUser) {
+    return this.prizeService.getUserBids(req.user.id);
+  }
+
+  /**
    * Add an item to the current user's watchlist.
    */
   @Post(':id/watch')

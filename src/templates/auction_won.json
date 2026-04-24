@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": { "type": "string", "format": "email" }
+    },
+    "subject": { "type": "string" },
+    "params": {
+      "type": "object",
+      "properties": {
+        "userName": { "type": "string" },
+        "itemName": { "type": "string" },
+        "winningBid": { "type": "string" },
+        "buyerFee": { "type": "string" },
+        "totalCharged": { "type": "string" },
+        "chargeStatus": { "type": "string" },
+        "orderUrl": { "type": "string" }
+      },
+      "required": ["userName", "itemName", "winningBid", "buyerFee", "totalCharged", "chargeStatus", "orderUrl"]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}
