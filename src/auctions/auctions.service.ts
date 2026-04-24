@@ -168,7 +168,22 @@ export class AuctionsService implements OnModuleInit {
       `Auction ${saved.id} created for prize ${prize.id} by admin ${adminId} (status=${saved.status})`,
     );
 
-    await this.scheduleAuctionJobs(saved.id, saved.endsAt);
+    // Schedule background jobs. If this fails (e.g. Redis hiccup), tear
+    // down the auction row so the admin can simply retry — otherwise the
+    // prize would be locked behind a stale auction with no scheduled
+    // close, and the unique constraint on prize_configuration_id would
+    // block any re-creation attempt.
+    try {
+      await this.scheduleAuctionJobs(saved.id, saved.endsAt);
+    } catch (err) {
+      this.logger.error(
+        `Failed to schedule jobs for auction ${saved.id}; rolling back. ${(err as Error).message}`,
+      );
+      await this.auctionRepository
+        .delete({ id: saved.id })
+        .catch(() => undefined);
+      throw err;
+    }
 
     return saved;
   }
@@ -903,20 +918,19 @@ export class AuctionsService implements OnModuleInit {
    * its end runs immediately).
    */
   async scheduleAuctionJobs(auctionId: string, endsAt: Date): Promise<void> {
-    const closeJobId = `auction-close:${auctionId}`;
-    const soonJobId = `auction-closing-soon:${auctionId}`;
+    // BullMQ rejects custom job IDs containing ':' with the literal error
+    // "Custom Id cannot contain :" (Redis uses ':' as its key separator).
+    // Use '__' as a delimiter that's safe across Redis + URL contexts.
+    const closeJobId = `auction-close__${auctionId}`;
+    const soonJobId = `auction-closing-soon__${auctionId}`;
     const now = Date.now();
     const closeDelay = Math.max(0, endsAt.getTime() - now);
     const soonDelay = Math.max(0, endsAt.getTime() - 60 * 60 * 1000 - now);
 
     // Remove any existing scheduled jobs (idempotent reschedule).
     await Promise.allSettled([
-      this.auctionQueue
-        .remove(closeJobId)
-        .catch(() => undefined),
-      this.auctionQueue
-        .remove(soonJobId)
-        .catch(() => undefined),
+      this.auctionQueue.remove(closeJobId).catch(() => undefined),
+      this.auctionQueue.remove(soonJobId).catch(() => undefined),
     ]);
 
     await this.auctionQueue.add(
@@ -957,10 +971,10 @@ export class AuctionsService implements OnModuleInit {
   async removeAuctionJobs(auctionId: string): Promise<void> {
     await Promise.allSettled([
       this.auctionQueue
-        .remove(`auction-close:${auctionId}`)
+        .remove(`auction-close__${auctionId}`)
         .catch(() => undefined),
       this.auctionQueue
-        .remove(`auction-closing-soon:${auctionId}`)
+        .remove(`auction-closing-soon__${auctionId}`)
         .catch(() => undefined),
     ]);
   }
@@ -1367,7 +1381,7 @@ export class AuctionsService implements OnModuleInit {
     auctionId: string,
     excludeUserId: string,
   ): Promise<void> {
-    const jobId = `auction-autopay-retry:${auctionId}`;
+    const jobId = `auction-autopay-retry__${auctionId}`;
     await this.auctionQueue.remove(jobId).catch(() => undefined);
     await this.auctionQueue.add(
       AUCTION_AUTOPAY_RETRY_JOB,
