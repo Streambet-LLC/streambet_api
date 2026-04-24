@@ -765,8 +765,8 @@ export class PrizeService {
   }
 
   private ensureImageLimit(imageUrls: string[]): void {
-    if (imageUrls.length > 7) {
-      throw new BadRequestException('A maximum of 7 item images is allowed');
+    if (imageUrls.length > 6) {
+      throw new BadRequestException('A maximum of 6 item images is allowed');
     }
   }
 
