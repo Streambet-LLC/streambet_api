@@ -133,7 +133,10 @@ export class PrizeService {
   async getAdminActivePrizeConfigurations(): Promise<PrizeConfigurationDto[]> {
     const configs = await this.prizeConfigRepository.find({
       where: { isActive: true },
-      relations: ['itemImages'],
+      // Eager-load `auction` so the admin Item Settings list / edit dialog
+      // can render auction status, current bid, end time, etc. without an
+      // extra round-trip per row.
+      relations: ['itemImages', 'auction'],
       order: { prizeTier: 'ASC', createdAt: 'DESC' },
     });
 
@@ -2662,6 +2665,10 @@ export class PrizeService {
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.prizeConfiguration', 'prize')
       .leftJoinAndSelect('prize.itemImages', 'itemImages')
+      // Surface auction bid count for items sold through the auction flow
+      // so the buyer-facing detail dialog can show competition history.
+      .leftJoin('prize.auction', 'auction')
+      .addSelect(['auction.id', 'auction.bidCount'])
       .leftJoin('prize.creator', 'seller')
       .addSelect([
         'seller.id',
@@ -2714,6 +2721,10 @@ export class PrizeService {
         order.prizeConfiguration?.creator?.username ||
         'CardCade',
       status: order.status,
+      // Auction provenance for the detail dialog. `bidCount` is null
+      // for non-auction sales so the UI can hide the row.
+      saleType: order.prizeConfiguration?.saleType || 'fixed_price',
+      auctionBidCount: order.prizeConfiguration?.auction?.bidCount ?? null,
     }));
 
     return { data, total };

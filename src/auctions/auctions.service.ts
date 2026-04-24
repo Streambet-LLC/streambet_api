@@ -4,11 +4,12 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, LessThan, Repository } from 'typeorm';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity';
@@ -63,7 +64,7 @@ function minIncrementForCurrent(currentUsd: number): number {
  *   counters back, and how many rows to insert.
  */
 @Injectable()
-export class AuctionsService {
+export class AuctionsService implements OnModuleInit {
   private readonly logger = new Logger(AuctionsService.name);
 
   constructor(
@@ -189,6 +190,203 @@ export class AuctionsService {
     });
     this.logger.log(`Auction ${auction.id} cancelled by admin ${adminId}`);
     return saved;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Lifecycle: orphan sweeper
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * On boot, find any auctions that should already be closed (status
+   * is still ACTIVE/SCHEDULED but `endsAt` is in the past) and run
+   * their close flow once. Covers two real-world failure modes:
+   *
+   *   1. The worker was offline when the BullMQ delayed job fired and
+   *      the job got dropped (or BullMQ lost it during a Redis flush).
+   *   2. An admin adjusted `ends_at` directly in Postgres, so the
+   *      queued job no longer matches reality.
+   *
+   * Idempotent: `runCloseJob` itself short-circuits on terminal
+   * statuses, so re-running is safe.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const stuck = await this.auctionRepository.find({
+        where: [
+          {
+            status: AuctionStatus.ACTIVE,
+            endsAt: LessThan(new Date()),
+          },
+          {
+            status: AuctionStatus.SCHEDULED,
+            endsAt: LessThan(new Date()),
+          },
+        ],
+        select: ['id', 'endsAt', 'status'],
+      });
+      if (stuck.length === 0) return;
+      this.logger.warn(
+        `Auction sweeper: found ${stuck.length} overdue auction(s) — running close flow.`,
+      );
+      for (const a of stuck) {
+        try {
+          await this.runCloseJob(a.id);
+        } catch (err) {
+          this.logger.error(
+            `Auction sweeper: runCloseJob(${a.id}) failed: ${(err as Error).message}`,
+          );
+        }
+      }
+    } catch (err) {
+      // Never block app boot on the sweeper.
+      this.logger.error(
+        `Auction sweeper failed to query overdue auctions: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Admin: listing
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Lightweight admin listing of every auction with the metadata the
+   * Admin → Auctions tab needs to triage state at a glance.
+   */
+  async listAllForAdmin(): Promise<
+    Array<{
+      id: string;
+      prizeConfigurationId: string;
+      prizeName: string;
+      status: AuctionStatus;
+      startsAt: string;
+      endsAt: string;
+      durationDays: number;
+      startingPriceUsd: number;
+      reservePriceUsd: number | null;
+      currentBidUsd: number | null;
+      bidCount: number;
+      extensionCount: number;
+      winnerUserId: string | null;
+      winnerUsername: string | null;
+      paidAt: string | null;
+      prizeOrderId: string | null;
+      paymentIntentId: string | null;
+      isOverdue: boolean;
+    }>
+  > {
+    const rows = await this.auctionRepository.find({
+      relations: ['prizeConfiguration'],
+      order: { createdAt: 'DESC' as const },
+    });
+    // Resolve winner usernames in one batch to avoid N+1.
+    const winnerIds = Array.from(
+      new Set(rows.map((r) => r.winnerUserId).filter((v): v is string => !!v)),
+    );
+    const winners = winnerIds.length
+      ? await this.userRepository
+          .createQueryBuilder('u')
+          .select(['u.id', 'u.username'])
+          .where('u.id IN (:...ids)', { ids: winnerIds })
+          .getMany()
+      : [];
+    const winnerMap = new Map(winners.map((u) => [u.id, u.username]));
+    const now = Date.now();
+    return rows.map((a) => ({
+      id: a.id,
+      prizeConfigurationId: a.prizeConfigurationId,
+      prizeName: a.prizeConfiguration?.name ?? 'Unknown item',
+      status: a.status,
+      startsAt: a.startsAt.toISOString(),
+      endsAt: a.endsAt.toISOString(),
+      durationDays: a.durationDays,
+      startingPriceUsd: Number(a.startingPriceUsd),
+      reservePriceUsd: a.reservePriceUsd ? Number(a.reservePriceUsd) : null,
+      currentBidUsd: a.currentBidUsd ? Number(a.currentBidUsd) : null,
+      bidCount: a.bidCount,
+      extensionCount: a.extensionCount,
+      winnerUserId: a.winnerUserId ?? null,
+      winnerUsername: a.winnerUserId
+        ? (winnerMap.get(a.winnerUserId) ?? null)
+        : null,
+      paidAt: a.paidAt ? a.paidAt.toISOString() : null,
+      prizeOrderId: a.prizeOrderId ?? null,
+      paymentIntentId: a.paymentIntentId ?? null,
+      // Overdue when the close job hasn't terminalized this row yet.
+      isOverdue:
+        (a.status === AuctionStatus.ACTIVE ||
+          a.status === AuctionStatus.SCHEDULED) &&
+        a.endsAt.getTime() < now,
+    }));
+  }
+
+  /**
+   * Admin: full per-auction detail including the winner and (when paid)
+   * the linked PrizeOrder's shipping address. Used by the Edit Item
+   * dialog so ops can ship the prize without leaving the screen.
+   *
+   * Returns `null` for winner/shipping fields when the auction hasn't
+   * resolved yet (still active, unsold, cancelled with no charge, etc.).
+   */
+  async getAdminDetails(auctionId: string): Promise<{
+    id: string;
+    status: AuctionStatus;
+    winnerUserId: string | null;
+    winner: {
+      id: string;
+      username: string;
+      email: string | null;
+    } | null;
+    paidAt: string | null;
+    paymentIntentId: string | null;
+    prizeOrderId: string | null;
+    winningBidUsd: number | null;
+    shippingAddress: PrizeOrder['shippingAddress'] | null;
+    orderStatus: string | null;
+  }> {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (!auction) {
+      throw new NotFoundException('Auction not found');
+    }
+
+    const winner = auction.winnerUserId
+      ? await this.userRepository.findOne({
+          where: { id: auction.winnerUserId },
+          select: ['id', 'username', 'email'],
+        })
+      : null;
+
+    // The prize order is only created on a successful charge, so it may
+    // be missing for unsold/failed/cancelled auctions even when there
+    // was a winner.
+    const order = auction.prizeOrderId
+      ? await this.orderRepository.findOne({
+          where: { id: auction.prizeOrderId },
+        })
+      : null;
+
+    return {
+      id: auction.id,
+      status: auction.status,
+      winnerUserId: auction.winnerUserId,
+      winner: winner
+        ? {
+            id: winner.id,
+            username: winner.username,
+            email: winner.email ?? null,
+          }
+        : null,
+      paidAt: auction.paidAt ? auction.paidAt.toISOString() : null,
+      paymentIntentId: auction.paymentIntentId,
+      prizeOrderId: auction.prizeOrderId,
+      winningBidUsd: auction.currentBidUsd
+        ? Number(auction.currentBidUsd)
+        : null,
+      shippingAddress: order?.shippingAddress ?? null,
+      orderStatus: order?.status ?? null,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────
