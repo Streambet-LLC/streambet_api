@@ -99,6 +99,20 @@ export class PrizeConfiguration extends BaseEntity {
   })
   cardValueUsd: string | null;
 
+  /**
+   * Per-item shipping fee in USD. Defaults to $5.00 (matches the legacy
+   * hard-coded constant). Currently surfaced in the auction bidder UX
+   * so winners see the full "if I win" total before placing a bid.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'shipping_cost_usd',
+    default: 5,
+  })
+  shippingCostUsd: string;
+
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;
 

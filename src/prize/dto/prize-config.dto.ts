@@ -115,6 +115,12 @@ export class AuctionSummaryDto {
     description: 'The requesting user\u2019s own proxy max on this auction, exposed only when they are the current leader so they can raise it. Null otherwise (proxy maxes are private from competitors).',
   })
   currentUserProxyMaxUsd: number | null;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Per-item shipping fee in USD that will be added to the winning bid + buyer processing fee at close.',
+  })
+  shippingCostUsd: number;
 }
 
 /**
@@ -416,6 +422,13 @@ export class PrizeConfigurationDto {
   saleType: PrizeSaleType;
 
   @ApiProperty({
+    example: 5,
+    description:
+      'Per-item shipping fee in USD. Added on top of bid + buyer processing fee at checkout / auction close.',
+  })
+  shippingCostUsd: number;
+
+  @ApiProperty({
     type: () => AuctionSummaryDto,
     nullable: true,
     description: 'Present when saleType === auction.',
@@ -646,6 +659,17 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsEnum(PrizeSaleType)
   saleType?: PrizeSaleType;
+
+  @ApiProperty({
+    example: 5,
+    description:
+      'Per-item shipping fee in USD. Defaults to $5 if omitted. Charged on top of the winning bid (auctions) or sale price (fixed/offers).',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  shippingCostUsd?: number;
 }
 /**
  * Updates create a new row with is_active=true and set old row to is_active=false
@@ -856,6 +880,16 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   profileFeatured?: boolean;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Per-item shipping fee in USD.',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  shippingCostUsd?: number;
 }
 
 /**

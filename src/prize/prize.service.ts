@@ -362,8 +362,25 @@ export class PrizeService {
         )
       : new Set<string>();
 
+    // Pre-load the set of auctions this user has bid on so each item's
+    // embedded auction summary can populate `isLeader` / `isBidder` /
+    // `currentUserProxyMaxUsd`. One round-trip regardless of list size.
+    const auctionIds = sellerItems
+      .map((i) => i.auction?.id)
+      .filter((id): id is string => !!id);
+    const bidderAuctionIds = requesterId
+      ? await this.auctionsService.getBidderAuctionIds(
+          requesterId,
+          auctionIds,
+        )
+      : new Set<string>();
+
     return sellerItems.map((item) =>
-      this.mapToDto(item, { isWatching: watched.has(item.id) }),
+      this.mapToDto(item, {
+        isWatching: watched.has(item.id),
+        auctionViewerUserId: requesterId ?? null,
+        auctionIsBidder: !!item.auction && bidderAuctionIds.has(item.auction.id),
+      }),
     );
   }
 
@@ -429,6 +446,16 @@ export class PrizeService {
           )
         : new Set<string>();
 
+      const auctionIds = sortedSellerItems
+        .map((i) => i.auction?.id)
+        .filter((id): id is string => !!id);
+      const bidderAuctionIds = requesterId
+        ? await this.auctionsService.getBidderAuctionIds(
+            requesterId,
+            auctionIds,
+          )
+        : new Set<string>();
+
       const response = {
         shop: {
           id: '0',
@@ -443,7 +470,12 @@ export class PrizeService {
           country: cardcadeSettings.country || null,
         },
         items: sortedSellerItems.map((item) =>
-          this.mapToDto(item, { isWatching: watched.has(item.id) }),
+          this.mapToDto(item, {
+            isWatching: watched.has(item.id),
+            auctionViewerUserId: requesterId ?? null,
+            auctionIsBidder:
+              !!item.auction && bidderAuctionIds.has(item.auction.id),
+          }),
         ),
       };
       this.logger.log(
@@ -966,6 +998,10 @@ export class PrizeService {
       isProOnly: dto.isProOnly ?? false,
       proEarlyAccessUntil,
       saleType: dto.saleType ?? undefined,
+      // Per-item shipping fee. DB column has DEFAULT 5.00 but we forward
+      // the admin-supplied value when present so creators can customize.
+      shippingCostUsd:
+        dto.shippingCostUsd != null ? dto.shippingCostUsd.toFixed(2) : undefined,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1159,6 +1195,12 @@ export class PrizeService {
         dto.profileFeatured ?? existingTier.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? existingTier.isProOnly ?? false,
       proEarlyAccessUntil: existingTier.proEarlyAccessUntil,
+      // Per-item shipping fee. Preserve previous value when the admin
+      // doesn't include it in the patch.
+      shippingCostUsd:
+        dto.shippingCostUsd != null
+          ? dto.shippingCostUsd.toFixed(2)
+          : existingTier.shippingCostUsd,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -3486,8 +3528,22 @@ export class PrizeService {
           items.map((i) => i.id),
         )
       : new Set<string>();
+    const auctionIds = items
+      .map((i) => i.auction?.id)
+      .filter((id): id is string => !!id);
+    const bidderAuctionIds = requesterId
+      ? await this.auctionsService.getBidderAuctionIds(
+          requesterId,
+          auctionIds,
+        )
+      : new Set<string>();
     return items.map((item) =>
-      this.mapToDto(item, { isWatching: watched.has(item.id) }),
+      this.mapToDto(item, {
+        isWatching: watched.has(item.id),
+        auctionViewerUserId: requesterId ?? null,
+        auctionIsBidder:
+          !!item.auction && bidderAuctionIds.has(item.auction.id),
+      }),
     );
   }
 
@@ -3503,9 +3559,25 @@ export class PrizeService {
     const visible = items.filter(
       (item) => item.isActive && item.showOnShop !== false,
     );
+    // Pre-load the bidder set so leader / bidder / proxy fields render
+    // correctly for any auction items on the watchlist.
+    const auctionIds = visible
+      .map((i) => i.auction?.id)
+      .filter((id): id is string => !!id);
+    const bidderAuctionIds = await this.auctionsService.getBidderAuctionIds(
+      userId,
+      auctionIds,
+    );
     // Everything in this list is by definition watched, so skip the extra
     // round-trip to fetch the watcher set.
-    return visible.map((item) => this.mapToDto(item, { isWatching: true }));
+    return visible.map((item) =>
+      this.mapToDto(item, {
+        isWatching: true,
+        auctionViewerUserId: userId,
+        auctionIsBidder:
+          !!item.auction && bidderAuctionIds.has(item.auction.id),
+      }),
+    );
   }
 
   /**
@@ -3554,7 +3626,19 @@ export class PrizeService {
    */
   private mapToDto(
     entity: PrizeConfiguration,
-    opts: { isWatching?: boolean } = {},
+    opts: {
+      isWatching?: boolean;
+      /**
+       * When provided, the embedded auction summary is built with this
+       * userId so `isLeader` and (for the leader) `currentUserProxyMaxUsd`
+       * are populated. Without it, list endpoints would always render
+       * the anonymous public view and leaders would lose their "Raise
+       * your max" CTA on refresh.
+       */
+      auctionViewerUserId?: string | null;
+      /** True when this user has placed at least one bid on this auction. */
+      auctionIsBidder?: boolean;
+    } = {},
   ): PrizeConfigurationDto {
     const sortedItemImages = (entity.itemImages || [])
       .slice()
@@ -3615,13 +3699,25 @@ export class PrizeService {
       watcherCount: Number(entity.watcherCount ?? 0),
       isWatching: opts.isWatching ?? false,
       saleType: entity.saleType,
+      // Per-item shipping fee. Migrated existing rows default to $5
+      // (see 20260423140000-AddItemShippingCost) so this is always set.
+      shippingCostUsd: entity.shippingCostUsd
+        ? Number(entity.shippingCostUsd)
+        : 5,
       // Auction summary derived from the eager-loaded `auction` relation.
-      // Per-user fields (isLeader/isBidder) are populated only when a
-      // userId is threaded through the calling chain. List endpoints
-      // currently render the public view (isLeader=isBidder=false); the
-      // detail endpoint surfaces the user-specific fields.
+      // Per-user fields (isLeader / isBidder / currentUserProxyMaxUsd)
+      // are populated when `auctionViewerUserId` is threaded through the
+      // calling chain so listing endpoints render the correct CTA for
+      // the current high bidder. Shipping is read off this prize so the
+      // bidder modal can show an accurate "if I win" total.
       auction: entity.auction
-        ? this.auctionsService.buildSummary(entity.auction)
+        ? this.auctionsService.buildSummary(entity.auction, {
+            userId: opts.auctionViewerUserId ?? undefined,
+            isBidder: opts.auctionIsBidder ?? false,
+            shippingCostUsd: entity.shippingCostUsd
+              ? Number(entity.shippingCostUsd)
+              : null,
+          })
         : null,
     };
   }

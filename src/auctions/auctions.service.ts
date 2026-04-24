@@ -198,6 +198,9 @@ export class AuctionsService {
   async getById(auctionId: string): Promise<Auction> {
     const a = await this.auctionRepository.findOne({
       where: { id: auctionId },
+      // Eager-load the prize so buildSummary can read shippingCostUsd
+      // without an extra query.
+      relations: ['prizeConfiguration'],
     });
     if (!a) throw new NotFoundException('Auction not found');
     return a;
@@ -207,6 +210,8 @@ export class AuctionsService {
     return this.auctionRepository.find({
       where: { status: AuctionStatus.ACTIVE },
       order: { endsAt: 'ASC' },
+      // Same reason as getById: shipping lives on the parent prize.
+      relations: ['prizeConfiguration'],
     });
   }
 
@@ -217,7 +222,17 @@ export class AuctionsService {
    */
   buildSummary(
     auction: Auction,
-    opts: { userId?: string; isBidder?: boolean } = {},
+    opts: {
+      userId?: string;
+      isBidder?: boolean;
+      /**
+       * Per-item shipping fee. Callers that already have the parent
+       * `PrizeConfiguration` loaded (e.g. PrizeService.mapToDto) should
+       * pass it explicitly. Falls back to the auction's own (lazy)
+       * relation, then to the legacy default of $5.
+       */
+      shippingCostUsd?: number | null;
+    } = {},
   ): AuctionSummaryDto {
     const current = auction.currentBidUsd
       ? Number(auction.currentBidUsd)
@@ -233,8 +248,18 @@ export class AuctionsService {
     const reserveMet =
       reserve === null ? null : current !== null && current >= reserve;
 
-    const fees = this.computeAuctionFees(current ?? 0);
-    const minNextFees = this.computeAuctionFees(minNext);
+    // Per-item shipping (see opts docs above) — fold it into the buyer's
+    // "if I win" totals so the bid modal preview matches what we'll
+    // actually charge at close.
+    const shippingForFees =
+      opts.shippingCostUsd != null
+        ? Number(opts.shippingCostUsd)
+        : auction.prizeConfiguration?.shippingCostUsd
+          ? Number(auction.prizeConfiguration.shippingCostUsd)
+          : 5;
+
+    const fees = this.computeAuctionFees(current ?? 0, shippingForFees);
+    const minNextFees = this.computeAuctionFees(minNext, shippingForFees);
 
     return {
       id: auction.id,
@@ -262,6 +287,9 @@ export class AuctionsService {
         auction.proxyMaxUsd
           ? Number(auction.proxyMaxUsd)
           : null,
+      // Shipping mirrors what we just rolled into the fee preview, so
+      // the bid modal "Shipping" line and the totals stay in sync.
+      shippingCostUsd: shippingForFees,
     };
   }
 
@@ -612,17 +640,24 @@ export class AuctionsService {
    * Returns USD floats (rounded to cents) so callers can serialize for
    * DTOs or pass directly to chargeWinner.
    */
-  computeAuctionFees(bidUsd: number): {
+  computeAuctionFees(
+    bidUsd: number,
+    shippingUsd: number = 0,
+  ): {
     bidUsd: number;
     buyerProcessingFeeUsd: number;
+    shippingUsd: number;
     totalChargedUsd: number;
     sellerFeeUsd: number;
     sellerNetUsd: number;
     rewardCadeCoins: number;
   } {
     const subtotalCents = Math.max(0, Math.round(bidUsd * 100));
+    const shippingCents = Math.max(0, Math.round(shippingUsd * 100));
     const buyerFeeCents = calculateBuyerProcessingFeeCents(subtotalCents);
-    const totalChargedCents = subtotalCents + buyerFeeCents;
+    // Shipping is passed straight through to the buyer (no fee taken on
+    // it) and excluded from the seller payout calc.
+    const totalChargedCents = subtotalCents + buyerFeeCents + shippingCents;
     const sellerFeeCents = calculateSellerFeeCents(
       subtotalCents,
       SELLER_FEE_DEFAULT_PERCENT,
@@ -633,6 +668,7 @@ export class AuctionsService {
     return {
       bidUsd: subtotalCents / 100,
       buyerProcessingFeeUsd: buyerFeeCents / 100,
+      shippingUsd: shippingCents / 100,
       totalChargedUsd: totalChargedCents / 100,
       sellerFeeUsd: sellerFeeCents / 100,
       sellerNetUsd: sellerNetCents / 100,
@@ -898,7 +934,21 @@ export class AuctionsService {
     winningBidUsd: number;
   }): Promise<void> {
     const { auction, winnerUserId, winningBidUsd } = params;
-    const fees = this.computeAuctionFees(winningBidUsd);
+    // Resolve per-item shipping. Migration backfilled $5 for existing
+    // rows; new items can be customized in admin.
+    let shippingUsd = 5;
+    try {
+      const prize = await this.prizeRepository.findOne({
+        where: { id: auction.prizeConfigurationId },
+        select: ['id', 'shippingCostUsd'],
+      });
+      if (prize?.shippingCostUsd != null) {
+        shippingUsd = Number(prize.shippingCostUsd);
+      }
+    } catch {
+      // fall back to default; never block the charge on shipping lookup.
+    }
+    const fees = this.computeAuctionFees(winningBidUsd, shippingUsd);
 
     // Resolve the winner's most recent saved payment method for this
     // auction. Their leading bid row carries the pm id when available.
@@ -934,7 +984,7 @@ export class AuctionsService {
         paymentMethodId,
         amountUsd: fees.totalChargedUsd,
         auctionId: auction.id,
-        description: `CardCade auction ${auction.id} winning bid + processing fee`,
+        description: `CardCade auction ${auction.id} winning bid + processing fee + shipping`,
       });
     } catch (err) {
       this.logger.warn(
