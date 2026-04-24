@@ -108,6 +108,13 @@ export class AuctionSummaryDto {
     description: 'Total the bidder would be charged if their bid wins at the minimum next bid amount.',
   })
   minNextBidTotalUsd: number;
+
+  @ApiProperty({
+    example: 75,
+    nullable: true,
+    description: 'The requesting user\u2019s own proxy max on this auction, exposed only when they are the current leader so they can raise it. Null otherwise (proxy maxes are private from competitors).',
+  })
+  currentUserProxyMaxUsd: number | null;
 }
 
 /**

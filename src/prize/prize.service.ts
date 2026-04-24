@@ -3509,6 +3509,47 @@ export class PrizeService {
   }
 
   /**
+   * Returns every prize the user has placed at least one bid on,
+   * ordered by their most-recent bid (newest first). Powers the
+   * "My Bids" page. Auction summaries are rebuilt with the viewer's
+   * userId so `isLeader` and `currentUserProxyMaxUsd` are populated
+   * for items where the viewer currently leads.
+   */
+  async getUserBids(userId: string): Promise<PrizeConfigurationDto[]> {
+    const rows = await this.auctionsService.getRecentBidAuctions(userId);
+    if (!rows.length) return [];
+    const auctionIds = rows.map((r) => r.auctionId);
+    // Use QB so we can filter on the auction relation explicitly. The
+    // entity's `auction` is OneToOne eager-loaded; we still need an
+    // explicit join to filter on its id.
+    const items = await this.prizeConfigRepository
+      .createQueryBuilder('prize')
+      .innerJoinAndSelect('prize.auction', 'auction')
+      .leftJoinAndSelect('prize.itemImages', 'itemImages')
+      .leftJoinAndSelect('prize.creator', 'creator')
+      .where('auction.id IN (:...auctionIds)', { auctionIds })
+      .andWhere('prize.isActive = true')
+      .getMany();
+    // Sort by lastBidAt DESC using the order from the bid query.
+    const orderIndex = new Map(rows.map((r, idx) => [r.auctionId, idx]));
+    items.sort((a, b) => {
+      const ai = a.auction ? (orderIndex.get(a.auction.id) ?? 9999) : 9999;
+      const bi = b.auction ? (orderIndex.get(b.auction.id) ?? 9999) : 9999;
+      return ai - bi;
+    });
+    return items.map((item) => {
+      const dto = this.mapToDto(item, { isWatching: false });
+      if (item.auction) {
+        dto.auction = this.auctionsService.buildSummary(item.auction, {
+          userId,
+          isBidder: true,
+        });
+      }
+      return dto;
+    });
+  }
+
+  /**
    * Map entity to DTO
    */
   private mapToDto(

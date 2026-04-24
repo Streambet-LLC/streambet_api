@@ -256,6 +256,12 @@ export class AuctionsService {
       totalDueIfWonUsd: current === null ? null : fees.totalChargedUsd,
       minNextBidProcessingFeeUsd: minNextFees.buyerProcessingFeeUsd,
       minNextBidTotalUsd: minNextFees.totalChargedUsd,
+      currentUserProxyMaxUsd:
+        !!opts.userId &&
+        auction.currentLeaderUserId === opts.userId &&
+        auction.proxyMaxUsd
+          ? Number(auction.proxyMaxUsd)
+          : null,
     };
   }
 
@@ -276,6 +282,33 @@ export class AuctionsService {
       .andWhere('b.auction_id IN (:...ids)', { ids: auctionIds })
       .getRawMany<{ auctionId: string }>();
     return new Set(rows.map((r) => r.auctionId));
+  }
+
+  /**
+   * Every auction the given user has placed at least one bid on,
+   * ordered by their most-recent bid (newest first). Powers the
+   * "My Bids" page so the items the bidder is most actively engaged
+   * with float to the top.
+   */
+  async getRecentBidAuctions(
+    userId: string,
+  ): Promise<{ auctionId: string; lastBidAt: Date }[]> {
+    if (!userId) return [];
+    // NOTE: `auction_bids` uses snake_case for explicitly-named columns
+    // (auction_id, user_id) but the default `@CreateDateColumn()` keeps
+    // its camelCase property name → quoted "createdAt" column.
+    const rows = await this.bidRepository
+      .createQueryBuilder('b')
+      .select('b.auction_id', 'auctionId')
+      .addSelect('MAX(b."createdAt")', 'lastBidAt')
+      .where('b.user_id = :userId', { userId })
+      .groupBy('b.auction_id')
+      .orderBy('MAX(b."createdAt")', 'DESC')
+      .getRawMany<{ auctionId: string; lastBidAt: Date }>();
+    return rows.map((r) => ({
+      auctionId: r.auctionId,
+      lastBidAt: new Date(r.lastBidAt),
+    }));
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -340,9 +373,55 @@ export class AuctionsService {
           throw new BadRequestException('Auction has already ended');
         }
         if (auction.currentLeaderUserId === userId) {
-          throw new BadRequestException(
-            'You are already the current high bidder.',
-          );
+          // Leader is raising their own proxy max. The visible bid does
+          // not change (no one to counter), but we record the new proxy
+          // ceiling and append a bid row so the action is auditable.
+          const existingProxy = auction.proxyMaxUsd
+            ? Number(auction.proxyMaxUsd)
+            : 0;
+          if (proxyMax <= existingProxy) {
+            throw new BadRequestException(
+              `Your new max must be higher than your current max ($${existingProxy.toFixed(2)}).`,
+            );
+          }
+
+          // Anti-snipe still applies — raising your max within the
+          // window is enough activity to extend, matching how regular
+          // bids behave.
+          const msToEnd = auction.endsAt.getTime() - Date.now();
+          let extended = false;
+          if (msToEnd <= ANTI_SNIPE_WINDOW_SECONDS * 1000) {
+            auction.endsAt = new Date(
+              auction.endsAt.getTime() + ANTI_SNIPE_WINDOW_SECONDS * 1000,
+            );
+            auction.extensionCount += 1;
+            extended = true;
+          }
+
+          const raiseBid = bidRepo.create({
+            auctionId: auction.id,
+            userId,
+            // Audit row: amount = current visible bid (unchanged), but
+            // proxyMax records the raised ceiling.
+            amountUsd: (auction.currentBidUsd
+              ? Number(auction.currentBidUsd)
+              : Number(auction.startingPriceUsd)
+            ).toFixed(2),
+            proxyMaxUsd: proxyMax.toFixed(2),
+            isProxyAuto: false,
+            stripePaymentMethodId: paymentMethodId,
+          });
+          await bidRepo.save(raiseBid);
+
+          auction.proxyMaxUsd = proxyMax.toFixed(2);
+          auction.bidCount += 1;
+          const savedAuction = await auctionRepo.save(auction);
+          return {
+            auction: savedAuction,
+            bid: raiseBid,
+            previousLeaderId: userId,
+            extended,
+          };
         }
 
         const start = Number(auction.startingPriceUsd);
