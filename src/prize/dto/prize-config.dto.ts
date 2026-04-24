@@ -16,6 +16,112 @@ import { Type } from 'class-transformer';
 import { PrizeCategory } from '../enums/prize-category.enum';
 import { PrizePurchaseOption } from '../enums/prize-purchase-option.enum';
 import { PrizeBrand } from '../enums/prize-brand.enum';
+import { PrizeSaleType } from '../enums/prize-sale-type.enum';
+import { AuctionStatus } from '../enums/auction-status.enum';
+
+/**
+ * Lightweight auction summary embedded on PrizeConfigurationDto when
+ * `saleType === 'auction'`. Reserve price is intentionally NOT exposed here
+ * (only `reserveMet`); admins get the raw value via the admin DTO.
+ */
+export class AuctionSummaryDto {
+  @ApiProperty({ example: 'uuid' })
+  id: string;
+
+  @ApiProperty({ enum: AuctionStatus })
+  status: AuctionStatus;
+
+  @ApiProperty({ example: '2026-04-25T12:00:00Z' })
+  startsAt: string;
+
+  @ApiProperty({ example: '2026-04-30T12:00:00Z' })
+  endsAt: string;
+
+  @ApiProperty({ example: 1, description: 'Auction length in days (1|3|5|7).' })
+  durationDays: number;
+
+  @ApiProperty({ example: 25.0 })
+  startingPriceUsd: number;
+
+  @ApiProperty({ example: 47.0, nullable: true, description: 'Current high bid (USD).' })
+  currentBidUsd: number | null;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Minimum increment for the next bid based on dynamic tiers.',
+  })
+  minNextBidIncrement: number;
+
+  @ApiProperty({
+    example: 50,
+    description: 'Minimum amount required for the next bid (currentBidUsd + increment, or startingPriceUsd).',
+  })
+  minNextBidUsd: number;
+
+  @ApiProperty({ example: 7, description: 'Total bid actions including auto-bids.' })
+  bidCount: number;
+
+  @ApiProperty({ example: 2, description: 'How many times the close was extended by the anti-snipe rule.' })
+  extensionCount: number;
+
+  @ApiProperty({
+    example: false,
+    description: 'True when a reserve exists and the current bid meets it. False when reserve exists and is unmet. Null when no reserve was set.',
+    nullable: true,
+  })
+  reserveMet: boolean | null;
+
+  @ApiProperty({ example: false, description: 'True when the requesting user is the current high bidder.' })
+  isLeader: boolean;
+
+  @ApiProperty({ example: false, description: 'True when the requesting user has placed at least one bid on this auction.' })
+  isBidder: boolean;
+
+  @ApiProperty({
+    example: 3,
+    description: 'Buyer processing fee percent applied on top of the winning bid (matches sales fee policy).',
+  })
+  buyerProcessingFeePercent: number;
+
+  @ApiProperty({
+    example: 1.41,
+    nullable: true,
+    description: 'Buyer processing fee in USD computed against the current bid (or starting price if no bids). Does not include shipping.',
+  })
+  buyerProcessingFeeUsd: number | null;
+
+  @ApiProperty({
+    example: 48.41,
+    nullable: true,
+    description: 'Total amount the winner would be charged at close based on the current bid + buyer processing fee. Excludes shipping (calculated at close).',
+  })
+  totalDueIfWonUsd: number | null;
+
+  @ApiProperty({
+    example: 1.5,
+    description: 'Buyer processing fee in USD computed against the minimum next bid. Helps the bid form show a clean total before submit.',
+  })
+  minNextBidProcessingFeeUsd: number;
+
+  @ApiProperty({
+    example: 51.5,
+    description: 'Total the bidder would be charged if their bid wins at the minimum next bid amount.',
+  })
+  minNextBidTotalUsd: number;
+
+  @ApiProperty({
+    example: 75,
+    nullable: true,
+    description: 'The requesting user\u2019s own proxy max on this auction, exposed only when they are the current leader so they can raise it. Null otherwise (proxy maxes are private from competitors).',
+  })
+  currentUserProxyMaxUsd: number | null;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Per-item shipping fee in USD that will be added to the winning bid + buyer processing fee at close.',
+  })
+  shippingCostUsd: number;
+}
 
 /**
  * DTO for individual prize tier information
@@ -306,6 +412,28 @@ export class PrizeConfigurationDto {
       'True when the requesting user is currently watching this item. Always false for anonymous requests.',
   })
   isWatching: boolean;
+
+  @ApiProperty({
+    enum: PrizeSaleType,
+    example: PrizeSaleType.FIXED_PRICE,
+    description:
+      'How this item is sold. `auction` items are bid-based and excluded from CadeCoin / redemptions.',
+  })
+  saleType: PrizeSaleType;
+
+  @ApiProperty({
+    example: 5,
+    description:
+      'Per-item shipping fee in USD. Added on top of bid + buyer processing fee at checkout / auction close.',
+  })
+  shippingCostUsd: number;
+
+  @ApiProperty({
+    type: () => AuctionSummaryDto,
+    nullable: true,
+    description: 'Present when saleType === auction.',
+  })
+  auction: AuctionSummaryDto | null;
 }
 /**
  * DTO for creating a new prize tier (admin only)
@@ -520,6 +648,28 @@ export class CreatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   profileFeatured?: boolean;
+
+  @ApiProperty({
+    enum: PrizeSaleType,
+    example: PrizeSaleType.FIXED_PRICE,
+    description:
+      'How this item is sold. Set to `auction` to mark the item as auction-eligible (an auction must then be created via /admin/auctions).',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizeSaleType)
+  saleType?: PrizeSaleType;
+
+  @ApiProperty({
+    example: 5,
+    description:
+      'Per-item shipping fee in USD. Defaults to $5 if omitted. Charged on top of the winning bid (auctions) or sale price (fixed/offers).',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  shippingCostUsd?: number;
 }
 /**
  * Updates create a new row with is_active=true and set old row to is_active=false
@@ -730,6 +880,16 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   profileFeatured?: boolean;
+
+  @ApiProperty({
+    example: 5,
+    description: 'Per-item shipping fee in USD.',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  shippingCostUsd?: number;
 }
 
 /**
