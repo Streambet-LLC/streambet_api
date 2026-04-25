@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { EbayListingDto, EbaySearchResponseDto } from './dto/ebay-search.dto';
@@ -19,7 +23,10 @@ export class EbayService {
           currency: item?.price?.currency ?? null,
           condition: item?.condition ?? null,
           grade: this.extractGradeFromTitle(titleValue),
-          imageUrl: item?.thumbnailImages?.[0]?.imageUrl ?? item?.image?.imageUrl ?? null,
+          imageUrl:
+            item?.thumbnailImages?.[0]?.imageUrl ??
+            item?.image?.imageUrl ??
+            null,
           itemWebUrl: item?.itemWebUrl ?? null,
           seller: item?.seller?.username ?? null,
           buyingOptions: item?.buyingOptions ?? [],
@@ -30,7 +37,9 @@ export class EbayService {
   }
 
   private normalizeImageBase64(imageBase64: string): string {
-    return imageBase64.trim().replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+    return imageBase64
+      .trim()
+      .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
   }
 
   private extractGradeFromTitle(title: string | null): string | null {
@@ -46,7 +55,8 @@ export class EbayService {
     for (const pattern of patterns) {
       const match = title.match(pattern);
       if (match) {
-        const grader = match[1].toUpperCase() === 'BECKETT' ? 'BGS' : match[1].toUpperCase();
+        const grader =
+          match[1].toUpperCase() === 'BECKETT' ? 'BGS' : match[1].toUpperCase();
         return `${grader} ${match[2]}`;
       }
     }
@@ -79,9 +89,13 @@ export class EbayService {
     return response.data.access_token as string;
   }
 
-  async searchListings(title: string, limit: number = 5): Promise<EbaySearchResponseDto> {
+  async searchListings(
+    title: string,
+    limit: number = 5,
+  ): Promise<EbaySearchResponseDto> {
     const timeoutMs = this.configService.get<number>('ebay.timeoutMs') ?? 20000;
-    const marketplaceId = this.configService.get<string>('ebay.marketplaceId') ?? 'EBAY_US';
+    const marketplaceId =
+      this.configService.get<string>('ebay.marketplaceId') ?? 'EBAY_US';
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const fetchLimit = Math.min(safeLimit * 4, 50);
 
@@ -126,7 +140,8 @@ export class EbayService {
     limit: number = 5,
   ): Promise<EbaySearchResponseDto> {
     const timeoutMs = this.configService.get<number>('ebay.timeoutMs') ?? 20000;
-    const marketplaceId = this.configService.get<string>('ebay.marketplaceId') ?? 'EBAY_US';
+    const marketplaceId =
+      this.configService.get<string>('ebay.marketplaceId') ?? 'EBAY_US';
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     const fetchLimit = Math.min(safeLimit * 4, 50);
 

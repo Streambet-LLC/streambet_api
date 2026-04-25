@@ -28,8 +28,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class AddMissingColumnsUsersPrizeCreatorApplications20260227120000
   implements MigrationInterface
 {
-  name =
-    'AddMissingColumnsUsersPrizeCreatorApplications20260227120000';
+  name = 'AddMissingColumnsUsersPrizeCreatorApplications20260227120000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ─── 1. users ────────────────────────────────────────────────────────────
@@ -125,21 +124,45 @@ export class AddMissingColumnsUsersPrizeCreatorApplications20260227120000
       ALTER COLUMN "socials" SET NOT NULL
     `);
 
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "reviewed_by_user_id"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "reviewed_at"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "application_status"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "card_preference"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "cards_collected"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "city_state"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "collector_background"`);
-    await queryRunner.query(`ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "application_type"`);
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "reviewed_by_user_id"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "reviewed_at"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "application_status"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "card_preference"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "cards_collected"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "city_state"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "collector_background"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "creator_applications" DROP COLUMN IF EXISTS "application_type"`,
+    );
 
     // ─── 2. prize_configurations ─────────────────────────────────────────────
-    await queryRunner.query(`ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "show_on_nicks_niceties"`);
-    await queryRunner.query(`ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "show_on_redemptions"`);
-    await queryRunner.query(`ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "display_order"`);
+    await queryRunner.query(
+      `ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "show_on_nicks_niceties"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "show_on_redemptions"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "prize_configurations" DROP COLUMN IF EXISTS "display_order"`,
+    );
 
     // ─── 1. users ────────────────────────────────────────────────────────────
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "is_seller"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "is_seller"`,
+    );
   }
 }

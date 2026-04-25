@@ -66,7 +66,9 @@ export class PsaService {
     );
 
     if (!accessToken) {
-      throw new ServiceUnavailableException('PSA access token is not configured');
+      throw new ServiceUnavailableException(
+        'PSA access token is not configured',
+      );
     }
 
     const headers = {
@@ -91,14 +93,20 @@ export class PsaService {
       if (this.isRateLimitError(error)) {
         rateLimitedUntilTomorrow = true;
         rateLimitedUntil = this.getTomorrowStartIso();
-        await this.notifyPsaRateLimited(normalizedCertNumber, 'certification lookup', error);
+        await this.notifyPsaRateLimited(
+          normalizedCertNumber,
+          'certification lookup',
+          error,
+        );
       }
       throw this.mapAxiosError(error, 'certification lookup');
     }
 
     const psaCert = certification?.PSACert || certification?.DNACert;
     if (!psaCert) {
-      throw new NotFoundException(`PSA certification ${normalizedCertNumber} was not found`);
+      throw new NotFoundException(
+        `PSA certification ${normalizedCertNumber} was not found`,
+      );
     }
 
     let imageUrls: string[] = [];
@@ -115,7 +123,11 @@ export class PsaService {
       if (this.isRateLimitError(error)) {
         rateLimitedUntilTomorrow = true;
         rateLimitedUntil = this.getTomorrowStartIso();
-        await this.notifyPsaRateLimited(normalizedCertNumber, 'image lookup', error);
+        await this.notifyPsaRateLimited(
+          normalizedCertNumber,
+          'image lookup',
+          error,
+        );
       }
 
       this.logger.warn(
@@ -140,7 +152,9 @@ export class PsaService {
 
         const psaPopSummary = populationResponse.data?.PSAPop ?? null;
 
-        const populationGradeKey = this.resolvePopulationGradeKey(psaCert.CardGrade);
+        const populationGradeKey = this.resolvePopulationGradeKey(
+          psaCert.CardGrade,
+        );
         const gradePopulation = this.toNullableNumber(
           populationGradeKey ? psaPopSummary?.[populationGradeKey] : null,
         );
@@ -152,7 +166,11 @@ export class PsaService {
         if (this.isRateLimitError(error)) {
           rateLimitedUntilTomorrow = true;
           rateLimitedUntil = this.getTomorrowStartIso();
-          await this.notifyPsaRateLimited(normalizedCertNumber, 'population lookup', error);
+          await this.notifyPsaRateLimited(
+            normalizedCertNumber,
+            'population lookup',
+            error,
+          );
         }
 
         this.logger.warn(
@@ -188,18 +206,21 @@ export class PsaService {
     const rawItems = Array.isArray(data)
       ? data
       : Array.isArray((data as { Images?: unknown })?.Images)
-        ? ((data as { Images?: unknown[] }).Images as unknown[])
+        ? (data as { Images?: unknown[] }).Images
         : Array.isArray((data as { images?: unknown })?.images)
-          ? ((data as { images?: unknown[] }).images as unknown[])
+          ? (data as { images?: unknown[] }).images
           : [];
 
     const mapped = rawItems
       .map((item) => item as PsaImagePayloadItem)
       .map((item) => ({
-        url:
-          item.ImageURL || item.ImageUrl || item.Url || item.url || '',
+        url: item.ImageURL || item.ImageUrl || item.Url || item.url || '',
         isFront:
-          item.IsFrontImage ?? item.isFrontImage ?? item.Front ?? item.front ?? false,
+          item.IsFrontImage ??
+          item.isFrontImage ??
+          item.Front ??
+          item.front ??
+          false,
       }))
       .filter((item) => item.url.trim().length > 0)
       .sort((a, b) => Number(b.isFront) - Number(a.isFront))
@@ -227,11 +248,17 @@ export class PsaService {
     const variety = this.toNullableString(psaCert.Variety);
     const gradeDescription = this.toNullableString(psaCert.GradeDescription);
     const cardGrade = this.toNullableString(psaCert.CardGrade);
-    const labelType = this.normalizeLabelType(this.toNullableString(psaCert.LabelType));
+    const labelType = this.normalizeLabelType(
+      this.toNullableString(psaCert.LabelType),
+    );
     const reverseCertBarcode = this.toYesNoString(psaCert.ReverseBarCode);
 
     const titleParts = [
-      cardGrade ? `PSA ${cardGrade}` : gradeDescription ? `PSA ${gradeDescription}` : 'PSA Graded',
+      cardGrade
+        ? `PSA ${cardGrade}`
+        : gradeDescription
+          ? `PSA ${gradeDescription}`
+          : 'PSA Graded',
       year,
       brand,
       subject,
@@ -339,7 +366,9 @@ export class PsaService {
     return String(value).trim().toUpperCase();
   }
 
-  private resolveFugitiveInkTechnology(labelType: string | null): string | null {
+  private resolveFugitiveInkTechnology(
+    labelType: string | null,
+  ): string | null {
     if (!labelType) {
       return null;
     }

@@ -62,7 +62,7 @@ export class FixRedemptionItemsActive20260306000000
       ON "prize_configurations" ("prize_tier") 
       WHERE "is_active" = true AND "created_by" IS NULL
     `);
-    
+
     await queryRunner.query(`
       CREATE UNIQUE INDEX "idx_prize_configurations_seller_unique_tier" 
       ON "prize_configurations" ("created_by", "prize_tier") 

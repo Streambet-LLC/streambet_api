@@ -16,6 +16,7 @@ import { AuctionJobsProcessor } from './processor/auction-jobs.processor';
 import {
   AuctionsController,
   AdminAuctionsController,
+  SellerAuctionsController,
 } from './auctions.controller';
 import { AuthModule } from '../auth/auth.module';
 import { InboxModule } from '../inbox/inbox.module';
@@ -65,7 +66,11 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     RedisModule,
     forwardRef(() => QueueModule),
   ],
-  controllers: [AuctionsController, AdminAuctionsController],
+  controllers: [
+    AuctionsController,
+    AdminAuctionsController,
+    SellerAuctionsController,
+  ],
   providers: [
     AuctionsService,
     AuctionsPaymentsService,

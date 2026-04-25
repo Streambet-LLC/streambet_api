@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUpdatedAtToLiveFeedUpdates1771299400000 implements MigrationInterface {
+export class AddUpdatedAtToLiveFeedUpdates1771299400000
+  implements MigrationInterface
+{
   name = 'AddUpdatedAtToLiveFeedUpdates1771299400000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

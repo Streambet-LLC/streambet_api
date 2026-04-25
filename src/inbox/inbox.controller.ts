@@ -41,18 +41,12 @@ export class InboxController {
   // ─── CONVERSATIONS ─────────────────────────────────────────────────
 
   @Post('conversations')
-  async createConversation(
-    @Request() req,
-    @Body() dto: CreateConversationDto,
-  ) {
+  async createConversation(@Request() req, @Body() dto: CreateConversationDto) {
     return this.inboxService.createConversation(req.user.id, dto);
   }
 
   @Get('conversations')
-  async listConversations(
-    @Request() req,
-    @Query() dto: ListConversationsDto,
-  ) {
+  async listConversations(@Request() req, @Query() dto: ListConversationsDto) {
     return this.inboxService.listConversations(req.user.id, dto);
   }
 
@@ -81,10 +75,7 @@ export class InboxController {
   }
 
   @Post('conversations/:id/read')
-  async markAsRead(
-    @Request() req,
-    @Param('id') conversationId: string,
-  ) {
+  async markAsRead(@Request() req, @Param('id') conversationId: string) {
     return this.inboxService.markConversationAsRead(
       req.user.id,
       conversationId,
@@ -118,10 +109,7 @@ export class InboxController {
   }
 
   @Patch('settings')
-  async updateSettings(
-    @Request() req,
-    @Body() dto: UpdateInboxSettingsDto,
-  ) {
+  async updateSettings(@Request() req, @Body() dto: UpdateInboxSettingsDto) {
     return this.inboxService.updateInboxSettings(req.user.id, dto);
   }
 

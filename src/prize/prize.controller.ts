@@ -863,7 +863,7 @@ export class AdminPrizeController {
 @Controller('seller/prizes')
 @UseGuards(JwtAuthGuard)
 export class SellerPrizeController {
-  constructor(private readonly prizeService: PrizeService) { }
+  constructor(private readonly prizeService: PrizeService) {}
 
   private ensureSeller(user: User): void {
     if (!user.isSeller) {
@@ -1000,7 +1000,9 @@ export class SellerPrizeController {
   }
 
   @Patch('profile-featured')
-  @ApiOperation({ summary: 'Update which items are featured on profile (max 10, PRO only)' })
+  @ApiOperation({
+    summary: 'Update which items are featured on profile (max 10, PRO only)',
+  })
   @ApiResponse({ status: 200, description: 'Featured items updated' })
   async updateProfileFeatured(
     @Request() req: RequestWithUser,

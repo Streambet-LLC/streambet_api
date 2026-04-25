@@ -31,4 +31,4 @@ import { LiveFeedUpdateModule } from 'src/live-feed-update/live-feed-update.modu
   providers: [StreamService, StreamGateway],
   exports: [StreamService, StreamGateway],
 })
-export class StreamModule { }
+export class StreamModule {}

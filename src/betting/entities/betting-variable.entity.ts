@@ -46,7 +46,13 @@ export class BettingVariable extends BaseEntity {
   totalBetsSweepCoinAmount: number;
 
   // Active currency - supports fractional amounts
-  @Column({ type: 'decimal', precision: 15, scale: 3, default: 0, name: 'total_bets_cade_coin_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 3,
+    default: 0,
+    name: 'total_bets_cade_coin_amount',
+  })
   totalBetsCadeCoinAmount: number;
 
   @Column({ type: 'int', default: 0, name: 'bet_count_gold_coin' })

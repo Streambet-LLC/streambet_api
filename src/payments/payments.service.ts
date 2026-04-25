@@ -258,7 +258,7 @@ export class PaymentsService {
     // Handle Connect-specific event types
     switch (event.type) {
       case 'account.updated':
-        await this.handleAccountUpdated(event.data.object as Stripe.Account);
+        await this.handleAccountUpdated(event.data.object);
         break;
 
       default:
@@ -301,25 +301,19 @@ export class PaymentsService {
     // Handle specific event types
     switch (event.type) {
       case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(
-          event.data.object as Stripe.Checkout.Session,
-        );
+        await this.handleCheckoutSessionCompleted(event.data.object);
         break;
 
       case 'checkout.session.expired':
-        await this.handleCheckoutSessionExpired(
-          event.data.object as Stripe.Checkout.Session,
-        );
+        await this.handleCheckoutSessionExpired(event.data.object);
         break;
 
       case 'payment_intent.payment_failed':
-        await this.handlePaymentIntentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentFailed(event.data.object);
         break;
 
       case 'account.updated':
-        await this.handleAccountUpdated(event.data.object as Stripe.Account);
+        await this.handleAccountUpdated(event.data.object);
         break;
 
       default:

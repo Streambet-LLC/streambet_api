@@ -33,9 +33,7 @@ export class DailySpinController {
     description:
       'Check if the user can spin today and when the next spin will be available',
   })
-  async getSpinStatus(
-    @Req() req: RequestWithUser,
-  ): Promise<SpinStatusDto> {
+  async getSpinStatus(@Req() req: RequestWithUser): Promise<SpinStatusDto> {
     return this.dailySpinService.getSpinStatus(req.user.id);
   }
 

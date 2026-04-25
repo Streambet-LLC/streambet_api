@@ -4,7 +4,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { WalletsService } from '../wallets/wallets.service';
+import { QueueService } from '../queue/queue.service';
+import { EmailType } from '../enums/email-type.enum';
 
 import { Wallet } from 'src/wallets/entities/wallet.entity';
 import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
@@ -24,6 +27,8 @@ export class AdminService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     private readonly walletsService: WalletsService,
+    private readonly queueService: QueueService,
+    private readonly configService: ConfigService,
   ) {}
 
   // This service acts primarily as a facade for admin operations
@@ -189,7 +194,9 @@ export class AdminService {
     }
 
     if (!user.isSeller) {
-      throw new BadRequestException('Fee override can only be cleared for sellers');
+      throw new BadRequestException(
+        'Fee override can only be cleared for sellers',
+      );
     }
 
     user.adminFeeOverridePercent = null;
@@ -200,5 +207,54 @@ export class AdminService {
     user.applicationFeePercent = Math.max(2, 4 - milestoneLevel * 0.5);
 
     return this.usersRepository.save(user);
+  }
+
+  /**
+   * Toggle the per-user auctions feature flag. When transitioning from
+   * disabled → enabled, dispatches a CardCade-branded notification email.
+   */
+  async setAuctionsEnabled(
+    userId: string,
+    enabled: boolean,
+  ): Promise<{ user: User; wasNewlyEnabled: boolean }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const wasNewlyEnabled = enabled && !user.auctionsEnabled;
+    user.auctionsEnabled = enabled;
+    const saved = await this.usersRepository.save(user);
+
+    if (wasNewlyEnabled && saved.email) {
+      try {
+        const host = (
+          this.configService.get<string>('email.HOST_URL') ||
+          this.configService.get<string>('APP_HOST_URL') ||
+          ''
+        ).replace(/\/$/, '');
+        const shopManageLink = `${host}/seller/shop/manage`;
+
+        await this.queueService.addEmailJob(
+          {
+            toAddress: [saved.email],
+            subject: 'Auctions are now enabled on your CardCade shop',
+            params: {
+              username: saved.username || 'there',
+              shopManageLink,
+            },
+          } as never,
+          EmailType.AuctionsEnabled,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Failed to dispatch auctions_enabled email to ${saved.email}: ${
+            (err as Error)?.message
+          }`,
+        );
+      }
+    }
+
+    return { user: saved, wasNewlyEnabled };
   }
 }

@@ -50,12 +50,18 @@ export class EbayRateLimitService {
   }
 
   async checkAndConsume(userId: string): Promise<ConsumeResult> {
-    const userShortPoints = this.configService.get<number>('ebay.perUserShortWindowPoints') ?? 1;
-    const userShortSeconds = this.configService.get<number>('ebay.perUserShortWindowSeconds') ?? 3;
-    const userLongPoints = this.configService.get<number>('ebay.perUserLongWindowPoints') ?? 10;
-    const userLongSeconds = this.configService.get<number>('ebay.perUserLongWindowSeconds') ?? 300;
-    const globalPoints = this.configService.get<number>('ebay.globalWindowPoints') ?? 60;
-    const globalSeconds = this.configService.get<number>('ebay.globalWindowSeconds') ?? 300;
+    const userShortPoints =
+      this.configService.get<number>('ebay.perUserShortWindowPoints') ?? 1;
+    const userShortSeconds =
+      this.configService.get<number>('ebay.perUserShortWindowSeconds') ?? 3;
+    const userLongPoints =
+      this.configService.get<number>('ebay.perUserLongWindowPoints') ?? 10;
+    const userLongSeconds =
+      this.configService.get<number>('ebay.perUserLongWindowSeconds') ?? 300;
+    const globalPoints =
+      this.configService.get<number>('ebay.globalWindowPoints') ?? 60;
+    const globalSeconds =
+      this.configService.get<number>('ebay.globalWindowSeconds') ?? 300;
 
     const userKeyBase = `ebay:search:user:${userId}`;
 
@@ -74,12 +80,19 @@ export class EbayRateLimitService {
       );
       if (!userLong.allowed) return userLong;
 
-      const global = await this.consumeWindow('ebay:search:global', globalPoints, globalSeconds);
+      const global = await this.consumeWindow(
+        'ebay:search:global',
+        globalPoints,
+        globalSeconds,
+      );
       if (!global.allowed) return global;
 
       return { allowed: true, retryAfterSeconds: 0 };
     } catch (error) {
-      this.logger.error('Rate limiter check failed; failing closed', error as Error);
+      this.logger.error(
+        'Rate limiter check failed; failing closed',
+        error as Error,
+      );
       return {
         allowed: false,
         retryAfterSeconds: this.getDefaultRetryAfterSeconds(),

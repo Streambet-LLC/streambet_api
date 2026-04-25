@@ -52,7 +52,10 @@ export class AuctionJobsProcessor extends WorkerHost {
           await this.auctionsService.runCloseJob(auctionId);
           return;
         case AUCTION_AUTOPAY_RETRY_JOB:
-          await this.auctionsService.runAutopayRetry(auctionId, data.retryUserId);
+          await this.auctionsService.runAutopayRetry(
+            auctionId,
+            data.retryUserId,
+          );
           return;
         default:
           this.logger.warn(`Unknown auction job name: ${name}`);

@@ -38,13 +38,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const fallbackStatus =
       typeof (exception as { status?: unknown })?.status === 'number'
         ? Number((exception as { status?: number }).status)
-        : typeof (exception as { statusCode?: unknown })?.statusCode === 'number'
+        : typeof (exception as { statusCode?: unknown })?.statusCode ===
+            'number'
           ? Number((exception as { statusCode?: number }).statusCode)
           : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const httpStatus = isHttpException
-      ? exception.getStatus()
-      : fallbackStatus;
+    const httpStatus = isHttpException ? exception.getStatus() : fallbackStatus;
 
     const errorResponse = isHttpException ? exception.getResponse() : null;
     const er =

@@ -91,7 +91,7 @@ export class BettingService {
     private readonly streamService: StreamService,
     @Inject(forwardRef(() => StreamGateway))
     private readonly streamGateway: StreamGateway,
-  ) { }
+  ) {}
 
   /**
    * Calculates the next 5 PM Pacific Time.
@@ -130,7 +130,12 @@ export class BettingService {
       );
 
       // Validate parsed values
-      if (isNaN(pstYear) || isNaN(pstMonth) || isNaN(pstDay) || isNaN(pstHour)) {
+      if (
+        isNaN(pstYear) ||
+        isNaN(pstMonth) ||
+        isNaN(pstDay) ||
+        isNaN(pstHour)
+      ) {
         throw new Error('Failed to parse PST time components');
       }
 
@@ -162,7 +167,10 @@ export class BettingService {
 
       return result;
     } catch (error) {
-      console.warn('[getNextRevealTime] Intl.DateTimeFormat failed, using fallback:', error.message);
+      console.warn(
+        '[getNextRevealTime] Intl.DateTimeFormat failed, using fallback:',
+        error.message,
+      );
       // Fallback: compute next 5 PM PST using a fixed -08:00 offset
       const now = new Date();
       const nowUtc = new Date(
@@ -195,7 +203,9 @@ export class BettingService {
 
       // Validate fallback result
       if (isNaN(result.getTime())) {
-        console.error('[getNextRevealTime] Fallback calculation also failed, returning fixed next 5 PM');
+        console.error(
+          '[getNextRevealTime] Fallback calculation also failed, returning fixed next 5 PM',
+        );
         // Absolute fallback: just return tomorrow at 5 PM UTC (worst case)
         const tomorrow = new Date(now);
         tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -862,10 +872,10 @@ export class BettingService {
         createdBy: round.createdBy,
         creator: round.creator
           ? {
-            id: round.creator.id,
-            username: round.creator.username,
-            profileImageUrl: round.creator.profileImageUrl,
-          }
+              id: round.creator.id,
+              username: round.creator.username,
+              profileImageUrl: round.creator.profileImageUrl,
+            }
           : null,
         mechanism: round.mechanism,
         firstRevealTime: round.firstRevealTime,
@@ -1663,22 +1673,22 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           } else if (newCurrency === CurrencyType.CADE_COINS) {
             lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           } else {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-              oldAmount +
-              newAmt,
+                oldAmount +
+                newAmt,
             );
           }
           // counts remain unchanged
@@ -1688,7 +1698,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsGoldCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsGoldCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountGoldCoin = Math.max(
               0,
@@ -1698,7 +1708,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsCadeCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsCadeCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountCadeCoin = Math.max(
               0,
@@ -1708,7 +1718,7 @@ export class BettingService {
             lockedNewBettingVariable.totalBetsSweepCoinAmount = Math.max(
               0,
               Number(lockedNewBettingVariable.totalBetsSweepCoinAmount) -
-              oldAmount,
+                oldAmount,
             );
             lockedNewBettingVariable.betCountSweepCoin = Math.max(
               0,
@@ -1741,7 +1751,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsGoldCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsGoldCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountGoldCoin = Math.max(
             0,
@@ -1751,7 +1761,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsCadeCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsCadeCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountCadeCoin = Math.max(
             0,
@@ -1761,7 +1771,7 @@ export class BettingService {
           lockedOldBettingVariable.totalBetsSweepCoinAmount = Math.max(
             0,
             Number(lockedOldBettingVariable.totalBetsSweepCoinAmount) -
-            oldAmount,
+              oldAmount,
           );
           lockedOldBettingVariable.betCountSweepCoin = Math.max(
             0,
@@ -2180,7 +2190,7 @@ export class BettingService {
 
       allStreamBets.forEach((item) => {
         let isWon = false;
-        let betData = {
+        const betData = {
           id: item.id,
           userId: item.userId,
           status: BetStatus.Lost,
@@ -2227,7 +2237,7 @@ export class BettingService {
         } else if (isWon) {
           betData.payoutAmount =
             round(betAmount / variableData.totalBetAmount, 2) *
-            variableData.totalPayout +
+              variableData.totalPayout +
             (variableData.isPayoutLessThanLimit ? betAmount : 0);
         } else {
           betData.refundAmount =
@@ -2984,8 +2994,12 @@ export class BettingService {
       }
 
       // Calculate potential winnings for Gold Coins, Sweep Coins, and Cade Coins
-      const { potentialSweepCoinAmt, potentialGoldCoinAmt, potentialCadeCoinAmt, betAmount } =
-        this.potentialAmountCal(bettingRound, bets);
+      const {
+        potentialSweepCoinAmt,
+        potentialGoldCoinAmt,
+        potentialCadeCoinAmt,
+        betAmount,
+      } = this.potentialAmountCal(bettingRound, bets);
 
       // Return structured response
       return {
@@ -3060,18 +3074,18 @@ export class BettingService {
           percentage =
             sentimentVotes > 0
               ? (
-                (Number(v.bv_bet_count_cade_coin) / sentimentVotes) *
-                100
-              ).toFixed(2)
+                  (Number(v.bv_bet_count_cade_coin) / sentimentVotes) *
+                  100
+                ).toFixed(2)
               : 0;
         } else {
           // Use cadecoin amounts for regular picks
           percentage =
             totalCadeCoins > 0
               ? (
-                (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins) *
-                100
-              ).toFixed(2)
+                  (Number(v.bv_total_bets_cade_coin_amount) / totalCadeCoins) *
+                  100
+                ).toFixed(2)
               : 0;
         }
 
@@ -3117,8 +3131,7 @@ export class BettingService {
         //   (a, b) => Number(b.percentage) - Number(a.percentage),
         // ),
         options: options.sort((a, b) => {
-          return moment(b.createdAt)
-            .isAfter(moment(a.createdAt)) ? -1 : 1
+          return moment(b.createdAt).isAfter(moment(a.createdAt)) ? -1 : 1;
         }),
         totalPot: {
           streamCoins: totalStreamCoins,
@@ -3194,8 +3207,12 @@ export class BettingService {
         if (bet.betstatus === BetStatus.Active) {
           try {
             // Calculate potential winnings for all currency types
-            const { potentialSweepCoinAmt, potentialGoldCoinAmt, potentialCadeCoinAmt, betAmount } =
-              this.potentialAmountCal(bettingRound, bet);
+            const {
+              potentialSweepCoinAmt,
+              potentialGoldCoinAmt,
+              potentialCadeCoinAmt,
+              betAmount,
+            } = this.potentialAmountCal(bettingRound, bet);
 
             potentialAmounts.push({
               userId: bet.userid,
@@ -3312,10 +3329,10 @@ export class BettingService {
       const sweepPotPerBettor =
         userOptionSweepCoinCount > 0
           ? round(
-            opposingPotSweepCoinAmountAfterPlatformFee /
-            userOptionSweepCoinCount,
-            2,
-          )
+              opposingPotSweepCoinAmountAfterPlatformFee /
+                userOptionSweepCoinCount,
+              2,
+            )
           : 0;
 
       // --- MAIN LOGIC: always calculate from scratch ---
@@ -3982,7 +3999,7 @@ export class BettingService {
           if (winningVariable) {
             if (
               winningVariable.betCountGoldCoin +
-              winningVariable.betCountSweepCoin ===
+                winningVariable.betCountSweepCoin ===
               0
             ) {
               status = 'void';
@@ -4261,4 +4278,3 @@ export class BettingService {
     };
   }
 }
-

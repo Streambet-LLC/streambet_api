@@ -10,7 +10,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { UserRole } from 'src/enums/user-role.enum';
 import { User } from '../../users/entities/user.entity';
@@ -40,7 +45,8 @@ export class EbayController {
   private ensureEbayAccess(user: User): void {
     const enabled = this.configService.get<boolean>('ebay.enabled') ?? false;
     const accessMode =
-      this.configService.get<'admin-only' | 'everyone'>('ebay.accessMode') ?? 'admin-only';
+      this.configService.get<'admin-only' | 'everyone'>('ebay.accessMode') ??
+      'admin-only';
 
     if (!enabled) {
       throw new NotFoundException('eBay search feature is disabled');
@@ -60,15 +66,22 @@ export class EbayController {
   ): Promise<EbaySearchResponseDto> {
     this.ensureEbayAccess(req.user);
 
-    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(String(req.user.id));
+    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(
+      String(req.user.id),
+    );
     if (!rateLimitResult.allowed) {
-      throw new HttpException({
-        message: 'Too many eBay lookups. Please retry after the cooldown window.',
-        retryAfterSeconds: rateLimitResult.retryAfterSeconds,
-      }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        {
+          message:
+            'Too many eBay lookups. Please retry after the cooldown window.',
+          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
-    const limit = body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
+    const limit =
+      body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
     return this.ebayService.searchListings(body.title, limit);
   }
 
@@ -81,15 +94,22 @@ export class EbayController {
   ): Promise<EbaySearchResponseDto> {
     this.ensureEbayAccess(req.user);
 
-    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(String(req.user.id));
+    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(
+      String(req.user.id),
+    );
     if (!rateLimitResult.allowed) {
-      throw new HttpException({
-        message: 'Too many eBay lookups. Please retry after the cooldown window.',
-        retryAfterSeconds: rateLimitResult.retryAfterSeconds,
-      }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        {
+          message:
+            'Too many eBay lookups. Please retry after the cooldown window.',
+          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
-    const limit = body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
+    const limit =
+      body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
     return this.ebayService.searchListingsByImage(body.imageBase64, limit);
   }
 }

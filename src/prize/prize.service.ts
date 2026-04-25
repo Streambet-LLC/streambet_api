@@ -298,7 +298,11 @@ export class PrizeService {
       .select('COUNT(p.id)', 'itemCount')
       .addSelect('COALESCE(SUM(p.view_count), 0)', 'totalViews')
       .addSelect('COALESCE(SUM(p.watcher_count), 0)', 'totalWatchers')
-      .getRawOne<{ itemCount: string; totalViews: string; totalWatchers: string }>();
+      .getRawOne<{
+        itemCount: string;
+        totalViews: string;
+        totalWatchers: string;
+      }>();
     const cardcadeItemCount = Number(cardcadeAgg?.itemCount || 0);
     const cardcadeTotalViews = Number(cardcadeAgg?.totalViews || 0);
     const cardcadeTotalWatchers = Number(cardcadeAgg?.totalWatchers || 0);
@@ -372,17 +376,15 @@ export class PrizeService {
       .map((i) => i.auction?.id)
       .filter((id): id is string => !!id);
     const bidderAuctionIds = requesterId
-      ? await this.auctionsService.getBidderAuctionIds(
-          requesterId,
-          auctionIds,
-        )
+      ? await this.auctionsService.getBidderAuctionIds(requesterId, auctionIds)
       : new Set<string>();
 
     return sellerItems.map((item) =>
       this.mapToDto(item, {
         isWatching: watched.has(item.id),
         auctionViewerUserId: requesterId ?? null,
-        auctionIsBidder: !!item.auction && bidderAuctionIds.has(item.auction.id),
+        auctionIsBidder:
+          !!item.auction && bidderAuctionIds.has(item.auction.id),
       }),
     );
   }
@@ -1004,7 +1006,9 @@ export class PrizeService {
       // Per-item shipping fee. DB column has DEFAULT 5.00 but we forward
       // the admin-supplied value when present so creators can customize.
       shippingCostUsd:
-        dto.shippingCostUsd != null ? dto.shippingCostUsd.toFixed(2) : undefined,
+        dto.shippingCostUsd != null
+          ? dto.shippingCostUsd.toFixed(2)
+          : undefined,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -3560,10 +3564,7 @@ export class PrizeService {
       .map((i) => i.auction?.id)
       .filter((id): id is string => !!id);
     const bidderAuctionIds = requesterId
-      ? await this.auctionsService.getBidderAuctionIds(
-          requesterId,
-          auctionIds,
-        )
+      ? await this.auctionsService.getBidderAuctionIds(requesterId, auctionIds)
       : new Set<string>();
     return items.map((item) =>
       this.mapToDto(item, {
@@ -3582,8 +3583,7 @@ export class PrizeService {
    * see and interact with.
    */
   async getUserWatchlist(userId: string): Promise<PrizeConfigurationDto[]> {
-    const { items } =
-      await this.engagementService.getWatchlistEntities(userId);
+    const { items } = await this.engagementService.getWatchlistEntities(userId);
     const visible = items.filter(
       (item) => item.isActive && item.showOnShop !== false,
     );
