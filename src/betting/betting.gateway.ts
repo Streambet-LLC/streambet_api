@@ -47,7 +47,7 @@ export class BettingGateway {
     private readonly walletsService: WalletsService,
     private readonly notificationService: NotificationService,
     private readonly chatGateway: ChatGateway,
-  ) { }
+  ) {}
 
   @SubscribeMessage(SocketEventName.JoinLiveFeed)
   handleJoinLiveFeed(@ConnectedSocket() client: AuthenticatedSocket) {
@@ -636,7 +636,8 @@ export class BettingGateway {
       })
       .catch((error) =>
         this.logger.error(
-          `Error emitting betting update: ${error instanceof Error ? error.message : 'Unknown error'
+          `Error emitting betting update: ${
+            error instanceof Error ? error.message : 'Unknown error'
           }`,
         ),
       );

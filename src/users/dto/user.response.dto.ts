@@ -73,6 +73,14 @@ export class PublicUserProfileDto {
 
   @ApiProperty({
     required: false,
+    example: false,
+    description:
+      'Whether user is allowed to list items as auctions (per-user feature flag).',
+  })
+  auctionsEnabled?: boolean;
+
+  @ApiProperty({
+    required: false,
     example: true,
     description: 'Whether user is an approved seller',
   })

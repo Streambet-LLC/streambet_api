@@ -9,11 +9,15 @@ export default registerAs('ebay', () => ({
   marketplaceId: process.env.EBAY_MARKETPLACE_ID || 'EBAY_US',
   timeoutMs: ebayFeatureConfig.timeoutMs,
   cacheTtlSeconds: ebayFeatureConfig.cacheTtlSeconds,
-  perUserShortWindowPoints: ebayFeatureConfig.rateLimit.perUserShortWindowPoints,
-  perUserShortWindowSeconds: ebayFeatureConfig.rateLimit.perUserShortWindowSeconds,
+  perUserShortWindowPoints:
+    ebayFeatureConfig.rateLimit.perUserShortWindowPoints,
+  perUserShortWindowSeconds:
+    ebayFeatureConfig.rateLimit.perUserShortWindowSeconds,
   perUserLongWindowPoints: ebayFeatureConfig.rateLimit.perUserLongWindowPoints,
-  perUserLongWindowSeconds: ebayFeatureConfig.rateLimit.perUserLongWindowSeconds,
+  perUserLongWindowSeconds:
+    ebayFeatureConfig.rateLimit.perUserLongWindowSeconds,
   globalWindowPoints: ebayFeatureConfig.rateLimit.globalWindowPoints,
   globalWindowSeconds: ebayFeatureConfig.rateLimit.globalWindowSeconds,
-  retryAfterSecondsDefault: ebayFeatureConfig.rateLimit.retryAfterSecondsDefault,
+  retryAfterSecondsDefault:
+    ebayFeatureConfig.rateLimit.retryAfterSecondsDefault,
 }));

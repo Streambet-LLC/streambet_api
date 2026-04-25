@@ -67,7 +67,7 @@ export class CreatorController {
     private readonly walletsService: WalletsService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
-  ) { }
+  ) {}
 
   // Helper method to check if user is creator
   private ensureCreator(user: User) {
@@ -466,7 +466,9 @@ export class CreatorController {
   async createConnectLink(
     @Request() req: RequestWithUser,
   ): Promise<ApiResponse> {
-    const resp = await this.creatorService.createConnectLink({ userId: req.user.id });
+    const resp = await this.creatorService.createConnectLink({
+      userId: req.user.id,
+    });
 
     return {
       status: HttpStatus.OK,

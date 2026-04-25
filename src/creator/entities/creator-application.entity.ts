@@ -20,7 +20,12 @@ export class CreatorApplication extends BaseEntity {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'creator', name: 'application_type' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    default: 'creator',
+    name: 'application_type',
+  })
   applicationType: string;
 
   // Creator-specific fields (nullable)
@@ -40,10 +45,20 @@ export class CreatorApplication extends BaseEntity {
   @Column({ type: 'text', nullable: true, name: 'cards_collected' })
   cardsCollected: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, name: 'card_preference' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    name: 'card_preference',
+  })
   cardPreference: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'pending', name: 'application_status' })
+  @Column({
+    type: 'varchar',
+    length: 50,
+    default: 'pending',
+    name: 'application_status',
+  })
   applicationStatus: string;
 
   @Column({ type: 'timestamp', nullable: true, name: 'reviewed_at' })

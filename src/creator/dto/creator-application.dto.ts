@@ -41,7 +41,8 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
-    description: 'Application Pitch/Message (required for creator applications)',
+    description:
+      'Application Pitch/Message (required for creator applications)',
     required: false,
   })
   @IsOptional()
@@ -61,7 +62,8 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
-    description: 'What city/state are you in (required for seller applications)',
+    description:
+      'What city/state are you in (required for seller applications)',
     required: false,
   })
   @IsOptional()

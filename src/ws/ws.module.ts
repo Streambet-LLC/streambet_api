@@ -6,7 +6,11 @@ import { UsersModule } from 'src/users/users.module';
 import { StreamModule } from 'src/stream/stream.module';
 
 @Module({
-  imports: [forwardRef(() => AuthModule), forwardRef(() => UsersModule), StreamModule],
+  imports: [
+    forwardRef(() => AuthModule),
+    forwardRef(() => UsersModule),
+    StreamModule,
+  ],
   providers: [AppGateway, GatewayManager],
   exports: [GatewayManager, AppGateway],
 })

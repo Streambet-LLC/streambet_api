@@ -11,6 +11,7 @@ import { User } from 'src/users/entities/user.entity';
 import { CreatorModule } from 'src/creator/creator.module';
 import { SubscriptionModule } from 'src/subscription/subscription.module';
 import { PromoCodeModule } from 'src/promo-code/promo-code.module';
+import { QueueModule } from 'src/queue/queue.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PromoCodeModule } from 'src/promo-code/promo-code.module';
     CreatorModule,
     SubscriptionModule,
     PromoCodeModule,
+    QueueModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

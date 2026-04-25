@@ -36,7 +36,10 @@ import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
 import { CreatorAnalyticsSummaryResponseDto } from './dto/analytics.dto';
 import { Stream } from 'src/stream/entities/stream.entity';
-import { CreatorApplicationDto, ApplicationType } from './dto/creator-application.dto';
+import {
+  CreatorApplicationDto,
+  ApplicationType,
+} from './dto/creator-application.dto';
 import { CreatorApplication } from './entities/creator-application.entity';
 import { UserRole } from 'src/enums/user-role.enum';
 import { EmailsService } from 'src/emails/email.service';
@@ -377,8 +380,7 @@ export class CreatorService {
 
       // Send approval email
       try {
-        const hostUrl =
-          this.configService.get<string>('email.HOST_URL') || '';
+        const hostUrl = this.configService.get<string>('email.HOST_URL') || '';
         const dashboardLink =
           application.applicationType === ApplicationType.SELLER
             ? `${hostUrl}/seller/shop/manage`

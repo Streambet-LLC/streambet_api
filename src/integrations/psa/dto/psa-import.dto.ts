@@ -52,7 +52,10 @@ export class PsaImportResponseDto {
   description: string | null;
 
   @ApiProperty({
-    example: ['https://images.psacard.com/card-front.jpg', 'https://images.psacard.com/card-back.jpg'],
+    example: [
+      'https://images.psacard.com/card-front.jpg',
+      'https://images.psacard.com/card-back.jpg',
+    ],
     type: [String],
   })
   imageUrls: string[];
@@ -60,7 +63,10 @@ export class PsaImportResponseDto {
   @ApiProperty({ example: 0 })
   coverImageIndex: number;
 
-  @ApiProperty({ example: 'https://images.psacard.com/card-front.jpg', nullable: true })
+  @ApiProperty({
+    example: 'https://images.psacard.com/card-front.jpg',
+    nullable: true,
+  })
   coverImageUrl: string | null;
 
   @ApiProperty({ example: true })

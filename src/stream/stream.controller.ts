@@ -34,7 +34,7 @@ interface RequestWithUser extends Request {
 @ApiTags('stream')
 @Controller('stream')
 export class StreamController {
-  constructor(private readonly streamService: StreamService) { }
+  constructor(private readonly streamService: StreamService) {}
   /**
  * Retrieves a paginated list of live and scheduled streams for the home page view.
    * Ensures DELETED, CANCELLED  and ENDEDstreams are excluded.
@@ -195,7 +195,9 @@ Returns essential fields (id, name, status, viewerCount) along with derived valu
   @UseGuards(OptionalJwtAuthGuard)
   @Get('promoted-bets')
   async promotedBets(@Request() req: RequestWithUser) {
-    const { data } = await this.streamService.getTopPromotedBets(req.user ? req.user.id : null,);
+    const { data } = await this.streamService.getTopPromotedBets(
+      req.user ? req.user.id : null,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'Successfully Listed',

@@ -110,7 +110,8 @@ export class ValidateDiscountCodeDto {
 
 export class BundleOfferDto {
   @ApiProperty({
-    description: 'Cart item IDs to include in the bundle offer (must be from the same seller)',
+    description:
+      'Cart item IDs to include in the bundle offer (must be from the same seller)',
   })
   @IsArray()
   @ArrayMinSize(1)

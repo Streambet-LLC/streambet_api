@@ -385,6 +385,9 @@ export class UsersService {
         ...(user.isProSubscriber && {
           isProSubscriber: true,
         }),
+        ...(user.auctionsEnabled && {
+          auctionsEnabled: true,
+        }),
       };
 
       return response;
@@ -490,6 +493,7 @@ export class UsersService {
         role: item.role,
         isSeller: item.isSeller,
         isProSubscriber: item.isProSubscriber,
+        auctionsEnabled: item.auctionsEnabled,
         profileImageUrl: item.profileImageUrl,
         revShare: item.revShare,
         applicationFeePercent:
@@ -675,9 +679,9 @@ export class UsersService {
    * @returns Promise<Array<{username: string, cadeCoins: number, profileImageUrl: string, monthToDateCoins: number, lifetimeCadeCoins: number}>>
    */
   async getLeaderboard(): Promise<
-    Array<{ 
-      username: string; 
-      cadeCoins: number; 
+    Array<{
+      username: string;
+      cadeCoins: number;
       profileImageUrl: string;
       monthToDateCoins: number;
       lifetimeCadeCoins: number;
@@ -708,29 +712,35 @@ export class UsersService {
         const monthlyTransactions = await this.transactionRepository
           .createQueryBuilder('t')
           .where('t.userId = :userId', { userId: u.id })
-          .andWhere('t.currencyType = :currencyType', { currencyType: CurrencyType.CADE_COINS })
+          .andWhere('t.currencyType = :currencyType', {
+            currencyType: CurrencyType.CADE_COINS,
+          })
           .andWhere('t.createdAt >= :startOfMonth', { startOfMonth })
           .getMany();
 
         let monthToDateCoins = 0;
         for (const transaction of monthlyTransactions) {
           const amount = Number(transaction.amount || 0);
-          
+
           // BET_WON: Only count net profit (same as lifetime logic)
           if (transaction.type === TransactionType.BET_WON) {
-            const originalBetAmount = Number(transaction.metadata?.originalBetAmount || 0);
+            const originalBetAmount = Number(
+              transaction.metadata?.originalBetAmount || 0,
+            );
             const netProfit = amount - originalBetAmount;
             if (netProfit > 0) {
               monthToDateCoins += netProfit;
             }
           }
           // Bonuses and credits: full amount
-          else if ([
-            TransactionType.INITIAL_CREDIT,
-            TransactionType.ADMIN_CREDIT,
-            TransactionType.BONUS,
-            TransactionType.DAILY_SPIN,
-          ].includes(transaction.type)) {
+          else if (
+            [
+              TransactionType.INITIAL_CREDIT,
+              TransactionType.ADMIN_CREDIT,
+              TransactionType.BONUS,
+              TransactionType.DAILY_SPIN,
+            ].includes(transaction.type)
+          ) {
             monthToDateCoins += amount;
           }
           // Admin debits: subtract
@@ -747,7 +757,7 @@ export class UsersService {
           monthToDateCoins: Math.max(0, Math.floor(monthToDateCoins)),
           lifetimeCadeCoins: Number(u.wallet?.lifetimeCoinsEarned || 0),
         };
-      })
+      }),
     );
 
     return leaderboardData;

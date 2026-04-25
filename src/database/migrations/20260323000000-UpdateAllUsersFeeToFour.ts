@@ -1,6 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UpdateAllUsersFeeToFour20260323000000 implements MigrationInterface {
+export class UpdateAllUsersFeeToFour20260323000000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Catch any users still at 7% (e.g. users who weren't sellers yet when the first migration ran)
     await queryRunner.query(`
