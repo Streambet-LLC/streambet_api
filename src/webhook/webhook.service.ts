@@ -1,4 +1,10 @@
-import { BadRequestException, forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { QueueService } from 'src/queue/queue.service';
 import { CoinflowWebhookDto } from './dto/coinflow-webhook.dto';
 import { InjectRepository } from '@nestjs/typeorm';

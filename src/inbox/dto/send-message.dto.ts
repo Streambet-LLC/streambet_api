@@ -31,7 +31,9 @@ export class AttachmentDto {
 }
 
 export class SendMessageDto {
-  @ApiPropertyOptional({ description: 'Message content (optional if attachments are provided)' })
+  @ApiPropertyOptional({
+    description: 'Message content (optional if attachments are provided)',
+  })
   @IsString()
   @IsOptional()
   @MaxLength(5000)

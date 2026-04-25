@@ -11,7 +11,8 @@ import { ConversationType } from '../entities/conversation.entity';
 
 export class CreateConversationDto {
   @ApiProperty({
-    description: 'The user ID of the recipient (seller for direct, omit for support)',
+    description:
+      'The user ID of the recipient (seller for direct, omit for support)',
     example: '550e8400-e29b-41d4-a716-446655440000',
     required: false,
   })

@@ -1,8 +1,5 @@
 import { IsOptional } from 'class-validator';
-import {
-  Column,
-  Entity,
-} from 'typeorm';
+import { Column, Entity } from 'typeorm';
 import { BaseEntity } from '../common/entities/base.entity';
 
 @Entity('live_feed_updates')

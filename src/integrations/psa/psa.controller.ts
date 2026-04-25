@@ -6,10 +6,18 @@ import {
   UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { User } from '../../users/entities/user.entity';
-import { PsaImportRequestDto, PsaImportResponseDto } from './dto/psa-import.dto';
+import {
+  PsaImportRequestDto,
+  PsaImportResponseDto,
+} from './dto/psa-import.dto';
 import { PsaService } from './psa.service';
 import { UserRole } from 'src/enums/user-role.enum';
 
@@ -31,7 +39,9 @@ export class PsaController {
   }
 
   @Post('import-cert')
-  @ApiOperation({ summary: 'Import PSA cert data and images for item autofill' })
+  @ApiOperation({
+    summary: 'Import PSA cert data and images for item autofill',
+  })
   @ApiResponse({ status: 201, type: PsaImportResponseDto })
   async importCert(
     @Request() req: RequestWithUser,

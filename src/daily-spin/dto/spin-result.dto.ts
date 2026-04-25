@@ -24,7 +24,8 @@ export class SpinResultDto {
   lifetimeCoinsEarned: number;
 
   @ApiProperty({
-    description: 'Timestamp when the next spin will be available (midnight UTC)',
+    description:
+      'Timestamp when the next spin will be available (midnight UTC)',
     example: '2026-02-10T00:00:00.000Z',
   })
   nextSpinAt: Date;

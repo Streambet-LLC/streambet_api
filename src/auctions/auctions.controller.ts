@@ -23,9 +23,7 @@ import { AuctionsService } from './auctions.service';
 import { AuctionsPaymentsService } from './auctions-payments.service';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
-import {
-  CreateSetupIntentResponseDto,
-} from './dto/setup-intent.dto';
+import { CreateSetupIntentResponseDto } from './dto/setup-intent.dto';
 import { AuctionSummaryDto } from '../prize/dto/prize-config.dto';
 
 interface RequestWithUser extends Request {
@@ -172,10 +170,7 @@ export class AdminAuctionsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new auction (admin only)' })
-  async create(
-    @Body() dto: CreateAuctionDto,
-    @Request() req: RequestWithUser,
-  ) {
+  async create(@Body() dto: CreateAuctionDto, @Request() req: RequestWithUser) {
     this.ensureAdmin(req.user);
     const auction = await this.auctionsService.createAuction(req.user.id, dto);
     return auction;
@@ -240,5 +235,37 @@ export class AdminAuctionsController {
   ) {
     this.ensureAdmin(req.user);
     return this.auctionsService.getAdminDetails(id);
+  }
+}
+
+/**
+ * Seller-facing auction creation. Gated by:
+ *   - JWT auth (must be signed in)
+ *   - `auctionsEnabled` flag on the user (enforced inside
+ *     `auctionsService.createAuction`)
+ *   - The prize being auctioned must have been created by the seller.
+ *
+ * Admins should use `/admin/auctions` (no ownership check).
+ */
+@ApiTags('seller-auctions')
+@ApiBearerAuth()
+@Controller('seller/auctions')
+@UseGuards(JwtAuthGuard)
+export class SellerAuctionsController {
+  constructor(private readonly auctionsService: AuctionsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new auction for one of your shop items' })
+  async create(@Body() dto: CreateAuctionDto, @Request() req: RequestWithUser) {
+    // Verify the prize belongs to this seller before we hand it off
+    // to the service. The service will additionally enforce the
+    // auctionsEnabled flag, so admins without the flag are blocked
+    // even if they hit this route.
+    await this.auctionsService.assertPrizeOwnedBy(
+      dto.prizeConfigurationId,
+      req.user.id,
+    );
+    const auction = await this.auctionsService.createAuction(req.user.id, dto);
+    return auction;
   }
 }

@@ -23,7 +23,9 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { SocketIoAdapter } from './ws/socket-io.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   // Allow larger JSON payloads for image-based integration requests (e.g. base64 uploads).
   app.useBodyParser('json', { limit: '10mb' });

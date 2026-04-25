@@ -254,4 +254,18 @@ export class User extends BaseEntity {
     name: 'is_pro_subscriber',
   })
   isProSubscriber: boolean;
+
+  /**
+   * Per-user feature flag enabling auction creation. When false the user
+   * cannot create an auction (UI hides the option, backend returns 403).
+   * Admins are NOT auto-enabled — they must also have this flag set, so
+   * we can phase rollout to a subset of trusted users.
+   */
+  @Column({
+    type: 'boolean',
+    default: false,
+    nullable: false,
+    name: 'auctions_enabled',
+  })
+  auctionsEnabled: boolean;
 }

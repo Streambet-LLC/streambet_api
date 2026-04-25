@@ -12,7 +12,7 @@ export class LiveFeedUpdateService {
     private readonly gatewayManager: GatewayManager,
     @InjectRepository(LiveFeedUpdate)
     private readonly liveFeedRepository: Repository<LiveFeedUpdate>,
-  ) { }
+  ) {}
 
   async getLastUpdates() {
     const data = await this.liveFeedRepository.find({

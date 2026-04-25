@@ -3,27 +3,27 @@ import Stripe from 'stripe';
 const stripeConfig = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const createConnectedAccount = async (email) => {
-    const account = await stripeConfig.accounts.create({
-        email,
-        capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-        },
-        controller: {
-            losses: {
-                payments: "stripe"
-            },
-            fees: {
-                payer: "account"
-            },
-            stripe_dashboard: {
-                type: "full"
-            }
-        }
-    });
+  const account = await stripeConfig.accounts.create({
+    email,
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    controller: {
+      losses: {
+        payments: 'stripe',
+      },
+      fees: {
+        payer: 'account',
+      },
+      stripe_dashboard: {
+        type: 'full',
+      },
+    },
+  });
 
-    return { accountId: account.id };
-}
+  return { accountId: account.id };
+};
 
 const createAccountLink = async (accountId) => {
   console.log(accountId);

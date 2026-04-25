@@ -1,9 +1,8 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateLiveFeedUpdate1770651506180 implements MigrationInterface {
-
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS live_feed_updates (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 type varchar(255) NOT NULL,
@@ -16,10 +15,9 @@ export class CreateLiveFeedUpdate1770651506180 implements MigrationInterface {
                 "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
             )
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE IF EXISTS live_feed_updates`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS live_feed_updates`);
+  }
 }

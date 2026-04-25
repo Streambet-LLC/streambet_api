@@ -43,7 +43,11 @@ export class AuctionSummaryDto {
   @ApiProperty({ example: 25.0 })
   startingPriceUsd: number;
 
-  @ApiProperty({ example: 47.0, nullable: true, description: 'Current high bid (USD).' })
+  @ApiProperty({
+    example: 47.0,
+    nullable: true,
+    description: 'Current high bid (USD).',
+  })
   currentBidUsd: number | null;
 
   @ApiProperty({
@@ -54,71 +58,94 @@ export class AuctionSummaryDto {
 
   @ApiProperty({
     example: 50,
-    description: 'Minimum amount required for the next bid (currentBidUsd + increment, or startingPriceUsd).',
+    description:
+      'Minimum amount required for the next bid (currentBidUsd + increment, or startingPriceUsd).',
   })
   minNextBidUsd: number;
 
-  @ApiProperty({ example: 7, description: 'Total bid actions including auto-bids.' })
+  @ApiProperty({
+    example: 7,
+    description: 'Total bid actions including auto-bids.',
+  })
   bidCount: number;
 
-  @ApiProperty({ example: 2, description: 'How many times the close was extended by the anti-snipe rule.' })
+  @ApiProperty({
+    example: 2,
+    description:
+      'How many times the close was extended by the anti-snipe rule.',
+  })
   extensionCount: number;
 
   @ApiProperty({
     example: false,
-    description: 'True when a reserve exists and the current bid meets it. False when reserve exists and is unmet. Null when no reserve was set.',
+    description:
+      'True when a reserve exists and the current bid meets it. False when reserve exists and is unmet. Null when no reserve was set.',
     nullable: true,
   })
   reserveMet: boolean | null;
 
-  @ApiProperty({ example: false, description: 'True when the requesting user is the current high bidder.' })
+  @ApiProperty({
+    example: false,
+    description: 'True when the requesting user is the current high bidder.',
+  })
   isLeader: boolean;
 
-  @ApiProperty({ example: false, description: 'True when the requesting user has placed at least one bid on this auction.' })
+  @ApiProperty({
+    example: false,
+    description:
+      'True when the requesting user has placed at least one bid on this auction.',
+  })
   isBidder: boolean;
 
   @ApiProperty({
     example: 3,
-    description: 'Buyer processing fee percent applied on top of the winning bid (matches sales fee policy).',
+    description:
+      'Buyer processing fee percent applied on top of the winning bid (matches sales fee policy).',
   })
   buyerProcessingFeePercent: number;
 
   @ApiProperty({
     example: 1.41,
     nullable: true,
-    description: 'Buyer processing fee in USD computed against the current bid (or starting price if no bids). Does not include shipping.',
+    description:
+      'Buyer processing fee in USD computed against the current bid (or starting price if no bids). Does not include shipping.',
   })
   buyerProcessingFeeUsd: number | null;
 
   @ApiProperty({
     example: 48.41,
     nullable: true,
-    description: 'Total amount the winner would be charged at close based on the current bid + buyer processing fee. Excludes shipping (calculated at close).',
+    description:
+      'Total amount the winner would be charged at close based on the current bid + buyer processing fee. Excludes shipping (calculated at close).',
   })
   totalDueIfWonUsd: number | null;
 
   @ApiProperty({
     example: 1.5,
-    description: 'Buyer processing fee in USD computed against the minimum next bid. Helps the bid form show a clean total before submit.',
+    description:
+      'Buyer processing fee in USD computed against the minimum next bid. Helps the bid form show a clean total before submit.',
   })
   minNextBidProcessingFeeUsd: number;
 
   @ApiProperty({
     example: 51.5,
-    description: 'Total the bidder would be charged if their bid wins at the minimum next bid amount.',
+    description:
+      'Total the bidder would be charged if their bid wins at the minimum next bid amount.',
   })
   minNextBidTotalUsd: number;
 
   @ApiProperty({
     example: 75,
     nullable: true,
-    description: 'The requesting user\u2019s own proxy max on this auction, exposed only when they are the current leader so they can raise it. Null otherwise (proxy maxes are private from competitors).',
+    description:
+      'The requesting user\u2019s own proxy max on this auction, exposed only when they are the current leader so they can raise it. Null otherwise (proxy maxes are private from competitors).',
   })
   currentUserProxyMaxUsd: number | null;
 
   @ApiProperty({
     example: 5,
-    description: 'Per-item shipping fee in USD that will be added to the winning bid + buyer processing fee at close.',
+    description:
+      'Per-item shipping fee in USD that will be added to the winning bid + buyer processing fee at close.',
   })
   shippingCostUsd: number;
 }
@@ -962,7 +989,8 @@ export class PrizeDisplayOrderUpdateDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on shop page (1-indexed, null if not shown on this page)',
+    description:
+      'Display order on shop page (1-indexed, null if not shown on this page)',
     nullable: true,
   })
   @IsOptional()
@@ -972,7 +1000,8 @@ export class PrizeDisplayOrderUpdateDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Display order on redemptions page (1-indexed, null if not shown on this page)',
+    description:
+      'Display order on redemptions page (1-indexed, null if not shown on this page)',
     nullable: true,
   })
   @IsOptional()
@@ -1000,7 +1029,8 @@ export class PrizeDisplayOrderUpdateDto {
 
   @ApiProperty({
     example: false,
-    description: 'Whether to sort redemptions page by purchase option (both first)',
+    description:
+      'Whether to sort redemptions page by purchase option (both first)',
   })
   @IsOptional()
   @IsBoolean()

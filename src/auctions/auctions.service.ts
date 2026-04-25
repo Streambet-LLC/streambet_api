@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -89,10 +90,43 @@ export class AuctionsService implements OnModuleInit {
   // Admin: create / cancel
   // ─────────────────────────────────────────────────────────────────────
 
+  /**
+   * Verify a prize belongs to the given user. Used by the seller-facing
+   * auction creation endpoint to prevent sellers from auctioning items
+   * they don't own.
+   */
+  async assertPrizeOwnedBy(prizeId: string, userId: string): Promise<void> {
+    const prize = await this.prizeRepository.findOne({
+      where: { id: prizeId },
+      select: ['id', 'createdBy'],
+    });
+    if (!prize) {
+      throw new NotFoundException('Prize item not found');
+    }
+    if (prize.createdBy !== userId) {
+      throw new ForbiddenException(
+        'You can only create auctions for items you own.',
+      );
+    }
+  }
+
   async createAuction(
     adminId: string,
     dto: CreateAuctionDto,
   ): Promise<Auction> {
+    // Per-user feature flag — applies to both admins and sellers.
+    const creator = await this.userRepository.findOne({
+      where: { id: adminId },
+    });
+    if (!creator) {
+      throw new NotFoundException('Creating user not found');
+    }
+    if (!creator.auctionsEnabled) {
+      throw new ForbiddenException(
+        'Auctions are not enabled for this account.',
+      );
+    }
+
     const prize = await this.prizeRepository.findOne({
       where: { id: dto.prizeConfigurationId },
     });
@@ -490,7 +524,8 @@ export class AuctionsService implements OnModuleInit {
       isLeader: !!opts.userId && auction.currentLeaderUserId === opts.userId,
       isBidder: !!opts.isBidder,
       buyerProcessingFeePercent: BUYER_PROCESSING_FEE_PERCENT,
-      buyerProcessingFeeUsd: current === null ? null : fees.buyerProcessingFeeUsd,
+      buyerProcessingFeeUsd:
+        current === null ? null : fees.buyerProcessingFeeUsd,
       totalDueIfWonUsd: current === null ? null : fees.totalChargedUsd,
       minNextBidProcessingFeeUsd: minNextFees.buyerProcessingFeeUsd,
       minNextBidTotalUsd: minNextFees.totalChargedUsd,
@@ -691,9 +726,9 @@ export class AuctionsService implements OnModuleInit {
         const minNextBid =
           currentVisible === null
             ? start
-            : +(currentVisible + minIncrementForCurrent(currentVisible)).toFixed(
-                2,
-              );
+            : +(
+                currentVisible + minIncrementForCurrent(currentVisible)
+              ).toFixed(2);
         if (proxyMax < minNextBid) {
           throw new BadRequestException(
             `Bid must be at least $${minNextBid.toFixed(2)}.`,
@@ -762,7 +797,9 @@ export class AuctionsService implements OnModuleInit {
         const challengerBid = bidRepo.create({
           auctionId: auction.id,
           userId,
-          amountUsd: (newLeaderId === userId ? newVisible : proxyMax).toFixed(2),
+          amountUsd: (newLeaderId === userId ? newVisible : proxyMax).toFixed(
+            2,
+          ),
           proxyMaxUsd: proxyMax.toFixed(2),
           isProxyAuto: false,
           stripePaymentMethodId: paymentMethodId,
@@ -1186,8 +1223,7 @@ export class AuctionsService implements OnModuleInit {
       order: { createdAt: 'DESC' as const },
     });
 
-    let paymentMethodId =
-      leadingBid?.stripePaymentMethodId ?? null;
+    let paymentMethodId = leadingBid?.stripePaymentMethodId ?? null;
     if (!paymentMethodId) {
       const cards = await this.paymentsService.listSavedCards(winnerUserId);
       paymentMethodId = cards[0]?.id ?? null;

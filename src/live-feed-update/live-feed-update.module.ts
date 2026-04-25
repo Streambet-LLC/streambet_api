@@ -12,4 +12,4 @@ import { WsModule } from 'src/ws/ws.module';
   providers: [LiveFeedUpdateService],
   exports: [LiveFeedUpdateService],
 })
-export class LiveFeedUpdateModule { }
+export class LiveFeedUpdateModule {}

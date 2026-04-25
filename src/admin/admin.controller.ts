@@ -1309,6 +1309,40 @@ export class AdminController {
     };
   }
 
+  // ── Auctions Feature Flag ──
+
+  @ApiOperation({ summary: 'Enable or disable auctions for a user' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Auctions flag updated successfully',
+  })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @SwaggerApiResponse({ status: 404, description: 'User not found' })
+  @Patch('users/:userId/auctions-enabled')
+  async setUserAuctionsEnabled(
+    @Request() req: RequestWithUser,
+    @Param('userId') userId: string,
+    @Body() body: { enabled: boolean },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const { user, wasNewlyEnabled } =
+      await this.adminService.setAuctionsEnabled(userId, !!body?.enabled);
+    return {
+      status: HttpStatus.OK,
+      message: body?.enabled
+        ? 'Auctions enabled for user'
+        : 'Auctions disabled for user',
+      data: {
+        userId: user.id,
+        auctionsEnabled: user.auctionsEnabled,
+        emailSent: wasNewlyEnabled,
+      },
+    };
+  }
+
   // ── Discount Code Management ──
 
   @ApiOperation({ summary: 'List all discount codes' })

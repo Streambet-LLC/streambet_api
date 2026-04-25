@@ -48,10 +48,7 @@ export class AdminInboxController {
     @Query() dto: ListMessagesDto,
   ) {
     this.ensureAdmin(req.user);
-    return this.inboxService.adminGetConversationMessages(
-      conversationId,
-      dto,
-    );
+    return this.inboxService.adminGetConversationMessages(conversationId, dto);
   }
 
   @Post('conversations/:id/messages')
