@@ -948,9 +948,7 @@ export class AdminController {
       streamId,
     );
     return {
-      // @ts-expect-error any
       data: canceledStreamId,
-      // @ts-ignore
       message: `Stream with ID ${canceledStreamId} has been canceled successfully.`,
       statusCode: HttpStatus.OK,
     };
