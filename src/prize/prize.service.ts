@@ -351,7 +351,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
-      relations: ['creator', 'itemImages'],
+      relations: ['creator', 'itemImages', 'auction'],
       order: {
         displayOrderShop: 'ASC',
         createdAt: 'DESC',
@@ -400,7 +400,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true,
       },
-      relations: ['creator', 'itemImages'],
+      relations: ['creator', 'itemImages', 'auction'],
     });
 
     if (!item) {
@@ -458,7 +458,7 @@ export class PrizeService {
           showOnShop: true,
           createdBy: IsNull(),
         },
-        relations: ['itemImages'],
+        relations: ['itemImages', 'auction'],
         order: {
           createdAt: 'DESC',
         },
@@ -545,7 +545,7 @@ export class PrizeService {
           isActive: true,
           showOnShop: true,
         },
-        relations: ['itemImages'],
+        relations: ['itemImages', 'auction'],
         order: {
           createdAt: 'DESC',
         },
@@ -611,7 +611,7 @@ export class PrizeService {
         isActive: true,
         showOnShop: true, // Only show items meant for shop, exclude admin redemptions
       },
-      relations: ['itemImages'],
+      relations: ['itemImages', 'auction'],
       order: {
         createdAt: 'DESC',
       },

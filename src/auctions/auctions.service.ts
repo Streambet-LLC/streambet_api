@@ -438,12 +438,6 @@ export class AuctionsService implements OnModuleInit {
     };
   }
 
-  /**
-   * Admin: full bid history for an auction, newest first. Used by the
-   * Admin → Auctions detail dialog so ops can see exactly who bid what
-   * (including auto-bids placed by the proxy engine) when triaging
-   * disputes or stuck auctions.
-   */
   async getAdminBidHistory(auctionId: string): Promise<
     {
       id: string;
