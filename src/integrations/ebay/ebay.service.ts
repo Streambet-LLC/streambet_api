@@ -1,4 +1,6 @@
 import {
+  HttpException,
+  HttpStatus,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -62,6 +64,24 @@ export class EbayService {
     }
 
     return null;
+  }
+
+  private getRetryAfterSeconds(retryAfterHeader: unknown): number {
+    const fallbackSeconds = 3;
+    if (typeof retryAfterHeader !== 'string') return fallbackSeconds;
+
+    const seconds = Number(retryAfterHeader);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.max(1, Math.floor(seconds));
+    }
+
+    const retryAt = Date.parse(retryAfterHeader);
+    if (Number.isNaN(retryAt)) return fallbackSeconds;
+
+    const deltaMs = retryAt - Date.now();
+    if (deltaMs <= 0) return fallbackSeconds;
+
+    return Math.max(1, Math.ceil(deltaMs / 1000));
   }
 
   private async getAccessToken(): Promise<string> {
@@ -129,7 +149,20 @@ export class EbayService {
       const listings = this.normalizeListings(items, safeLimit);
 
       return { listings };
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 429) {
+        const retryAfterSeconds = this.getRetryAfterSeconds(
+          error?.response?.headers?.['retry-after'],
+        );
+        throw new HttpException(
+          {
+            message: 'eBay rate limit reached. Please retry after the provided delay.',
+            retryAfterSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
       this.logger.error('eBay Browse API search failed', error);
       throw new InternalServerErrorException('eBay search failed');
     }
@@ -177,7 +210,20 @@ export class EbayService {
       const listings = this.normalizeListings(items, safeLimit);
 
       return { listings };
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 429) {
+        const retryAfterSeconds = this.getRetryAfterSeconds(
+          error?.response?.headers?.['retry-after'],
+        );
+        throw new HttpException(
+          {
+            message: 'eBay rate limit reached. Please retry after the provided delay.',
+            retryAfterSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
       this.logger.error('eBay Browse API image search failed', error);
       throw new InternalServerErrorException('eBay image search failed');
     }
