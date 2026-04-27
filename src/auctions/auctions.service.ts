@@ -438,6 +438,60 @@ export class AuctionsService implements OnModuleInit {
     };
   }
 
+  async getAdminBidHistory(auctionId: string): Promise<
+    {
+      id: string;
+      userId: string;
+      username: string | null;
+      amountUsd: number;
+      proxyMaxUsd: number;
+      isProxyAuto: boolean;
+      createdAt: string;
+    }[]
+  > {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+      select: ['id'],
+    });
+    if (!auction) {
+      throw new NotFoundException('Auction not found');
+    }
+
+    const rows = await this.bidRepository
+      .createQueryBuilder('b')
+      .leftJoin('users', 'u', 'u.id = b.user_id')
+      .select([
+        'b.id AS id',
+        'b.user_id AS "userId"',
+        'u.username AS username',
+        'b.amount_usd AS "amountUsd"',
+        'b.proxy_max_usd AS "proxyMaxUsd"',
+        'b.is_proxy_auto AS "isProxyAuto"',
+        'b."createdAt" AS "createdAt"',
+      ])
+      .where('b.auction_id = :auctionId', { auctionId })
+      .orderBy('b."createdAt"', 'DESC')
+      .getRawMany<{
+        id: string;
+        userId: string;
+        username: string | null;
+        amountUsd: string;
+        proxyMaxUsd: string;
+        isProxyAuto: boolean;
+        createdAt: Date;
+      }>();
+
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      username: r.username,
+      amountUsd: Number(r.amountUsd),
+      proxyMaxUsd: Number(r.proxyMaxUsd),
+      isProxyAuto: r.isProxyAuto,
+      createdAt: new Date(r.createdAt).toISOString(),
+    }));
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // Reads
   // ─────────────────────────────────────────────────────────────────────
@@ -1266,6 +1320,7 @@ export class AuctionsService implements OnModuleInit {
           auctionId: auction.id,
           winningBidUsd,
           buyerFeeUsd: fees.buyerProcessingFeeUsd,
+          shippingUsd: fees.shippingUsd,
           totalChargedUsd: fees.totalChargedUsd,
           chargeStatus: 'failed',
           orderId: null,
@@ -1311,6 +1366,7 @@ export class AuctionsService implements OnModuleInit {
           auctionId: auction.id,
           winningBidUsd: fees.bidUsd,
           buyerFeeUsd: fees.buyerProcessingFeeUsd,
+          shippingUsd: fees.shippingUsd,
           totalChargedUsd: fees.totalChargedUsd,
           chargeStatus: 'charged',
           orderId: order.id,
@@ -1352,6 +1408,7 @@ export class AuctionsService implements OnModuleInit {
         auctionId: auction.id,
         winningBidUsd: fees.bidUsd,
         buyerFeeUsd: fees.buyerProcessingFeeUsd,
+        shippingUsd: fees.shippingUsd,
         totalChargedUsd: fees.totalChargedUsd,
         chargeStatus: 'pending_action',
         orderId: null,

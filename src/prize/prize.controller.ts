@@ -88,6 +88,30 @@ export class PrizeController {
     return this.prizeService.getAllShopItems(req.user?.id);
   }
 
+  /**
+   * Public direct-link endpoint for a single shop item. Powers the
+   * `/shop/item/:id` page used by share links and email CTAs (e.g.
+   * the auction-won email). Returns the same enriched DTO shape as
+   * `shop-items` so the page can render either AuctionCard or PrizeCard
+   * with all viewer-relative fields populated.
+   */
+  @Get('shop-items/:id')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get a single shop item by id (public)' })
+  @ApiParam({ name: 'id', description: 'Prize item id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the enriched shop item',
+    type: PrizeConfigurationDto,
+  })
+  @ApiResponse({ status: 404, description: 'Shop item not found' })
+  async getShopItemById(
+    @Param('id') id: string,
+    @Request() req: RequestMaybeUser,
+  ) {
+    return this.prizeService.getShopItemById(id, req.user?.id);
+  }
+
   @Get('shops')
   @ApiOperation({ summary: 'Get seller shops with active inventory' })
   @ApiResponse({ status: 200, description: 'Returns seller shops' })
