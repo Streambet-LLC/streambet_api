@@ -45,6 +45,10 @@
                     <span style="opacity:0.8;"><%= params.buyerFee %></span>
                   </p>
                   <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Shipping:</span>
+                    <span style="opacity:0.8;"><%= params.shippingFee %></span>
+                  </p>
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
                     <span style="font-weight:600;">Total charged to your card:</span>
                     <span style="opacity:0.8;color:#bdff00;"><%= params.totalCharged %></span>
                   </p>
@@ -52,10 +56,20 @@
                     <span style="font-weight:600;">Payment status:</span>
                     <span style="opacity:0.8;"><%= params.chargeStatus %></span>
                   </p>
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Sold by:</span>
+                    <span style="opacity:0.8;"><%= params.sellerName %></span>
+                  </p>
                 </div>
-                <p style="font-size:15px;line-height:1.6;opacity:0.7;color:#fff;margin:0 0 24px 0;">
-                  Your order has been created. We'll confirm your shipping address and ship the card right away.
-                </p>
+                <% if (params.isSellerOwned) { %>
+                  <p style="font-size:15px;line-height:1.6;opacity:0.7;color:#fff;margin:0 0 24px 0;">
+                    <strong style="color:#fff;"><%= params.sellerName %></strong> has been notified that you won this auction along with your shipping address and will ship the card directly. Please follow up with the seller through CardCade if you run into any shipping issues.
+                  </p>
+                <% } else { %>
+                  <p style="font-size:15px;line-height:1.6;opacity:0.7;color:#fff;margin:0 0 24px 0;">
+                    Your order has been created. We'll confirm your shipping address and ship the card right away.
+                  </p>
+                <% } %>
                 <a href="<%= params.orderUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:20px;margin-bottom:20px;display:block;text-align:center;">
                   View your order
                 </a>
