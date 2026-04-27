@@ -2,8 +2,6 @@ import {
   Body,
   Controller,
   ForbiddenException,
-  HttpException,
-  HttpStatus,
   NotFoundException,
   Post,
   Request,
@@ -25,7 +23,6 @@ import {
   EbaySearchResponseDto,
 } from './dto/ebay-search.dto';
 import { EbayService } from './ebay.service';
-import { EbayRateLimitService } from './ebay-rate-limit.service';
 
 interface RequestWithUser {
   user: User;
@@ -38,7 +35,6 @@ interface RequestWithUser {
 export class EbayController {
   constructor(
     private readonly ebayService: EbayService,
-    private readonly ebayRateLimitService: EbayRateLimitService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -66,20 +62,6 @@ export class EbayController {
   ): Promise<EbaySearchResponseDto> {
     this.ensureEbayAccess(req.user);
 
-    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(
-      String(req.user.id),
-    );
-    if (!rateLimitResult.allowed) {
-      throw new HttpException(
-        {
-          message:
-            'Too many eBay lookups. Please retry after the cooldown window.',
-          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
     const limit =
       body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
     return this.ebayService.searchListings(body.title, limit);
@@ -93,20 +75,6 @@ export class EbayController {
     @Request() req: RequestWithUser,
   ): Promise<EbaySearchResponseDto> {
     this.ensureEbayAccess(req.user);
-
-    const rateLimitResult = await this.ebayRateLimitService.checkAndConsume(
-      String(req.user.id),
-    );
-    if (!rateLimitResult.allowed) {
-      throw new HttpException(
-        {
-          message:
-            'Too many eBay lookups. Please retry after the cooldown window.',
-          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
 
     const limit =
       body.limit && body.limit > 0 && body.limit <= 50 ? body.limit : 5;
