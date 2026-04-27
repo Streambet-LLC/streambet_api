@@ -63,6 +63,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (er && 'isForcedLogout' in er) {
       error.isForcedLogout = Boolean(er.isForcedLogout);
     }
+    if (er && 'retryAfterSeconds' in er) {
+      const retryAfterSeconds = Number(er.retryAfterSeconds);
+      if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+        error.retryAfterSeconds = Math.max(1, Math.floor(retryAfterSeconds));
+      }
+    }
     if (httpStatus === HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url}`,
