@@ -236,6 +236,20 @@ export class AdminAuctionsController {
     this.ensureAdmin(req.user);
     return this.auctionsService.getAdminDetails(id);
   }
+
+  /**
+   * Full bid history for the auction, newest first. Used by the admin
+   * detail dialog so ops can see exactly who bid what.
+   */
+  @Get(':id/bids')
+  @ApiOperation({ summary: 'Get full bid history for an auction (admin only)' })
+  async getBids(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    this.ensureAdmin(req.user);
+    return this.auctionsService.getAdminBidHistory(id);
+  }
 }
 
 /**

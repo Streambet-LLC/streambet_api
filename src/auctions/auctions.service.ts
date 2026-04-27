@@ -438,6 +438,66 @@ export class AuctionsService implements OnModuleInit {
     };
   }
 
+  /**
+   * Admin: full bid history for an auction, newest first. Used by the
+   * Admin → Auctions detail dialog so ops can see exactly who bid what
+   * (including auto-bids placed by the proxy engine) when triaging
+   * disputes or stuck auctions.
+   */
+  async getAdminBidHistory(auctionId: string): Promise<
+    {
+      id: string;
+      userId: string;
+      username: string | null;
+      amountUsd: number;
+      proxyMaxUsd: number;
+      isProxyAuto: boolean;
+      createdAt: string;
+    }[]
+  > {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+      select: ['id'],
+    });
+    if (!auction) {
+      throw new NotFoundException('Auction not found');
+    }
+
+    const rows = await this.bidRepository
+      .createQueryBuilder('b')
+      .leftJoin('users', 'u', 'u.id = b.user_id')
+      .select([
+        'b.id AS id',
+        'b.user_id AS "userId"',
+        'u.username AS username',
+        'b.amount_usd AS "amountUsd"',
+        'b.proxy_max_usd AS "proxyMaxUsd"',
+        'b.is_proxy_auto AS "isProxyAuto"',
+        'b."createdAt" AS "createdAt"',
+      ])
+      .where('b.auction_id = :auctionId', { auctionId })
+      .orderBy('b."createdAt"', 'DESC')
+      .getRawMany<{
+        id: string;
+        userId: string;
+        username: string | null;
+        amountUsd: string;
+        proxyMaxUsd: string;
+        isProxyAuto: boolean;
+        createdAt: Date;
+      }>();
+
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      username: r.username,
+      amountUsd: Number(r.amountUsd),
+      proxyMaxUsd: Number(r.proxyMaxUsd),
+      isProxyAuto: r.isProxyAuto,
+      createdAt: new Date(r.createdAt).toISOString(),
+    }));
+  }
+
   // ─────────────────────────────────────────────────────────────────────
   // Reads
   // ─────────────────────────────────────────────────────────────────────
