@@ -236,6 +236,7 @@ export class AuctionsNotificationsService {
     auctionId: string;
     winningBidUsd: number;
     buyerFeeUsd: number;
+    shippingUsd?: number;
     totalChargedUsd: number;
     chargeStatus: 'charged' | 'pending_action' | 'failed';
     orderId: string | null;
@@ -252,12 +253,40 @@ export class AuctionsNotificationsService {
     });
     if (!user || !prize) return;
 
+    // Resolve the seller (if any). Prizes with a non-null createdBy that
+    // resolves to a seller account are seller-owned; otherwise the item
+    // is sold directly by CardCade. We use this to (a) show the seller's
+    // shop name in the email and (b) swap the shipping confirmation copy
+    // since CardCade ships its own inventory but seller items are
+    // shipped directly by the seller.
+    let seller: User | null = null;
+    if (prize.createdBy) {
+      seller = await this.userRepository.findOne({
+        where: { id: prize.createdBy },
+      });
+    }
+    const isSellerOwned = !!seller && seller.isSeller === true;
+    const sellerName =
+      isSellerOwned && seller
+        ? seller.shopName || seller.username || 'the seller'
+        : 'CardCade';
+
     const itemName = prize.name || 'an auction item';
     const orderUrl = params.orderId
       ? this.orderUrl(params.orderId)
       : `${this.appHost().replace(/\/$/, '')}/account/orders`;
     const winningBid = this.fmtUsd(params.winningBidUsd);
     const buyerFee = this.fmtUsd(params.buyerFeeUsd);
+    // Fall back to the prize's stored shipping if the caller didn't
+    // pass one (kept optional so existing call sites don't break during
+    // partial rollouts).
+    const shippingUsdValue =
+      params.shippingUsd != null
+        ? params.shippingUsd
+        : prize.shippingCostUsd != null
+          ? Number(prize.shippingCostUsd)
+          : 0;
+    const shippingFee = this.fmtUsd(shippingUsdValue);
     const totalCharged = this.fmtUsd(params.totalChargedUsd);
     const chargeStatus =
       params.chargeStatus === 'charged'
@@ -270,7 +299,7 @@ export class AuctionsNotificationsService {
       this.inboxService
         .sendSystemMessageToUser(
           params.winnerUserId,
-          `You won ${itemName} for ${winningBid}. Total charged: ${totalCharged} (incl. ${buyerFee} buyer fee). [View your order](${orderUrl})`,
+          `You won ${itemName} for ${winningBid}. Total charged: ${totalCharged} (incl. ${buyerFee} buyer fee + ${shippingFee} shipping). [View your order](${orderUrl})`,
         )
         .catch((err) =>
           this.logger.warn(`Winner inbox failed: ${err?.message}`),
@@ -286,8 +315,11 @@ export class AuctionsNotificationsService {
                   itemName,
                   winningBid,
                   buyerFee,
+                  shippingFee,
                   totalCharged,
                   chargeStatus,
+                  sellerName,
+                  isSellerOwned,
                   orderUrl,
                 },
               } as never,

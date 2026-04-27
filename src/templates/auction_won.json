@@ -14,11 +14,14 @@
         "itemName": { "type": "string" },
         "winningBid": { "type": "string" },
         "buyerFee": { "type": "string" },
+        "shippingFee": { "type": "string" },
         "totalCharged": { "type": "string" },
         "chargeStatus": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "isSellerOwned": { "type": "boolean" },
         "orderUrl": { "type": "string" }
       },
-      "required": ["userName", "itemName", "winningBid", "buyerFee", "totalCharged", "chargeStatus", "orderUrl"]
+      "required": ["userName", "itemName", "winningBid", "buyerFee", "shippingFee", "totalCharged", "chargeStatus", "sellerName", "isSellerOwned", "orderUrl"]
     }
   },
   "required": ["toAddress", "subject", "params"]
