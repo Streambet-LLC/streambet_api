@@ -390,6 +390,44 @@ export class PrizeService {
     );
   }
 
+  async getShopItemById(
+    id: string,
+    requesterId?: string | null,
+  ): Promise<PrizeConfigurationDto> {
+    const item = await this.prizeConfigRepository.findOne({
+      where: {
+        id,
+        isActive: true,
+        showOnShop: true,
+      },
+      relations: ['creator', 'itemImages'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Shop item not found');
+    }
+
+    const watched = requesterId
+      ? await this.engagementService.getWatchedItemIds(requesterId, [item.id])
+      : new Set<string>();
+
+    const auctionId = item.auction?.id;
+    const isBidder =
+      !!auctionId && !!requesterId
+        ? (
+            await this.auctionsService.getBidderAuctionIds(requesterId, [
+              auctionId,
+            ])
+          ).has(auctionId)
+        : false;
+
+    return this.mapToDto(item, {
+      isWatching: watched.has(item.id),
+      auctionViewerUserId: requesterId ?? null,
+      auctionIsBidder: isBidder,
+    });
+  }
+
   /**
    * Public: get one seller shop and its active items.
    */
