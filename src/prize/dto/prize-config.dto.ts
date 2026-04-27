@@ -917,6 +917,26 @@ export class UpdatePrizeTierDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   shippingCostUsd?: number;
+
+  /**
+   * Sale type is immutable after creation — an item that was created as
+   * an auction stays an auction (and vice-versa), so the update flow
+   * intentionally ignores this value and preserves the existing tier's
+   * `saleType`. We still accept it in the DTO because the seller and
+   * admin edit forms include the field in their submit payload, and the
+   * global ValidationPipe is configured with `forbidNonWhitelisted:
+   * true` which would otherwise reject the entire request with 400.
+   */
+  @ApiProperty({
+    enum: PrizeSaleType,
+    example: PrizeSaleType.FIXED_PRICE,
+    description:
+      'Accepted for backwards compatibility with the edit forms; saleType is immutable after creation and the existing value is preserved.',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PrizeSaleType)
+  saleType?: PrizeSaleType;
 }
 
 /**
