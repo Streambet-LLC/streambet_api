@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -22,6 +22,7 @@ import {
 } from './dto/cart.dto';
 import { WalletsService } from '../wallets/wallets.service';
 import { PrizePurchaseOption } from '../prize/enums/prize-purchase-option.enum';
+import { PrizeSaleType } from '../prize/enums/prize-sale-type.enum';
 import {
   calculateBuyerItemFeeCents,
   calculateSellerFeeCents,
@@ -276,6 +277,11 @@ export class CartService {
     if (!prize.isActive) {
       throw new BadRequestException('Item is no longer available');
     }
+    if (prize.saleType === PrizeSaleType.AUCTION) {
+      throw new BadRequestException(
+        'Auction items must be won via bidding and cannot be added to the cart.',
+      );
+    }
 
     if (prize.stock < 1) {
       throw new BadRequestException('Item is out of stock');
@@ -297,7 +303,7 @@ export class CartService {
       const newQty = existingItem.quantity + quantity;
       if (newQty > prize.stock) {
         throw new BadRequestException(
-          `Cannot add more — only ${prize.stock} available (you have ${existingItem.quantity} in cart)`,
+          `Cannot add more â€” only ${prize.stock} available (you have ${existingItem.quantity} in cart)`,
         );
       }
       existingItem.quantity = newQty;
@@ -566,7 +572,7 @@ export class CartService {
         // Remove from cart
         await this.cartItemRepository.remove(cardcadeGroup.items);
       } else {
-        // USD or combined — include in Stripe session
+        // USD or combined â€” include in Stripe session
         needsStripeSession = true;
       }
     }
@@ -622,7 +628,7 @@ export class CartService {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `${group.shopName} — ${item.prizeConfiguration.name}`,
+              name: `${group.shopName} â€” ${item.prizeConfiguration.name}`,
               ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
                 ? {
                     images: [resolveImageUrl(item.prizeConfiguration.imageUrl)],
@@ -643,7 +649,7 @@ export class CartService {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `Shipping — ${group.shopName}`,
+            name: `Shipping â€” ${group.shopName}`,
           },
           unit_amount: group.shippingCents,
         },
@@ -702,7 +708,7 @@ export class CartService {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `CardCade's Shop — ${item.prizeConfiguration.name}`,
+              name: `CardCade's Shop â€” ${item.prizeConfiguration.name}`,
               ...(resolveImageUrl(item.prizeConfiguration.imageUrl)
                 ? {
                     images: [resolveImageUrl(item.prizeConfiguration.imageUrl)],
@@ -723,7 +729,7 @@ export class CartService {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `Shipping — CardCade's Shop`,
+            name: `Shipping â€” CardCade's Shop`,
           },
           unit_amount: cardcadeGroup.shippingCents,
         },
@@ -829,7 +835,7 @@ export class CartService {
         errStack,
       );
       this.logger.error(
-        `Stripe params — success_url: ${successUrl}, cancel_url: ${cancelUrl}, ` +
+        `Stripe params â€” success_url: ${successUrl}, cancel_url: ${cancelUrl}, ` +
           `line_items count: ${lineItems.length}`,
       );
       // Clean up created orders since payment session failed

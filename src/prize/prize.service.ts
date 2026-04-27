@@ -48,6 +48,7 @@ import {
 } from './dto';
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
+import { PrizeSaleType } from './enums/prize-sale-type.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
 import { AuctionsService } from '../auctions/auctions.service';
@@ -1816,6 +1817,11 @@ export class PrizeService {
     if (!prize.isActive) {
       throw new BadRequestException('This prize is no longer available');
     }
+    if (prize.saleType === PrizeSaleType.AUCTION) {
+      throw new BadRequestException(
+        'Auction items can only be acquired by winning the auction. Promo codes do not apply to auction purchases.',
+      );
+    }
     if (prize.purchaseOption === PrizePurchaseOption.OFFERS_ONLY) {
       throw new BadRequestException(
         'This prize is offer-only and cannot be purchased directly',
@@ -2916,6 +2922,11 @@ export class PrizeService {
     const prize = await this.getPrizeTierById(dto.prizeConfigId);
     if (!prize.isActive) {
       throw new BadRequestException('This prize is not available');
+    }
+    if (prize.saleType === PrizeSaleType.AUCTION) {
+      throw new BadRequestException(
+        'Auction items do not accept offers. Place a bid instead.',
+      );
     }
     if (prize.purchaseOption === PrizePurchaseOption.BUY_ONLY) {
       throw new BadRequestException(
