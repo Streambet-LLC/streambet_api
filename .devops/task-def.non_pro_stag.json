@@ -232,19 +232,19 @@
         },
         {
           "name": "EBAY_CLIENT_ID",
-          "valueFrom": "/cardcade/non_pro_stag/EBAY_CLIENT_ID":
+          "valueFrom": "/cardcade/non_pro_stag/EBAY_CLIENT_ID"
         },
         {
           "name": "EBAY_CLIENT_SECRET",
-          "valueFrom": "/cardcade/non_pro_stag/EBAY_CLIENT_SECRET":
+          "valueFrom": "/cardcade/non_pro_stag/EBAY_CLIENT_SECRET"
         },
         {
           "name": "EBAY_DEV_ID",
-          "valueFrom": "/cardcade/non_pro_stag/EBAY_DEV_ID":
+          "valueFrom": "/cardcade/non_pro_stag/EBAY_DEV_ID"
         },
         {
           "name": "EBAY_GLOBAL_ID",
-          "valueFrom": "/cardcade/non_pro_stag/EBAY_GLOBAL_ID":
+          "valueFrom": "/cardcade/non_pro_stag/EBAY_GLOBAL_ID"
         }
       ],
       "mountPoints": [],
