@@ -152,7 +152,7 @@
         },
         {
           "name": "ADMIN_EMAIL",
-          "valueFrom": "/cardcade/non_pro_prod/ADMIN_EMAIL"
+          "valueFrom": "/cardcade/non_pro_stag/ADMIN_EMAIL"
         },
         {
           "name": "AWS_SMTP_REGION",
