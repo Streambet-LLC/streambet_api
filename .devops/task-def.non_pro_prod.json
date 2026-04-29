@@ -151,6 +151,10 @@
           "valueFrom": "/cardcade/non_pro_prod/MAIL_DEFAULT_EMAIL"
         },
         {
+          "name": "ADMIN_EMAIL",
+          "valueFrom": "/cardcade/non_pro_prod/ADMIN_EMAIL"
+        },
+        {
           "name": "AWS_SMTP_REGION",
           "valueFrom": "/cardcade/non_pro_prod/AWS_SMTP_REGION"
         },
