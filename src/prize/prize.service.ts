@@ -3017,7 +3017,7 @@ export class PrizeService {
         'http://localhost:3000',
       );
       let recipientEmail =
-        this.configService.get<string>('ADMIN_EMAIL') || 'admin@cardcade.io';
+        this.configService.get<string>('ADMIN_EMAIL') || 'contact@cardcade.fun';
       let subject = `💰 New Prize Offer: ${prize.name}`;
       let reviewUrl = `${frontendUrl}/admin/prizes/redemptions?orderId=${saved.id}`;
       let portalLabel = 'admin panel';
