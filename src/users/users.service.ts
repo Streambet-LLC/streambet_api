@@ -515,6 +515,13 @@ export class UsersService {
             : item.isSeller
               ? 'milestone'
               : null,
+        solanaWallet: item.solanaWallet ?? null,
+        cryptoPaymentsEnabled: !!item.cryptoPaymentsEnabled,
+        cryptoOverrideFeeBps:
+          item.cryptoOverrideFeeBps !== null &&
+          item.cryptoOverrideFeeBps !== undefined
+            ? Number(item.cryptoOverrideFeeBps)
+            : null,
         wallet: item.wallet
           ? {
               id: item.wallet.id,

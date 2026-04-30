@@ -7,6 +7,10 @@
       {
         "include": "templates/**/*",
         "outDir": "dist"
+      },
+      {
+        "include": "integrations/solana/*.json",
+        "outDir": "dist/src"
       }
     ],
     "deleteOutDir": true

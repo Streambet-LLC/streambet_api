@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export type PaymentMethod = 'coins' | 'usd' | 'combined';
+export type PaymentMethod = 'coins' | 'usd' | 'combined' | 'crypto';
 
 // DTO for prize purchase (creating a prize order) adding comment to force rebuild of prize service
 export class ShippingAddressDto {
