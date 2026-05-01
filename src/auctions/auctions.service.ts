@@ -47,11 +47,20 @@ const ANTI_SNIPE_WINDOW_SECONDS = 30;
 /**
  * Dynamic minimum bid increments by current price tier. The increment is
  * applied to the *current* bid to compute the next minimum.
+ *
+ * Tiers (USD):
+ *   < $50          → $2
+ *   $50  – $150    → $3
+ *   $150 – $300    → $5
+ *   $300 – $600    → $7
+ *   $600+          → $10
  */
 function minIncrementForCurrent(currentUsd: number): number {
-  if (currentUsd < 50) return 1;
-  if (currentUsd < 250) return 3;
-  return 5;
+  if (currentUsd < 50) return 2;
+  if (currentUsd < 150) return 3;
+  if (currentUsd < 300) return 5;
+  if (currentUsd < 600) return 7;
+  return 10;
 }
 
 /**
