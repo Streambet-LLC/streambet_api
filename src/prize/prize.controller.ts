@@ -477,6 +477,54 @@ export class AdminPrizeController {
   }
 
   /**
+   * Admin endpoint: Paginated list of all completed sales transactions.
+   * Supports date-range, payment-method (crypto/noncrypto/all) and free-text
+   * filters.
+   */
+  @Get('sales-history')
+  @ApiOperation({ summary: 'List all completed sales (admin)' })
+  @ApiResponse({ status: 200, description: 'Paginated sales transactions' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async getAdminSalesHistory(
+    @Request() req: RequestWithUser,
+    @Query()
+    filterDto: {
+      from?: string;
+      to?: string;
+      paymentMethod?: 'crypto' | 'noncrypto' | 'all';
+      range?: string;
+      q?: string;
+    },
+  ) {
+    this.ensureAdmin(req.user);
+    return this.prizeService.getAdminSalesHistory(filterDto);
+  }
+
+  /**
+   * Admin endpoint: Monthly aggregate of completed sales with crypto vs
+   * non-crypto breakdown. Defaults to the last 12 months.
+   */
+  @Get('sales-summary')
+  @ApiOperation({ summary: 'Monthly sales summary (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Monthly revenue + order counts, plus window totals',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async getAdminSalesSummary(
+    @Request() req: RequestWithUser,
+    @Query() filterDto: { months?: string },
+  ) {
+    this.ensureAdmin(req.user);
+    const months = filterDto?.months ? parseInt(filterDto.months, 10) : 12;
+    return this.prizeService.getAdminSalesSummary({
+      months: Number.isFinite(months) ? months : 12,
+    });
+  }
+
+  /**
    * Admin endpoint: Create new prize tier
    */
   @Post()
