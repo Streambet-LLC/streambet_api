@@ -268,4 +268,40 @@ export class User extends BaseEntity {
     name: 'auctions_enabled',
   })
   auctionsEnabled: boolean;
+
+  /**
+   * Solana wallet address (base58 public key) for crypto payments.
+   * Used to receive USDC via pay_invoice contract instruction.
+   */
+  @Column({
+    type: 'varchar',
+    length: 88,
+    nullable: true,
+    name: 'solana_wallet',
+  })
+  solanaWallet?: string;
+
+  /**
+   * Whether this user/seller is enabled to receive crypto payments.
+   * Defaults to false; Cardcade (authority) is implicitly true on-chain.
+   */
+  @Column({
+    type: 'boolean',
+    default: false,
+    nullable: false,
+    name: 'crypto_payments_enabled',
+  })
+  cryptoPaymentsEnabled: boolean;
+
+  /**
+   * Optional per-seller fee override (in basis points) for crypto payments.
+   * When set, overrides the default seller group fee on pay_invoice.
+   * Mirrors the on-chain SellerProfile.override_fee_bps for UI display.
+   */
+  @Column({
+    type: 'smallint',
+    nullable: true,
+    name: 'crypto_override_fee_bps',
+  })
+  cryptoOverrideFeeBps?: number;
 }

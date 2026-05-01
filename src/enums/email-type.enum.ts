@@ -18,4 +18,5 @@ export enum EmailType {
   AuctionWon = 'auction_won',
   AuctionLost = 'auction_lost',
   AuctionsEnabled = 'auctions_enabled',
+  CryptoEnabled = 'crypto_enabled',
 }

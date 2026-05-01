@@ -39,6 +39,7 @@ import redisConfig from './config/redis.config';
 import geoFencingConfig from './config/geo-fencing.config';
 import { envValidationSchema } from './config/redis.validation';
 import coinflowConfig from './config/coinflow.config';
+import solanaConfig from './config/solana.config';
 
 import { CoinPackageModule } from './coin-package/coin-package.module';
 import { WsModule } from './ws/ws.module';
@@ -50,6 +51,7 @@ import { CreatorModule } from './creator/creator.module';
 import { PrizeModule } from './prize/prize.module';
 import { PsaModule } from './integrations/psa/psa.module';
 import { EbayModule } from './integrations/ebay/ebay.module';
+import { SolanaModule } from './integrations/solana/solana.module';
 import { DailySpinModule } from './daily-spin/daily-spin.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -82,6 +84,7 @@ import { AuctionsModule } from './auctions/auctions.module';
         redisConfig,
         geoFencingConfig,
         coinflowConfig,
+        solanaConfig,
         personaConfig,
         psaConfig,
         ebayConfig,
@@ -160,6 +163,7 @@ import { AuctionsModule } from './auctions/auctions.module';
     ReviewsModule,
     EbayModule,
     AuctionsModule,
+    SolanaModule,
   ],
   controllers: [AppController],
   providers: [

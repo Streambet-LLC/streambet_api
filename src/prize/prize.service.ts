@@ -458,7 +458,10 @@ export class PrizeService {
           showOnShop: true,
           createdBy: IsNull(),
         },
-        relations: ['itemImages', 'auction'],
+        // Include `creator` for parity with the seller branch, even though
+        // CardCade items have a null creator (so sellerCryptoEnabled stays
+        // false on those — CardCade isn't a crypto-payout seller).
+        relations: ['itemImages', 'auction', 'creator'],
         order: {
           createdAt: 'DESC',
         },
@@ -545,7 +548,10 @@ export class PrizeService {
           isActive: true,
           showOnShop: true,
         },
-        relations: ['itemImages', 'auction'],
+        // `creator` is required so mapToDto can derive
+        // `sellerCryptoEnabled` from `creator.cryptoPaymentsEnabled`.
+        // Without it, the buyer's checkout modal won't show the USDC option.
+        relations: ['itemImages', 'auction', 'creator'],
         order: {
           createdAt: 'DESC',
         },
@@ -611,7 +617,9 @@ export class PrizeService {
         isActive: true,
         showOnShop: true, // Only show items meant for shop, exclude admin redemptions
       },
-      relations: ['itemImages', 'auction'],
+      // `creator` is required so mapToDto populates sellerCryptoEnabled,
+      // which the buyer's checkout modal uses to show the USDC option.
+      relations: ['itemImages', 'auction', 'creator'],
       order: {
         createdAt: 'DESC',
       },
@@ -1886,7 +1894,11 @@ export class PrizeService {
     }
 
     const isSellerOwnedItem = await this.isSellerOwnedItem(prize);
-    if (isSellerOwnedItem && dto.paymentMethod !== 'usd') {
+    if (
+      isSellerOwnedItem &&
+      dto.paymentMethod !== 'usd' &&
+      dto.paymentMethod !== 'crypto'
+    ) {
       throw new BadRequestException(
         'Seller shop items are USD-only. CadeCoins are not accepted for this item.',
       );
@@ -1912,6 +1924,36 @@ export class PrizeService {
       throw new BadRequestException(
         'For combined payment, both amounts must be > 0',
       );
+    }
+    if (dto.paymentMethod === 'crypto') {
+      if (dto.coinsAmount !== 0) {
+        throw new BadRequestException(
+          'For crypto payment, coins amount must be 0',
+        );
+      }
+      if (dto.usdAmount <= 0) {
+        throw new BadRequestException(
+          'For crypto payment, USD amount must be > 0',
+        );
+      }
+      if (!prize.createdBy) {
+        throw new BadRequestException(
+          'This item cannot be paid for with crypto',
+        );
+      }
+      const seller = await this.userRepository.findOne({
+        where: { id: prize.createdBy },
+      });
+      if (!seller?.cryptoPaymentsEnabled) {
+        throw new BadRequestException(
+          'Seller does not accept crypto payments',
+        );
+      }
+      if (!seller.solanaWallet) {
+        throw new BadRequestException(
+          'Seller has not configured a Solana wallet',
+        );
+      }
     }
 
     // Verify total price calculation (50 coins = $1)
@@ -2210,6 +2252,13 @@ export class PrizeService {
           `Failed to create checkout session: ${errorMessage}`,
         );
       }
+    } else if (dto.paymentMethod === 'crypto') {
+      // Order created in 'buy_attempted' status. Client will:
+      //   POST /crypto/quote { orderId } → buildTx → wallet sign+send → POST /crypto/confirm
+      // No Stripe session, no coin deduction. Buyer fee is added on-chain.
+      this.logger.log(
+        `Crypto prize order ${savedOrder.id} created for user ${userId}; awaiting on-chain payment`,
+      );
     }
 
     return {
@@ -3768,6 +3817,7 @@ export class PrizeService {
       createdBy: entity.createdBy,
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
+      sellerCryptoEnabled: entity.creator?.cryptoPaymentsEnabled ?? false,
       updatedBy: entity.updatedBy,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
