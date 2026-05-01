@@ -24,13 +24,16 @@ export type CardcadeMarketplace = {
     "* **Seller fee:** group-tiered. Each seller can be assigned to a",
     "`SellerGroup` (e.g. group 0 = 4 %, group 1 = 3.5 %, …). New sellers",
     "default to group 0.",
-    "* **Shipping:** stored on the listing as a separate field; passed",
-    "through to the seller. Fees are computed against the item price ONLY,",
-    "never against shipping.",
+    "* **Shipping:** sent in the same `pay_invoice` call as the item amount;",
+    "passed through to the seller. Fees are computed against the item",
+    "amount ONLY, never against shipping.",
+    "* **CardCade-as-seller:** when the seller wallet equals the marketplace",
+    "`authority`, the seller fee is automatically 0% (the platform never",
+    "charges itself). The buyer fee is unaffected.",
     "",
     "### Worked example",
     "",
-    "Listing: price 100 USDC, shipping 10 USDC.",
+    "Invoice: amount 100 USDC, shipping 10 USDC.",
     "Seller is in group 0 (4 %). Buyer is not waived (0.5 %).",
     "",
     "```text",
@@ -40,336 +43,6 @@ export type CardcadeMarketplace = {
     "```"
   ],
   "instructions": [
-    {
-      "name": "buyCard",
-      "discriminator": [
-        113,
-        142,
-        149,
-        246,
-        22,
-        115,
-        156,
-        154
-      ],
-      "accounts": [
-        {
-          "name": "buyer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "seller",
-          "docs": [
-            "PDA's reclaimed lamports go here when it closes."
-          ],
-          "writable": true,
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  112,
-                  108,
-                  97,
-                  99,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "cardMint",
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  105,
-                  115,
-                  116,
-                  105,
-                  110,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "cardMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowTokenAccount",
-          "writable": true
-        },
-        {
-          "name": "buyerCardAccount",
-          "writable": true
-        },
-        {
-          "name": "paymentMint",
-          "docs": [
-            "USDC mint — must match marketplace config."
-          ]
-        },
-        {
-          "name": "buyerPaymentAccount",
-          "writable": true
-        },
-        {
-          "name": "sellerPaymentAccount",
-          "writable": true
-        },
-        {
-          "name": "treasuryPaymentAccount",
-          "writable": true
-        },
-        {
-          "name": "sellerProfile",
-          "docs": [
-            "Optional `SellerProfile` for the listing seller. Address is",
-            "seed-verified; if uninitialized we fall back to the default group."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  101,
-                  108,
-                  108,
-                  101,
-                  114,
-                  95,
-                  112,
-                  114,
-                  111,
-                  102,
-                  105,
-                  108,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              }
-            ]
-          }
-        },
-        {
-          "name": "sellerGroup",
-          "docs": [
-            "`SellerGroup` whose `group_id` must match the seller's profile (or",
-            "`DEFAULT_SELLER_GROUP_ID` when no profile exists). Verified in",
-            "handler — seeds cannot be parameterized on a runtime value here."
-          ]
-        },
-        {
-          "name": "buyerWaiver",
-          "docs": [
-            "Optional `BuyerWaiver`. Seed-verified; if owned by this program the",
-            "buyer fee is waived. Spoofing is impossible because the address is",
-            "derived from the buyer's pubkey by the program."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  121,
-                  101,
-                  114,
-                  95,
-                  119,
-                  97,
-                  105,
-                  118,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "cancelListing",
-      "discriminator": [
-        41,
-        183,
-        50,
-        232,
-        230,
-        233,
-        157,
-        70
-      ],
-      "accounts": [
-        {
-          "name": "seller",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  112,
-                  108,
-                  97,
-                  99,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "cardMint",
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  105,
-                  115,
-                  116,
-                  105,
-                  110,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "cardMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowTokenAccount",
-          "writable": true
-        },
-        {
-          "name": "sellerCardAccount",
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": []
-    },
     {
       "name": "grantBuyerWaiver",
       "discriminator": [
@@ -624,222 +297,6 @@ export type CardcadeMarketplace = {
       ]
     },
     {
-      "name": "listCard",
-      "discriminator": [
-        113,
-        226,
-        80,
-        193,
-        197,
-        19,
-        75,
-        161
-      ],
-      "accounts": [
-        {
-          "name": "seller",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  112,
-                  108,
-                  97,
-                  99,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "cardMint"
-        },
-        {
-          "name": "sellerCardAccount",
-          "writable": true
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  105,
-                  115,
-                  116,
-                  105,
-                  110,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "cardMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrowTokenAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrowAuthority"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "cardMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "price",
-          "type": "u64"
-        },
-        {
-          "name": "shipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "payInvoice",
       "discriminator": [
         104,
@@ -1056,126 +513,6 @@ export type CardcadeMarketplace = {
         },
         {
           "name": "amount",
-          "type": "u64"
-        },
-        {
-          "name": "shipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "primarySale",
-      "discriminator": [
-        183,
-        109,
-        237,
-        220,
-        232,
-        6,
-        182,
-        84
-      ],
-      "accounts": [
-        {
-          "name": "buyer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "authority",
-          "docs": [
-            "Marketplace authority must co-sign every primary sale (gates pricing)."
-          ],
-          "signer": true,
-          "relations": [
-            "marketplace"
-          ]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  112,
-                  108,
-                  97,
-                  99,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "cardMint"
-        },
-        {
-          "name": "sourceCardAccount",
-          "writable": true
-        },
-        {
-          "name": "buyerCardAccount",
-          "writable": true
-        },
-        {
-          "name": "paymentMint"
-        },
-        {
-          "name": "buyerPaymentAccount",
-          "writable": true
-        },
-        {
-          "name": "treasuryPaymentAccount",
-          "writable": true
-        },
-        {
-          "name": "buyerWaiver",
-          "docs": [
-            "Optional `BuyerWaiver`. Same anti-spoofing as in buy_card."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  121,
-                  101,
-                  114,
-                  95,
-                  119,
-                  97,
-                  105,
-                  118,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "price",
           "type": "u64"
         },
         {
@@ -1753,72 +1090,6 @@ export type CardcadeMarketplace = {
       ]
     },
     {
-      "name": "updateListing",
-      "discriminator": [
-        192,
-        174,
-        210,
-        68,
-        116,
-        40,
-        242,
-        253
-      ],
-      "accounts": [
-        {
-          "name": "seller",
-          "signer": true,
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "cardMint",
-          "relations": [
-            "listing"
-          ]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  105,
-                  115,
-                  116,
-                  105,
-                  110,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "cardMint"
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "newPrice",
-          "type": "u64"
-        },
-        {
-          "name": "newShipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "updateTreasury",
       "discriminator": [
         60,
@@ -1985,19 +1256,6 @@ export type CardcadeMarketplace = {
       ]
     },
     {
-      "name": "listing",
-      "discriminator": [
-        218,
-        32,
-        50,
-        73,
-        43,
-        134,
-        26,
-        58
-      ]
-    },
-    {
       "name": "marketplace",
       "discriminator": [
         70,
@@ -2039,19 +1297,6 @@ export type CardcadeMarketplace = {
   ],
   "events": [
     {
-      "name": "cardSold",
-      "discriminator": [
-        57,
-        222,
-        233,
-        89,
-        105,
-        84,
-        199,
-        81
-      ]
-    },
-    {
       "name": "invoicePaid",
       "discriminator": [
         200,
@@ -2079,7 +1324,7 @@ export type CardcadeMarketplace = {
     {
       "code": 6002,
       "name": "invalidPrice",
-      "msg": "Listing price must be greater than zero."
+      "msg": "Payment amount must be greater than zero."
     },
     {
       "code": 6003,
@@ -2094,65 +1339,50 @@ export type CardcadeMarketplace = {
     {
       "code": 6005,
       "name": "unauthorizedSeller",
-      "msg": "Signer is not the listing seller."
+      "msg": "Signer is not the listed seller."
     },
     {
       "code": 6006,
-      "name": "listingInactive",
-      "msg": "Listing is not active."
-    },
-    {
-      "code": 6007,
       "name": "treasuryMismatch",
       "msg": "Provided treasury token account does not match the marketplace config."
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "paymentMintMismatch",
       "msg": "Provided payment mint does not match the marketplace config (USDC only)."
     },
     {
-      "code": 6009,
-      "name": "tokenMintMismatch",
-      "msg": "Token account mint mismatch."
-    },
-    {
-      "code": 6010,
+      "code": 6008,
       "name": "mathOverflow",
       "msg": "Arithmetic overflow."
     },
     {
-      "code": 6011,
-      "name": "invalidCardAmount",
-      "msg": "Card amount must be exactly 1."
-    },
-    {
-      "code": 6012,
+      "code": 6009,
       "name": "sellerGroupMismatch",
       "msg": "Provided seller_group account does not match the seller's profile / default."
     },
     {
-      "code": 6013,
+      "code": 6010,
       "name": "sellerProfileMismatch",
       "msg": "Provided seller_profile account does not match the listing seller."
     },
     {
-      "code": 6014,
+      "code": 6011,
       "name": "invalidBuyerWaiver",
       "msg": "Buyer waiver account does not belong to this program."
     },
     {
-      "code": 6015,
+      "code": 6012,
       "name": "cannotMutateDefaultGroup",
       "msg": "Cannot delete or reassign the default seller group (id 0)."
     },
     {
-      "code": 6016,
+      "code": 6013,
       "name": "invalidCryptoSellerAllowance",
       "msg": "Crypto seller allowance account does not belong to this program."
     },
     {
-      "code": 6017,
+      "code": 6014,
       "name": "cryptoSellerNotAllowed",
       "msg": "Seller is not authorised to receive crypto payments."
     }
@@ -2189,58 +1419,6 @@ export type CardcadeMarketplace = {
                 32
               ]
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "cardSold",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "listing",
-            "type": "pubkey"
-          },
-          {
-            "name": "buyer",
-            "type": "pubkey"
-          },
-          {
-            "name": "seller",
-            "type": "pubkey"
-          },
-          {
-            "name": "cardMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "price",
-            "type": "u64"
-          },
-          {
-            "name": "shipping",
-            "type": "u64"
-          },
-          {
-            "name": "buyerFee",
-            "type": "u64"
-          },
-          {
-            "name": "sellerFee",
-            "type": "u64"
-          },
-          {
-            "name": "sellerGroupId",
-            "type": "u8"
-          },
-          {
-            "name": "buyerWaived",
-            "type": "bool"
-          },
-          {
-            "name": "isPrimary",
-            "type": "bool"
           }
         ]
       }
@@ -2409,66 +1587,6 @@ export type CardcadeMarketplace = {
           {
             "name": "sellerIsAuthority",
             "type": "bool"
-          }
-        ]
-      }
-    },
-    {
-      "name": "listing",
-      "docs": [
-        "One PDA per active listing."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "seller",
-            "type": "pubkey"
-          },
-          {
-            "name": "cardMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "escrowTokenAccount",
-            "type": "pubkey"
-          },
-          {
-            "name": "price",
-            "docs": [
-              "Item price in USDC base units. Fees are computed against this number",
-              "only — shipping is excluded from the fee base."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "shipping",
-            "docs": [
-              "Shipping cost in USDC base units. Passed straight through to the",
-              "seller; fees do NOT apply to it."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "isActive",
-            "type": "bool"
-          },
-          {
-            "name": "createdAt",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "reserved",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }

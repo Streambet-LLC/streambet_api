@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   Inject,
   forwardRef,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, In, Repository } from 'typeorm';
@@ -65,9 +66,25 @@ import {
  * Implements data hardening: updates create new rows instead of modifying existing ones.
  */
 @Injectable()
-export class PrizeService {
+export class PrizeService implements OnModuleInit {
   private readonly logger = new Logger(PrizeService.name);
   private stripe: Stripe;
+
+  /**
+   * Cached value of the platform-level "CardCade accepts USDC" flag,
+   * derived from `shop_settings.cardcade.cryptoPaymentsEnabled` AND a
+   * non-empty `cryptoWalletAddress`. The cache lives for `CARDCADE_FLAG_TTL_MS`
+   * so high-traffic list endpoints don't hammer `shop_settings` per row in
+   * `mapToDto`. Reads are sync — if the cache is stale we kick off a
+   * non-blocking refresh and return the previous value (false on cold
+   * start). Admin toggles take effect within ~60s on every endpoint.
+   */
+  private cardcadeCryptoCache: { value: boolean; expiresAt: number } = {
+    value: false,
+    expiresAt: 0,
+  };
+  private cardcadeCryptoRefreshing = false;
+  private static readonly CARDCADE_FLAG_TTL_MS = 60_000;
 
   constructor(
     @InjectRepository(PrizeConfiguration)
@@ -92,6 +109,19 @@ export class PrizeService {
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
+    );
+  }
+
+  /**
+   * Warm the CardCade crypto-flag cache before the app starts handling
+   * requests. Without this, the first request after boot would see the
+   * default `false` (cold cache), the frontend would cache "card only",
+   * and the USDC option would stay hidden until React Query refetched.
+   */
+  async onModuleInit(): Promise<void> {
+    await this.refreshCardcadeCryptoCache();
+    this.logger.log(
+      `[CardCade flag] warmed on boot: cryptoEnabled=${this.cardcadeCryptoCache.value}`,
     );
   }
 
@@ -216,7 +246,16 @@ export class PrizeService {
       settings.cryptoWalletAddress = trimmed.length > 0 ? trimmed : null;
     }
 
-    return this.shopSettingsRepository.save(settings);
+    const saved = await this.shopSettingsRepository.save(settings);
+
+    // If we just touched the CardCade row, refresh the in-memory flag
+    // immediately so the next prize-list response reflects the change
+    // without waiting for the 60s TTL to expire.
+    if (shopKey === 'cardcade') {
+      await this.refreshCardcadeCryptoCache();
+    }
+
+    return saved;
   }
 
   /**
@@ -1958,23 +1997,36 @@ export class PrizeService {
           'For crypto payment, USD amount must be > 0',
         );
       }
-      if (!prize.createdBy) {
-        throw new BadRequestException(
-          'This item cannot be paid for with crypto',
-        );
-      }
-      const seller = await this.userRepository.findOne({
-        where: { id: prize.createdBy },
-      });
-      if (!seller?.cryptoPaymentsEnabled) {
-        throw new BadRequestException(
-          'Seller does not accept crypto payments',
-        );
-      }
-      if (!seller.solanaWallet) {
-        throw new BadRequestException(
-          'Seller has not configured a Solana wallet',
-        );
+      if (prize.createdBy) {
+        // Seller-owned item: validate the seller's own crypto config.
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (!seller?.cryptoPaymentsEnabled) {
+          throw new BadRequestException(
+            'Seller does not accept crypto payments',
+          );
+        }
+        if (!seller.solanaWallet) {
+          throw new BadRequestException(
+            'Seller has not configured a Solana wallet',
+          );
+        }
+      } else {
+        // CardCade-owned item (no creator): validate platform shop_settings.
+        // The crypto-order service later resolves the destination wallet
+        // from this same row via `resolveSellerWallet`.
+        const cardcadeSettings = await this.shopSettingsRepository.findOne({
+          where: { shopKey: 'cardcade' },
+        });
+        if (
+          !cardcadeSettings?.cryptoPaymentsEnabled ||
+          !cardcadeSettings.cryptoWalletAddress
+        ) {
+          throw new BadRequestException(
+            'CardCade is not currently accepting crypto payments',
+          );
+        }
       }
     }
 
@@ -4053,6 +4105,56 @@ export class PrizeService {
   }
 
   /**
+   * Sync read of the cached CardCade crypto-enabled flag, used by
+   * `mapToDto` to populate `sellerCryptoEnabled` for items with no
+   * creator (`createdBy IS NULL`). If the cached value is stale, fires a
+   * non-blocking refresh — the current call returns the previous value.
+   */
+  private readCardcadeCryptoEnabled(): boolean {
+    if (
+      Date.now() > this.cardcadeCryptoCache.expiresAt &&
+      !this.cardcadeCryptoRefreshing
+    ) {
+      this.cardcadeCryptoRefreshing = true;
+      void this.refreshCardcadeCryptoCache().finally(() => {
+        this.cardcadeCryptoRefreshing = false;
+      });
+    }
+    return this.cardcadeCryptoCache.value;
+  }
+
+  /**
+   * Force-refresh the CardCade crypto-enabled cache. Safe to await from
+   * any entry point that wants the very latest value (e.g. immediately
+   * after admin saves the toggle).
+   */
+  private async refreshCardcadeCryptoCache(): Promise<void> {
+    try {
+      const settings = await this.shopSettingsRepository.findOne({
+        where: { shopKey: 'cardcade' },
+      });
+      const enabled =
+        !!settings?.cryptoPaymentsEnabled && !!settings?.cryptoWalletAddress;
+      this.cardcadeCryptoCache = {
+        value: enabled,
+        expiresAt: Date.now() + PrizeService.CARDCADE_FLAG_TTL_MS,
+      };
+    } catch (err) {
+      // Don't poison the cache on transient DB errors. Bump the expiry
+      // a little to avoid hot-looping the failing query.
+      this.cardcadeCryptoCache = {
+        value: this.cardcadeCryptoCache.value,
+        expiresAt: Date.now() + 5_000,
+      };
+      this.logger.warn(
+        `[CardCade flag] failed to refresh shop_settings cache: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /**
    * Map entity to DTO
    */
   private mapToDto(
@@ -4130,7 +4232,9 @@ export class PrizeService {
       createdByShopName: entity.creator?.shopName ?? null,
       sellerCryptoEnabled:
         opts.sellerCryptoEnabledOverride ??
-        (entity.creator?.cryptoPaymentsEnabled ?? false),
+        (entity.createdBy === null
+          ? this.readCardcadeCryptoEnabled()
+          : (entity.creator?.cryptoPaymentsEnabled ?? false)),
       updatedBy: entity.updatedBy,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
