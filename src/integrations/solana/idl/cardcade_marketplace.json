@@ -1,5 +1,5 @@
 {
-  "address": "EhrkuypJLs7UWB838XToAf6RD7j8NYjPdcK6YkSKCNVZ",
+  "address": "HcMUewaCXRFMi8KAwBwgRRdScJ5Z4KSffqtYG6Dmpfzk",
   "metadata": {
     "name": "cardcade_marketplace",
     "version": "0.1.0",
@@ -18,13 +18,16 @@
     "* **Seller fee:** group-tiered. Each seller can be assigned to a",
     "`SellerGroup` (e.g. group 0 = 4 %, group 1 = 3.5 %, …). New sellers",
     "default to group 0.",
-    "* **Shipping:** stored on the listing as a separate field; passed",
-    "through to the seller. Fees are computed against the item price ONLY,",
-    "never against shipping.",
+    "* **Shipping:** sent in the same `pay_invoice` call as the item amount;",
+    "passed through to the seller. Fees are computed against the item",
+    "amount ONLY, never against shipping.",
+    "* **CardCade-as-seller:** when the seller wallet equals the marketplace",
+    "`authority`, the seller fee is automatically 0% (the platform never",
+    "charges itself). The buyer fee is unaffected.",
     "",
     "### Worked example",
     "",
-    "Listing: price 100 USDC, shipping 10 USDC.",
+    "Invoice: amount 100 USDC, shipping 10 USDC.",
     "Seller is in group 0 (4 %). Buyer is not waived (0.5 %).",
     "",
     "```text",
@@ -35,237 +38,25 @@
   ],
   "instructions": [
     {
-      "name": "buy_card",
-      "discriminator": [113, 142, 149, 246, 22, 115, 156, 154],
-      "accounts": [
-        {
-          "name": "buyer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "seller",
-          "docs": ["PDA's reclaimed lamports go here when it closes."],
-          "writable": true,
-          "relations": ["listing"]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
-              }
-            ]
-          }
-        },
-        {
-          "name": "card_mint",
-          "relations": ["listing"]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "card_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_token_account",
-          "writable": true
-        },
-        {
-          "name": "buyer_card_account",
-          "writable": true
-        },
-        {
-          "name": "payment_mint",
-          "docs": ["USDC mint — must match marketplace config."]
-        },
-        {
-          "name": "buyer_payment_account",
-          "writable": true
-        },
-        {
-          "name": "seller_payment_account",
-          "writable": true
-        },
-        {
-          "name": "treasury_payment_account",
-          "writable": true
-        },
-        {
-          "name": "seller_profile",
-          "docs": [
-            "Optional `SellerProfile` for the listing seller. Address is",
-            "seed-verified; if uninitialized we fall back to the default group."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              }
-            ]
-          }
-        },
-        {
-          "name": "seller_group",
-          "docs": [
-            "`SellerGroup` whose `group_id` must match the seller's profile (or",
-            "`DEFAULT_SELLER_GROUP_ID` when no profile exists). Verified in",
-            "handler — seeds cannot be parameterized on a runtime value here."
-          ]
-        },
-        {
-          "name": "buyer_waiver",
-          "docs": [
-            "Optional `BuyerWaiver`. Seed-verified; if owned by this program the",
-            "buyer fee is waived. Spoofing is impossible because the address is",
-            "derived from the buyer's pubkey by the program."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "cancel_listing",
-      "discriminator": [41, 183, 50, 232, 230, 233, 157, 70],
-      "accounts": [
-        {
-          "name": "seller",
-          "writable": true,
-          "signer": true,
-          "relations": ["listing"]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
-              }
-            ]
-          }
-        },
-        {
-          "name": "card_mint",
-          "relations": ["listing"]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "card_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_token_account",
-          "writable": true
-        },
-        {
-          "name": "seller_card_account",
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "grant_buyer_waiver",
-      "discriminator": [126, 201, 96, 19, 224, 229, 246, 33],
+      "discriminator": [
+        126,
+        201,
+        96,
+        19,
+        224,
+        229,
+        246,
+        33
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -273,7 +64,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -289,7 +92,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -308,13 +122,24 @@
     },
     {
       "name": "grant_crypto_seller",
-      "discriminator": [120, 69, 107, 57, 185, 118, 179, 176],
+      "discriminator": [
+        120,
+        69,
+        107,
+        57,
+        185,
+        118,
+        179,
+        176
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -322,7 +147,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -338,7 +175,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -357,7 +206,16 @@
     },
     {
       "name": "initialize_marketplace",
-      "discriminator": [47, 81, 64, 0, 96, 56, 105, 7],
+      "discriminator": [
+        47,
+        81,
+        64,
+        0,
+        96,
+        56,
+        105,
+        7
+      ],
       "accounts": [
         {
           "name": "authority",
@@ -371,7 +229,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -386,7 +256,9 @@
         },
         {
           "name": "payment_mint",
-          "docs": ["USDC mint — set once at init and immutable thereafter."]
+          "docs": [
+            "USDC mint — set once at init and immutable thereafter."
+          ]
         },
         {
           "name": "treasury",
@@ -419,130 +291,17 @@
       ]
     },
     {
-      "name": "list_card",
-      "discriminator": [113, 226, 80, 193, 197, 19, 75, 161],
-      "accounts": [
-        {
-          "name": "seller",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
-              }
-            ]
-          }
-        },
-        {
-          "name": "card_mint"
-        },
-        {
-          "name": "seller_card_account",
-          "writable": true
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "card_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
-              },
-              {
-                "kind": "account",
-                "path": "listing"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_token_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow_authority"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206,
-                  235, 121, 172, 28, 180, 133, 237, 95, 91, 55, 145, 58, 140,
-                  245, 133, 126, 255, 0, 169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "card_mint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
-                13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
-                219, 233, 248, 89
-              ]
-            }
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "price",
-          "type": "u64"
-        },
-        {
-          "name": "shipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "pay_invoice",
-      "discriminator": [104, 6, 62, 239, 197, 206, 208, 220],
+      "discriminator": [
+        104,
+        6,
+        62,
+        239,
+        197,
+        206,
+        208,
+        220
+      ],
       "accounts": [
         {
           "name": "buyer",
@@ -551,7 +310,9 @@
         },
         {
           "name": "seller",
-          "docs": ["authorise the seller_payment_account owner."]
+          "docs": [
+            "authorise the seller_payment_account owner."
+          ]
         },
         {
           "name": "marketplace",
@@ -559,14 +320,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "payment_mint",
-          "docs": ["USDC mint — must match marketplace config."]
+          "docs": [
+            "USDC mint — must match marketplace config."
+          ]
         },
         {
           "name": "buyer_payment_account",
@@ -592,8 +367,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -621,7 +408,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -642,7 +440,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -659,7 +469,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [105, 110, 118, 111, 105, 99, 101]
+                "value": [
+                  105,
+                  110,
+                  118,
+                  111,
+                  105,
+                  99,
+                  101
+                ]
               },
               {
                 "kind": "arg",
@@ -681,7 +499,10 @@
         {
           "name": "invoice_id",
           "type": {
-            "array": ["u8", 16]
+            "array": [
+              "u8",
+              16
+            ]
           }
         },
         {
@@ -695,115 +516,54 @@
       ]
     },
     {
-      "name": "primary_sale",
-      "discriminator": [183, 109, 237, 220, 232, 6, 182, 84],
+      "name": "revoke_buyer_waiver",
+      "discriminator": [
+        64,
+        222,
+        158,
+        8,
+        85,
+        176,
+        1,
+        67
+      ],
       "accounts": [
         {
-          "name": "buyer",
-          "writable": true,
-          "signer": true
-        },
-        {
           "name": "authority",
-          "docs": [
-            "Marketplace authority must co-sign every primary sale (gates pricing)."
-          ],
+          "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
-              }
-            ]
-          }
-        },
-        {
-          "name": "card_mint"
-        },
-        {
-          "name": "source_card_account",
-          "writable": true
-        },
-        {
-          "name": "buyer_card_account",
-          "writable": true
-        },
-        {
-          "name": "payment_mint"
-        },
-        {
-          "name": "buyer_payment_account",
-          "writable": true
-        },
-        {
-          "name": "treasury_payment_account",
-          "writable": true
-        },
-        {
-          "name": "buyer_waiver",
-          "docs": [
-            "Optional `BuyerWaiver`. Same anti-spoofing as in buy_card."
-          ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "price",
-          "type": "u64"
-        },
-        {
-          "name": "shipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "revoke_buyer_waiver",
-      "discriminator": [64, 222, 158, 8, 85, 176, 1, 67],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true,
-          "relations": ["marketplace"]
-        },
-        {
-          "name": "marketplace",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
               }
             ]
           }
         },
         {
           "name": "buyer",
-          "relations": ["waiver"]
+          "relations": [
+            "waiver"
+          ]
         },
         {
           "name": "waiver",
@@ -813,7 +573,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -828,13 +599,24 @@
     },
     {
       "name": "revoke_crypto_seller",
-      "discriminator": [145, 188, 32, 175, 79, 159, 33, 133],
+      "discriminator": [
+        145,
+        188,
+        32,
+        175,
+        79,
+        159,
+        33,
+        133
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -842,14 +624,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "seller",
-          "relations": ["allowance"]
+          "relations": [
+            "allowance"
+          ]
         },
         {
           "name": "allowance",
@@ -859,7 +655,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -874,12 +682,23 @@
     },
     {
       "name": "set_paused",
-      "discriminator": [91, 60, 125, 192, 176, 225, 166, 218],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -888,7 +707,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -907,13 +738,24 @@
         "Assign / move a seller into a group. Creates the `SellerProfile`",
         "PDA if missing (init_if_needed)."
       ],
-      "discriminator": [146, 92, 3, 15, 21, 42, 151, 107],
+      "discriminator": [
+        146,
+        92,
+        3,
+        15,
+        21,
+        42,
+        151,
+        107
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -921,7 +763,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -940,8 +794,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -971,13 +837,24 @@
     },
     {
       "name": "set_seller_override_fee",
-      "discriminator": [26, 8, 167, 165, 229, 123, 64, 244],
+      "discriminator": [
+        26,
+        8,
+        167,
+        165,
+        229,
+        123,
+        64,
+        244
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -985,7 +862,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1001,8 +890,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -1028,12 +929,23 @@
     },
     {
       "name": "update_authority",
-      "discriminator": [32, 46, 64, 28, 149, 75, 243, 88],
+      "discriminator": [
+        32,
+        46,
+        64,
+        28,
+        149,
+        75,
+        243,
+        88
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1042,7 +954,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1057,12 +981,23 @@
     },
     {
       "name": "update_buyer_fee",
-      "discriminator": [94, 177, 87, 223, 151, 1, 247, 192],
+      "discriminator": [
+        94,
+        177,
+        87,
+        223,
+        151,
+        1,
+        247,
+        192
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1071,7 +1006,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1086,12 +1033,23 @@
     },
     {
       "name": "update_default_seller_fee",
-      "discriminator": [134, 253, 137, 111, 33, 251, 255, 231],
+      "discriminator": [
+        134,
+        253,
+        137,
+        111,
+        33,
+        251,
+        255,
+        231
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1100,7 +1058,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1114,58 +1084,24 @@
       ]
     },
     {
-      "name": "update_listing",
-      "discriminator": [192, 174, 210, 68, 116, 40, 242, 253],
-      "accounts": [
-        {
-          "name": "seller",
-          "signer": true,
-          "relations": ["listing"]
-        },
-        {
-          "name": "card_mint",
-          "relations": ["listing"]
-        },
-        {
-          "name": "listing",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
-              },
-              {
-                "kind": "account",
-                "path": "seller"
-              },
-              {
-                "kind": "account",
-                "path": "card_mint"
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "new_price",
-          "type": "u64"
-        },
-        {
-          "name": "new_shipping",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "update_treasury",
-      "discriminator": [60, 16, 243, 66, 96, 59, 254, 131],
+      "discriminator": [
+        60,
+        16,
+        243,
+        66,
+        96,
+        59,
+        254,
+        131
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1174,7 +1110,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1189,13 +1137,24 @@
     },
     {
       "name": "upsert_seller_group",
-      "discriminator": [124, 18, 73, 183, 32, 156, 148, 86],
+      "discriminator": [
+        124,
+        18,
+        73,
+        183,
+        32,
+        156,
+        148,
+        86
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1203,7 +1162,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1229,7 +1200,10 @@
         {
           "name": "label",
           "type": {
-            "array": ["u8", 32]
+            "array": [
+              "u8",
+              32
+            ]
           }
         }
       ]
@@ -1238,41 +1212,96 @@
   "accounts": [
     {
       "name": "BuyerWaiver",
-      "discriminator": [132, 155, 241, 215, 13, 155, 109, 218]
+      "discriminator": [
+        132,
+        155,
+        241,
+        215,
+        13,
+        155,
+        109,
+        218
+      ]
     },
     {
       "name": "CryptoSellerAllowance",
-      "discriminator": [255, 163, 134, 161, 173, 103, 2, 187]
+      "discriminator": [
+        255,
+        163,
+        134,
+        161,
+        173,
+        103,
+        2,
+        187
+      ]
     },
     {
       "name": "Invoice",
-      "discriminator": [51, 194, 250, 114, 6, 104, 18, 164]
-    },
-    {
-      "name": "Listing",
-      "discriminator": [218, 32, 50, 73, 43, 134, 26, 58]
+      "discriminator": [
+        51,
+        194,
+        250,
+        114,
+        6,
+        104,
+        18,
+        164
+      ]
     },
     {
       "name": "Marketplace",
-      "discriminator": [70, 222, 41, 62, 78, 3, 32, 174]
+      "discriminator": [
+        70,
+        222,
+        41,
+        62,
+        78,
+        3,
+        32,
+        174
+      ]
     },
     {
       "name": "SellerGroup",
-      "discriminator": [202, 87, 155, 161, 7, 162, 35, 190]
+      "discriminator": [
+        202,
+        87,
+        155,
+        161,
+        7,
+        162,
+        35,
+        190
+      ]
     },
     {
       "name": "SellerProfile",
-      "discriminator": [96, 227, 91, 129, 3, 158, 255, 21]
+      "discriminator": [
+        96,
+        227,
+        91,
+        129,
+        3,
+        158,
+        255,
+        21
+      ]
     }
   ],
   "events": [
     {
-      "name": "CardSold",
-      "discriminator": [57, 222, 233, 89, 105, 84, 199, 81]
-    },
-    {
       "name": "InvoicePaid",
-      "discriminator": [200, 211, 168, 170, 46, 82, 83, 186]
+      "discriminator": [
+        200,
+        211,
+        168,
+        170,
+        46,
+        82,
+        83,
+        186
+      ]
     }
   ],
   "errors": [
@@ -1289,7 +1318,7 @@
     {
       "code": 6002,
       "name": "InvalidPrice",
-      "msg": "Listing price must be greater than zero."
+      "msg": "Payment amount must be greater than zero."
     },
     {
       "code": 6003,
@@ -1304,65 +1333,50 @@
     {
       "code": 6005,
       "name": "UnauthorizedSeller",
-      "msg": "Signer is not the listing seller."
+      "msg": "Signer is not the listed seller."
     },
     {
       "code": 6006,
-      "name": "ListingInactive",
-      "msg": "Listing is not active."
-    },
-    {
-      "code": 6007,
       "name": "TreasuryMismatch",
       "msg": "Provided treasury token account does not match the marketplace config."
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "PaymentMintMismatch",
       "msg": "Provided payment mint does not match the marketplace config (USDC only)."
     },
     {
-      "code": 6009,
-      "name": "TokenMintMismatch",
-      "msg": "Token account mint mismatch."
-    },
-    {
-      "code": 6010,
+      "code": 6008,
       "name": "MathOverflow",
       "msg": "Arithmetic overflow."
     },
     {
-      "code": 6011,
-      "name": "InvalidCardAmount",
-      "msg": "Card amount must be exactly 1."
-    },
-    {
-      "code": 6012,
+      "code": 6009,
       "name": "SellerGroupMismatch",
       "msg": "Provided seller_group account does not match the seller's profile / default."
     },
     {
-      "code": 6013,
+      "code": 6010,
       "name": "SellerProfileMismatch",
       "msg": "Provided seller_profile account does not match the listing seller."
     },
     {
-      "code": 6014,
+      "code": 6011,
       "name": "InvalidBuyerWaiver",
       "msg": "Buyer waiver account does not belong to this program."
     },
     {
-      "code": 6015,
+      "code": 6012,
       "name": "CannotMutateDefaultGroup",
       "msg": "Cannot delete or reassign the default seller group (id 0)."
     },
     {
-      "code": 6016,
+      "code": 6013,
       "name": "InvalidCryptoSellerAllowance",
       "msg": "Crypto seller allowance account does not belong to this program."
     },
     {
-      "code": 6017,
+      "code": 6014,
       "name": "CryptoSellerNotAllowed",
       "msg": "Seller is not authorised to receive crypto payments."
     }
@@ -1394,60 +1408,11 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "CardSold",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "listing",
-            "type": "pubkey"
-          },
-          {
-            "name": "buyer",
-            "type": "pubkey"
-          },
-          {
-            "name": "seller",
-            "type": "pubkey"
-          },
-          {
-            "name": "card_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "price",
-            "type": "u64"
-          },
-          {
-            "name": "shipping",
-            "type": "u64"
-          },
-          {
-            "name": "buyer_fee",
-            "type": "u64"
-          },
-          {
-            "name": "seller_fee",
-            "type": "u64"
-          },
-          {
-            "name": "seller_group_id",
-            "type": "u8"
-          },
-          {
-            "name": "buyer_waived",
-            "type": "bool"
-          },
-          {
-            "name": "is_primary",
-            "type": "bool"
           }
         ]
       }
@@ -1479,7 +1444,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1492,7 +1460,9 @@
         "fields": [
           {
             "name": "buyer_fee_bps",
-            "docs": ["Buyer fee in bps (e.g. 50 = 0.5 %)."],
+            "docs": [
+              "Buyer fee in bps (e.g. 50 = 0.5 %)."
+            ],
             "type": "u16"
           },
           {
@@ -1520,7 +1490,10 @@
           {
             "name": "invoice_id",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           },
           {
@@ -1546,7 +1519,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           }
         ]
@@ -1560,7 +1536,10 @@
           {
             "name": "invoice_id",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           },
           {
@@ -1607,63 +1586,10 @@
       }
     },
     {
-      "name": "Listing",
-      "docs": ["One PDA per active listing."],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "seller",
-            "type": "pubkey"
-          },
-          {
-            "name": "card_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "escrow_token_account",
-            "type": "pubkey"
-          },
-          {
-            "name": "price",
-            "docs": [
-              "Item price in USDC base units. Fees are computed against this number",
-              "only — shipping is excluded from the fee base."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "shipping",
-            "docs": [
-              "Shipping cost in USDC base units. Passed straight through to the",
-              "seller; fees do NOT apply to it."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "is_active",
-            "type": "bool"
-          },
-          {
-            "name": "created_at",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "_reserved",
-            "type": {
-              "array": ["u8", 32]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "Marketplace",
-      "docs": ["Global marketplace configuration (singleton PDA)."],
+      "docs": [
+        "Global marketplace configuration (singleton PDA)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1676,7 +1602,9 @@
           },
           {
             "name": "payment_mint",
-            "docs": ["USDC mint — set once at init and immutable thereafter."],
+            "docs": [
+              "USDC mint — set once at init and immutable thereafter."
+            ],
             "type": "pubkey"
           },
           {
@@ -1712,7 +1640,9 @@
           },
           {
             "name": "bump",
-            "docs": ["Bump for the marketplace PDA."],
+            "docs": [
+              "Bump for the marketplace PDA."
+            ],
             "type": "u8"
           },
           {
@@ -1723,13 +1653,19 @@
               "`<= 32`."
             ],
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "_reserved_b",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1758,7 +1694,10 @@
               "UTF-8, null-padded human label (e.g. \"default\", \"vip\")."
             ],
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -1768,7 +1707,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1816,7 +1758,10 @@
               "(1 + 2 bytes serialised by Anchor)."
             ],
             "type": {
-              "array": ["u8", 29]
+              "array": [
+                "u8",
+                29
+              ]
             }
           }
         ]

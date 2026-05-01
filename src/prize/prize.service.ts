@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   Inject,
   forwardRef,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, In, Repository } from 'typeorm';
@@ -65,9 +66,25 @@ import {
  * Implements data hardening: updates create new rows instead of modifying existing ones.
  */
 @Injectable()
-export class PrizeService {
+export class PrizeService implements OnModuleInit {
   private readonly logger = new Logger(PrizeService.name);
   private stripe: Stripe;
+
+  /**
+   * Cached value of the platform-level "CardCade accepts USDC" flag,
+   * derived from `shop_settings.cardcade.cryptoPaymentsEnabled` AND a
+   * non-empty `cryptoWalletAddress`. The cache lives for `CARDCADE_FLAG_TTL_MS`
+   * so high-traffic list endpoints don't hammer `shop_settings` per row in
+   * `mapToDto`. Reads are sync — if the cache is stale we kick off a
+   * non-blocking refresh and return the previous value (false on cold
+   * start). Admin toggles take effect within ~60s on every endpoint.
+   */
+  private cardcadeCryptoCache: { value: boolean; expiresAt: number } = {
+    value: false,
+    expiresAt: 0,
+  };
+  private cardcadeCryptoRefreshing = false;
+  private static readonly CARDCADE_FLAG_TTL_MS = 60_000;
 
   constructor(
     @InjectRepository(PrizeConfiguration)
@@ -92,6 +109,19 @@ export class PrizeService {
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
+    );
+  }
+
+  /**
+   * Warm the CardCade crypto-flag cache before the app starts handling
+   * requests. Without this, the first request after boot would see the
+   * default `false` (cold cache), the frontend would cache "card only",
+   * and the USDC option would stay hidden until React Query refetched.
+   */
+  async onModuleInit(): Promise<void> {
+    await this.refreshCardcadeCryptoCache();
+    this.logger.log(
+      `[CardCade flag] warmed on boot: cryptoEnabled=${this.cardcadeCryptoCache.value}`,
     );
   }
 
@@ -174,6 +204,8 @@ export class PrizeService {
         city: null,
         state: null,
         country: null,
+        cryptoPaymentsEnabled: false,
+        cryptoWalletAddress: null,
       });
       return defaults;
     }
@@ -205,8 +237,25 @@ export class PrizeService {
     if (dto.city !== undefined) settings.city = dto.city;
     if (dto.state !== undefined) settings.state = dto.state;
     if (dto.country !== undefined) settings.country = dto.country;
+    if (dto.cryptoPaymentsEnabled !== undefined)
+      settings.cryptoPaymentsEnabled = dto.cryptoPaymentsEnabled;
+    if (dto.cryptoWalletAddress !== undefined) {
+      // Treat empty string the same as null so admins can clear the field
+      // from the UI without sending an explicit null.
+      const trimmed = (dto.cryptoWalletAddress ?? '').trim();
+      settings.cryptoWalletAddress = trimmed.length > 0 ? trimmed : null;
+    }
 
-    return this.shopSettingsRepository.save(settings);
+    const saved = await this.shopSettingsRepository.save(settings);
+
+    // If we just touched the CardCade row, refresh the in-memory flag
+    // immediately so the next prize-list response reflects the change
+    // without waiting for the 60s TTL to expire.
+    if (shopKey === 'cardcade') {
+      await this.refreshCardcadeCryptoCache();
+    }
+
+    return saved;
   }
 
   /**
@@ -483,8 +532,19 @@ export class PrizeService {
           city: null,
           state: null,
           country: null,
+          cryptoPaymentsEnabled: false,
+          cryptoWalletAddress: null,
         } as ShopSettings;
       }
+
+      // CardCade items have no creator, so the per-item sellerCryptoEnabled
+      // flag is derived from the platform-level shop settings instead. Only
+      // surface USDC checkout when both the toggle is on AND a treasury
+      // wallet has actually been configured — otherwise the wallet would
+      // see the radio button but the order would fail at quote time.
+      const cardcadeCryptoEnabled =
+        cardcadeSettings.cryptoPaymentsEnabled &&
+        !!cardcadeSettings.cryptoWalletAddress;
 
       const watched = requesterId
         ? await this.engagementService.getWatchedItemIds(
@@ -522,6 +582,7 @@ export class PrizeService {
             auctionViewerUserId: requesterId ?? null,
             auctionIsBidder:
               !!item.auction && bidderAuctionIds.has(item.auction.id),
+            sellerCryptoEnabledOverride: cardcadeCryptoEnabled,
           }),
         ),
       };
@@ -1936,23 +1997,36 @@ export class PrizeService {
           'For crypto payment, USD amount must be > 0',
         );
       }
-      if (!prize.createdBy) {
-        throw new BadRequestException(
-          'This item cannot be paid for with crypto',
-        );
-      }
-      const seller = await this.userRepository.findOne({
-        where: { id: prize.createdBy },
-      });
-      if (!seller?.cryptoPaymentsEnabled) {
-        throw new BadRequestException(
-          'Seller does not accept crypto payments',
-        );
-      }
-      if (!seller.solanaWallet) {
-        throw new BadRequestException(
-          'Seller has not configured a Solana wallet',
-        );
+      if (prize.createdBy) {
+        // Seller-owned item: validate the seller's own crypto config.
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (!seller?.cryptoPaymentsEnabled) {
+          throw new BadRequestException(
+            'Seller does not accept crypto payments',
+          );
+        }
+        if (!seller.solanaWallet) {
+          throw new BadRequestException(
+            'Seller has not configured a Solana wallet',
+          );
+        }
+      } else {
+        // CardCade-owned item (no creator): validate platform shop_settings.
+        // The crypto-order service later resolves the destination wallet
+        // from this same row via `resolveSellerWallet`.
+        const cardcadeSettings = await this.shopSettingsRepository.findOne({
+          where: { shopKey: 'cardcade' },
+        });
+        if (
+          !cardcadeSettings?.cryptoPaymentsEnabled ||
+          !cardcadeSettings.cryptoWalletAddress
+        ) {
+          throw new BadRequestException(
+            'CardCade is not currently accepting crypto payments',
+          );
+        }
       }
     }
 
@@ -2845,6 +2919,288 @@ export class PrizeService {
   }
 
   /**
+   * Admin: paginated list of all completed sales transactions across the
+   * platform. Supports date-range, payment-method, and free-text filters.
+   *
+   * Completed = order.status IN (paid, shipped, delivered). We intentionally
+   * exclude pending/buy_attempted/offer_* so totals reflect captured revenue.
+   */
+  async getAdminSalesHistory(filterDto?: {
+    from?: string;
+    to?: string;
+    paymentMethod?: 'crypto' | 'noncrypto' | 'all';
+    range?: string;
+    q?: string;
+  }): Promise<{ data: any[]; total: number }> {
+    const completedStatuses = ['paid', 'shipped', 'delivered'];
+
+    const query = this.prizeOrderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.prizeConfiguration', 'prize')
+      .leftJoin('prize.creator', 'seller')
+      .addSelect([
+        'seller.id',
+        'seller.username',
+        'seller.shopName',
+        'seller.name',
+      ])
+      .where('order.status IN (:...statuses)', {
+        statuses: completedStatuses,
+      });
+
+    if (filterDto?.from) {
+      query.andWhere('order.createdAt >= :from', { from: filterDto.from });
+    }
+    if (filterDto?.to) {
+      query.andWhere('order.createdAt <= :to', { to: filterDto.to });
+    }
+    if (filterDto?.paymentMethod === 'crypto') {
+      query.andWhere(`order.paymentMethod = :pm`, { pm: 'crypto' });
+    } else if (filterDto?.paymentMethod === 'noncrypto') {
+      query.andWhere(`order.paymentMethod <> :pm`, { pm: 'crypto' });
+    }
+    if (filterDto?.q) {
+      query.andWhere(
+        '(LOWER(prize.name) ILIKE LOWER(:q) OR LOWER(user.username) ILIKE LOWER(:q) OR LOWER(user.email) ILIKE LOWER(:q) OR LOWER(seller.username) ILIKE LOWER(:q))',
+        { q: `%${filterDto.q}%` },
+      );
+    }
+
+    query.orderBy('order.createdAt', 'DESC');
+
+    const total = await query.getCount();
+
+    const range: [number, number] = filterDto?.range
+      ? JSON.parse(filterDto.range)
+      : [0, 25];
+    const [offset, limit] = range;
+    query.skip(offset).take(limit);
+
+    const orders = await query.getMany();
+
+    const data = orders.map((order) => ({
+      id: order.id,
+      createdAt: order.createdAt.toISOString(),
+      itemName: order.prizeConfiguration?.name || 'Unknown Item',
+      totalPrice: parseFloat(order.totalPrice?.toString() || '0'),
+      usdCharged: parseFloat(order.usdCharged?.toString() || '0'),
+      coinsDeducted: order.coinsDeducted ?? 0,
+      paymentMethod: order.paymentMethod,
+      status: order.status,
+      buyerUsername: order.user?.username || 'Unknown',
+      buyerEmail: order.user?.email || null,
+      sellerUsername:
+        order.prizeConfiguration?.creator?.username || 'CardCade',
+      cryptoTxSignature: order.cryptoTxSignature || null,
+      cryptoBuyerWallet: order.cryptoBuyerWallet || null,
+    }));
+
+    return { data, total };
+  }
+
+  /**
+   * Admin: monthly aggregate summary of completed sales. Returns one row per
+   * month for the requested window, including crypto vs non-crypto splits so
+   * the UI can render a "How much we made / how much in crypto" overview.
+   *
+   * Numbers are USD (PrizeOrder.totalPrice is stored in USD already).
+   */
+  async getAdminSalesSummary(filterDto?: {
+    months?: number;
+  }): Promise<{
+    months: Array<{
+      month: string; // ISO date for the first day of the month (UTC)
+      totalRevenue: number;
+      cryptoRevenue: number;
+      nonCryptoRevenue: number;
+      platformFees: number;
+      cryptoPlatformFees: number;
+      nonCryptoPlatformFees: number;
+      orderCount: number;
+      cryptoOrderCount: number;
+      nonCryptoOrderCount: number;
+    }>;
+    totals: {
+      totalRevenue: number;
+      cryptoRevenue: number;
+      nonCryptoRevenue: number;
+      platformFees: number;
+      cryptoPlatformFees: number;
+      nonCryptoPlatformFees: number;
+      orderCount: number;
+      cryptoOrderCount: number;
+      nonCryptoOrderCount: number;
+    };
+    feeAssumptions: {
+      nonCryptoBuyerFeePercent: number;
+      nonCryptoSellerFeePercent: number;
+      cryptoCombinedBps: number;
+    };
+  }> {
+    const months = Math.max(1, Math.min(filterDto?.months ?? 12, 60));
+
+    // Compute the window cutoff in JS so we don't depend on Postgres-specific
+    // interval-arithmetic with bound parameters (which TypeORM occasionally
+    // mishandles). `cutoff` = first day of the (months-1) months ago.
+    const now = new Date();
+    const cutoff = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
+    );
+
+    let rows: Array<{
+      month: Date | string;
+      total_revenue: string | null;
+      crypto_revenue: string | null;
+      noncrypto_revenue: string | null;
+      order_count: string;
+      crypto_order_count: string;
+      noncrypto_order_count: string;
+    }> = [];
+
+    try {
+      rows = await this.prizeOrderRepository
+        .createQueryBuilder('order')
+        .select(`date_trunc('month', "order"."createdAt")`, 'month')
+        .addSelect(`COALESCE(SUM("order"."total_price"), 0)`, 'total_revenue')
+        .addSelect(
+          `COALESCE(SUM(CASE WHEN "order"."payment_method" = 'crypto' THEN "order"."total_price" ELSE 0 END), 0)`,
+          'crypto_revenue',
+        )
+        .addSelect(
+          `COALESCE(SUM(CASE WHEN "order"."payment_method" <> 'crypto' THEN "order"."total_price" ELSE 0 END), 0)`,
+          'noncrypto_revenue',
+        )
+        .addSelect(`COUNT(*)`, 'order_count')
+        .addSelect(
+          `COUNT(*) FILTER (WHERE "order"."payment_method" = 'crypto')`,
+          'crypto_order_count',
+        )
+        .addSelect(
+          `COUNT(*) FILTER (WHERE "order"."payment_method" <> 'crypto')`,
+          'noncrypto_order_count',
+        )
+        .where('order.status IN (:...statuses)', {
+          statuses: ['paid', 'shipped', 'delivered'],
+        })
+        .andWhere(`"order"."createdAt" >= :cutoff`, { cutoff })
+        .groupBy(`date_trunc('month', "order"."createdAt")`)
+        .orderBy(`month`, 'DESC')
+        .getRawMany();
+    } catch (err) {
+      this.logger.error(
+        `getAdminSalesSummary aggregate query failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw err;
+    }
+
+    // Build a dense series so months with zero sales still show up.
+    const map = new Map(
+      rows.map((r) => [
+        new Date(r.month).toISOString().slice(0, 7), // YYYY-MM
+        r,
+      ]),
+    );
+
+    const monthsOut: Array<{
+      month: string;
+      totalRevenue: number;
+      cryptoRevenue: number;
+      nonCryptoRevenue: number;
+      platformFees: number;
+      cryptoPlatformFees: number;
+      nonCryptoPlatformFees: number;
+      orderCount: number;
+      cryptoOrderCount: number;
+      nonCryptoOrderCount: number;
+    }> = [];
+
+    // Platform-fee estimates. Stored orders don't capture the exact platform
+    // cut, so we approximate with the standard rates:
+    //   - Non-crypto: 3% buyer + 4% seller of subtotal (totalPrice already
+    //     includes the buyer fee, so divide by 1.03 to back out subtotal).
+    //   - Crypto:   200 bps combined (buyer + default seller) of total.
+    //               Per-seller group overrides on-chain are ignored here.
+    const NON_CRYPTO_BUYER_FEE_PCT = 3;
+    const NON_CRYPTO_SELLER_FEE_PCT = 4;
+    const NON_CRYPTO_FEE_RATE_OF_TOTAL =
+      (NON_CRYPTO_BUYER_FEE_PCT + NON_CRYPTO_SELLER_FEE_PCT) /
+      100 /
+      (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
+    const CRYPTO_COMBINED_BPS = 200;
+    const CRYPTO_FEE_RATE_OF_TOTAL = CRYPTO_COMBINED_BPS / 10000;
+
+    const cursor = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    for (let i = 0; i < months; i++) {
+      const key = cursor.toISOString().slice(0, 7);
+      const r = map.get(key);
+      const cryptoRevenue = parseFloat(r?.crypto_revenue ?? '0');
+      const nonCryptoRevenue = parseFloat(r?.noncrypto_revenue ?? '0');
+      const cryptoPlatformFees =
+        Math.round(cryptoRevenue * CRYPTO_FEE_RATE_OF_TOTAL * 100) / 100;
+      const nonCryptoPlatformFees =
+        Math.round(nonCryptoRevenue * NON_CRYPTO_FEE_RATE_OF_TOTAL * 100) /
+        100;
+      monthsOut.push({
+        month: cursor.toISOString(),
+        totalRevenue: parseFloat(r?.total_revenue ?? '0'),
+        cryptoRevenue,
+        nonCryptoRevenue,
+        platformFees:
+          Math.round((cryptoPlatformFees + nonCryptoPlatformFees) * 100) /
+          100,
+        cryptoPlatformFees,
+        nonCryptoPlatformFees,
+        orderCount: parseInt(r?.order_count ?? '0', 10),
+        cryptoOrderCount: parseInt(r?.crypto_order_count ?? '0', 10),
+        nonCryptoOrderCount: parseInt(r?.noncrypto_order_count ?? '0', 10),
+      });
+      // Step back one month
+      cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+    }
+
+    const totals = monthsOut.reduce(
+      (acc, m) => ({
+        totalRevenue: acc.totalRevenue + m.totalRevenue,
+        cryptoRevenue: acc.cryptoRevenue + m.cryptoRevenue,
+        nonCryptoRevenue: acc.nonCryptoRevenue + m.nonCryptoRevenue,
+        platformFees: acc.platformFees + m.platformFees,
+        cryptoPlatformFees: acc.cryptoPlatformFees + m.cryptoPlatformFees,
+        nonCryptoPlatformFees:
+          acc.nonCryptoPlatformFees + m.nonCryptoPlatformFees,
+        orderCount: acc.orderCount + m.orderCount,
+        cryptoOrderCount: acc.cryptoOrderCount + m.cryptoOrderCount,
+        nonCryptoOrderCount: acc.nonCryptoOrderCount + m.nonCryptoOrderCount,
+      }),
+      {
+        totalRevenue: 0,
+        cryptoRevenue: 0,
+        nonCryptoRevenue: 0,
+        platformFees: 0,
+        cryptoPlatformFees: 0,
+        nonCryptoPlatformFees: 0,
+        orderCount: 0,
+        cryptoOrderCount: 0,
+        nonCryptoOrderCount: 0,
+      },
+    );
+
+    return {
+      months: monthsOut,
+      totals,
+      feeAssumptions: {
+        nonCryptoBuyerFeePercent: NON_CRYPTO_BUYER_FEE_PCT,
+        nonCryptoSellerFeePercent: NON_CRYPTO_SELLER_FEE_PCT,
+        cryptoCombinedBps: CRYPTO_COMBINED_BPS,
+      },
+    };
+  }
+
+  /**
    * Get offer orders for a specific seller's shop items
    */
   async getSellerOffers(
@@ -2964,6 +3320,7 @@ export class PrizeService {
       usdCharged: parseFloat(order.usdCharged.toString()),
       totalPrice: parseFloat(order.totalPrice.toString()),
       stripeSessionId: order.stripeSessionId,
+      cryptoTxSignature: order.cryptoTxSignature ?? undefined,
       status: order.status,
       offerAmount: order.offerAmount
         ? parseFloat(order.offerAmount.toString())
@@ -3748,6 +4105,56 @@ export class PrizeService {
   }
 
   /**
+   * Sync read of the cached CardCade crypto-enabled flag, used by
+   * `mapToDto` to populate `sellerCryptoEnabled` for items with no
+   * creator (`createdBy IS NULL`). If the cached value is stale, fires a
+   * non-blocking refresh — the current call returns the previous value.
+   */
+  private readCardcadeCryptoEnabled(): boolean {
+    if (
+      Date.now() > this.cardcadeCryptoCache.expiresAt &&
+      !this.cardcadeCryptoRefreshing
+    ) {
+      this.cardcadeCryptoRefreshing = true;
+      void this.refreshCardcadeCryptoCache().finally(() => {
+        this.cardcadeCryptoRefreshing = false;
+      });
+    }
+    return this.cardcadeCryptoCache.value;
+  }
+
+  /**
+   * Force-refresh the CardCade crypto-enabled cache. Safe to await from
+   * any entry point that wants the very latest value (e.g. immediately
+   * after admin saves the toggle).
+   */
+  private async refreshCardcadeCryptoCache(): Promise<void> {
+    try {
+      const settings = await this.shopSettingsRepository.findOne({
+        where: { shopKey: 'cardcade' },
+      });
+      const enabled =
+        !!settings?.cryptoPaymentsEnabled && !!settings?.cryptoWalletAddress;
+      this.cardcadeCryptoCache = {
+        value: enabled,
+        expiresAt: Date.now() + PrizeService.CARDCADE_FLAG_TTL_MS,
+      };
+    } catch (err) {
+      // Don't poison the cache on transient DB errors. Bump the expiry
+      // a little to avoid hot-looping the failing query.
+      this.cardcadeCryptoCache = {
+        value: this.cardcadeCryptoCache.value,
+        expiresAt: Date.now() + 5_000,
+      };
+      this.logger.warn(
+        `[CardCade flag] failed to refresh shop_settings cache: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /**
    * Map entity to DTO
    */
   private mapToDto(
@@ -3764,6 +4171,12 @@ export class PrizeService {
       auctionViewerUserId?: string | null;
       /** True when this user has placed at least one bid on this auction. */
       auctionIsBidder?: boolean;
+      /**
+       * Force the value of `sellerCryptoEnabled` on the resulting DTO.
+       * Used by virtual shops (e.g. CardCade) whose items have no creator
+       * user — the flag comes from `shop_settings` instead.
+       */
+      sellerCryptoEnabledOverride?: boolean;
     } = {},
   ): PrizeConfigurationDto {
     const sortedItemImages = (entity.itemImages || [])
@@ -3817,7 +4230,11 @@ export class PrizeService {
       createdBy: entity.createdBy,
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
-      sellerCryptoEnabled: entity.creator?.cryptoPaymentsEnabled ?? false,
+      sellerCryptoEnabled:
+        opts.sellerCryptoEnabledOverride ??
+        (entity.createdBy === null
+          ? this.readCardcadeCryptoEnabled()
+          : (entity.creator?.cryptoPaymentsEnabled ?? false)),
       updatedBy: entity.updatedBy,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
