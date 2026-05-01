@@ -1,4 +1,13 @@
-import { IsString, IsOptional, Length, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  Length,
+  IsInt,
+  Min,
+  Max,
+  IsBoolean,
+  MaxLength,
+} from 'class-validator';
 
 export class QuoteCryptoPaymentDto {
   /** Order ID to quote. The seller, amount and shipping are derived server-side. */
@@ -53,4 +62,82 @@ export class SetSellerOverrideFeeDto {
   @Min(0)
   @Max(10000)
   overrideFeeBps?: number | null;
+}
+
+// ─── Marketplace config ──────────────────────────────────────────────
+export class UpdateMarketplaceConfigDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  buyerFeeBps?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  defaultSellerFeeBps?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(32, 44)
+  treasury?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(32, 44)
+  authority?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  paused?: boolean;
+}
+
+// ─── Seller groups ───────────────────────────────────────────────────
+export class UpsertSellerGroupDto {
+  @IsInt()
+  @Min(0)
+  @Max(255)
+  groupId: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  feeBps: number;
+
+  @IsString()
+  @MaxLength(32)
+  label: string;
+}
+
+export class SetSellerGroupDto {
+  @IsString()
+  @Length(32, 44)
+  sellerWallet: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(255)
+  groupId: number;
+}
+
+// ─── Buyer waivers ───────────────────────────────────────────────────
+export class BuyerWaiverDto {
+  @IsString()
+  @Length(32, 44)
+  buyerWallet: string;
+}
+
+export class WithdrawTreasuryDto {
+  /** Destination wallet (base58). USDC ATA will be auto-created if missing. */
+  @IsString()
+  @Length(32, 44)
+  destinationWallet: string;
+
+  /**
+   * Amount to withdraw, expressed as a u64 base-units string (USDC has 6
+   * decimals, so 1 USDC = "1000000"). String avoids JS number precision loss.
+   */
+  @IsString()
+  amountBaseUnits: string;
 }

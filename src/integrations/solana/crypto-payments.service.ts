@@ -13,7 +13,13 @@ import {
   SystemProgram,
   ParsedTransactionWithMeta,
 } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
+import {
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  getAccount,
+  getOrCreateAssociatedTokenAccount,
+  createTransferCheckedInstruction,
+} from '@solana/spl-token';
 /* eslint-disable-next-line @typescript-eslint/no-require-imports */
 const bs58Raw = require('bs58');
 const bs58: {
@@ -84,6 +90,13 @@ export class CryptoPaymentsService implements OnModuleInit {
   private readonly logger = new Logger(CryptoPaymentsService.name);
   private connection!: Connection;
   private authorityKp!: Keypair;
+  /**
+   * Treasury signer. Defaults to the authority keypair when
+   * `CARDCADE_TREASURY_SECRET_BASE58` is not provided (matches the devnet
+   * setup where authority and treasury are the same wallet). Used to sign
+   * USDC withdrawals from the treasury ATA.
+   */
+  private treasuryKp?: Keypair;
   private provider!: anchor.AnchorProvider;
   private program!: anchor.Program;
   private programId!: PublicKey;
@@ -137,6 +150,22 @@ export class CryptoPaymentsService implements OnModuleInit {
       this.authorityKp = Keypair.generate();
     }
 
+    const treasuryBase58 = this.config.get<string>(
+      'solana.treasurySecretBase58',
+    );
+    if (treasuryBase58) {
+      const tSecret = bs58.decode(treasuryBase58);
+      if (tSecret.length !== 64) {
+        throw new Error(
+          `CARDCADE_TREASURY_SECRET_BASE58 must decode to 64 bytes, got ${tSecret.length}`,
+        );
+      }
+      this.treasuryKp = Keypair.fromSecretKey(tSecret);
+    } else if (authBase58) {
+      // Fall back to authority keypair (devnet setup).
+      this.treasuryKp = this.authorityKp;
+    }
+
     const wallet = new anchor.Wallet(this.authorityKp);
     this.provider = new anchor.AnchorProvider(this.connection, wallet, {
       commitment: 'confirmed',
@@ -187,6 +216,72 @@ export class CryptoPaymentsService implements OnModuleInit {
   /** Force re-fetch of the cached marketplace config. */
   invalidateMarketplaceCache(): void {
     this.cachedMarketplace = undefined;
+  }
+
+  /**
+   * Resolve a seller's on-chain fee status: which `SellerGroup` they're in,
+   * that group's label + base fee, and any per-seller override. Used by the
+   * admin Crypto Sellers tab so each row can render
+   * `"Group <label> · X.XX%"` (or `"Override · X.XX%"`).
+   *
+   * Returns `null` for the group when no SellerProfile exists yet (the
+   * seller hasn't been assigned to anything, so the marketplace
+   * `default_seller_fee_bps` is what would apply at quote time).
+   */
+  async getSellerFeeStatus(sellerWallet: string): Promise<{
+    profileExists: boolean;
+    groupId: number;
+    groupLabel: string | null;
+    groupFeeBps: number;
+    overrideFeeBps: number | null;
+    /** profile.override_fee_bps ?? group.fee_bps */
+    effectiveFeeBps: number;
+    isDefaultGroup: boolean;
+  }> {
+    const seller = new PublicKey(sellerWallet);
+    const market = await this.getMarketplaceConfig();
+    const [profileAddr] = sellerProfilePda(this.programId, seller);
+
+    let profileExists = false;
+    let groupId = DEFAULT_SELLER_GROUP_ID;
+    let overrideFeeBps: number | null = null;
+    try {
+      const profile: any = await (
+        this.program.account as any
+      ).sellerProfile.fetch(profileAddr);
+      profileExists = true;
+      groupId = Number(profile.groupId);
+      overrideFeeBps =
+        profile.overrideFeeBps !== null && profile.overrideFeeBps !== undefined
+          ? Number(profile.overrideFeeBps)
+          : null;
+    } catch {
+      // No profile on-chain yet → fall back to default group view.
+    }
+
+    let groupFeeBps = market.defaultSellerFeeBps;
+    let groupLabel: string | null = null;
+    try {
+      const [groupAddr] = sellerGroupPda(this.programId, groupId);
+      const group: any = await (this.program.account as any).sellerGroup.fetch(
+        groupAddr,
+      );
+      groupFeeBps = Number(group.feeBps);
+      groupLabel = decodeGroupLabel(group.label);
+    } catch {
+      // Group account missing — keep marketplace default.
+    }
+
+    const effectiveFeeBps = overrideFeeBps ?? groupFeeBps;
+    return {
+      profileExists,
+      groupId,
+      groupLabel,
+      groupFeeBps,
+      overrideFeeBps,
+      effectiveFeeBps,
+      isDefaultGroup: groupId === DEFAULT_SELLER_GROUP_ID,
+    };
   }
 
   /**
@@ -456,6 +551,362 @@ export class CryptoPaymentsService implements OnModuleInit {
     return info !== null && info.owner.equals(this.programId);
   }
 
+  // ─── Treasury (admin) ──────────────────────────────────────────────
+  /** True if we hold a treasury signer secret in env (or fall back to authority). */
+  get canSignTreasury(): boolean {
+    return !!this.treasuryKp;
+  }
+
+  /**
+   * Admin read: USDC balance of the configured treasury ATA + native SOL
+   * balance of the owner wallet (used for paying gas on withdrawals).
+   * Returns nulls for fields that fail to fetch instead of throwing.
+   */
+  async getTreasuryStatus(): Promise<{
+    treasuryAta: string;
+    treasuryOwner: string | null;
+    treasurySignerLoaded: boolean;
+    treasurySignerMatchesOwner: boolean | null;
+    usdcBalance: string | null; // base units (u64)
+    usdcBalanceUi: number | null;
+    decimals: number;
+    ownerSolLamports: number | null;
+  }> {
+    const decimals = 6;
+    let usdcBalance: string | null = null;
+    let usdcBalanceUi: number | null = null;
+    let owner: PublicKey | null = null;
+    try {
+      const acct = await getAccount(this.connection, this.treasuryAta);
+      usdcBalance = acct.amount.toString();
+      usdcBalanceUi = Number(acct.amount) / 10 ** decimals;
+      owner = acct.owner;
+    } catch (e) {
+      this.logger.warn(
+        `getAccount(treasuryAta) failed: ${(e as Error).message}`,
+      );
+    }
+
+    let ownerSolLamports: number | null = null;
+    if (owner) {
+      try {
+        ownerSolLamports = await this.connection.getBalance(owner);
+      } catch (e) {
+        this.logger.warn(
+          `getBalance(treasury owner) failed: ${(e as Error).message}`,
+        );
+      }
+    }
+
+    const signerMatches =
+      owner && this.treasuryKp ? owner.equals(this.treasuryKp.publicKey) : null;
+
+    return {
+      treasuryAta: this.treasuryAta.toBase58(),
+      treasuryOwner: owner ? owner.toBase58() : null,
+      treasurySignerLoaded: !!this.treasuryKp,
+      treasurySignerMatchesOwner: signerMatches,
+      usdcBalance,
+      usdcBalanceUi,
+      decimals,
+      ownerSolLamports,
+    };
+  }
+
+  /**
+   * Admin: withdraw USDC from the treasury ATA to an arbitrary destination
+   * wallet. The destination's USDC ATA is auto-created (rent paid by the
+   * treasury signer) if it doesn't already exist.
+   *
+   * `amountBaseUnits` is u64 base units (USDC has 6 decimals → 1 USDC = 1_000_000).
+   */
+  async withdrawTreasuryUsdc(
+    destinationWallet: string,
+    amountBaseUnits: bigint,
+  ): Promise<{ txSignature: string; destinationAta: string }> {
+    if (!this.treasuryKp) {
+      throw new Error(
+        'No treasury signer loaded (set CARDCADE_TREASURY_SECRET_BASE58 or CARDCADE_AUTHORITY_SECRET_BASE58)',
+      );
+    }
+    if (amountBaseUnits <= 0n) {
+      throw new Error('amountBaseUnits must be > 0');
+    }
+    const dest = new PublicKey(destinationWallet);
+
+    // Verify on-chain that our signer actually owns the treasury ATA before
+    // attempting the transfer — avoids cryptic SPL errors if env is wrong.
+    const tAcct = await getAccount(this.connection, this.treasuryAta);
+    if (!tAcct.owner.equals(this.treasuryKp.publicKey)) {
+      throw new Error(
+        `Treasury signer (${this.treasuryKp.publicKey.toBase58()}) does not own treasury ATA owner=${tAcct.owner.toBase58()}`,
+      );
+    }
+    if (tAcct.amount < amountBaseUnits) {
+      throw new Error(
+        `Insufficient treasury USDC: have=${tAcct.amount.toString()} want=${amountBaseUnits.toString()}`,
+      );
+    }
+
+    // getOrCreateAssociatedTokenAccount handles "create if missing" with the
+    // treasury signer paying ~0.002 SOL of rent for new ATAs.
+    const destAta = await getOrCreateAssociatedTokenAccount(
+      this.connection,
+      this.treasuryKp,
+      this.paymentMint,
+      dest,
+      true, // allowOwnerOffCurve — be lenient about PDA destinations
+    );
+
+    const ix = createTransferCheckedInstruction(
+      this.treasuryAta,
+      this.paymentMint,
+      destAta.address,
+      this.treasuryKp.publicKey,
+      amountBaseUnits,
+      6,
+    );
+    const tx = new anchor.web3.Transaction().add(ix);
+    const sig = await anchor.web3.sendAndConfirmTransaction(
+      this.connection,
+      tx,
+      [this.treasuryKp],
+      { commitment: 'confirmed' },
+    );
+    this.logger.log(
+      `withdraw_treasury_usdc(${destinationWallet}, ${amountBaseUnits.toString()}) ata=${destAta.address.toBase58()} tx=${sig}`,
+    );
+    return { txSignature: sig, destinationAta: destAta.address.toBase58() };
+  }
+
+  // ─── Marketplace config (admin) ─────────────────────────────────────
+  /** Admin: update buyer fee (basis points). */
+  async updateBuyerFee(buyerFeeBps: number): Promise<string> {
+    const sig = await (this.program.methods as any)
+      .updateBuyerFee(buyerFeeBps)
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.invalidateMarketplaceCache();
+    this.logger.log(`update_buyer_fee(${buyerFeeBps}) tx=${sig}`);
+    return sig;
+  }
+
+  /**
+   * Admin: update marketplace `default_seller_fee_bps` (the fallback used
+   * when a seller has no SellerProfile). NOTE: this does NOT mutate the
+   * group-0 SellerGroup PDA — call `upsertSellerGroup(0, ...)` to keep them
+   * aligned.
+   */
+  async updateDefaultSellerFee(defaultSellerFeeBps: number): Promise<string> {
+    const sig = await (this.program.methods as any)
+      .updateDefaultSellerFee(defaultSellerFeeBps)
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.invalidateMarketplaceCache();
+    this.logger.log(
+      `update_default_seller_fee(${defaultSellerFeeBps}) tx=${sig}`,
+    );
+    return sig;
+  }
+
+  /** Admin: rotate the treasury wallet (USDC ATA recipient). */
+  async updateTreasury(newTreasury: string): Promise<string> {
+    const sig = await (this.program.methods as any)
+      .updateTreasury(new PublicKey(newTreasury))
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.invalidateMarketplaceCache();
+    this.logger.log(`update_treasury(${newTreasury}) tx=${sig}`);
+    return sig;
+  }
+
+  /**
+   * Admin: rotate the on-chain authority. ⚠️ After this succeeds, the API's
+   * `CARDCADE_AUTHORITY_SECRET_BASE58` must be rotated to the new key or
+   * subsequent admin calls will fail with `UnauthorizedAuthority`.
+   */
+  async updateAuthority(newAuthority: string): Promise<string> {
+    const sig = await (this.program.methods as any)
+      .updateAuthority(new PublicKey(newAuthority))
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.invalidateMarketplaceCache();
+    this.logger.log(`update_authority(${newAuthority}) tx=${sig}`);
+    return sig;
+  }
+
+  /** Admin: pause / unpause new payments + sales contract-wide. */
+  async setPaused(paused: boolean): Promise<string> {
+    const sig = await (this.program.methods as any)
+      .setPaused(paused)
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.invalidateMarketplaceCache();
+    this.logger.log(`set_paused(${paused}) tx=${sig}`);
+    return sig;
+  }
+
+  // ─── Seller groups (admin) ──────────────────────────────────────────
+  /**
+   * Admin: create-or-update a SellerGroup tier. `label` is encoded as a
+   * NUL-padded 32-byte UTF-8 buffer. Group 0 is the implicit "default" tier.
+   */
+  async upsertSellerGroup(
+    groupId: number,
+    feeBps: number,
+    label: string,
+  ): Promise<string> {
+    if (!Number.isInteger(groupId) || groupId < 0 || groupId > 255) {
+      throw new Error(`groupId must be a u8 (0-255), got ${groupId}`);
+    }
+    const labelBuf = encodeGroupLabel(label);
+    const [groupAddr] = sellerGroupPda(this.programId, groupId);
+    const sig = await (this.program.methods as any)
+      .upsertSellerGroup(groupId, feeBps, Array.from(labelBuf))
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+        group: groupAddr,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.logger.log(
+      `upsert_seller_group(${groupId}, ${feeBps}, "${label}") tx=${sig}`,
+    );
+    return sig;
+  }
+
+  /**
+   * Admin: assign / move a seller into an existing group. Creates the
+   * SellerProfile PDA on first assignment.
+   */
+  async setSellerGroup(sellerWallet: string, groupId: number): Promise<string> {
+    const seller = new PublicKey(sellerWallet);
+    const [profile] = sellerProfilePda(this.programId, seller);
+    const [group] = sellerGroupPda(this.programId, groupId);
+    const sig = await (this.program.methods as any)
+      .setSellerGroup(groupId)
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+        seller,
+        profile,
+        group,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.logger.log(`set_seller_group(${sellerWallet}, ${groupId}) tx=${sig}`);
+    return sig;
+  }
+
+  /**
+   * List every SellerGroup PDA on-chain. Used by the admin Groups panel.
+   * Each row is `{ groupId, feeBps, label }` sorted by groupId ascending.
+   */
+  async listSellerGroups(): Promise<
+    Array<{
+      groupId: number;
+      feeBps: number;
+      label: string | null;
+      pda: string;
+    }>
+  > {
+    const all: any[] = await (this.program.account as any).sellerGroup.all();
+    const rows = all.map((entry) => {
+      const acct = entry.account;
+      return {
+        groupId: Number(acct.groupId),
+        feeBps: Number(acct.feeBps),
+        label: decodeGroupLabel(acct.label),
+        pda: (entry.publicKey as PublicKey).toBase58(),
+      };
+    });
+    rows.sort((a, b) => a.groupId - b.groupId);
+    return rows;
+  }
+
+  // ─── Buyer fee waivers (admin) ──────────────────────────────────────
+  /** Admin: grant a buyer a permanent fee waiver (sets buyer_fee to 0). */
+  async grantBuyerWaiver(buyerWallet: string): Promise<string> {
+    const buyer = new PublicKey(buyerWallet);
+    const [waiver] = buyerWaiverPda(this.programId, buyer);
+    const sig = await (this.program.methods as any)
+      .grantBuyerWaiver()
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+        buyer,
+        waiver,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.logger.log(`grant_buyer_waiver(${buyerWallet}) tx=${sig}`);
+    return sig;
+  }
+
+  /** Admin: revoke a buyer's fee waiver (closes the waiver PDA). */
+  async revokeBuyerWaiver(buyerWallet: string): Promise<string> {
+    const buyer = new PublicKey(buyerWallet);
+    const [waiver] = buyerWaiverPda(this.programId, buyer);
+    const sig = await (this.program.methods as any)
+      .revokeBuyerWaiver()
+      .accountsPartial({
+        authority: this.authorityKp.publicKey,
+        marketplace: this.marketplaceAddr,
+        buyer,
+        waiver,
+      })
+      .signers([this.authorityKp])
+      .rpc();
+    this.logger.log(`revoke_buyer_waiver(${buyerWallet}) tx=${sig}`);
+    return sig;
+  }
+
+  /** Quick check: does a buyer currently have a fee waiver on-chain? */
+  async hasBuyerWaiver(buyerWallet: string): Promise<boolean> {
+    const buyer = new PublicKey(buyerWallet);
+    const [addr] = buyerWaiverPda(this.programId, buyer);
+    const info = await this.connection.getAccountInfo(addr);
+    return info !== null && info.owner.equals(this.programId);
+  }
+
+  /** List every BuyerWaiver PDA on-chain. */
+  async listBuyerWaivers(): Promise<
+    Array<{ buyer: string; grantedAt: number; pda: string }>
+  > {
+    const all: any[] = await (this.program.account as any).buyerWaiver.all();
+    return all
+      .map((entry) => ({
+        buyer: (entry.account.buyer as PublicKey).toBase58(),
+        grantedAt: Number(entry.account.grantedAt),
+        pda: (entry.publicKey as PublicKey).toBase58(),
+      }))
+      .sort((a, b) => b.grantedAt - a.grantedAt);
+  }
+
   /** Expose constants for callers (e.g. for response shaping). */
   get programIdString(): string {
     return this.programId.toBase58();
@@ -469,4 +920,37 @@ export class CryptoPaymentsService implements OnModuleInit {
   get tokenProgramId(): PublicKey {
     return TOKEN_PROGRAM_ID;
   }
+}
+
+/**
+ * On-chain `SellerGroup.label` is a fixed-size 32-byte UTF-8 buffer with
+ * trailing NULs. Anchor decodes it as `number[]` (or `Buffer`); strip the
+ * padding and return a plain string for display.
+ */
+/**
+ * Encode a human label to the contract's fixed 32-byte UTF-8 buffer.
+ * Truncates to fit; pads the remainder with NULs.
+ */
+function encodeGroupLabel(label: string): Buffer {
+  const buf = Buffer.alloc(32);
+  const src = Buffer.from((label ?? '').slice(0, 32), 'utf8');
+  src.copy(buf, 0, 0, Math.min(src.length, 32));
+  return buf;
+}
+
+function decodeGroupLabel(raw: unknown): string | null {
+  if (raw == null) return null;
+  let bytes: Buffer;
+  if (Buffer.isBuffer(raw)) bytes = raw;
+  else if (Array.isArray(raw)) bytes = Buffer.from(raw as number[]);
+  else if (raw instanceof Uint8Array) bytes = Buffer.from(raw);
+  else return null;
+  const trimmed = bytes.subarray(
+    0,
+    bytes.findIndex((b) => b === 0) === -1
+      ? bytes.length
+      : bytes.findIndex((b) => b === 0),
+  );
+  const text = trimmed.toString('utf8').trim();
+  return text.length > 0 ? text : null;
 }

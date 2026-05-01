@@ -109,6 +109,16 @@ export class CryptoOrderService {
       );
     }
 
+    // Refuse to mint a quote when admins have paused on-chain sales — the
+    // contract would reject the pay_invoice tx anyway, but failing here
+    // gives the buyer a clean error before they sign anything.
+    const market = await this.crypto.getMarketplaceConfig();
+    if (market.paused) {
+      throw new BadRequestException(
+        'Crypto payments are temporarily paused. Please try again later.',
+      );
+    }
+
     const prize = await this.prizeRepo.findOne({
       where: { id: order.prizeConfigurationId },
     });
