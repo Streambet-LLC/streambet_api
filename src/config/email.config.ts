@@ -110,6 +110,10 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/auctions_enabled.ejs',
       schemaPath: './src/templates/auctions_enabled.json',
     },
+    crypto_enabled: {
+      templatePath: './src/templates/crypto_enabled.ejs',
+      schemaPath: './src/templates/crypto_enabled.json',
+    },
     buyer_payment_expired: {
       templatePath: './src/templates/buyer_payment_expired.ejs',
       schemaPath: './src/templates/buyer_payment_expired.json',

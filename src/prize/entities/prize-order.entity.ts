@@ -36,7 +36,7 @@ export class PrizeOrder extends BaseEntity {
     nullable: false,
     name: 'payment_method',
   })
-  paymentMethod: 'coins' | 'usd' | 'combined';
+  paymentMethod: 'coins' | 'usd' | 'combined' | 'crypto';
 
   @Column({
     type: 'integer',
@@ -167,4 +167,39 @@ export class PrizeOrder extends BaseEntity {
   @ManyToOne(() => PrizeConfiguration)
   @JoinColumn({ name: 'prize_configuration_id' })
   prizeConfiguration: PrizeConfiguration;
+
+  /**
+   * Solana transaction signature for crypto payments (pay_invoice).
+   * Used to verify the on-chain transaction before marking order paid.
+   */
+  @Column({
+    type: 'varchar',
+    length: 88,
+    nullable: true,
+    name: 'crypto_tx_signature',
+  })
+  cryptoTxSignature?: string;
+
+  /**
+   * Buyer's Solana wallet address (base58 public key) for crypto payments.
+   * Stored for audit trail and to match against buyer account in transaction.
+   */
+  @Column({
+    type: 'varchar',
+    length: 88,
+    nullable: true,
+    name: 'crypto_buyer_wallet',
+  })
+  cryptoBuyerWallet?: string;
+
+  /**
+   * Invoice ID (16 bytes hex-encoded) for replay protection.
+   * On-chain pay_invoice uses this to generate the Invoice PDA seed.
+   */
+  @Column({
+    type: 'bytea',
+    nullable: true,
+    name: 'crypto_invoice_id',
+  })
+  cryptoInvoiceId?: Buffer;
 }

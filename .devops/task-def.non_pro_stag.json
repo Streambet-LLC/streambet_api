@@ -249,6 +249,26 @@
         {
           "name": "EBAY_GLOBAL_ID",
           "valueFrom": "/cardcade/non_pro_stag/EBAY_GLOBAL_ID"
+        },
+        {
+          "name": "SOLANA_RPC_URL",
+          "valueFrom": "/cardcade/non_pro_stag/SOLANA_RPC_URL"
+        },
+        {
+          "name": "CARDCADE_TREASURY_ATA",
+          "valueFrom": "/cardcade/non_pro_stag/CARDCADE_TREASURY_ATA"
+        },
+        {
+          "name": "CARDCADE_AUTHORITY_SECRET_BASE58",
+          "valueFrom": "/cardcade/non_pro_stag/CARDCADE_AUTHORITY_SECRET_BASE58"
+        },
+        {
+          "name": "CARDCADE_PROGRAM_ID",
+          "valueFrom": "/cardcade/non_pro_stag/CARDCADE_PROGRAM_ID"
+        },
+        {
+          "name": "CARDCADE_USDC_MINT",
+          "valueFrom": "/cardcade/non_pro_stag/CARDCADE_USDC_MINT"
         }
       ],
       "mountPoints": [],

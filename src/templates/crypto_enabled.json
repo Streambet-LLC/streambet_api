@@ -1,0 +1,22 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "params": {
+      "type": "object",
+      "required": ["username", "settingsCryptoLink"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Username of the seller getting crypto payments enabled"
+        },
+        "settingsCryptoLink": {
+          "type": "string",
+          "description": "Link to the seller's settings → crypto tab to connect their Solana wallet"
+        }
+      }
+    }
+  },
+  "required": ["params"]
+}

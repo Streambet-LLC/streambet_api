@@ -397,6 +397,12 @@ export class PrizeConfigurationDto {
   })
   createdByShopName: string | null;
 
+  @ApiProperty({
+    example: false,
+    description: 'True if the seller has approved crypto (USDC) payments',
+  })
+  sellerCryptoEnabled?: boolean;
+
   @ApiProperty({ example: 'uuid', nullable: true })
   updatedBy: string | null;
 
