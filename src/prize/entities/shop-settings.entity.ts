@@ -40,4 +40,26 @@ export class ShopSettings extends BaseEntity {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   country: string | null;
+
+  /**
+   * Platform-level crypto payout settings. Used by virtual shops (e.g.
+   * CardCade) whose items have no creator user — CryptoOrderService falls
+   * back to these fields when `prize.createdBy` is null so admin-owned
+   * inventory can still be purchased with USDC. Individual sellers
+   * continue to use `User.cryptoPaymentsEnabled` / `User.solanaWallet`.
+   */
+  @Column({
+    type: 'boolean',
+    name: 'crypto_payments_enabled',
+    default: false,
+  })
+  cryptoPaymentsEnabled: boolean;
+
+  @Column({
+    type: 'varchar',
+    length: 88,
+    name: 'crypto_wallet_address',
+    nullable: true,
+  })
+  cryptoWalletAddress: string | null;
 }
