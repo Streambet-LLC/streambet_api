@@ -2964,6 +2964,7 @@ export class PrizeService {
       usdCharged: parseFloat(order.usdCharged.toString()),
       totalPrice: parseFloat(order.totalPrice.toString()),
       stripeSessionId: order.stripeSessionId,
+      cryptoTxSignature: order.cryptoTxSignature ?? undefined,
       status: order.status,
       offerAmount: order.offerAmount
         ? parseFloat(order.offerAmount.toString())

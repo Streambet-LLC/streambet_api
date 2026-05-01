@@ -8,13 +8,19 @@ import {
 } from './crypto-payments.controller';
 import { PrizeOrder } from '../../prize/entities/prize-order.entity';
 import { PrizeConfiguration } from '../../prize/entities/prize-configuration.entity';
+import { PrizeRedemption } from '../../prize/entities/prize-redemption.entity';
 import { User } from '../../users/entities/user.entity';
 import { QueueModule } from '../../queue/queue.module';
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PrizeOrder, PrizeConfiguration, User]),
+    TypeOrmModule.forFeature([
+      PrizeOrder,
+      PrizeConfiguration,
+      PrizeRedemption,
+      User,
+    ]),
     QueueModule,
   ],
   providers: [CryptoPaymentsService, CryptoOrderService],

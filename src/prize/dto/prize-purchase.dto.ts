@@ -66,8 +66,8 @@ export class CreatePrizeOrderDto {
   @Type(() => ShippingAddressDto)
   shippingAddress: ShippingAddressDto;
 
-  @ApiProperty({ enum: ['coins', 'usd', 'combined'] })
-  @IsEnum(['coins', 'usd', 'combined'])
+  @ApiProperty({ enum: ['coins', 'usd', 'combined', 'crypto'] })
+  @IsEnum(['coins', 'usd', 'combined', 'crypto'])
   paymentMethod: PaymentMethod;
 
   @ApiProperty({
@@ -142,6 +142,12 @@ export class PrizeOrderResponseDto {
 
   @ApiProperty({ nullable: true })
   stripeSessionId?: string;
+
+  @ApiProperty({
+    nullable: true,
+    description: 'Solana transaction signature when paid via crypto.',
+  })
+  cryptoTxSignature?: string;
 
   @ApiProperty({
     enum: [
