@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
@@ -11,6 +10,7 @@ import { Repository } from 'typeorm';
 import { PrizeOrder } from '../../prize/entities/prize-order.entity';
 import { PrizeConfiguration } from '../../prize/entities/prize-configuration.entity';
 import { PrizeRedemption } from '../../prize/entities/prize-redemption.entity';
+import { ShopSettings } from '../../prize/entities/shop-settings.entity';
 import { PrizeCategory } from '../../prize/enums/prize-category.enum';
 import { ShippingStatus } from '../../prize/dto/prize-redemption.dto';
 import { User } from '../../users/entities/user.entity';
@@ -38,8 +38,51 @@ export class CryptoOrderService {
     private readonly redemptionRepo: Repository<PrizeRedemption>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(ShopSettings)
+    private readonly shopSettingsRepo: Repository<ShopSettings>,
     private readonly crypto: CryptoPaymentsService,
   ) {}
+
+  /**
+   * Resolve the destination wallet for a prize order. Individual sellers'
+   * payouts come from their User row; CardCade-owned items (createdBy is
+   * NULL) fall back to the platform-level cardcade row in `shop_settings`,
+   * which an admin maintains via Seller Shop Manage.
+   */
+  private async resolveSellerWallet(prize: PrizeConfiguration): Promise<{
+    wallet: string;
+    /** Human label for log lines. */
+    source: 'user' | 'cardcade';
+  }> {
+    if (prize.createdBy) {
+      const seller = await this.userRepo.findOne({
+        where: { id: prize.createdBy },
+      });
+      if (!seller) throw new NotFoundException('Seller not found');
+      if (!seller.solanaWallet) {
+        throw new BadRequestException(
+          'Seller has not configured a Solana wallet',
+        );
+      }
+      if (!seller.cryptoPaymentsEnabled) {
+        throw new BadRequestException(
+          'Seller is not approved for crypto payments',
+        );
+      }
+      return { wallet: seller.solanaWallet, source: 'user' };
+    }
+
+    // Platform-owned (CardCade) item.
+    const settings = await this.shopSettingsRepo.findOne({
+      where: { shopKey: 'cardcade' },
+    });
+    if (!settings?.cryptoPaymentsEnabled || !settings.cryptoWalletAddress) {
+      throw new BadRequestException(
+        'Crypto payments are not enabled for this shop',
+      );
+    }
+    return { wallet: settings.cryptoWalletAddress, source: 'cardcade' };
+  }
 
   async quote(input: {
     orderId: string;
@@ -70,23 +113,7 @@ export class CryptoOrderService {
       where: { id: order.prizeConfigurationId },
     });
     if (!prize) throw new NotFoundException('Prize configuration not found');
-    if (!prize.createdBy) {
-      throw new BadRequestException('Prize has no seller (createdBy)');
-    }
-    const seller = await this.userRepo.findOne({
-      where: { id: prize.createdBy },
-    });
-    if (!seller) throw new NotFoundException('Seller not found');
-    if (!seller.solanaWallet) {
-      throw new BadRequestException(
-        'Seller has not configured a Solana wallet',
-      );
-    }
-    if (!seller.cryptoPaymentsEnabled) {
-      throw new BadRequestException(
-        'Seller is not approved for crypto payments',
-      );
-    }
+    const { wallet: sellerWallet } = await this.resolveSellerWallet(prize);
 
     // Convert USD decimal → USDC base units (6 decimals).
     const amountBaseUnits = usdToUsdcBaseUnits(Number(order.totalPrice));
@@ -95,7 +122,7 @@ export class CryptoOrderService {
     );
 
     const quote = await this.crypto.buildQuote({
-      sellerWallet: seller.solanaWallet,
+      sellerWallet,
       buyerWallet: input.buyerWallet,
       amountBaseUnits,
       shippingBaseUnits,
@@ -143,12 +170,8 @@ export class CryptoOrderService {
     const prize = await this.prizeRepo.findOne({
       where: { id: order.prizeConfigurationId },
     });
-    if (!prize?.createdBy) throw new BadRequestException('Prize has no seller');
-    const seller = await this.userRepo.findOne({
-      where: { id: prize.createdBy },
-    });
-    if (!seller?.solanaWallet)
-      throw new BadRequestException('Seller wallet missing');
+    if (!prize) throw new NotFoundException('Prize configuration not found');
+    const { wallet: sellerWallet } = await this.resolveSellerWallet(prize);
 
     const expectedAmount = usdToUsdcBaseUnits(Number(order.totalPrice));
     const expectedInvoiceIdHex = Buffer.from(order.cryptoInvoiceId).toString(
@@ -158,7 +181,7 @@ export class CryptoOrderService {
     const verdict = await this.crypto.verifyPaymentTx({
       txSignature: input.txSignature,
       expectedInvoiceIdHex,
-      expectedSellerWallet: seller.solanaWallet,
+      expectedSellerWallet: sellerWallet,
       expectedBuyerWallet: input.buyerWallet,
       expectedAmount,
     });

@@ -1,5 +1,11 @@
 ﻿import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsObject,
+  IsBoolean,
+  ValidateIf,
+} from 'class-validator';
 
 /**
  * DTO for shop settings response
@@ -28,6 +34,20 @@ export class ShopSettingsDto {
 
   @ApiProperty({ nullable: true })
   country: string | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Whether this virtual shop accepts USDC (Solana) payments. Mirrors User.cryptoPaymentsEnabled for individual sellers.',
+  })
+  cryptoPaymentsEnabled: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Solana wallet address (base58) that receives USDC for this shop.',
+  })
+  cryptoWalletAddress: string | null;
 }
 
 /**
@@ -68,4 +88,15 @@ export class UpdateShopSettingsDto {
   @IsOptional()
   @IsString()
   country?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  cryptoPaymentsEnabled?: boolean;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  cryptoWalletAddress?: string | null;
 }

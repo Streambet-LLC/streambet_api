@@ -174,6 +174,8 @@ export class PrizeService {
         city: null,
         state: null,
         country: null,
+        cryptoPaymentsEnabled: false,
+        cryptoWalletAddress: null,
       });
       return defaults;
     }
@@ -205,6 +207,14 @@ export class PrizeService {
     if (dto.city !== undefined) settings.city = dto.city;
     if (dto.state !== undefined) settings.state = dto.state;
     if (dto.country !== undefined) settings.country = dto.country;
+    if (dto.cryptoPaymentsEnabled !== undefined)
+      settings.cryptoPaymentsEnabled = dto.cryptoPaymentsEnabled;
+    if (dto.cryptoWalletAddress !== undefined) {
+      // Treat empty string the same as null so admins can clear the field
+      // from the UI without sending an explicit null.
+      const trimmed = (dto.cryptoWalletAddress ?? '').trim();
+      settings.cryptoWalletAddress = trimmed.length > 0 ? trimmed : null;
+    }
 
     return this.shopSettingsRepository.save(settings);
   }
@@ -483,8 +493,19 @@ export class PrizeService {
           city: null,
           state: null,
           country: null,
+          cryptoPaymentsEnabled: false,
+          cryptoWalletAddress: null,
         } as ShopSettings;
       }
+
+      // CardCade items have no creator, so the per-item sellerCryptoEnabled
+      // flag is derived from the platform-level shop settings instead. Only
+      // surface USDC checkout when both the toggle is on AND a treasury
+      // wallet has actually been configured — otherwise the wallet would
+      // see the radio button but the order would fail at quote time.
+      const cardcadeCryptoEnabled =
+        cardcadeSettings.cryptoPaymentsEnabled &&
+        !!cardcadeSettings.cryptoWalletAddress;
 
       const watched = requesterId
         ? await this.engagementService.getWatchedItemIds(
@@ -522,6 +543,7 @@ export class PrizeService {
             auctionViewerUserId: requesterId ?? null,
             auctionIsBidder:
               !!item.auction && bidderAuctionIds.has(item.auction.id),
+            sellerCryptoEnabledOverride: cardcadeCryptoEnabled,
           }),
         ),
       };
@@ -3765,6 +3787,12 @@ export class PrizeService {
       auctionViewerUserId?: string | null;
       /** True when this user has placed at least one bid on this auction. */
       auctionIsBidder?: boolean;
+      /**
+       * Force the value of `sellerCryptoEnabled` on the resulting DTO.
+       * Used by virtual shops (e.g. CardCade) whose items have no creator
+       * user — the flag comes from `shop_settings` instead.
+       */
+      sellerCryptoEnabledOverride?: boolean;
     } = {},
   ): PrizeConfigurationDto {
     const sortedItemImages = (entity.itemImages || [])
@@ -3818,7 +3846,9 @@ export class PrizeService {
       createdBy: entity.createdBy,
       createdByUsername: entity.creator?.username ?? null,
       createdByShopName: entity.creator?.shopName ?? null,
-      sellerCryptoEnabled: entity.creator?.cryptoPaymentsEnabled ?? false,
+      sellerCryptoEnabled:
+        opts.sellerCryptoEnabledOverride ??
+        (entity.creator?.cryptoPaymentsEnabled ?? false),
       updatedBy: entity.updatedBy,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
