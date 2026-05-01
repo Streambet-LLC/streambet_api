@@ -13,7 +13,7 @@ export default registerAs('solana', () => ({
   rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com',
   programId:
     process.env.CARDCADE_PROGRAM_ID ||
-    'EhrkuypJLs7UWB838XToAf6RD7j8NYjPdcK6YkSKCNVZ',
+    'HcMUewaCXRFMi8KAwBwgRRdScJ5Z4KSffqtYG6Dmpfzk',
   usdcMint:
     process.env.CARDCADE_USDC_MINT ||
     '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',

@@ -1,5 +1,5 @@
 {
-  "address": "EhrkuypJLs7UWB838XToAf6RD7j8NYjPdcK6YkSKCNVZ",
+  "address": "HcMUewaCXRFMi8KAwBwgRRdScJ5Z4KSffqtYG6Dmpfzk",
   "metadata": {
     "name": "cardcade_marketplace",
     "version": "0.1.0",
@@ -36,7 +36,16 @@
   "instructions": [
     {
       "name": "buy_card",
-      "discriminator": [113, 142, 149, 246, 22, 115, 156, 154],
+      "discriminator": [
+        113,
+        142,
+        149,
+        246,
+        22,
+        115,
+        156,
+        154
+      ],
       "accounts": [
         {
           "name": "buyer",
@@ -45,9 +54,13 @@
         },
         {
           "name": "seller",
-          "docs": ["PDA's reclaimed lamports go here when it closes."],
+          "docs": [
+            "PDA's reclaimed lamports go here when it closes."
+          ],
           "writable": true,
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "marketplace",
@@ -55,14 +68,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "card_mint",
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "listing",
@@ -71,7 +98,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
               },
               {
                 "kind": "account",
@@ -90,7 +125,14 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
               },
               {
                 "kind": "account",
@@ -109,7 +151,9 @@
         },
         {
           "name": "payment_mint",
-          "docs": ["USDC mint — must match marketplace config."]
+          "docs": [
+            "USDC mint — must match marketplace config."
+          ]
         },
         {
           "name": "buyer_payment_account",
@@ -134,8 +178,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -165,7 +221,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -184,13 +251,24 @@
     },
     {
       "name": "cancel_listing",
-      "discriminator": [41, 183, 50, 232, 230, 233, 157, 70],
+      "discriminator": [
+        41,
+        183,
+        50,
+        232,
+        230,
+        233,
+        157,
+        70
+      ],
       "accounts": [
         {
           "name": "seller",
           "writable": true,
           "signer": true,
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "marketplace",
@@ -198,14 +276,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "card_mint",
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "listing",
@@ -214,7 +306,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
               },
               {
                 "kind": "account",
@@ -233,7 +333,14 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
               },
               {
                 "kind": "account",
@@ -259,13 +366,24 @@
     },
     {
       "name": "grant_buyer_waiver",
-      "discriminator": [126, 201, 96, 19, 224, 229, 246, 33],
+      "discriminator": [
+        126,
+        201,
+        96,
+        19,
+        224,
+        229,
+        246,
+        33
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -273,7 +391,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -289,7 +419,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -308,13 +449,24 @@
     },
     {
       "name": "grant_crypto_seller",
-      "discriminator": [120, 69, 107, 57, 185, 118, 179, 176],
+      "discriminator": [
+        120,
+        69,
+        107,
+        57,
+        185,
+        118,
+        179,
+        176
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -322,7 +474,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -338,7 +502,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -357,7 +533,16 @@
     },
     {
       "name": "initialize_marketplace",
-      "discriminator": [47, 81, 64, 0, 96, 56, 105, 7],
+      "discriminator": [
+        47,
+        81,
+        64,
+        0,
+        96,
+        56,
+        105,
+        7
+      ],
       "accounts": [
         {
           "name": "authority",
@@ -371,7 +556,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -386,7 +583,9 @@
         },
         {
           "name": "payment_mint",
-          "docs": ["USDC mint — set once at init and immutable thereafter."]
+          "docs": [
+            "USDC mint — set once at init and immutable thereafter."
+          ]
         },
         {
           "name": "treasury",
@@ -420,7 +619,16 @@
     },
     {
       "name": "list_card",
-      "discriminator": [113, 226, 80, 193, 197, 19, 75, 161],
+      "discriminator": [
+        113,
+        226,
+        80,
+        193,
+        197,
+        19,
+        75,
+        161
+      ],
       "accounts": [
         {
           "name": "seller",
@@ -433,7 +641,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -452,7 +672,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
               },
               {
                 "kind": "account",
@@ -471,7 +699,14 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [101, 115, 99, 114, 111, 119]
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
               },
               {
                 "kind": "account",
@@ -492,9 +727,38 @@
               {
                 "kind": "const",
                 "value": [
-                  6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206,
-                  235, 121, 172, 28, 180, 133, 237, 95, 91, 55, 145, 58, 140,
-                  245, 133, 126, 255, 0, 169
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
                 ]
               },
               {
@@ -505,9 +769,38 @@
             "program": {
               "kind": "const",
               "value": [
-                140, 151, 37, 143, 78, 36, 137, 241, 187, 61, 16, 41, 20, 142,
-                13, 131, 11, 90, 19, 153, 218, 255, 16, 132, 4, 142, 123, 216,
-                219, 233, 248, 89
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
               ]
             }
           }
@@ -542,7 +835,16 @@
     },
     {
       "name": "pay_invoice",
-      "discriminator": [104, 6, 62, 239, 197, 206, 208, 220],
+      "discriminator": [
+        104,
+        6,
+        62,
+        239,
+        197,
+        206,
+        208,
+        220
+      ],
       "accounts": [
         {
           "name": "buyer",
@@ -551,7 +853,9 @@
         },
         {
           "name": "seller",
-          "docs": ["authorise the seller_payment_account owner."]
+          "docs": [
+            "authorise the seller_payment_account owner."
+          ]
         },
         {
           "name": "marketplace",
@@ -559,14 +863,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "payment_mint",
-          "docs": ["USDC mint — must match marketplace config."]
+          "docs": [
+            "USDC mint — must match marketplace config."
+          ]
         },
         {
           "name": "buyer_payment_account",
@@ -592,8 +910,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -621,7 +951,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -642,7 +983,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -659,7 +1012,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [105, 110, 118, 111, 105, 99, 101]
+                "value": [
+                  105,
+                  110,
+                  118,
+                  111,
+                  105,
+                  99,
+                  101
+                ]
               },
               {
                 "kind": "arg",
@@ -681,7 +1042,10 @@
         {
           "name": "invoice_id",
           "type": {
-            "array": ["u8", 16]
+            "array": [
+              "u8",
+              16
+            ]
           }
         },
         {
@@ -696,7 +1060,16 @@
     },
     {
       "name": "primary_sale",
-      "discriminator": [183, 109, 237, 220, 232, 6, 182, 84],
+      "discriminator": [
+        183,
+        109,
+        237,
+        220,
+        232,
+        6,
+        182,
+        84
+      ],
       "accounts": [
         {
           "name": "buyer",
@@ -709,7 +1082,9 @@
             "Marketplace authority must co-sign every primary sale (gates pricing)."
           ],
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -717,7 +1092,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -754,7 +1141,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -782,13 +1180,24 @@
     },
     {
       "name": "revoke_buyer_waiver",
-      "discriminator": [64, 222, 158, 8, 85, 176, 1, 67],
+      "discriminator": [
+        64,
+        222,
+        158,
+        8,
+        85,
+        176,
+        1,
+        67
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -796,14 +1205,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "buyer",
-          "relations": ["waiver"]
+          "relations": [
+            "waiver"
+          ]
         },
         {
           "name": "waiver",
@@ -813,7 +1236,18 @@
               {
                 "kind": "const",
                 "value": [
-                  98, 117, 121, 101, 114, 95, 119, 97, 105, 118, 101, 114
+                  98,
+                  117,
+                  121,
+                  101,
+                  114,
+                  95,
+                  119,
+                  97,
+                  105,
+                  118,
+                  101,
+                  114
                 ]
               },
               {
@@ -828,13 +1262,24 @@
     },
     {
       "name": "revoke_crypto_seller",
-      "discriminator": [145, 188, 32, 175, 79, 159, 33, 133],
+      "discriminator": [
+        145,
+        188,
+        32,
+        175,
+        79,
+        159,
+        33,
+        133
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -842,14 +1287,28 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
         },
         {
           "name": "seller",
-          "relations": ["allowance"]
+          "relations": [
+            "allowance"
+          ]
         },
         {
           "name": "allowance",
@@ -859,7 +1318,19 @@
               {
                 "kind": "const",
                 "value": [
-                  99, 114, 121, 112, 116, 111, 95, 115, 101, 108, 108, 101, 114
+                  99,
+                  114,
+                  121,
+                  112,
+                  116,
+                  111,
+                  95,
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114
                 ]
               },
               {
@@ -874,12 +1345,23 @@
     },
     {
       "name": "set_paused",
-      "discriminator": [91, 60, 125, 192, 176, 225, 166, 218],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -888,7 +1370,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -907,13 +1401,24 @@
         "Assign / move a seller into a group. Creates the `SellerProfile`",
         "PDA if missing (init_if_needed)."
       ],
-      "discriminator": [146, 92, 3, 15, 21, 42, 151, 107],
+      "discriminator": [
+        146,
+        92,
+        3,
+        15,
+        21,
+        42,
+        151,
+        107
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -921,7 +1426,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -940,8 +1457,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -971,13 +1500,24 @@
     },
     {
       "name": "set_seller_override_fee",
-      "discriminator": [26, 8, 167, 165, 229, 123, 64, 244],
+      "discriminator": [
+        26,
+        8,
+        167,
+        165,
+        229,
+        123,
+        64,
+        244
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -985,7 +1525,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1001,8 +1553,20 @@
               {
                 "kind": "const",
                 "value": [
-                  115, 101, 108, 108, 101, 114, 95, 112, 114, 111, 102, 105,
-                  108, 101
+                  115,
+                  101,
+                  108,
+                  108,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
                 ]
               },
               {
@@ -1028,12 +1592,23 @@
     },
     {
       "name": "update_authority",
-      "discriminator": [32, 46, 64, 28, 149, 75, 243, 88],
+      "discriminator": [
+        32,
+        46,
+        64,
+        28,
+        149,
+        75,
+        243,
+        88
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1042,7 +1617,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1057,12 +1644,23 @@
     },
     {
       "name": "update_buyer_fee",
-      "discriminator": [94, 177, 87, 223, 151, 1, 247, 192],
+      "discriminator": [
+        94,
+        177,
+        87,
+        223,
+        151,
+        1,
+        247,
+        192
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1071,7 +1669,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1086,12 +1696,23 @@
     },
     {
       "name": "update_default_seller_fee",
-      "discriminator": [134, 253, 137, 111, 33, 251, 255, 231],
+      "discriminator": [
+        134,
+        253,
+        137,
+        111,
+        33,
+        251,
+        255,
+        231
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1100,7 +1721,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1115,16 +1748,29 @@
     },
     {
       "name": "update_listing",
-      "discriminator": [192, 174, 210, 68, 116, 40, 242, 253],
+      "discriminator": [
+        192,
+        174,
+        210,
+        68,
+        116,
+        40,
+        242,
+        253
+      ],
       "accounts": [
         {
           "name": "seller",
           "signer": true,
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "card_mint",
-          "relations": ["listing"]
+          "relations": [
+            "listing"
+          ]
         },
         {
           "name": "listing",
@@ -1133,7 +1779,15 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [108, 105, 115, 116, 105, 110, 103]
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  105,
+                  110,
+                  103
+                ]
               },
               {
                 "kind": "account",
@@ -1160,12 +1814,23 @@
     },
     {
       "name": "update_treasury",
-      "discriminator": [60, 16, 243, 66, 96, 59, 254, 131],
+      "discriminator": [
+        60,
+        16,
+        243,
+        66,
+        96,
+        59,
+        254,
+        131
+      ],
       "accounts": [
         {
           "name": "authority",
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1174,7 +1839,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1189,13 +1866,24 @@
     },
     {
       "name": "upsert_seller_group",
-      "discriminator": [124, 18, 73, 183, 32, 156, 148, 86],
+      "discriminator": [
+        124,
+        18,
+        73,
+        183,
+        32,
+        156,
+        148,
+        86
+      ],
       "accounts": [
         {
           "name": "authority",
           "writable": true,
           "signer": true,
-          "relations": ["marketplace"]
+          "relations": [
+            "marketplace"
+          ]
         },
         {
           "name": "marketplace",
@@ -1203,7 +1891,19 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [109, 97, 114, 107, 101, 116, 112, 108, 97, 99, 101]
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  112,
+                  108,
+                  97,
+                  99,
+                  101
+                ]
               }
             ]
           }
@@ -1229,7 +1929,10 @@
         {
           "name": "label",
           "type": {
-            "array": ["u8", 32]
+            "array": [
+              "u8",
+              32
+            ]
           }
         }
       ]
@@ -1238,41 +1941,122 @@
   "accounts": [
     {
       "name": "BuyerWaiver",
-      "discriminator": [132, 155, 241, 215, 13, 155, 109, 218]
+      "discriminator": [
+        132,
+        155,
+        241,
+        215,
+        13,
+        155,
+        109,
+        218
+      ]
     },
     {
       "name": "CryptoSellerAllowance",
-      "discriminator": [255, 163, 134, 161, 173, 103, 2, 187]
+      "discriminator": [
+        255,
+        163,
+        134,
+        161,
+        173,
+        103,
+        2,
+        187
+      ]
     },
     {
       "name": "Invoice",
-      "discriminator": [51, 194, 250, 114, 6, 104, 18, 164]
+      "discriminator": [
+        51,
+        194,
+        250,
+        114,
+        6,
+        104,
+        18,
+        164
+      ]
     },
     {
       "name": "Listing",
-      "discriminator": [218, 32, 50, 73, 43, 134, 26, 58]
+      "discriminator": [
+        218,
+        32,
+        50,
+        73,
+        43,
+        134,
+        26,
+        58
+      ]
     },
     {
       "name": "Marketplace",
-      "discriminator": [70, 222, 41, 62, 78, 3, 32, 174]
+      "discriminator": [
+        70,
+        222,
+        41,
+        62,
+        78,
+        3,
+        32,
+        174
+      ]
     },
     {
       "name": "SellerGroup",
-      "discriminator": [202, 87, 155, 161, 7, 162, 35, 190]
+      "discriminator": [
+        202,
+        87,
+        155,
+        161,
+        7,
+        162,
+        35,
+        190
+      ]
     },
     {
       "name": "SellerProfile",
-      "discriminator": [96, 227, 91, 129, 3, 158, 255, 21]
+      "discriminator": [
+        96,
+        227,
+        91,
+        129,
+        3,
+        158,
+        255,
+        21
+      ]
     }
   ],
   "events": [
     {
       "name": "CardSold",
-      "discriminator": [57, 222, 233, 89, 105, 84, 199, 81]
+      "discriminator": [
+        57,
+        222,
+        233,
+        89,
+        105,
+        84,
+        199,
+        81
+      ]
     },
     {
       "name": "InvoicePaid",
-      "discriminator": [200, 211, 168, 170, 46, 82, 83, 186]
+      "discriminator": [
+        200,
+        211,
+        168,
+        170,
+        46,
+        82,
+        83,
+        186
+      ]
     }
   ],
   "errors": [
@@ -1394,7 +2178,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1479,7 +2266,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1492,7 +2282,9 @@
         "fields": [
           {
             "name": "buyer_fee_bps",
-            "docs": ["Buyer fee in bps (e.g. 50 = 0.5 %)."],
+            "docs": [
+              "Buyer fee in bps (e.g. 50 = 0.5 %)."
+            ],
             "type": "u16"
           },
           {
@@ -1520,7 +2312,10 @@
           {
             "name": "invoice_id",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           },
           {
@@ -1546,7 +2341,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           }
         ]
@@ -1560,7 +2358,10 @@
           {
             "name": "invoice_id",
             "type": {
-              "array": ["u8", 16]
+              "array": [
+                "u8",
+                16
+              ]
             }
           },
           {
@@ -1608,7 +2409,9 @@
     },
     {
       "name": "Listing",
-      "docs": ["One PDA per active listing."],
+      "docs": [
+        "One PDA per active listing."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1655,7 +2458,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1663,7 +2469,9 @@
     },
     {
       "name": "Marketplace",
-      "docs": ["Global marketplace configuration (singleton PDA)."],
+      "docs": [
+        "Global marketplace configuration (singleton PDA)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1676,7 +2484,9 @@
           },
           {
             "name": "payment_mint",
-            "docs": ["USDC mint — set once at init and immutable thereafter."],
+            "docs": [
+              "USDC mint — set once at init and immutable thereafter."
+            ],
             "type": "pubkey"
           },
           {
@@ -1712,7 +2522,9 @@
           },
           {
             "name": "bump",
-            "docs": ["Bump for the marketplace PDA."],
+            "docs": [
+              "Bump for the marketplace PDA."
+            ],
             "type": "u8"
           },
           {
@@ -1723,13 +2535,19 @@
               "`<= 32`."
             ],
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
             "name": "_reserved_b",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1758,7 +2576,10 @@
               "UTF-8, null-padded human label (e.g. \"default\", \"vip\")."
             ],
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           },
           {
@@ -1768,7 +2589,10 @@
           {
             "name": "_reserved",
             "type": {
-              "array": ["u8", 32]
+              "array": [
+                "u8",
+                32
+              ]
             }
           }
         ]
@@ -1816,7 +2640,10 @@
               "(1 + 2 bytes serialised by Anchor)."
             ],
             "type": {
-              "array": ["u8", 29]
+              "array": [
+                "u8",
+                29
+              ]
             }
           }
         ]
