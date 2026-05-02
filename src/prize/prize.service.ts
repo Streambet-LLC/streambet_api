@@ -16,6 +16,9 @@ import Stripe from 'stripe';
 import { PrizeConfiguration } from './entities/prize-configuration.entity';
 import { PrizeRedemption } from './entities/prize-redemption.entity';
 import { PrizeOrder } from './entities/prize-order.entity';
+import { PrizeItemEbaySoldListing } from './entities/prize-item-ebay-sold-listing.entity';
+import { PrizeItemEbaySoldListingReport } from './entities/prize-item-ebay-sold-listing-report.entity';
+import { PrizeItemEbaySyncState } from './entities/prize-item-ebay-sync-state.entity';
 import { ItemConfigurationImage } from './entities/item-configuration-image.entity';
 import { ShopSettings } from './entities/shop-settings.entity';
 import { PrizeEngagementService } from './prize-engagement.service';
@@ -41,6 +44,14 @@ import {
   ShippingStatus,
   CreatePrizeOrderDto,
   PrizeOrderResponseDto,
+  EbayMarketHistoryDto,
+  AdminEbayMarketSoldListingDto,
+  ModerateEbaySoldListingDto,
+  ReportEbaySoldListingDto,
+  EbayMarketSoldListingDto,
+  EbayMarketSummaryDto,
+  EbayMarketWindowAverageDto,
+  AdminReportedEbaySoldListingDto,
   MakeOfferDto,
   CounterOfferDto,
   MarkAsShippedDto,
@@ -53,6 +64,8 @@ import { PrizeSaleType } from './enums/prize-sale-type.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
 import { AuctionsService } from '../auctions/auctions.service';
+import { UserRole } from '../enums/user-role.enum';
+import { InboxService } from '../inbox/inbox.service';
 import {
   BUYER_PROCESSING_FEE_PERCENT,
   calculateBuyerItemFeeCents,
@@ -60,6 +73,19 @@ import {
   calculateSellerFeeCents,
   getEffectiveSellerFeePercent,
 } from 'src/common/utils/fee-utils';
+
+type EbayMarketWindowKey = '7d' | '30d' | '90d' | '180d' | '365d' | 'all';
+
+const EBAY_MARKET_WINDOWS: Array<{
+  key: Exclude<EbayMarketWindowKey, 'all'>;
+  days: number;
+}> = [
+  { key: '7d', days: 7 },
+  { key: '30d', days: 30 },
+  { key: '90d', days: 90 },
+  { key: '180d', days: 180 },
+  { key: '365d', days: 365 },
+];
 
 /**
  * Service for managing prize configuration and calculating user progress.
@@ -95,6 +121,12 @@ export class PrizeService implements OnModuleInit {
     private readonly prizeRedemptionRepository: Repository<PrizeRedemption>,
     @InjectRepository(PrizeOrder)
     private readonly prizeOrderRepository: Repository<PrizeOrder>,
+    @InjectRepository(PrizeItemEbaySoldListing)
+    private readonly ebaySoldListingRepository: Repository<PrizeItemEbaySoldListing>,
+    @InjectRepository(PrizeItemEbaySoldListingReport)
+    private readonly ebaySoldListingReportRepository: Repository<PrizeItemEbaySoldListingReport>,
+    @InjectRepository(PrizeItemEbaySyncState)
+    private readonly ebaySyncStateRepository: Repository<PrizeItemEbaySyncState>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(ShopSettings)
@@ -104,6 +136,7 @@ export class PrizeService implements OnModuleInit {
     private readonly emailsService: EmailsService,
     private readonly promoCodeService: PromoCodeService,
     private readonly engagementService: PrizeEngagementService,
+    private readonly inboxService: InboxService,
     @Inject(forwardRef(() => AuctionsService))
     private readonly auctionsService: AuctionsService,
   ) {
@@ -475,6 +508,510 @@ export class PrizeService implements OnModuleInit {
       auctionViewerUserId: requesterId ?? null,
       auctionIsBidder: isBidder,
     });
+  }
+
+  async getItemEbayMarketSummary(itemId: string, requesterId?: string | null): Promise<EbayMarketSummaryDto> {
+    const item = await this.prizeConfigRepository.findOne({
+      where: { id: itemId, isActive: true },
+      select: ['id', 'amount', 'ebayMarketLastCalculatedAt'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Shop item not found');
+    }
+
+    // Build query to exclude globally inaccurate listings and pending reports by requester
+    let latestQb = this.ebaySoldListingRepository
+      .createQueryBuilder('sold')
+      .where('sold.item_id = :itemId', { itemId })
+      .andWhere('sold.is_inaccurate = false')
+      .andWhere('sold.sale_price IS NOT NULL');
+
+    // Exclude pending reports by this requester using subquery
+    if (requesterId) {
+      const pendingListingRows = await this.ebaySoldListingReportRepository
+        .createQueryBuilder('report')
+        .select('report.listing_id', 'listingId')
+        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
+        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .getRawMany<{ listingId: string }>();
+
+      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      if (excludedIds.length > 0) {
+        latestQb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
+      }
+    }
+
+    const latestRows = await latestQb
+      .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .limit(10)
+      .getMany();
+
+    const latestPrices = latestRows
+      .map((row) => this.parseNumeric(row.salePrice))
+      .filter((value): value is number => value !== null);
+
+    const averagePrice =
+      latestPrices.length > 0
+        ? this.round2(
+            latestPrices.reduce((sum, value) => sum + value, 0) /
+              latestPrices.length,
+          )
+        : null;
+
+    const now = new Date();
+    let qb = this.ebaySoldListingRepository
+      .createQueryBuilder('sold')
+      .where('sold.item_id = :itemId', { itemId })
+      .andWhere('sold.is_inaccurate = false')
+      .andWhere('sold.sale_price IS NOT NULL')
+      .select('COUNT(*)::int', 'all_count')
+      .addSelect('AVG(sold.sale_price)::numeric', 'all_avg');
+
+    // Exclude pending reports by this requester using subquery
+    if (requesterId) {
+      const pendingListingRows = await this.ebaySoldListingReportRepository
+        .createQueryBuilder('report')
+        .select('report.listing_id', 'listingId')
+        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
+        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .getRawMany<{ listingId: string }>();
+
+      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      if (excludedIds.length > 0) {
+        qb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
+      }
+    }
+
+    for (const windowDef of EBAY_MARKET_WINDOWS) {
+      const since = new Date(now);
+      since.setDate(since.getDate() - windowDef.days);
+      const sinceParam = `since_${windowDef.key}`;
+
+      qb.addSelect(
+        `COUNT(*) FILTER (WHERE COALESCE(sold.date_sold, sold."createdAt") >= :${sinceParam})::int`,
+        `count_${windowDef.key}`,
+      ).addSelect(
+        `AVG(sold.sale_price) FILTER (WHERE COALESCE(sold.date_sold, sold."createdAt") >= :${sinceParam})::numeric`,
+        `avg_${windowDef.key}`,
+      );
+
+      qb.setParameter(sinceParam, since);
+    }
+
+    const stats = await qb.getRawOne<Record<string, unknown>>();
+
+    const windows: EbayMarketWindowAverageDto[] = [
+      ...EBAY_MARKET_WINDOWS.map((windowDef) => ({
+        window: windowDef.key,
+        soldCount: this.parseCount(stats?.[`count_${windowDef.key}`]),
+        averagePrice: this.parseNumeric(stats?.[`avg_${windowDef.key}`]),
+      })),
+      {
+        window: 'all',
+        soldCount: this.parseCount(stats?.all_count),
+        averagePrice: this.parseNumeric(stats?.all_avg),
+      },
+    ];
+
+    // Prize `amount` is stored in CadeCoins (50 coins = $1), while sold-listing
+    // analytics are USD. Convert before computing market delta.
+    const listingPriceCoins = this.parseNumeric(item.amount);
+    const listingPrice =
+      listingPriceCoins !== null ? this.round2(listingPriceCoins / 50) : null;
+    const percentDifference =
+      listingPrice !== null && averagePrice !== null && averagePrice > 0
+        ? this.round2(((listingPrice - averagePrice) / averagePrice) * 100)
+        : null;
+
+    return {
+      itemId,
+      listingPrice,
+      averagePrice,
+      soldCountUsed: latestPrices.length,
+      percentDifference,
+      lastCalculatedAt: item.ebayMarketLastCalculatedAt ?? null,
+      totalValidSoldCount: this.parseCount(stats?.all_count),
+      windows,
+    };
+  }
+
+  async getItemEbayMarketHistory(
+    itemId: string,
+    limit?: number,
+    requesterId?: string | null,
+  ): Promise<EbayMarketHistoryDto> {
+    const normalizedLimit = Math.max(1, Math.min(240, limit ?? 120));
+    const summary = await this.getItemEbayMarketSummary(itemId, requesterId);
+
+    let qb = this.ebaySoldListingRepository
+      .createQueryBuilder('sold')
+      .where('sold.item_id = :itemId', { itemId })
+      .andWhere('sold.is_inaccurate = false')
+      .andWhere('sold.sale_price IS NOT NULL');
+
+    // Exclude pending reports by this requester using subquery
+    if (requesterId) {
+      const pendingListingRows = await this.ebaySoldListingReportRepository
+        .createQueryBuilder('report')
+        .select('report.listing_id', 'listingId')
+        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
+        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .getRawMany<{ listingId: string }>();
+
+      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      if (excludedIds.length > 0) {
+        qb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
+      }
+    }
+
+    const rows = await qb
+      .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .limit(normalizedLimit)
+      .getMany();
+
+    const listings: EbayMarketSoldListingDto[] = rows.map((row) => ({
+      id: row.id,
+      providerItemId: row.providerItemId,
+      soldTitle: row.soldTitle,
+      salePrice: this.parseNumeric(row.salePrice) ?? 0,
+      currencySymbol: row.currencySymbol,
+      dateSold: row.dateSold,
+      imageUrl: row.imageUrl,
+      listingUrl: row.listingUrl,
+      itemCondition: row.itemCondition,
+      buyingFormat: row.buyingFormat,
+      shippingPrice: this.parseNumeric(row.shippingPrice),
+    }));
+
+    return {
+      itemId,
+      summary,
+      listings,
+    };
+  }
+
+  async getItemEbaySoldListingsForAdmin(
+    itemId: string,
+    limit?: number,
+    includeInaccurate: boolean = true,
+  ): Promise<AdminEbayMarketSoldListingDto[]> {
+    const item = await this.prizeConfigRepository.findOne({
+      where: { id: itemId },
+      select: ['id'],
+    });
+    if (!item) {
+      throw new NotFoundException('Item not found');
+    }
+
+    const normalizedLimit = Math.max(1, Math.min(500, limit ?? 240));
+    const qb = this.ebaySoldListingRepository
+      .createQueryBuilder('sold')
+      .where('sold.item_id = :itemId', { itemId })
+      .andWhere('sold.sale_price IS NOT NULL')
+      .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .limit(normalizedLimit);
+
+    if (!includeInaccurate) {
+      qb.andWhere('sold.is_inaccurate = false');
+    }
+
+    const rows = await qb.getMany();
+    return rows.map((row) => this.mapSoldListingToAdminDto(row));
+  }
+
+  async moderateEbaySoldListing(
+    listingId: string,
+    adminUserId: string,
+    dto: ModerateEbaySoldListingDto,
+  ): Promise<AdminEbayMarketSoldListingDto> {
+    const listing = await this.ebaySoldListingRepository.findOne({
+      where: { id: listingId },
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Sold listing not found');
+    }
+
+    const now = new Date();
+    if (dto.isInaccurate) {
+      listing.isInaccurate = true;
+      listing.inaccurateReason = dto.reason?.trim() || null;
+      listing.inaccurateFlaggedByUserId = adminUserId;
+      listing.inaccurateFlaggedAt = now;
+    } else {
+      listing.isInaccurate = false;
+      listing.inaccurateReason = null;
+      listing.inaccurateFlaggedByUserId = null;
+      listing.inaccurateFlaggedAt = null;
+    }
+
+    const saved = await this.ebaySoldListingRepository.save(listing);
+    return this.mapSoldListingToAdminDto(saved);
+  }
+
+  async getReportedEbaySoldListingsForAdmin(
+    limit?: number,
+  ): Promise<AdminReportedEbaySoldListingDto[]> {
+    const normalizedLimit = Math.max(1, Math.min(500, limit ?? 240));
+    
+    // Fetch pending reports with their related sold listings
+    const reports = await this.ebaySoldListingReportRepository.find({
+      where: { status: 'pending' },
+      relations: ['listing', 'listing.item', 'reporterUser'],
+      order: { createdAt: 'DESC' },
+      take: normalizedLimit,
+    });
+
+    return reports.map((report) => ({
+      ...this.mapSoldListingToAdminDto(report.listing),
+      itemId: report.listing.itemId,
+      itemName: report.listing.item?.name || 'Unknown Item',
+      itemImageUrl: report.listing.item?.imageUrl || null,
+      flaggedByUsername: report.reporterUser?.username || null,
+      flaggedByEmail: report.reporterUser?.email || null,
+      inaccurateFlaggedAt: report.createdAt,
+      inaccurateReason: report.reason || null,
+    }));
+  }
+
+  async deleteEbaySoldListingForAdmin(
+    listingId: string,
+  ): Promise<{ success: true; listingId: string }> {
+    const listing = await this.ebaySoldListingRepository.findOne({
+      where: { id: listingId },
+      select: ['id'],
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Sold listing not found');
+    }
+
+    await this.ebaySoldListingRepository.delete({ id: listingId });
+    return { success: true, listingId };
+  }
+
+  async updateItemEbaySearchQuery(
+    itemId: string,
+    ebaySearchQuery: string | null,
+  ): Promise<{ id: string; ebaySearchQuery: string | null }> {
+    const item = await this.prizeConfigRepository.findOne({
+      where: { id: itemId },
+      select: ['id'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item not found');
+    }
+
+    const normalized = ebaySearchQuery?.trim() || null;
+    await this.prizeConfigRepository.update(itemId, { ebaySearchQuery: normalized });
+    return { id: itemId, ebaySearchQuery: normalized };
+  }
+
+  async deleteAllItemEbaySoldListings(
+    itemId: string,
+  ): Promise<{ deleted: number }> {
+    const item = await this.prizeConfigRepository.findOne({
+      where: { id: itemId },
+      select: ['id'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item not found');
+    }
+
+    const result = await this.ebaySoldListingRepository.delete({ itemId });
+
+    // Reset sync state so next sync starts fresh
+    await this.ebaySyncStateRepository.update(
+      { itemId },
+      {
+        lastFetchSucceededAt: null,
+        lastSeenSoldAt: null,
+        lastSeenProviderItemId: null,
+        nextFetchAt: null,
+        lastCalculatedAt: null,
+      },
+    );
+
+    await this.prizeConfigRepository.update(itemId, {
+      ebayMarketLastCalculatedAt: null,
+    });
+
+    return { deleted: result.affected ?? 0 };
+  }
+
+  async bulkDeleteEbaySoldListings(
+    listingIds: string[],
+  ): Promise<{ deleted: number }> {
+    const result = await this.ebaySoldListingRepository.delete({ id: In(listingIds) });
+    return { deleted: result.affected ?? 0 };
+  }
+
+  /**
+   * Admin action: Approve a pending report by removing the listing universally.
+   * Sets the listing as globally inaccurate and marks all pending reports for it as approved.
+   */
+  async approveEbaySoldListingReport(
+    listingId: string,
+    adminUserId: string,
+    reason?: string,
+  ): Promise<AdminEbayMarketSoldListingDto> {
+    const listing = await this.ebaySoldListingRepository.findOne({
+      where: { id: listingId },
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Sold listing not found');
+    }
+
+    const now = new Date();
+    listing.isInaccurate = true;
+    listing.inaccurateReason = reason?.trim() || null;
+    listing.inaccurateFlaggedByUserId = adminUserId;
+    listing.inaccurateFlaggedAt = now;
+    const updatedListing = await this.ebaySoldListingRepository.save(listing);
+
+    // Mark all pending reports for this listing as approved
+    await this.ebaySoldListingReportRepository.update(
+      { listingId, status: 'pending' },
+      {
+        status: 'approved',
+        resolvedAt: now,
+        resolvedByUserId: adminUserId,
+        resolutionNote: reason || null,
+      },
+    );
+
+    return this.mapSoldListingToAdminDto(updatedListing);
+  }
+
+  /**
+   * Admin action: Reject all pending reports for a listing.
+   * Marks pending reports as rejected but does not change global visibility.
+   */
+  async rejectEbaySoldListingReports(
+    listingId: string,
+    adminUserId: string,
+    reason?: string,
+  ): Promise<{ success: true; rejectedCount: number }> {
+    const now = new Date();
+    const result = await this.ebaySoldListingReportRepository.update(
+      { listingId, status: 'pending' },
+      {
+        status: 'rejected',
+        resolvedAt: now,
+        resolvedByUserId: adminUserId,
+        resolutionNote: reason || null,
+      },
+    );
+
+    return {
+      success: true,
+      rejectedCount: result.affected || 0,
+    };
+  }
+
+  async reportEbaySoldListing(
+    listingId: string,
+    userId: string,
+    dto: ReportEbaySoldListingDto,
+  ): Promise<{ success: true; listingId: string }> {
+    const listing = await this.ebaySoldListingRepository.findOne({
+      where: { id: listingId },
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Sold listing not found');
+    }
+
+    // Create or update pending report for this user and listing
+    const existingReport = await this.ebaySoldListingReportRepository.findOne({
+      where: {
+        listingId,
+        reporterUserId: userId,
+        status: 'pending',
+      },
+    });
+
+    if (existingReport) {
+      // Update existing pending report reason and timestamp
+      existingReport.reason = dto.reason?.trim() || existingReport.reason || null;
+      existingReport.updatedAt = new Date();
+      await this.ebaySoldListingReportRepository.save(existingReport);
+    } else {
+      // Create new pending report
+      const report = this.ebaySoldListingReportRepository.create({
+        listingId,
+        reporterUserId: userId,
+        reason: dto.reason?.trim() || null,
+        status: 'pending',
+      });
+      await this.ebaySoldListingReportRepository.save(report);
+    }
+
+    // Notify admins about the report
+    await this.notifyAdminsAboutReportedSoldListing(listing, userId);
+
+    return {
+      success: true,
+      listingId,
+    };
+  }
+
+  private async notifyAdminsAboutReportedSoldListing(
+    listing: PrizeItemEbaySoldListing,
+    reporterId: string,
+  ): Promise<void> {
+    try {
+      const [reporter, admins, item] = await Promise.all([
+        this.userRepository.findOne({
+          where: { id: reporterId },
+          select: ['id', 'username', 'email'],
+        }),
+        this.userRepository.find({
+          where: { role: UserRole.ADMIN, isActive: true },
+          select: ['id'],
+        }),
+        this.prizeConfigRepository.findOne({
+          where: { id: listing.itemId },
+          select: ['id', 'name'],
+        }),
+      ]);
+
+      const adminIds = admins
+        .map((admin) => admin.id)
+        .filter((adminId) => adminId && adminId !== reporterId);
+
+      if (adminIds.length === 0) {
+        return;
+      }
+
+      const itemName = item?.name || listing.searchQuery || 'Unknown item';
+      const reporterLabel = reporter?.username || reporter?.email || 'A user';
+      const reasonText = listing.inaccurateReason
+        ? `Reason: ${listing.inaccurateReason}`
+        : 'Reason: not provided';
+
+      const message = [
+        `A sold listing was reported for ${itemName}.`,
+        `Listing: ${listing.soldTitle}`,
+        `Reported by: ${reporterLabel}`,
+        reasonText,
+        'Open Admin > Reported eBay Listings to review and remove/clear it.',
+      ].join('\n');
+
+      await Promise.all(
+        adminIds.map((adminId) =>
+          this.inboxService.sendSystemMessageToUser(adminId, message),
+        ),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send sold-listing report notifications for listing ${listing.id}: ${(error as Error)?.message || error}`,
+      );
+    }
   }
 
   /**
@@ -1110,6 +1647,7 @@ export class PrizeService implements OnModuleInit {
       profileFeatured: dto.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? false,
       proEarlyAccessUntil,
+      ebaySearchQuery: dto.ebaySearchQuery?.trim() || null,
       saleType: dto.saleType ?? undefined,
       // Per-item shipping fee. DB column has DEFAULT 5.00 but we forward
       // the admin-supplied value when present so creators can customize.
@@ -1310,6 +1848,10 @@ export class PrizeService implements OnModuleInit {
         dto.profileFeatured ?? existingTier.profileFeatured ?? false,
       isProOnly: dto.isProOnly ?? existingTier.isProOnly ?? false,
       proEarlyAccessUntil: existingTier.proEarlyAccessUntil,
+      ebaySearchQuery:
+        dto.ebaySearchQuery !== undefined
+          ? dto.ebaySearchQuery?.trim() || null
+          : existingTier.ebaySearchQuery,
       // Per-item shipping fee. Preserve previous value when the admin
       // doesn't include it in the patch.
       shippingCostUsd:
@@ -4236,6 +4778,8 @@ export class PrizeService implements OnModuleInit {
           ? this.readCardcadeCryptoEnabled()
           : (entity.creator?.cryptoPaymentsEnabled ?? false)),
       updatedBy: entity.updatedBy,
+      ebaySearchQuery: entity.ebaySearchQuery,
+      ebayMarketLastCalculatedAt: entity.ebayMarketLastCalculatedAt,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
       proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
@@ -4263,6 +4807,50 @@ export class PrizeService implements OnModuleInit {
               : null,
           })
         : null,
+    };
+  }
+
+  private parseNumeric(value: unknown): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const parsed =
+      typeof value === 'number' ? value : Number(String(value).trim());
+    return Number.isFinite(parsed) ? this.round2(parsed) : null;
+  }
+
+  private parseCount(value: unknown): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+  }
+
+  private round2(value: number): number {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
+  private mapSoldListingToAdminDto(
+    row: PrizeItemEbaySoldListing,
+  ): AdminEbayMarketSoldListingDto {
+    return {
+      id: row.id,
+      providerItemId: row.providerItemId,
+      soldTitle: row.soldTitle,
+      salePrice: this.parseNumeric(row.salePrice) ?? 0,
+      currencySymbol: row.currencySymbol,
+      dateSold: row.dateSold,
+      imageUrl: row.imageUrl,
+      listingUrl: row.listingUrl,
+      itemCondition: row.itemCondition,
+      buyingFormat: row.buyingFormat,
+      shippingPrice: this.parseNumeric(row.shippingPrice),
+      searchQuery: row.searchQuery ?? null,
+      isInaccurate: row.isInaccurate,
+      inaccurateReason: row.inaccurateReason,
+      inaccurateFlaggedByUserId: row.inaccurateFlaggedByUserId,
+      inaccurateFlaggedAt: row.inaccurateFlaggedAt,
     };
   }
 

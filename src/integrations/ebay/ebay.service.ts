@@ -8,6 +8,54 @@ import {
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { EbayListingDto, EbaySearchResponseDto } from './dto/ebay-search.dto';
+import { normalizeEbaySearchKeywords } from './ebay-query.utils';
+
+type CompletedItemProduct = {
+  title?: string;
+  sale_price?: number | string | null;
+  currency?: string | null;
+  condition?: string | null;
+  buying_format?: string | null;
+  date_sold?: string | null;
+  image_url?: string | null;
+  shipping_price?: number | string | null;
+  link?: string | null;
+  item_id?: string | null;
+};
+
+type CompletedItemsResponse = {
+  success?: boolean;
+  average_price?: number;
+  median_price?: number;
+  min_price?: number;
+  max_price?: number;
+  results?: number;
+  total_results?: number;
+  response_url?: string;
+  products?: CompletedItemProduct[];
+};
+
+export type EbayCompletedItem = {
+  title: string | null;
+  salePrice: number | null;
+  currencySymbol: string | null;
+  itemCondition: string | null;
+  buyingFormat: string | null;
+  dateSold: Date | null;
+  imageUrl: string | null;
+  shippingPrice: number | null;
+  listingUrl: string | null;
+  providerItemId: string | null;
+  rawPayload: Record<string, unknown>;
+};
+
+export type EbayCompletedItemsResult = {
+  query: string;
+  source: string;
+  responseUrl: string | null;
+  products: EbayCompletedItem[];
+  resultCount: number;
+};
 
 @Injectable()
 export class EbayService {
@@ -82,6 +130,158 @@ export class EbayService {
     if (deltaMs <= 0) return fallbackSeconds;
 
     return Math.max(1, Math.ceil(deltaMs / 1000));
+  }
+
+  private normalizeCompletedItem(item: CompletedItemProduct): EbayCompletedItem {
+    const salePriceRaw =
+      typeof item.sale_price === 'number'
+        ? item.sale_price
+        : Number(item.sale_price ?? NaN);
+    const shippingPriceRaw =
+      typeof item.shipping_price === 'number'
+        ? item.shipping_price
+        : Number(item.shipping_price ?? NaN);
+    const dateSoldRaw = item.date_sold ? new Date(item.date_sold) : null;
+
+    return {
+      title: item.title?.trim() || null,
+      salePrice: Number.isFinite(salePriceRaw) ? salePriceRaw : null,
+      currencySymbol: item.currency?.trim() || null,
+      itemCondition: item.condition?.trim() || null,
+      buyingFormat: item.buying_format?.trim() || null,
+      dateSold:
+        dateSoldRaw && !Number.isNaN(dateSoldRaw.getTime()) ? dateSoldRaw : null,
+      imageUrl: item.image_url?.trim() || null,
+      shippingPrice: Number.isFinite(shippingPriceRaw) ? shippingPriceRaw : null,
+      listingUrl: item.link?.trim() || null,
+      providerItemId: item.item_id?.trim() || null,
+      rawPayload: item as Record<string, unknown>,
+    };
+  }
+
+  async findCompletedItems(
+    keywords: string,
+    maxSearchResults: 60 | 120 | 240 = 240,
+  ): Promise<EbayCompletedItemsResult> {
+    const trimmedKeywords = normalizeEbaySearchKeywords(keywords);
+    if (!trimmedKeywords) {
+      throw new HttpException(
+        { message: 'keywords must be a non-empty string' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const timeoutMs = this.configService.get<number>('ebay.timeoutMs') ?? 20000;
+
+    const scrapeChainUrl =
+      this.configService.get<string>('SCRAPECHAIN_EBAY_COMPLETED_URL') ||
+      this.configService.get<string>('EBAY_COMPLETED_DIRECT_URL') || // legacy alias
+      'https://ebay-api.scrapechain.com/findCompletedItems';
+
+    const rapidApiKey =
+      this.configService.get<string>('RAPIDAPI_EBAY_COMPLETED_KEY') || '';
+    const rapidApiHost =
+      this.configService.get<string>('RAPIDAPI_EBAY_COMPLETED_HOST') || '';
+    const rapidApiUrl =
+      this.configService.get<string>('RAPIDAPI_EBAY_COMPLETED_URL') || '';
+
+    const payload = {
+      keywords: trimmedKeywords,
+      max_search_results: maxSearchResults,
+      remove_outliers: true,
+      site_id: this.configService.get<string>('EBAY_COMPLETED_SITE_ID') || '0',
+      excluded_keywords:
+        this.configService.get<string>('EBAY_COMPLETED_EXCLUDED_KEYWORDS') ||
+        undefined,
+      category_id:
+        this.configService.get<string>('EBAY_COMPLETED_CATEGORY_ID') ||
+        undefined,
+    };
+
+    const hasRapidApiFallback = !!(rapidApiKey && rapidApiHost && rapidApiUrl);
+
+    // Primary: scrapechain
+    try {
+      const response = await axios.post<CompletedItemsResponse>(scrapeChainUrl, payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: timeoutMs,
+      });
+
+      const products = Array.isArray(response.data?.products)
+        ? response.data.products
+        : [];
+
+      return {
+        query: trimmedKeywords,
+        source: 'scrapechain',
+        responseUrl: response.data?.response_url || null,
+        products: products.map((item) => this.normalizeCompletedItem(item)),
+        resultCount: response.data?.results ?? products.length,
+      };
+    } catch (scraperError: any) {
+      if (!hasRapidApiFallback) {
+        if (scraperError?.response?.status === 429) {
+          const retryAfterSeconds = this.getRetryAfterSeconds(
+            scraperError?.response?.headers?.['retry-after'],
+          );
+          throw new HttpException(
+            {
+              message:
+                'eBay completed-items rate limit reached. Please retry after the provided delay.',
+              retryAfterSeconds,
+            },
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
+        }
+        this.logger.error('eBay completed-items fetch failed (scrapechain)', scraperError);
+        throw new InternalServerErrorException('eBay completed-items fetch failed');
+      }
+
+      this.logger.warn(
+        `Scrapechain eBay fetch failed (status ${scraperError?.response?.status ?? 'unknown'}), falling back to RapidAPI`,
+      );
+    }
+
+    // Fallback: RapidAPI
+    try {
+      const response = await axios.post<CompletedItemsResponse>(rapidApiUrl, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-rapidapi-key': rapidApiKey,
+          'x-rapidapi-host': rapidApiHost,
+        },
+        timeout: timeoutMs,
+      });
+
+      const products = Array.isArray(response.data?.products)
+        ? response.data.products
+        : [];
+
+      return {
+        query: trimmedKeywords,
+        source: 'rapidapi',
+        responseUrl: response.data?.response_url || null,
+        products: products.map((item) => this.normalizeCompletedItem(item)),
+        resultCount: response.data?.results ?? products.length,
+      };
+    } catch (error: any) {
+      if (error?.response?.status === 429) {
+        const retryAfterSeconds = this.getRetryAfterSeconds(
+          error?.response?.headers?.['retry-after'],
+        );
+        throw new HttpException(
+          {
+            message:
+              'eBay completed-items rate limit reached. Please retry after the provided delay.',
+            retryAfterSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      this.logger.error('eBay completed-items fetch failed (RapidAPI fallback)', error);
+      throw new InternalServerErrorException('eBay completed-items fetch failed');
+    }
   }
 
   private async getAccessToken(): Promise<string> {
