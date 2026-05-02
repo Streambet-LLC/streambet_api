@@ -251,6 +251,22 @@
           "valueFrom": "/cardcade/non_pro_stag/EBAY_GLOBAL_ID"
         },
         {
+          "name": "SCRAPECHAIN_EBAY_COMPLETED_URL",
+          "valueFrom": "/cardcade/non_pro_stag/SCRAPECHAIN_EBAY_COMPLETED_URL"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_HOST",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_HOST"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_KEY",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_URL",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_URL"
+        },
+        {
           "name": "SOLANA_RPC_URL",
           "valueFrom": "/cardcade/non_pro_stag/SOLANA_RPC_URL"
         },
