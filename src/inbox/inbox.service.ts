@@ -159,6 +159,14 @@ export class InboxService {
     dto: SendMessageDto,
     isAdminMessage = false,
     adminName?: string,
+    /**
+     * Internal flag used by automated/system flows that already queue their
+     * own dedicated email for the same event (e.g. auction outbid). When
+     * `false`, we still write the inbox row but skip the generic
+     * "new message on CardCade" email so the user doesn't get two emails.
+     * Defaults to `true` to preserve existing user-to-user behavior.
+     */
+    notifyByEmail = true,
   ) {
     const conversation = await this.conversationRepo.findOne({
       where: { id: conversationId },
@@ -235,12 +243,16 @@ export class InboxService {
     participant.lastReadAt = new Date();
     await this.participantRepo.save(participant);
 
-    // Send email notification to other participants
-    await this.notifyRecipients(
-      conversationId,
-      senderId,
-      content || '📷 Image',
-    );
+    // Send email notification to other participants (unless the caller —
+    // typically an automated system flow — already queues its own
+    // purpose-specific email and asked us to suppress this one).
+    if (notifyByEmail) {
+      await this.notifyRecipients(
+        conversationId,
+        senderId,
+        content || '📷 Image',
+      );
+    }
 
     return this.messageRepo.findOne({
       where: { id: savedMessage.id },
@@ -932,7 +944,17 @@ export class InboxService {
   async sendSystemMessageToUser(
     recipientId: string,
     content: string,
-    opts: { adminName?: string } = {},
+    opts: {
+      adminName?: string;
+      /**
+       * When true, the inbox row is still created but the generic
+       * "new message on CardCade" email is NOT sent. Use this whenever the
+       * caller already queues its own dedicated email for the same event
+       * (auction outbid/closing-soon/won/lost, watcher alerts, review
+       * reminders, etc.) so the user never receives duplicate emails.
+       */
+      suppressEmail?: boolean;
+    } = {},
   ): Promise<{ conversationId: string }> {
     const trimmed = content?.trim();
     if (!trimmed) {
@@ -946,6 +968,7 @@ export class InboxService {
       { content: trimmed },
       true, // isAdminMessage — gives it the system/admin badge in the UI
       opts.adminName ?? 'CardCade',
+      !opts.suppressEmail,
     );
     return { conversationId: thread.id };
   }

@@ -120,6 +120,7 @@ export class AuctionsNotificationsService {
         .sendSystemMessageToUser(
           previousLeaderUserId,
           `You've been outbid on ${itemName}. Current bid is ${currentBid}, min next bid ${minNext}. [Place a higher bid](${url})`,
+          { suppressEmail: true },
         )
         .catch((err) =>
           this.logger.warn(`Outbid inbox failed: ${err?.message}`),
@@ -196,6 +197,7 @@ export class AuctionsNotificationsService {
           .sendSystemMessageToUser(
             u.id,
             `${itemName} closes in ~1 hour. Current bid ${currentBid}. Bids in the final 30s extend the auction. [View the auction](${url})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(`Closing-soon inbox failed: ${err?.message}`),
@@ -300,6 +302,7 @@ export class AuctionsNotificationsService {
         .sendSystemMessageToUser(
           params.winnerUserId,
           `You won ${itemName} for ${winningBid}. Total charged: ${totalCharged} (incl. ${buyerFee} buyer fee + ${shippingFee} shipping). [View your order](${orderUrl})`,
+          { suppressEmail: true },
         )
         .catch((err) =>
           this.logger.warn(`Winner inbox failed: ${err?.message}`),
@@ -369,6 +372,7 @@ export class AuctionsNotificationsService {
           .sendSystemMessageToUser(
             u.id,
             `The auction for ${itemName} has ended. Winning bid was ${winningBid}. No charge was made to your card. [Browse the shop](${shopUrl})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(`Loser inbox failed: ${err?.message}`),

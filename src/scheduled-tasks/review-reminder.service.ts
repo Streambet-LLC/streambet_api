@@ -128,6 +128,7 @@ export class ReviewReminderService {
           .sendSystemMessageToUser(
             buyer.id,
             `${imageMd}How was your purchase of ${prize.name} from [@${seller.username}](${sellerUrl})? Share your experience to help other collectors.\n[Leave a review](${reviewUrl})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(
@@ -171,6 +172,7 @@ export class ReviewReminderService {
           .sendSystemMessageToUser(
             seller.id,
             `${imageMd}Your sale of ${prize.name} to [@${buyer.username}](${buyerUrl}) is complete — how was the buyer?\n[Leave a review](${reviewUrl})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(
