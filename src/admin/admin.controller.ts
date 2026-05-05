@@ -66,6 +66,10 @@ import {
   CreateDiscountCodeDto,
   UpdateDiscountCodeDto,
 } from './dto/discount-code.dto';
+import {
+  CreatePromoCodeDto,
+  UpdatePromoCodeDto,
+} from './dto/promo-code.dto';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -1410,6 +1414,72 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Discount code updated successfully',
+      data,
+    };
+  }
+
+  // ── Promo Code Management (signup coin bonus codes) ──
+
+  @ApiOperation({ summary: 'List all signup-bonus promo codes' })
+  @SwaggerApiResponse({ status: 200, description: 'Promo codes fetched' })
+  @Get('promo-codes')
+  async getPromoCodes(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.promoCodeService.findAllPromoCodes();
+    return {
+      status: HttpStatus.OK,
+      message: 'Promo codes fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Create a new signup-bonus promo code' })
+  @SwaggerApiResponse({ status: 201, description: 'Promo code created' })
+  @Post('promo-codes')
+  async createPromoCode(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreatePromoCodeDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.promoCodeService.createPromoCode({
+      code: dto.code,
+      amount: dto.amount,
+      isActive: dto.isActive,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+    });
+    return {
+      status: HttpStatus.CREATED,
+      message: 'Promo code created successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Update an existing signup-bonus promo code' })
+  @SwaggerApiResponse({ status: 200, description: 'Promo code updated' })
+  @ApiParam({ name: 'id', description: 'Promo code ID' })
+  @Patch('promo-codes/:id')
+  async updatePromoCode(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdatePromoCodeDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const updates: {
+      amount?: number;
+      isActive?: boolean;
+      expiresAt?: Date | null;
+    } = {};
+    if (dto.amount !== undefined) updates.amount = dto.amount;
+    if (dto.isActive !== undefined) updates.isActive = dto.isActive;
+    if (dto.expiresAt !== undefined) {
+      updates.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    }
+    const data = await this.promoCodeService.updatePromoCode(id, updates);
+    return {
+      status: HttpStatus.OK,
+      message: 'Promo code updated successfully',
       data,
     };
   }
