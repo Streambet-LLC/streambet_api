@@ -172,6 +172,24 @@ export class PrizeConfiguration extends BaseEntity {
   @Column({ type: 'timestamp', name: 'pro_early_access_until', nullable: true })
   proEarlyAccessUntil: Date | null;
 
+  /**
+   * Optional admin-controlled search phrase used for market data lookups.
+   * When null, integrations should default to the item title.
+   */
+  @Column({ type: 'varchar', length: 255, name: 'ebay_search_query', nullable: true })
+  ebaySearchQuery: string | null;
+
+  /**
+   * Last time the market averages displayed on card were recalculated.
+   * Surfaced in UI so users know how fresh the market signal is.
+   */
+  @Column({
+    type: 'timestamp',
+    name: 'ebay_market_last_calculated_at',
+    nullable: true,
+  })
+  ebayMarketLastCalculatedAt: Date | null;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

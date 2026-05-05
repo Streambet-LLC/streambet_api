@@ -7,6 +7,9 @@ import { ItemConfigurationImage } from './entities/item-configuration-image.enti
 import { ShopSettings } from './entities/shop-settings.entity';
 import { PrizeItemView } from './entities/prize-item-view.entity';
 import { PrizeItemWatcher } from './entities/prize-item-watcher.entity';
+import { PrizeItemEbaySoldListing } from './entities/prize-item-ebay-sold-listing.entity';
+import { PrizeItemEbaySyncState } from './entities/prize-item-ebay-sync-state.entity';
+import { PrizeItemEbaySoldListingReport } from './entities/prize-item-ebay-sold-listing-report.entity';
 import { Auction } from './entities/auction.entity';
 import { AuctionBid } from './entities/auction-bid.entity';
 import { User } from '../users/entities/user.entity';
@@ -33,6 +36,9 @@ import { AuctionsModule } from '../auctions/auctions.module';
       ShopSettings,
       PrizeItemView,
       PrizeItemWatcher,
+      PrizeItemEbaySoldListing,
+      PrizeItemEbaySyncState,
+      PrizeItemEbaySoldListingReport,
       Auction,
       AuctionBid,
       User,
