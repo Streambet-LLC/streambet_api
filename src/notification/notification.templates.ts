@@ -93,8 +93,7 @@ export const NOTIFICATION_TEMPLATE = {
       `Round Complete - Click to see if you won...`,
   },
   EMAIL_WELCOME: {
-    TITLE: () =>
-      `You've passed go, collect 1000 ${formatCurrencyType(CurrencyType.GOLD_COINS)}`,
+    TITLE: () => `Welcome to CardCade!`,
   },
   EMAIL_PASSWORD_RESET: {
     TITLE: () => `Password Reset Request`,
