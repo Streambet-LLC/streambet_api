@@ -478,6 +478,13 @@ export class PrizeConfigurationDto {
   shippingCostUsd: number;
 
   @ApiProperty({
+    example: false,
+    description:
+      'When true, the item is in-person pickup only — the storefront and checkout UIs hide shipping-address collection and shipping defaults to $0.00.',
+  })
+  isInPerson: boolean;
+
+  @ApiProperty({
     type: () => AuctionSummaryDto,
     nullable: true,
     description: 'Present when saleType === auction.',
@@ -729,6 +736,16 @@ export class CreatePrizeTierDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   shippingCostUsd?: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Mark this item as in-person pickup. Skips the shipping address requirement at checkout and zeroes the default shipping cost (sellers may still override). Defaults to false.',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isInPerson?: boolean;
 }
 /**
  * Updates create a new row with is_active=true and set old row to is_active=false
@@ -959,6 +976,16 @@ export class UpdatePrizeTierDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   shippingCostUsd?: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Toggle in-person pickup mode. When true the storefront/checkout skip shipping address collection.',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isInPerson?: boolean;
 
   /**
    * Sale type is immutable after creation — an item that was created as

@@ -1655,6 +1655,10 @@ export class PrizeService implements OnModuleInit {
         dto.shippingCostUsd != null
           ? dto.shippingCostUsd.toFixed(2)
           : undefined,
+      // In-person pickup flag. When true the checkout/offer flows skip
+      // shipping address collection and the cart contributes $0 shipping
+      // for this item regardless of `shippingCostUsd`.
+      isInPerson: dto.isInPerson ?? false,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1858,6 +1862,11 @@ export class PrizeService implements OnModuleInit {
         dto.shippingCostUsd != null
           ? dto.shippingCostUsd.toFixed(2)
           : existingTier.shippingCostUsd,
+      // Preserve existing in-person flag when the patch omits it.
+      isInPerson:
+        dto.isInPerson != null
+          ? dto.isInPerson
+          : (existingTier.isInPerson ?? false),
       // Data-hardening creates a brand-new row on every edit. Fields the
       // edit dialog doesn't surface still need to be carried over verbatim
       // or the item silently changes shape (e.g. an auction item flips back
@@ -4801,6 +4810,8 @@ export class PrizeService implements OnModuleInit {
       shippingCostUsd: entity.shippingCostUsd
         ? Number(entity.shippingCostUsd)
         : 5,
+      // In-person pickup flag. Defaults to false for legacy rows.
+      isInPerson: entity.isInPerson ?? false,
       // Auction summary derived from the eager-loaded `auction` relation.
       // Per-user fields (isLeader / isBidder / currentUserProxyMaxUsd)
       // are populated when `auctionViewerUserId` is threaded through the
