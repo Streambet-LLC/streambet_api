@@ -1655,6 +1655,10 @@ export class PrizeService implements OnModuleInit {
         dto.shippingCostUsd != null
           ? dto.shippingCostUsd.toFixed(2)
           : undefined,
+      // In-person pickup flag. When true the checkout/offer flows skip
+      // shipping address collection and the cart contributes $0 shipping
+      // for this item regardless of `shippingCostUsd`.
+      isInPerson: dto.isInPerson ?? false,
     });
 
     const saved = await this.prizeConfigRepository.save(newTier);
@@ -1858,6 +1862,11 @@ export class PrizeService implements OnModuleInit {
         dto.shippingCostUsd != null
           ? dto.shippingCostUsd.toFixed(2)
           : existingTier.shippingCostUsd,
+      // Preserve existing in-person flag when the patch omits it.
+      isInPerson:
+        dto.isInPerson != null
+          ? dto.isInPerson
+          : (existingTier.isInPerson ?? false),
       // Data-hardening creates a brand-new row on every edit. Fields the
       // edit dialog doesn't surface still need to be carried over verbatim
       // or the item silently changes shape (e.g. an auction item flips back
@@ -2507,7 +2516,8 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
-    const SHIPPING_FEE = 5; // $5 shipping fee
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5; // Per-item shipping fee (default $5; 0 = Free Shipping)
 
     // Validate payment method matches amounts
     if (dto.paymentMethod === 'coins' && dto.usdAmount !== 0) {
@@ -3939,7 +3949,8 @@ export class PrizeService implements OnModuleInit {
       }
     }
 
-    const SHIPPING_FEE = 5; // $5 shipping fee
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5; // Per-item shipping fee (default $5; 0 = Free Shipping)
     const totalWithShipping = dto.offerAmount + SHIPPING_FEE;
 
     // Create order with offer_made status
@@ -4075,7 +4086,13 @@ export class PrizeService implements OnModuleInit {
 
     // Determine amount to charge before updating status
     const wasCountered = order.status === 'countered';
-    const SHIPPING_FEE = 5;
+    const acceptOfferPrize = await this.getPrizeTierById(
+      order.prizeConfigurationId,
+    );
+    const SHIPPING_FEE =
+      acceptOfferPrize.shippingCostUsd != null
+        ? Number(acceptOfferPrize.shippingCostUsd)
+        : 5;
     const negotiatedAmount =
       wasCountered && order.counterOfferAmount
         ? order.counterOfferAmount
@@ -4089,7 +4106,7 @@ export class PrizeService implements OnModuleInit {
     const updated = await this.prizeOrderRepository.save(order);
 
     // Create Stripe checkout session
-    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+    const prize = acceptOfferPrize;
 
     const offerAmountCents = Math.round(amountToCharge * 100);
 
@@ -4270,7 +4287,8 @@ export class PrizeService implements OnModuleInit {
     }
 
     const prize = await this.getPrizeTierById(order.prizeConfigurationId);
-    const SHIPPING_FEE = 5;
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5;
     const negotiatedAmount = order.counterOfferAmount || order.totalPrice;
     const amountToCharge =
       negotiatedAmount === order.totalPrice
@@ -4792,6 +4810,8 @@ export class PrizeService implements OnModuleInit {
       shippingCostUsd: entity.shippingCostUsd
         ? Number(entity.shippingCostUsd)
         : 5,
+      // In-person pickup flag. Defaults to false for legacy rows.
+      isInPerson: entity.isInPerson ?? false,
       // Auction summary derived from the eager-loaded `auction` relation.
       // Per-user fields (isLeader / isBidder / currentUserProxyMaxUsd)
       // are populated when `auctionViewerUserId` is threaded through the

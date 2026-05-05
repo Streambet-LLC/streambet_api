@@ -207,7 +207,10 @@ export class CartService {
           stripeAccountId,
           items: [],
           itemSubtotalCents: 0,
-          shippingCents: SHIPPING_FEE * 100,
+          // Per-item shipping accumulates below from each
+          // prize.shippingCostUsd. Defaults to $5 when the column is
+          // null (legacy rows) and 0 means Free Shipping.
+          shippingCents: 0,
           buyerFeeCents: 0,
           sellerFeeCents: 0,
           sellerFeePercent,
@@ -223,6 +226,15 @@ export class CartService {
           item.quantity,
       );
       group.itemSubtotalCents += itemCents;
+      // In-person pickup no longer forces shipping to $0 — sellers may
+      // still charge a hand-off / delivery fee, so we honor whatever
+      // shippingCostUsd the seller saved on the prize. The isInPerson
+      // flag only affects whether we collect a shipping address.
+      const perItemShippingUsd =
+        item.prizeConfiguration.shippingCostUsd != null
+          ? Number(item.prizeConfiguration.shippingCostUsd)
+          : SHIPPING_FEE;
+      group.shippingCents += Math.round(perItemShippingUsd * 100) * item.quantity;
     }
 
     // Calculate fees for each group
@@ -467,7 +479,17 @@ export class CartService {
           0,
         );
         const isCardCade = group.sellerId === null;
-        const shippingCents = SHIPPING_FEE * 100;
+        // Per-item shipping: sum each prize’s shippingCostUsd (default $5
+        // for legacy rows; 0 = Free Shipping). In-person items still
+        // honor the seller-configured shipping fee — only address
+        // collection is skipped on the storefront.
+        const shippingCents = buyableItems.reduce((sum, item) => {
+          const perItemShippingUsd =
+            item.prizeConfiguration.shippingCostUsd != null
+              ? Number(item.prizeConfiguration.shippingCostUsd)
+              : SHIPPING_FEE;
+          return sum + Math.round(perItemShippingUsd * 100) * item.quantity;
+        }, 0);
         const buyerFeeCents = isCardCade
           ? 0
           : calculateBuyerItemFeeCents(

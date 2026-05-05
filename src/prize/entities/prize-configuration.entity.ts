@@ -113,6 +113,19 @@ export class PrizeConfiguration extends BaseEntity {
   })
   shippingCostUsd: string;
 
+  /**
+   * When true, the item is marked as in-person pickup: the storefront and
+   * checkout flows skip shipping-address collection entirely and the
+   * shipping cost defaults to $0.00 (the seller may still override).
+   * Defaults to false so every existing/legacy listing continues to ship.
+   */
+  @Column({
+    type: 'boolean',
+    name: 'is_in_person',
+    default: false,
+  })
+  isInPerson: boolean;
+
   @Column({ type: 'integer', name: 'display_order_shop', nullable: true })
   displayOrderShop: number | null;
 
