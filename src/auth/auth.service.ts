@@ -131,18 +131,55 @@ export class AuthService {
       await this.walletsService.create(user.id);
 
       // credit promo code
+      let appliedPromo: Awaited<
+        ReturnType<typeof this.promoCodeService.creditPromo>
+      > = null;
       if (!isEmpty(promoCode)) {
-        await this.promoCodeService.creditPromo(user.id, promoCode);
+        appliedPromo = await this.promoCodeService.creditPromo(
+          user.id,
+          promoCode,
+        );
       }
 
       // Generate tokens
       await this.sendAccountVerificationEmail(user, redirect);
+
+      // If the promo code the user entered is ALSO a cart discount code,
+      // surface that to the client so they can be reminded to use it at
+      // checkout (works on buys, not auctions).
+      let discountCodeAlsoAvailable:
+        | { code: string; description: string }
+        | undefined;
+      if (
+        appliedPromo &&
+        this.promoCodeService.isDiscountConfigured(appliedPromo) &&
+        appliedPromo.isActive &&
+        (!appliedPromo.expiresAt || new Date() <= appliedPromo.expiresAt)
+      ) {
+        let description = 'Discount available at checkout';
+        if (
+          appliedPromo.discountPercent &&
+          Number(appliedPromo.discountPercent) > 0
+        ) {
+          description = `${Number(appliedPromo.discountPercent)}% off at checkout`;
+        } else if (
+          appliedPromo.discountAmountCents &&
+          Number(appliedPromo.discountAmountCents) > 0
+        ) {
+          description = `$${(Number(appliedPromo.discountAmountCents) / 100).toFixed(2)} off at checkout`;
+        }
+        discountCodeAlsoAvailable = {
+          code: appliedPromo.code,
+          description,
+        };
+      }
 
       return {
         id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
+        discountCodeAlsoAvailable,
       };
     } catch (e) {
       this.logger.error('Error in AuthService.register:', e);

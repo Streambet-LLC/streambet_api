@@ -160,4 +160,14 @@ export class UserRegistrationResponseDto {
 
   @ApiProperty()
   role: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Set when the promo code entered at signup is also a cart discount code.',
+  })
+  discountCodeAlsoAvailable?: {
+    code: string;
+    description: string;
+  };
 }
