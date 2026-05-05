@@ -8,8 +8,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      # FIX: Construct the full image URI here so other jobs can see it
-      image_tag: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}
+      # FIX: Construct the full image URI here so other jobs can see it.
+      # Append run_number + run_attempt so every workflow run produces a
+      # unique tag, even when the same commit is built more than once
+      # (ECR repos use immutable tags, so we can never reuse a tag).
+      image_tag: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -35,7 +38,7 @@ jobs:
           context: .
           push: true
           # Use the same naming convention defined in your outputs
-          tags: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}
+          tags: ${{ steps.login-ecr.outputs.registry }}/cardcade_${{ github.ref_name }}:${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
           provenance: false
 
   validate:
