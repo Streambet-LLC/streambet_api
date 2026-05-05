@@ -25,6 +25,14 @@ import { PrizeService } from './prize.service';
 import { PrizeEngagementService } from './prize-engagement.service';
 import {
   PrizeConfigurationDto,
+  EbayMarketSummaryDto,
+  EbayMarketHistoryDto,
+  AdminEbayMarketSoldListingDto,
+  AdminReportedEbaySoldListingDto,
+  ModerateEbaySoldListingDto,
+  ReportEbaySoldListingDto,
+  UpdateItemEbaySearchQueryDto,
+  BulkDeleteEbaySoldListingsDto,
   CreatePrizeTierDto,
   UpdatePrizeTierDto,
   AdminRedemptionResponseDto,
@@ -110,6 +118,58 @@ export class PrizeController {
     @Request() req: RequestMaybeUser,
   ) {
     return this.prizeService.getShopItemById(id, req.user?.id);
+  }
+
+  @Get('shop-items/:id/ebay-market-summary')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get sold-market summary metrics for one shop item' })
+  @ApiParam({ name: 'id', description: 'Prize item id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns latest-10 average, windows, and percent difference',
+    type: EbayMarketSummaryDto,
+  })
+  async getShopItemEbayMarketSummary(
+    @Request() req: RequestMaybeUser,
+    @Param('id') id: string,
+  ): Promise<EbayMarketSummaryDto> {
+    return this.prizeService.getItemEbayMarketSummary(id, req.user?.id);
+  }
+
+  @Get('shop-items/:id/ebay-market-history')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get sold-market history rows for one shop item' })
+  @ApiParam({ name: 'id', description: 'Prize item id' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns sold listings history and summary metrics',
+    type: EbayMarketHistoryDto,
+  })
+  async getShopItemEbayMarketHistory(
+    @Request() req: RequestMaybeUser,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ): Promise<EbayMarketHistoryDto> {
+    const parsedLimit = Number(limit);
+    return this.prizeService.getItemEbayMarketHistory(
+      id,
+      Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      req.user?.id,
+    );
+  }
+
+  @Post('ebay-sold-listings/:listingId/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Report a sold listing as inaccurate' })
+  @ApiParam({ name: 'listingId', description: 'Sold listing ID' })
+  @ApiResponse({ status: 201, description: 'Sold listing flagged for moderation' })
+  async reportEbaySoldListing(
+    @Request() req: RequestWithUser,
+    @Param('listingId') listingId: string,
+    @Body() dto: ReportEbaySoldListingDto,
+  ): Promise<{ success: true; listingId: string }> {
+    return this.prizeService.reportEbaySoldListing(listingId, req.user.id, dto);
   }
 
   @Get('shops')
@@ -927,6 +987,200 @@ export class AdminPrizeController {
   ) {
     this.ensureAdmin(req.user);
     return this.prizeService.updateShopSettings(shopKey, dto);
+  }
+
+  @Patch('items/:id/ebay-search-query')
+  @ApiOperation({ summary: 'Update the eBay search query used for an item (admin)' })
+  @ApiParam({ name: 'id', description: 'Prize item ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'eBay search query updated',
+    schema: {
+      properties: {
+        id: { type: 'string' },
+        ebaySearchQuery: { type: 'string', nullable: true },
+      },
+    },
+  })
+  async updateItemEbaySearchQuery(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateItemEbaySearchQueryDto,
+  ): Promise<{ id: string; ebaySearchQuery: string | null }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.updateItemEbaySearchQuery(id, dto.ebaySearchQuery);
+  }
+
+  @Delete('items/:id/ebay-sold-listings')
+  @ApiOperation({ summary: 'Drop all eBay sold listings for one item and reset sync state (admin)' })
+  @ApiParam({ name: 'id', description: 'Prize item ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'All sold listings deleted and sync state reset',
+    schema: {
+      properties: {
+        deleted: { type: 'number' },
+      },
+    },
+  })
+  async deleteAllItemEbaySoldListings(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<{ deleted: number }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.deleteAllItemEbaySoldListings(id);
+  }
+
+  @Get('items/:id/ebay-sold-listings')
+  @ApiOperation({ summary: 'Get sold listings for one item (admin moderation)' })
+  @ApiParam({ name: 'id', description: 'Prize item ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns sold listings including inaccurate flags',
+    type: [AdminEbayMarketSoldListingDto],
+  })
+  async getItemEbaySoldListings(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('includeInaccurate') includeInaccurate?: string,
+  ): Promise<AdminEbayMarketSoldListingDto[]> {
+    this.ensureAdmin(req.user);
+    const parsedLimit = Number(limit);
+    const includeInaccurateBool =
+      includeInaccurate === undefined
+        ? true
+        : !['0', 'false', 'no', 'off'].includes(
+            includeInaccurate.toLowerCase(),
+          );
+
+    return this.prizeService.getItemEbaySoldListingsForAdmin(
+      id,
+      Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+      includeInaccurateBool,
+    );
+  }
+
+  @Get('ebay-sold-listings/reported')
+  @ApiOperation({ summary: 'Get reported sold listings queue (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns reported sold listings across all items',
+    type: [AdminReportedEbaySoldListingDto],
+  })
+  async getReportedEbaySoldListings(
+    @Request() req: RequestWithUser,
+    @Query('limit') limit?: string,
+  ): Promise<AdminReportedEbaySoldListingDto[]> {
+    this.ensureAdmin(req.user);
+    const parsedLimit = Number(limit);
+    return this.prizeService.getReportedEbaySoldListingsForAdmin(
+      Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    );
+  }
+
+  @Patch('ebay-sold-listings/:listingId/moderation')
+  @ApiOperation({ summary: 'Mark or clear sold listing inaccurate status (admin)' })
+  @ApiParam({ name: 'listingId', description: 'Sold listing ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sold listing moderation state updated',
+    type: AdminEbayMarketSoldListingDto,
+  })
+  async moderateEbaySoldListing(
+    @Request() req: RequestWithUser,
+    @Param('listingId') listingId: string,
+    @Body() dto: ModerateEbaySoldListingDto,
+  ): Promise<AdminEbayMarketSoldListingDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.moderateEbaySoldListing(listingId, req.user.id, dto);
+  }
+
+  @Delete('ebay-sold-listings/bulk')
+  @ApiOperation({ summary: 'Bulk hard-delete sold listing rows by ID (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Selected sold listings deleted',
+    schema: {
+      properties: {
+        deleted: { type: 'number' },
+      },
+    },
+  })
+  async bulkDeleteEbaySoldListings(
+    @Request() req: RequestWithUser,
+    @Body() dto: BulkDeleteEbaySoldListingsDto,
+  ): Promise<{ deleted: number }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.bulkDeleteEbaySoldListings(dto.listingIds);
+  }
+
+  @Delete('ebay-sold-listings/:listingId')
+  @ApiOperation({ summary: 'Hard delete sold listing row (admin)' })
+  @ApiParam({ name: 'listingId', description: 'Sold listing ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Sold listing deleted',
+    schema: {
+      properties: {
+        success: { type: 'boolean', example: true },
+        listingId: { type: 'string', example: 'uuid' },
+      },
+    },
+  })
+  async deleteEbaySoldListing(
+    @Request() req: RequestWithUser,
+    @Param('listingId') listingId: string,
+  ): Promise<{ success: true; listingId: string }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.deleteEbaySoldListingForAdmin(listingId);
+  }
+
+  @Post('ebay-sold-listings/:listingId/report/approve')
+  @ApiOperation({
+    summary:
+      'Approve a pending report by removing listing universally from market data (admin)',
+  })
+  @ApiParam({ name: 'listingId', description: 'Sold listing ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Report approved and listing removed universally',
+    type: AdminEbayMarketSoldListingDto,
+  })
+  async approveEbaySoldListingReport(
+    @Request() req: RequestWithUser,
+    @Param('listingId') listingId: string,
+    @Body() dto?: { reason?: string },
+  ): Promise<AdminEbayMarketSoldListingDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.approveEbaySoldListingReport(
+      listingId,
+      req.user.id,
+      dto?.reason,
+    );
+  }
+
+  @Post('ebay-sold-listings/:listingId/report/reject')
+  @ApiOperation({
+    summary:
+      'Reject pending reports for a listing, restoring it to market visibility (admin)',
+  })
+  @ApiParam({ name: 'listingId', description: 'Sold listing ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Reports rejected and listing remains visible',
+  })
+  async rejectEbaySoldListingReports(
+    @Request() req: RequestWithUser,
+    @Param('listingId') listingId: string,
+    @Body() dto?: { reason?: string },
+  ): Promise<{ success: true; rejectedCount: number }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.rejectEbaySoldListingReports(
+      listingId,
+      req.user.id,
+      dto?.reason,
+    );
   }
 }
 

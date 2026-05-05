@@ -1,4 +1,5 @@
 export * from './prize-config.dto';
+export * from './ebay-market.dto';
 export * from './prize-redemption.dto';
 export {
   CreatePrizeOrderDto,

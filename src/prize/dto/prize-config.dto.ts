@@ -407,6 +407,22 @@ export class PrizeConfigurationDto {
   updatedBy: string | null;
 
   @ApiProperty({
+    example: 'charizard psa 10',
+    nullable: true,
+    description:
+      'Optional admin-controlled search phrase for sold-market data. Falls back to item name when null.',
+  })
+  ebaySearchQuery: string | null;
+
+  @ApiProperty({
+    example: '2026-05-01T10:30:00Z',
+    nullable: true,
+    description:
+      'Last datetime when market averages were recalculated for this item.',
+  })
+  ebayMarketLastCalculatedAt: Date | null;
+
+  @ApiProperty({
     example: false,
     description: 'Whether this item is featured on the seller profile page',
   })
@@ -683,6 +699,16 @@ export class CreatePrizeTierDto {
   profileFeatured?: boolean;
 
   @ApiProperty({
+    example: 'charizard psa 10',
+    description:
+      'Optional admin-controlled search phrase for sold-market data. If omitted, integrations should use item name.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  ebaySearchQuery?: string;
+
+  @ApiProperty({
     enum: PrizeSaleType,
     example: PrizeSaleType.FIXED_PRICE,
     description:
@@ -913,6 +939,16 @@ export class UpdatePrizeTierDto {
   @IsOptional()
   @IsBoolean()
   profileFeatured?: boolean;
+
+  @ApiProperty({
+    example: 'charizard psa 10',
+    description:
+      'Optional admin-controlled search phrase for sold-market data. If omitted, existing value is preserved.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  ebaySearchQuery?: string;
 
   @ApiProperty({
     example: 5,
