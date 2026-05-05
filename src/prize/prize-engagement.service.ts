@@ -243,6 +243,7 @@ export class PrizeEngagementService {
           .sendSystemMessageToUser(
             user.id,
             `The price of **${item.name}** has ${direction} from ${before} to ${after}. [View item](${itemUrl})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(
@@ -294,6 +295,7 @@ export class PrizeEngagementService {
           .sendSystemMessageToUser(
             user.id,
             `**${item.name}** just sold out. [View item](${itemUrl})`,
+            { suppressEmail: true },
           )
           .catch((err) =>
             this.logger.warn(
