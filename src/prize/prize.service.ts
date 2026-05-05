@@ -2507,7 +2507,8 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
-    const SHIPPING_FEE = 5; // $5 shipping fee
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5; // Per-item shipping fee (default $5; 0 = Free Shipping)
 
     // Validate payment method matches amounts
     if (dto.paymentMethod === 'coins' && dto.usdAmount !== 0) {
@@ -3939,7 +3940,8 @@ export class PrizeService implements OnModuleInit {
       }
     }
 
-    const SHIPPING_FEE = 5; // $5 shipping fee
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5; // Per-item shipping fee (default $5; 0 = Free Shipping)
     const totalWithShipping = dto.offerAmount + SHIPPING_FEE;
 
     // Create order with offer_made status
@@ -4075,7 +4077,13 @@ export class PrizeService implements OnModuleInit {
 
     // Determine amount to charge before updating status
     const wasCountered = order.status === 'countered';
-    const SHIPPING_FEE = 5;
+    const acceptOfferPrize = await this.getPrizeTierById(
+      order.prizeConfigurationId,
+    );
+    const SHIPPING_FEE =
+      acceptOfferPrize.shippingCostUsd != null
+        ? Number(acceptOfferPrize.shippingCostUsd)
+        : 5;
     const negotiatedAmount =
       wasCountered && order.counterOfferAmount
         ? order.counterOfferAmount
@@ -4089,7 +4097,7 @@ export class PrizeService implements OnModuleInit {
     const updated = await this.prizeOrderRepository.save(order);
 
     // Create Stripe checkout session
-    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+    const prize = acceptOfferPrize;
 
     const offerAmountCents = Math.round(amountToCharge * 100);
 
@@ -4270,7 +4278,8 @@ export class PrizeService implements OnModuleInit {
     }
 
     const prize = await this.getPrizeTierById(order.prizeConfigurationId);
-    const SHIPPING_FEE = 5;
+    const SHIPPING_FEE =
+      prize.shippingCostUsd != null ? Number(prize.shippingCostUsd) : 5;
     const negotiatedAmount = order.counterOfferAmount || order.totalPrice;
     const amountToCharge =
       negotiatedAmount === order.totalPrice
