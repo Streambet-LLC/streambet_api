@@ -438,7 +438,7 @@ export class PrizeConfigurationDto {
     example: '2025-06-01T00:00:00Z',
     nullable: true,
     description:
-      'Pro early access deadline (48h after creation). Item is only visible to Pro subscribers until this time.',
+      'Pro early access deadline (24h after creation). Item is only visible to Pro subscribers until this time.',
   })
   proEarlyAccessUntil: Date | null;
 

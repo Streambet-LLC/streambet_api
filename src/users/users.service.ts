@@ -14,7 +14,6 @@ import {
   ProfileUpdateDto,
   UserFilterDto,
   UserUpdateDto,
-  UserCreatorRoleUpdateDto,
 } from './dto/user.requests.dto';
 import { UserResponseDto, PublicUserProfileDto } from './dto/user.response.dto';
 import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
@@ -379,9 +378,6 @@ export class UsersService {
           isSeller: true,
           listedItemCount,
         }),
-        ...(user.role === UserRole.CREATOR && {
-          isCreator: true,
-        }),
         ...(user.isProSubscriber && {
           isProSubscriber: true,
         }),
@@ -557,33 +553,6 @@ export class UsersService {
     const message = userStatus
       ? 'User activated successfully'
       : 'User deactivated successfully';
-
-    return { result: !!affected, message };
-  }
-
-  async updateUserCreatorRole(
-    userCreatorRoleUpdateDto: UserCreatorRoleUpdateDto,
-  ): Promise<{ result: boolean; message: string }> {
-    const { userId, isCreator } = userCreatorRoleUpdateDto;
-    const user = await this.usersRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Determine role based on isCreator flag
-    const role = isCreator ? UserRole.CREATOR : UserRole.USER;
-
-    // Update both role and isCreator
-    const { affected } = await this.usersRepository
-      .createQueryBuilder()
-      .update(User)
-      .set({ role, isCreator })
-      .where('id = :userId', { userId })
-      .execute();
-
-    const message = isCreator
-      ? 'User promoted to creator successfully'
-      : 'User demoted to regular user successfully';
 
     return { result: !!affected, message };
   }

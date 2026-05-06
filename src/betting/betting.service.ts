@@ -82,7 +82,6 @@ export class BettingService {
     private betRoundHistoryService: BetRoundHistoryService,
     private bettingSummaryService: BettingSummaryService,
     private usersService: UsersService,
-    private platformPayoutService: PlatformPayoutService,
     private sentimentPickVoteService: SentimentPickVoteService,
     private liveFeedUpdateService: LiveFeedUpdateService,
     private dataSource: DataSource,
@@ -2252,12 +2251,6 @@ export class BettingService {
         queryRunner,
         processedBets,
         bettingVariable.round.roundName,
-      );
-
-      await this.platformPayoutService.recordPayout(
-        queryRunner,
-        roundCalculation.sweep.round[bettingVariable.id].totalPlatformSplit,
-        bettingVariable,
       );
 
       // Close the betting round

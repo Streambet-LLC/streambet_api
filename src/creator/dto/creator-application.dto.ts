@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
+/**
+ * Application type kept as an enum for forward-compatibility, but only SELLER
+ * is supported now (creator role removed in Phase 3 cleanup).
+ */
 export enum ApplicationType {
-  CREATOR = 'creator',
   SELLER = 'seller',
 }
 
@@ -20,40 +23,8 @@ export class CreatorApplicationDto {
   email: string;
 
   @ApiProperty({
-    enum: ApplicationType,
-    description: 'Application Type',
-    required: false,
-    default: ApplicationType.CREATOR,
-  })
-  @IsOptional()
-  @IsEnum(ApplicationType)
-  applicationType?: ApplicationType;
-
-  // Creator-specific fields
-  @ApiProperty({
     type: String,
-    description: 'Socials (required for creator applications)',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  socials?: string;
-
-  @ApiProperty({
-    type: String,
-    description:
-      'Application Pitch/Message (required for creator applications)',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  message?: string;
-
-  // Seller-specific fields
-  @ApiProperty({
-    type: String,
-    description:
-      'Tell us about yourself from a collector perspective (required for seller applications)',
+    description: 'Tell us about yourself from a collector perspective',
     required: false,
   })
   @IsOptional()
@@ -62,8 +33,7 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
-    description:
-      'What city/state are you in (required for seller applications)',
+    description: 'What city/state are you in',
     required: false,
   })
   @IsOptional()
@@ -72,8 +42,7 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
-    description:
-      'What cards do you predominately collect (required for seller applications)',
+    description: 'What cards do you predominately collect',
     required: false,
   })
   @IsOptional()
@@ -82,8 +51,7 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
-    description:
-      'Do you predominately do raw cards or slabbed (required for seller applications)',
+    description: 'Do you predominately do raw cards or slabbed',
     required: false,
   })
   @IsOptional()

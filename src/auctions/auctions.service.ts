@@ -24,6 +24,9 @@ import { AuctionsGateway } from './auctions.gateway';
 import { AuctionsNotificationsService } from './auctions-notifications.service';
 import { AuctionSummaryDto } from '../prize/dto/prize-config.dto';
 import { PrizeOrder } from '../prize/entities/prize-order.entity';
+import { PrizeRedemption } from '../prize/entities/prize-redemption.entity';
+import { PrizeCategory } from '../prize/enums/prize-category.enum';
+import { ShippingStatus } from '../prize/dto/prize-redemption.dto';
 import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_CLOSE_JOB,
@@ -88,6 +91,8 @@ export class AuctionsService implements OnModuleInit {
     private readonly userRepository: Repository<User>,
     @InjectRepository(PrizeOrder)
     private readonly orderRepository: Repository<PrizeOrder>,
+    @InjectRepository(PrizeRedemption)
+    private readonly redemptionRepository: Repository<PrizeRedemption>,
     private readonly dataSource: DataSource,
     private readonly paymentsService: AuctionsPaymentsService,
     private readonly gateway: AuctionsGateway,
@@ -1472,7 +1477,38 @@ export class AuctionsService implements OnModuleInit {
       stripePaymentIntentId: paymentIntentId,
       status: 'paid',
     });
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // For CardCade-owned items (created_by IS NULL) mirror the shop
+    // purchase flow and create a PrizeRedemption row so the won
+    // auction shows up in the admin Redemptions panel for shipping
+    // (tracking number / carrier / status). Seller-owned auctions are
+    // intentionally excluded — sellers fulfill their own orders
+    // through the seller dashboard, not the CardCade ops queue.
+    const prize = await this.prizeRepository.findOne({
+      where: { id: auction.prizeConfigurationId },
+    });
+    if (prize && prize.createdBy === null) {
+      let prizeCategory: PrizeCategory = PrizeCategory.SLAB;
+      if (prize.category === 'sealed') {
+        prizeCategory = PrizeCategory.SEALED;
+      } else if (prize.category === 'raw') {
+        prizeCategory = PrizeCategory.RAW;
+      }
+      const redemption = this.redemptionRepository.create({
+        userId: winnerUserId,
+        prizeConfigurationId: auction.prizeConfigurationId,
+        prizeOrderId: savedOrder.id,
+        dateRedeemed: new Date(),
+        prizeTier: prize.prizeTier,
+        prizeCategory,
+        shippingStatus: ShippingStatus.OPEN,
+        fulfilled: false,
+      });
+      await this.redemptionRepository.save(redemption);
+    }
+
+    return savedOrder;
   }
 
   /**
