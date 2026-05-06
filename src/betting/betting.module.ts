@@ -17,7 +17,6 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
 import { BettingGateway } from './betting.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { NotificationModule } from 'src/notification/notification.module';
-import { PlatformPayoutModule } from 'src/platform-payout/platform-payout.module';
 import { BetRoundHistoryModule } from 'src/bet-round-history/bet-round-history.module';
 import { LiveFeedUpdateModule } from 'src/live-feed-update/live-feed-update.module';
 import { User } from 'src/users/entities/user.entity';
@@ -40,7 +39,6 @@ import { User } from 'src/users/entities/user.entity';
     GeoFencingModule,
     forwardRef(() => WsModule),
     NotificationModule,
-    PlatformPayoutModule,
     BetRoundHistoryModule,
     LiveFeedUpdateModule,
   ],

@@ -40,7 +40,6 @@ import {
   ProfileUpdateDto,
   UserFilterDto,
   UserUpdateDto,
-  UserCreatorRoleUpdateDto,
 } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
@@ -54,8 +53,6 @@ import { AddGoldCoinDto, UpdateCoinDto } from './dto/coin-update.dto';
 import { UpdateUserFeeOverrideDto } from './dto/update-user-fee-override.dto';
 import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
-import { PayoutReportFilterDto } from 'src/platform-payout/dto/payout-report/payout-report.requests.dto';
-import { PlatformPayoutService } from 'src/platform-payout/plaform-payout.service';
 import { ViewBetDto } from 'src/betting/dto/view-bet.dto';
 import { CreatorService } from 'src/creator/creator.service';
 import { ApplicationFilterDto } from 'src/creator/dto/application-filter.dto';
@@ -70,6 +67,14 @@ import {
   CreatePromoCodeDto,
   UpdatePromoCodeDto,
 } from './dto/promo-code.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
+import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
+import {
+  ConciergeRequest,
+  ConciergeRequestStatus,
+} from 'src/concierge/entities/concierge-request.entity';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -87,10 +92,15 @@ export class AdminController {
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
     private readonly streamService: StreamService,
-    private readonly payoutService: PlatformPayoutService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
     private readonly promoCodeService: PromoCodeService,
+    @InjectRepository(PrizeOrder)
+    private readonly prizeOrderRepository: Repository<PrizeOrder>,
+    @InjectRepository(PrizeConfiguration)
+    private readonly prizeConfigurationRepository: Repository<PrizeConfiguration>,
+    @InjectRepository(ConciergeRequest)
+    private readonly conciergeRequestRepository: Repository<ConciergeRequest>,
   ) {}
 
   // Helper method to check if user is admin
@@ -101,8 +111,8 @@ export class AdminController {
   }
 
   private ensureAdminOrCreator(user: User) {
-    if (![UserRole.ADMIN, UserRole.CREATOR].includes(user.role)) {
-      throw new ForbiddenException('Admin/Creator access required');
+    if (user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Admin access required');
     }
   }
 
@@ -393,26 +403,6 @@ export class AdminController {
     this.ensureAdmin(req.user);
     const { result, message } =
       await this.usersService.updateUserStatus(userUpdateDto);
-    return {
-      statusCode: HttpStatus.OK,
-      message,
-      data: result,
-    };
-  }
-
-  @ApiOperation({
-    summary: `Update user creator role.`,
-    description: 'API to grant or revoke creator role for a user by their ID.',
-  })
-  @Patch('users/creator-role')
-  async updateUserCreatorRole(
-    @Body() userCreatorRoleUpdateDto: UserCreatorRoleUpdateDto,
-    @Request() req: RequestWithUser,
-  ) {
-    this.ensureAdmin(req.user);
-    const { result, message } = await this.usersService.updateUserCreatorRole(
-      userCreatorRoleUpdateDto,
-    );
     return {
       statusCode: HttpStatus.OK,
       message,
@@ -833,22 +823,57 @@ export class AdminController {
     // Total users
     const totalUsers = await this.usersService.getUsersCount();
 
-    // Total live streams
-    const totalLiveStreams = await this.streamService.getLiveStreamsCount();
+    // Total cards listed (active prize configurations)
+    const totalCardsListed = await this.prizeConfigurationRepository.count({
+      where: { isActive: true },
+    });
 
-    // Total active bets
-    const totalActiveBets = await this.bettingService.getActiveBetsCount();
+    // Concierge requests (pending — claimed ones are excluded)
+    const totalConciergeRequests = await this.conciergeRequestRepository.count(
+      { where: { status: ConciergeRequestStatus.PENDING } },
+    );
 
-    const totalLiveTime = await this.streamService.getTotalLiveDuration();
+    // Monthly fees earned (current calendar month, paid orders)
+    // Uses same approximation as getAdminSalesSummary:
+    //   - Non-crypto: ~6.796% of totalPrice (3% buyer + 4% seller, backed out)
+    //   - Crypto:     2% of totalPrice (200 bps combined)
+    const NON_CRYPTO_FEE_RATE_OF_TOTAL = (3 + 4) / 100 / (1 + 3 / 100);
+    const CRYPTO_FEE_RATE_OF_TOTAL = 200 / 10000;
+    const now = new Date();
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    const feeRow = await this.prizeOrderRepository
+      .createQueryBuilder('o')
+      .select(
+        `COALESCE(SUM(CASE WHEN o.payment_method = 'crypto' THEN o.total_price ELSE 0 END), 0)`,
+        'crypto_revenue',
+      )
+      .addSelect(
+        `COALESCE(SUM(CASE WHEN o.payment_method <> 'crypto' THEN o.total_price ELSE 0 END), 0)`,
+        'noncrypto_revenue',
+      )
+      .where("o.status IN ('paid', 'processing', 'shipped', 'delivered')")
+      .andWhere('o.createdAt >= :monthStart', { monthStart })
+      .getRawOne<{ crypto_revenue: string; noncrypto_revenue: string }>();
+
+    const cryptoRevenue = parseFloat(feeRow?.crypto_revenue ?? '0');
+    const nonCryptoRevenue = parseFloat(feeRow?.noncrypto_revenue ?? '0');
+    const monthlyFeesEarned =
+      Math.round(
+        (cryptoRevenue * CRYPTO_FEE_RATE_OF_TOTAL +
+          nonCryptoRevenue * NON_CRYPTO_FEE_RATE_OF_TOTAL) *
+          100,
+      ) / 100;
 
     return {
       statusCode: HttpStatus.OK,
       message: 'Analytics summary fetched successfully',
       data: {
         totalUsers,
-        totalActiveBets,
-        totalLiveStreams,
-        totalLiveTime,
+        monthlyFeesEarned,
+        totalCardsListed,
+        totalConciergeRequests,
       },
     };
   }
@@ -1048,28 +1073,6 @@ export class AdminController {
       data: deletedStreamId,
       message: `Stream with ID ${deletedStreamId} has been deleted successfully.`,
       statusCode: HttpStatus.OK,
-    };
-  }
-
-  @ApiOperation({
-    summary: 'Stream Payout Report',
-  })
-  @ApiOkResponse({ type: PayoutReportFilterDto })
-  @Get('stream-payout-report')
-  async getStreamPayoutReport(
-    @Request() req: RequestWithUser,
-    @Query() payoutReportFilterDto: PayoutReportFilterDto,
-  ) {
-    this.ensureAdmin(req.user);
-    const { total, data } = await this.payoutService.generatePayoutReport(
-      payoutReportFilterDto,
-    );
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Successfully Listed',
-      data,
-      total,
     };
   }
 

@@ -1668,7 +1668,7 @@ export class PrizeService implements OnModuleInit {
     const featuredDisplayOrder = dto.featuredDisplayOrder ?? null;
 
     // Create new tier
-    const proEarlyAccessUntil = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const proEarlyAccessUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const newTier = this.prizeConfigRepository.create({
       prizeTier,
       amount,
@@ -2546,7 +2546,7 @@ export class PrizeService implements OnModuleInit {
         new Date(prize.proEarlyAccessUntil as unknown as string) > now
       ) {
         throw new ForbiddenException(
-          'This item is in the 48-hour early access window for CardCade Pro members.',
+          'This item is in the 24-hour early access window for CardCade Pro members.',
         );
       }
     }
@@ -4004,7 +4004,7 @@ export class PrizeService implements OnModuleInit {
         new Date(prize.proEarlyAccessUntil as unknown as string) > now
       ) {
         throw new ForbiddenException(
-          'This item is in the 48-hour early access window for CardCade Pro members.',
+          'This item is in the 24-hour early access window for CardCade Pro members.',
         );
       }
     }

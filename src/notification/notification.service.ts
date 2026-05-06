@@ -361,7 +361,7 @@ export class NotificationService {
 
       const message =
         event === 'activated'
-          ? `Hi ${user.username}, welcome to CardCade Pro! You now have access to exclusive items, 48-hour early access to new drops, and concierge support. Your ${plan} plan is now active.`
+          ? `Hi ${user.username}, welcome to CardCade Pro! You now have access to exclusive items, 24-hour early access to new drops, and concierge support. Your ${plan} plan is now active.`
           : `Hi ${user.username}, your CardCade Pro subscription has been cancelled. You will retain access until the end of your current billing period.`;
 
       const emailType =

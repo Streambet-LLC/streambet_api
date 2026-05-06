@@ -4,20 +4,23 @@ export class AdminAnalyticsSummaryResponseDto {
   @ApiProperty({ type: Number, description: 'Total number of users' })
   totalUsers: number;
 
-  @ApiProperty({ type: Number, description: 'Total number of active streams' })
-  totalActiveStreams: number;
-
-  @ApiProperty({ type: Number, description: 'Total number of active bets' })
-  totalActiveBets: number;
-
-  @ApiProperty({ type: Number, description: 'Total number of live streams' })
-  totalLiveStreams: number;
+  @ApiProperty({
+    type: Number,
+    description: 'Approximate platform fees earned this calendar month (USD)',
+  })
+  monthlyFeesEarned: number;
 
   @ApiProperty({
-    type: String,
-    description: 'Total live time in HH:mm:ss format',
+    type: Number,
+    description: 'Total number of active prize/card listings',
   })
-  totalLiveTime: string;
+  totalCardsListed: number;
+
+  @ApiProperty({
+    type: Number,
+    description: 'Total concierge requests submitted (all-time)',
+  })
+  totalConciergeRequests: number;
 }
 
 export class StreamAnalyticsResponseDto {
