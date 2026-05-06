@@ -4,44 +4,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  BadRequestException,
-  forwardRef,
-  Inject,
-  OnModuleDestroy,
-  OnApplicationShutdown,
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
-import { FilterDto, Range, Sort } from 'src/common/filters/filter.dto';
-import { UpdateStreamDto } from '../betting/dto/update-stream.dto';
-import { WalletsService } from 'src/wallets/wallets.service';
-import { Wallet } from 'src/wallets/entities/wallet.entity';
-import { BettingRoundStatus } from 'src/enums/round-status.enum';
-import { BetStatus } from 'src/enums/bet-status.enum';
-import { PlatformName } from 'src/enums/platform-name.enum';
-import { QueueService } from 'src/queue/queue.service';
-import { BettingService } from 'src/betting/betting.service';
-import { BettingSummaryService } from 'src/redis/betting-summary.service';
-import {
-  StreamEventType,
-  StreamList,
-  StreamStatus,
-} from 'src/enums/stream.enum';
-import { STREAM_LIVE_QUEUE } from 'src/common/constants/queue.constants';
-import { CurrencyType } from 'src/enums/currency.enum';
+import { DataSource, Repository } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
-import { NotificationService } from 'src/notification/notification.service';
-import { BettingRound } from 'src/betting/entities/betting-round.entity';
-import { BettingVariable } from 'src/betting/entities/betting-variable.entity';
-import { CreatorAnalyticsSummaryResponseDto } from './dto/analytics.dto';
-import { Stream } from 'src/stream/entities/stream.entity';
-import {
-  CreatorApplicationDto,
-  ApplicationType,
-} from './dto/creator-application.dto';
+import { ApplicationType, CreatorApplicationDto } from './dto/creator-application.dto';
 import { CreatorApplication } from './entities/creator-application.entity';
-import { UserRole } from 'src/enums/user-role.enum';
 import { EmailsService } from 'src/emails/email.service';
 import { EmailType } from 'src/enums/email-type.enum';
 import { ConfigService } from '@nestjs/config';
@@ -51,8 +20,6 @@ import { stripe } from 'src/integrations/stripe';
 export class CreatorService {
   private readonly logger = new Logger(CreatorService.name);
   constructor(
-    @InjectRepository(Stream)
-    private streamsRepository: Repository<Stream>,
     @InjectRepository(CreatorApplication)
     private creatorApplicationsRepository: Repository<CreatorApplication>,
     @InjectRepository(User)
@@ -61,59 +28,6 @@ export class CreatorService {
     private emailsService: EmailsService,
     private configService: ConfigService,
   ) {}
-
-  private formatDuration(totalSeconds: number): string {
-    const hours = Math.floor(totalSeconds / 3600)
-      .toString()
-      .padStart(2, '0');
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-      .toString()
-      .padStart(2, '0');
-    const seconds = Math.floor(totalSeconds % 60)
-      .toString()
-      .padStart(2, '0');
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-
-  async getAnalyticsSummary({
-    creatorId,
-  }: {
-    creatorId: string;
-  }): Promise<CreatorAnalyticsSummaryResponseDto> {
-    try {
-      const totalViews = await this.streamsRepository.sum('viewerCount', {
-        creatorId,
-      });
-
-      const totalStreams = await this.streamsRepository.count({
-        where: {
-          creatorId,
-        },
-      });
-
-      const result = await this.dataSource.query(`
-        SELECT SUM(EXTRACT(EPOCH FROM ("endTime" - "scheduledStartTime"))) AS total_seconds
-        FROM streams
-        WHERE "scheduledStartTime" IS NOT NULL AND "endTime" IS NOT NULL
-        AND "creatorId"='${creatorId}'
-      `);
-
-      const totalSeconds = parseFloat(result[0].total_seconds) || 0;
-      const totalLiveTime = this.formatDuration(totalSeconds);
-
-      return {
-        totalViews,
-        totalStreams,
-        totalLiveTime,
-      };
-    } catch (e) {
-      Logger.error('Unable to retrieve top live streams', e);
-      throw new HttpException(
-        `Unable to retrieve top live streams at the moment. Please try again later`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
 
   async upsertCreatorApplication({
     userId,
@@ -133,17 +47,11 @@ export class CreatorService {
       );
     }
 
-    if (user.role === UserRole.CREATOR) {
-      throw new ConflictException('User is already a creator');
-    }
-
     try {
       const existing = await this.creatorApplicationsRepository.findOne({
         where: { userId, isDeleted: false },
       });
 
-      const applicationType =
-        applicationDto.applicationType || ApplicationType.CREATOR;
       let application;
 
       if (existing) {
@@ -152,23 +60,12 @@ export class CreatorService {
           firstName: applicationDto.firstName,
           lastName: applicationDto.lastName,
           email: applicationDto.email,
-          applicationType,
+          applicationType: ApplicationType.SELLER,
+          collectorBackground: applicationDto.collectorBackground,
+          cityState: applicationDto.cityState,
+          cardsCollected: applicationDto.cardsCollected,
+          cardPreference: applicationDto.cardPreference,
         };
-
-        // Add creator-specific fields if provided
-        if (applicationType === ApplicationType.CREATOR) {
-          updateData.socials = applicationDto.socials;
-          updateData.message = applicationDto.message;
-        }
-
-        // Add seller-specific fields if provided
-        if (applicationType === ApplicationType.SELLER) {
-          updateData.socials = applicationDto.socials;
-          updateData.collectorBackground = applicationDto.collectorBackground;
-          updateData.cityState = applicationDto.cityState;
-          updateData.cardsCollected = applicationDto.cardsCollected;
-          updateData.cardPreference = applicationDto.cardPreference;
-        }
 
         await this.creatorApplicationsRepository.update(
           existing.id,
@@ -184,30 +81,18 @@ export class CreatorService {
         firstName: applicationDto.firstName,
         lastName: applicationDto.lastName,
         email: applicationDto.email,
-        applicationType,
+        applicationType: ApplicationType.SELLER,
+        collectorBackground: applicationDto.collectorBackground,
+        cityState: applicationDto.cityState,
+        cardsCollected: applicationDto.cardsCollected,
+        cardPreference: applicationDto.cardPreference,
       };
-
-      // Add creator-specific fields if provided
-      if (applicationType === ApplicationType.CREATOR) {
-        createData.socials = applicationDto.socials;
-        createData.message = applicationDto.message;
-      }
-
-      // Add seller-specific fields if provided
-      if (applicationType === ApplicationType.SELLER) {
-        createData.socials = applicationDto.socials;
-        createData.collectorBackground = applicationDto.collectorBackground;
-        createData.cityState = applicationDto.cityState;
-        createData.cardsCollected = applicationDto.cardsCollected;
-        createData.cardPreference = applicationDto.cardPreference;
-      }
 
       application = this.creatorApplicationsRepository.create(createData);
       await this.creatorApplicationsRepository.save(application);
 
       // Send email notification for new seller applications
-      if (applicationType === ApplicationType.SELLER) {
-        try {
+      try {
           const emailHTML = `
             <html>
               <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -239,7 +124,6 @@ export class CreatorService {
           );
           // Don't throw - we don't want email failure to block the application
         }
-      }
 
       return;
     } catch (e) {
@@ -290,7 +174,6 @@ export class CreatorService {
   }
 
   async getAllApplications(filters: {
-    applicationType?: string;
     status?: string;
     page?: number;
     limit?: number;
@@ -301,10 +184,6 @@ export class CreatorService {
       const skip = (page - 1) * limit;
 
       const where: any = { isDeleted: false };
-
-      if (filters.applicationType) {
-        where.applicationType = filters.applicationType;
-      }
 
       if (filters.status) {
         where.applicationStatus = filters.status;
@@ -357,40 +236,31 @@ export class CreatorService {
 
       await this.creatorApplicationsRepository.save(application);
 
-      // Grant appropriate role/flag to user
+      // Grant seller flag + Stripe Connect account to user
       const user = application.user;
-      if (application.applicationType === ApplicationType.SELLER) {
-        const stripeAccount = await stripe.createConnectedAccount(
-          application.user.email,
-        );
-        user.isSeller = true;
-        user.stripeAccountId = stripeAccount.accountId;
-        // Set default shop name if not already set
-        if (!user.shopName) {
-          user.shopName = `${user.username}'s Shop`;
-        }
-        this.logger.log(`Granted seller flag to user ${user.id}`);
-      } else if (application.applicationType === ApplicationType.CREATOR) {
-        user.role = UserRole.CREATOR;
-        user.isCreator = true;
-        this.logger.log(`Granted creator role to user ${user.id}`);
+      const stripeAccount = await stripe.createConnectedAccount(
+        application.user.email,
+      );
+      user.isSeller = true;
+      user.stripeAccountId = stripeAccount.accountId;
+      // Set default shop name if not already set
+      if (!user.shopName) {
+        user.shopName = `${user.username}'s Shop`;
       }
+      this.logger.log(`Granted seller flag to user ${user.id}`);
 
       await this.userRepository.save(user);
 
       // Send approval email
       try {
         const hostUrl = this.configService.get<string>('email.HOST_URL') || '';
-        const dashboardLink =
-          application.applicationType === ApplicationType.SELLER
-            ? `${hostUrl}/seller/shop/manage`
-            : hostUrl;
+        const dashboardLink = `${hostUrl}/seller/shop/manage`;
         const emailData = {
           toAddress: [user.email],
-          subject: `Your ${application.applicationType} application has been approved!`,
+          subject: `Your seller application has been approved!`,
           params: {
             username: user.username,
-            applicationType: application.applicationType,
+            applicationType: ApplicationType.SELLER,
             dashboardLink,
           },
         };

@@ -8,4 +8,4 @@ import { ReferralService } from './referral.service';
   providers: [ReferralService],
   exports: [ReferralService],
 })
-export class PlatformPayoutModule {}
+export class ReferralModule {}

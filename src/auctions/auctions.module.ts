@@ -7,6 +7,7 @@ import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity';
 import { PrizeItemWatcher } from '../prize/entities/prize-item-watcher.entity';
 import { PrizeOrder } from '../prize/entities/prize-order.entity';
+import { PrizeRedemption } from '../prize/entities/prize-redemption.entity';
 import { User } from '../users/entities/user.entity';
 import { AuctionsService } from './auctions.service';
 import { AuctionsPaymentsService } from './auctions-payments.service';
@@ -47,6 +48,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
       PrizeConfiguration,
       PrizeItemWatcher,
       PrizeOrder,
+      PrizeRedemption,
       User,
     ]),
     BullModule.registerQueueAsync({
