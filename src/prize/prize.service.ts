@@ -3142,24 +3142,43 @@ export class PrizeService implements OnModuleInit {
     prize: PrizeConfiguration,
     buyer: User,
   ): Promise<void> {
-    // Only send if this is a seller-owned item
-    if (!prize.createdBy) {
-      return;
-    }
-
-    const seller = await this.userRepository.findOne({
-      where: { id: prize.createdBy },
-    });
-
-    if (!seller || !seller.email) {
-      this.logger.warn(
-        `Seller ${prize.createdBy} not found or has no email for order ${order.id}`,
-      );
-      return;
-    }
-
     try {
-      // Show the seller the amount without the buyer service fee
+      // Determine recipient: admin for CardCade items, seller for seller-owned items
+      let recipientEmail: string;
+      let recipientName: string;
+      let markShippedUrl: string;
+
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+
+      if (!prize.createdBy) {
+        // CardCade (admin) item - send to admin email
+        recipientEmail =
+          this.configService.get<string>('ADMIN_EMAIL') ||
+          'contact@cardcade.fun';
+        recipientName = 'CardCade Admin';
+        markShippedUrl = `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
+      } else {
+        // Seller-owned item
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+
+        if (!seller || !seller.email) {
+          this.logger.warn(
+            `Seller ${prize.createdBy} not found or has no email for order ${order.id}`,
+          );
+          return;
+        }
+
+        recipientEmail = seller.email;
+        recipientName = seller.name || seller.username;
+        markShippedUrl = `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+      }
+
+      // Show the recipient the amount without the buyer service fee
       const BUYER_FEE_PERCENT = BUYER_PROCESSING_FEE_PERCENT;
       const charged = parseFloat(order.usdCharged?.toString() || '0');
       const sellerVisibleAmount =
@@ -3167,11 +3186,6 @@ export class PrizeService implements OnModuleInit {
           ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
           : order.totalPrice;
 
-      const frontendUrl = this.configService.get<string>(
-        'CLIENT_URL',
-        'http://localhost:3000',
-      );
-      const markShippedUrl = `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
       const shipping: PrizeOrder['shippingAddress'] = order.shippingAddress || {
         firstName: '',
         lastName: '',
@@ -3184,10 +3198,10 @@ export class PrizeService implements OnModuleInit {
 
       await this.emailsService.sendEmailSMTP(
         {
-          toAddress: [seller.email],
+          toAddress: [recipientEmail],
           subject: `New Sale! ${prize.name} has been purchased 🎉`,
           params: {
-            sellerName: seller.name || seller.username,
+            sellerName: recipientName,
             itemName: prize.name,
             buyerName: buyer.name || buyer.username,
             amount: sellerVisibleAmount,
@@ -3210,11 +3224,11 @@ export class PrizeService implements OnModuleInit {
         'seller_shop_purchase',
       );
       this.logger.log(
-        `Seller shop purchase notification sent to ${seller.email} for order ${order.id}`,
+        `Shop purchase notification sent to ${recipientEmail} for order ${order.id}`,
       );
     } catch (emailError) {
       this.logger.error(
-        `Failed to send seller shop purchase email for order ${order.id}:`,
+        `Failed to send shop purchase email for order ${order.id}:`,
         emailError,
       );
     }
