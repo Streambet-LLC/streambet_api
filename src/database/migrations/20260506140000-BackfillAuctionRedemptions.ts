@@ -38,9 +38,7 @@ export class BackfillAuctionRedemptions20260506140000
         prize_category,
         shipping_status,
         fulfilled,
-        date_redeemed,
-        created_at,
-        updated_at
+        date_redeemed
       )
       SELECT
         po.user_id,
@@ -54,9 +52,7 @@ export class BackfillAuctionRedemptions20260506140000
         END AS prize_category,
         'open' AS shipping_status,
         false AS fulfilled,
-        COALESCE(po.created_at, NOW()) AS date_redeemed,
-        NOW() AS created_at,
-        NOW() AS updated_at
+        COALESCE(po."createdAt", NOW()) AS date_redeemed
       FROM prize_orders po
       INNER JOIN auctions a
               ON a.prize_order_id = po.id
