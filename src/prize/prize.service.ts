@@ -88,6 +88,7 @@ const EBAY_MARKET_WINDOWS: Array<{
 ];
 
 const EBAY_FLAG_SOCIALS_KEY_SOLD_AVG = '_ff_ebaySoldAvg';
+const EBAY_FLAG_SOCIALS_KEY_SOLD_AVG_ADMIN_ONLY = '_ff_ebaySoldAvgAdminOnly';
 const EBAY_FLAG_SOCIALS_KEY_MANUAL_SYNC = '_ff_ebayManualSync';
 
 /**
@@ -251,6 +252,7 @@ export class PrizeService implements OnModuleInit {
 
   async getEbayFeatureFlags(): Promise<{
     ebaySoldAvgEnabled: boolean;
+    ebaySoldAvgAdminOnly: boolean;
     ebayManualSyncEnabled: boolean;
   }> {
     const settings = await this.getShopSettings('cardcade');
@@ -260,6 +262,10 @@ export class PrizeService implements OnModuleInit {
       ebaySoldAvgEnabled: this.parseHotfixFeatureFlag(
         socials[EBAY_FLAG_SOCIALS_KEY_SOLD_AVG],
         true,
+      ),
+      ebaySoldAvgAdminOnly: this.parseHotfixFeatureFlag(
+        socials[EBAY_FLAG_SOCIALS_KEY_SOLD_AVG_ADMIN_ONLY],
+        false,
       ),
       ebayManualSyncEnabled: this.parseHotfixFeatureFlag(
         socials[EBAY_FLAG_SOCIALS_KEY_MANUAL_SYNC],
