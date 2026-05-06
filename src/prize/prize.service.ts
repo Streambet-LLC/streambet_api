@@ -87,6 +87,9 @@ const EBAY_MARKET_WINDOWS: Array<{
   { key: '365d', days: 365 },
 ];
 
+const EBAY_FLAG_SOCIALS_KEY_SOLD_AVG = '_ff_ebaySoldAvg';
+const EBAY_FLAG_SOCIALS_KEY_MANUAL_SYNC = '_ff_ebayManualSync';
+
 /**
  * Service for managing prize configuration and calculating user progress.
  * Implements data hardening: updates create new rows instead of modifying existing ones.
@@ -244,6 +247,43 @@ export class PrizeService implements OnModuleInit {
     }
 
     throw new NotFoundException(`Shop settings not found for key: ${shopKey}`);
+  }
+
+  async getEbayFeatureFlags(): Promise<{
+    ebaySoldAvgEnabled: boolean;
+    ebayManualSyncEnabled: boolean;
+  }> {
+    const settings = await this.getShopSettings('cardcade');
+    const socials = settings.socials ?? {};
+
+    return {
+      ebaySoldAvgEnabled: this.parseHotfixFeatureFlag(
+        socials[EBAY_FLAG_SOCIALS_KEY_SOLD_AVG],
+        true,
+      ),
+      ebayManualSyncEnabled: this.parseHotfixFeatureFlag(
+        socials[EBAY_FLAG_SOCIALS_KEY_MANUAL_SYNC],
+        true,
+      ),
+    };
+  }
+
+  private parseHotfixFeatureFlag(value: unknown, fallback: boolean): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true') {
+        return true;
+      }
+      if (normalized === 'false') {
+        return false;
+      }
+    }
+
+    return fallback;
   }
 
   /**
