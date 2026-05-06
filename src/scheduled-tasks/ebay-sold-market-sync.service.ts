@@ -10,7 +10,15 @@ import {
   EbayCompletedItemsResult,
   EbayService,
 } from 'src/integrations/ebay/ebay.service';
-import { normalizeEbaySearchKeywords } from 'src/integrations/ebay/ebay-query.utils';
+import {
+  normalizeEbaySearchKeywords,
+  extractPsaGradeFromItemTitle,
+  psaGradesMatch,
+  extractCardNumberFromTitle,
+  cardNumbersMatch,
+  extractYearFromTitle,
+  yearsMatch,
+} from 'src/integrations/ebay/ebay-query.utils';
 
 const SYNC_BATCH_SIZE = 6;
 const DEFAULT_MAX_SEARCH_RESULTS: 60 | 120 | 240 = 240;
@@ -126,6 +134,7 @@ export class EbaySoldMarketSyncService {
     fetched: number;
     inserted: number;
     deduped: number;
+    autoFlagged: number;
     query: string;
     calculatedAt: Date;
   }> {
@@ -137,11 +146,122 @@ export class EbaySoldMarketSyncService {
     return this.syncItem(item);
   }
 
+  async migratePsaGradeFlags(): Promise<{
+    totalListings: number;
+    flaggedCount: number;
+    unflaggedCount: number;
+    unchangedCount: number;
+  }> {
+    this.logger.log('Starting PSA grade, card number, and year migration for existing sold listings...');
+
+    // Get all items with their sold listings
+    const items = await this.itemRepository.find({
+      select: ['id', 'name', 'ebaySearchQuery'],
+    });
+
+    let totalListings = 0;
+    let flaggedCount = 0;
+    let unflaggedCount = 0;
+    let unchangedCount = 0;
+
+    for (const item of items) {
+      const rawQuery = (item.ebaySearchQuery || item.name || '').trim();
+      const itemPsaGrade = extractPsaGradeFromItemTitle(rawQuery);
+      const itemCardNumber = extractCardNumberFromTitle(rawQuery);
+      const itemYear = extractYearFromTitle(rawQuery);
+
+      // Skip items without PSA grades, card numbers, or year - they don't need filtering
+      if (!itemPsaGrade && !itemCardNumber && !itemYear) {
+        continue;
+      }
+
+      // Get all sold listings for this item
+      const listings = await this.soldListingRepository.find({
+        where: { itemId: item.id },
+      });
+
+      for (const listing of listings) {
+        totalListings++;
+
+        const soldListingPsaGrade = extractPsaGradeFromItemTitle(listing.soldTitle);
+        const soldListingCardNumber = extractCardNumberFromTitle(listing.soldTitle);
+        const soldListingYear = extractYearFromTitle(listing.soldTitle);
+        let shouldBeInaccurate = false;
+        let reason: string | null = null;
+
+        // Check PSA grade if item has one
+        if (itemPsaGrade) {
+          if (!soldListingPsaGrade) {
+            shouldBeInaccurate = true;
+            reason = 'Auto-flagged: Missing PSA grade';
+          } else if (!psaGradesMatch(itemPsaGrade, soldListingPsaGrade)) {
+            shouldBeInaccurate = true;
+            reason = `Auto-flagged: PSA grade mismatch (expected ${itemPsaGrade}, found ${soldListingPsaGrade})`;
+          }
+        }
+
+        // Check card number if item has one (independent of PSA grade)
+        if (!shouldBeInaccurate && itemCardNumber) {
+          if (!soldListingCardNumber) {
+            shouldBeInaccurate = true;
+            reason = 'Auto-flagged: Missing card number';
+          } else if (!cardNumbersMatch(itemCardNumber, soldListingCardNumber)) {
+            shouldBeInaccurate = true;
+            reason = `Auto-flagged: Card number mismatch (expected #${itemCardNumber}, found #${soldListingCardNumber})`;
+          }
+        }
+
+        // Check year if item has one (independent of PSA grade and card number)
+        if (!shouldBeInaccurate && itemYear) {
+          if (!soldListingYear) {
+            shouldBeInaccurate = true;
+            reason = 'Auto-flagged: Missing year';
+          } else if (!yearsMatch(itemYear, soldListingYear)) {
+            shouldBeInaccurate = true;
+            reason = `Auto-flagged: Year mismatch (expected ${itemYear}, found ${soldListingYear})`;
+          }
+        }
+
+        // Update if flags changed
+        if (listing.isInaccurate !== shouldBeInaccurate) {
+          listing.isInaccurate = shouldBeInaccurate;
+          listing.inaccurateReason = reason;
+          listing.inaccurateFlaggedAt = shouldBeInaccurate ? new Date() : null;
+          await this.soldListingRepository.save(listing);
+
+          if (shouldBeInaccurate) {
+            flaggedCount++;
+          } else {
+            unflaggedCount++;
+          }
+        } else {
+          unchangedCount++;
+        }
+      }
+
+      this.logger.debug(
+        `Migrated item ${item.id}: psaGrade=${itemPsaGrade || 'none'}, cardNumber=${itemCardNumber ? '#' + itemCardNumber : 'none'}, year=${itemYear || 'none'}, listings=${listings.length}`,
+      );
+    }
+
+    this.logger.log(
+      `PSA grade, card number, and year migration complete: total=${totalListings}, flagged=${flaggedCount}, unflagged=${unflaggedCount}, unchanged=${unchangedCount}`,
+    );
+
+    return {
+      totalListings,
+      flaggedCount,
+      unflaggedCount,
+      unchangedCount,
+    };
+  }
+
   private async syncItem(item: PrizeConfiguration): Promise<{
     itemId: string;
     fetched: number;
     inserted: number;
     deduped: number;
+    autoFlagged: number;
     query: string;
     calculatedAt: Date;
   }> {
@@ -162,10 +282,16 @@ export class EbaySoldMarketSyncService {
         fetched: 0,
         inserted: 0,
         deduped: 0,
+        autoFlagged: 0,
         query,
         calculatedAt: now,
       };
     }
+
+    // Extract PSA grade, card number, and year from the original item title for filtering
+    const itemPsaGrade = extractPsaGradeFromItemTitle(rawQuery);
+    const itemCardNumber = extractCardNumberFromTitle(rawQuery);
+    const itemYear = extractYearFromTitle(rawQuery);
 
     await this.updateSyncState(item.id, {
       lastFetchAttemptedAt: now,
@@ -173,7 +299,7 @@ export class EbaySoldMarketSyncService {
 
     const result = await this.fetchCompletedItemsWithRetry(query);
 
-    const saveResult = await this.persistListings(item.id, query, result);
+    const saveResult = await this.persistListings(item.id, query, result, itemPsaGrade, itemCardNumber, itemYear);
     const computedAt = new Date();
 
     await this.itemRepository.update(item.id, {
@@ -189,7 +315,7 @@ export class EbaySoldMarketSyncService {
     });
 
     this.logger.log(
-      `eBay sold sync item=${item.id} query="${query}" fetched=${result.products.length} inserted=${saveResult.inserted} deduped=${saveResult.deduped}`,
+      `eBay sold sync item=${item.id} query="${query}" psaGrade=${itemPsaGrade || 'none'} cardNumber=${itemCardNumber ? '#' + itemCardNumber : 'none'} year=${itemYear || 'none'} fetched=${result.products.length} inserted=${saveResult.inserted} deduped=${saveResult.deduped} autoFlagged=${saveResult.autoFlagged}`,
     );
 
     return {
@@ -197,6 +323,7 @@ export class EbaySoldMarketSyncService {
       fetched: result.products.length,
       inserted: saveResult.inserted,
       deduped: saveResult.deduped,
+      autoFlagged: saveResult.autoFlagged,
       query,
       calculatedAt: computedAt,
     };
@@ -236,14 +363,17 @@ export class EbaySoldMarketSyncService {
     itemId: string,
     searchQuery: string,
     result: EbayCompletedItemsResult,
-  ): Promise<{
+    itemPsaGrade: string | null,
+    itemCardNumber: string | null,    itemYear: string | null,  ): Promise<{
     inserted: number;
     deduped: number;
+    autoFlagged: number;
     lastSeenSoldAt: Date | null;
     lastSeenProviderItemId: string | null;
   }> {
     let inserted = 0;
     let deduped = 0;
+    let autoFlagged = 0;
 
     const sortedByRecency = [...result.products].sort((a, b) => {
       const aTime = a.dateSold?.getTime() ?? 0;
@@ -271,6 +401,60 @@ export class EbaySoldMarketSyncService {
         continue;
       }
 
+      // PSA grade and card number filtering: auto-flag if they don't match
+      let isInaccurate = false;
+      let inaccurateReason: string | null = null;
+
+      if (itemPsaGrade) {
+        const soldListingPsaGrade = extractPsaGradeFromItemTitle(product.title || '');
+        
+        if (!soldListingPsaGrade) {
+          // Item has PSA grade but sold listing doesn't
+          isInaccurate = true;
+          inaccurateReason = 'Auto-flagged: Missing PSA grade';
+          autoFlagged += 1;
+        } else if (!psaGradesMatch(itemPsaGrade, soldListingPsaGrade)) {
+          // Both have PSA grades but they don't match
+          isInaccurate = true;
+          inaccurateReason = `Auto-flagged: PSA grade mismatch (expected ${itemPsaGrade}, found ${soldListingPsaGrade})`;
+          autoFlagged += 1;
+        }
+      }
+
+      // Card number filtering (independent of PSA grade)
+      if (!isInaccurate && itemCardNumber) {
+        const soldListingCardNumber = extractCardNumberFromTitle(product.title || '');
+        
+        if (!soldListingCardNumber) {
+          // Item has card number but sold listing doesn't
+          isInaccurate = true;
+          inaccurateReason = 'Auto-flagged: Missing card number';
+          autoFlagged += 1;
+        } else if (!cardNumbersMatch(itemCardNumber, soldListingCardNumber)) {
+          // Both have card numbers but they don't match
+          isInaccurate = true;
+          inaccurateReason = `Auto-flagged: Card number mismatch (expected #${itemCardNumber}, found #${soldListingCardNumber})`;
+          autoFlagged += 1;
+        }
+      }
+
+      // Year filtering (independent of PSA grade and card number)
+      if (!isInaccurate && itemYear) {
+        const soldListingYear = extractYearFromTitle(product.title || '');
+        
+        if (!soldListingYear) {
+          // Item has year but sold listing doesn't
+          isInaccurate = true;
+          inaccurateReason = 'Auto-flagged: Missing year';
+          autoFlagged += 1;
+        } else if (!yearsMatch(itemYear, soldListingYear)) {
+          // Both have years but they don't match
+          isInaccurate = true;
+          inaccurateReason = `Auto-flagged: Year mismatch (expected ${itemYear}, found ${soldListingYear})`;
+          autoFlagged += 1;
+        }
+      }
+
       const entity = this.soldListingRepository.create({
         itemId,
         providerItemId,
@@ -288,6 +472,9 @@ export class EbaySoldMarketSyncService {
         buyingFormat: product.buyingFormat,
         responseUrl: result.responseUrl,
         rawPayload: product.rawPayload,
+        isInaccurate,
+        inaccurateReason,
+        inaccurateFlaggedAt: isInaccurate ? new Date() : null,
       });
 
       await this.soldListingRepository.save(entity);
@@ -297,6 +484,7 @@ export class EbaySoldMarketSyncService {
     return {
       inserted,
       deduped,
+      autoFlagged,
       lastSeenSoldAt: newest?.dateSold ?? null,
       lastSeenProviderItemId:
         newest !== undefined

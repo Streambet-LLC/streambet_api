@@ -81,11 +81,40 @@ export class EbaySoldMarketAdminController {
     fetched: number;
     inserted: number;
     deduped: number;
+    autoFlagged: number;
     query: string;
     calculatedAt: Date;
   }> {
     this.ensureAdmin(req.user);
     await this.ensureManualSyncEnabled();
     return this.syncService.runManualSyncForItem(itemId);
+  }
+
+  @Post('migrate-psa-grade-flags')
+  @ApiOperation({ 
+    summary: 'One-time migration: Retroactively apply PSA grade, card number, and year filtering to all existing sold listings (admin)' 
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Migration completed',
+    schema: {
+      properties: {
+        totalListings: { type: 'number' },
+        flaggedCount: { type: 'number' },
+        unflaggedCount: { type: 'number' },
+        unchangedCount: { type: 'number' },
+      },
+    },
+  })
+  async migratePsaGradeFlags(
+    @Request() req: RequestWithUser,
+  ): Promise<{
+    totalListings: number;
+    flaggedCount: number;
+    unflaggedCount: number;
+    unchangedCount: number;
+  }> {
+    this.ensureAdmin(req.user);
+    return this.syncService.migratePsaGradeFlags();
   }
 }
