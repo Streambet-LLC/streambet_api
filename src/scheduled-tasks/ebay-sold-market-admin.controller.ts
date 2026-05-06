@@ -11,6 +11,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UserRole } from 'src/enums/user-role.enum';
+import { PrizeService } from 'src/prize/prize.service';
 import { User } from 'src/users/entities/user.entity';
 import { EbaySoldMarketSyncService } from './ebay-sold-market-sync.service';
 
@@ -23,11 +24,23 @@ interface RequestWithUser extends Request {
 @Controller('admin/ebay-market')
 @UseGuards(JwtAuthGuard)
 export class EbaySoldMarketAdminController {
-  constructor(private readonly syncService: EbaySoldMarketSyncService) {}
+  constructor(
+    private readonly syncService: EbaySoldMarketSyncService,
+    private readonly prizeService: PrizeService,
+  ) {}
 
   private ensureAdmin(user: User): void {
     if (user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Admin access required');
+    }
+  }
+
+  private async ensureManualSyncEnabled(): Promise<void> {
+    const flags = await this.prizeService.getEbayFeatureFlags();
+    if (!flags.ebayManualSyncEnabled) {
+      throw new ForbiddenException(
+        'Manual eBay sold sync is disabled by admin feature controls',
+      );
     }
   }
 
@@ -48,6 +61,7 @@ export class EbaySoldMarketAdminController {
     @Request() req: RequestWithUser,
   ): Promise<{ alreadyRunning: boolean; queued: number; itemIds: string[] }> {
     this.ensureAdmin(req.user);
+    await this.ensureManualSyncEnabled();
     return this.syncService.startSyncAll();
   }
 
@@ -71,6 +85,7 @@ export class EbaySoldMarketAdminController {
     calculatedAt: Date;
   }> {
     this.ensureAdmin(req.user);
+    await this.ensureManualSyncEnabled();
     return this.syncService.runManualSyncForItem(itemId);
   }
 }

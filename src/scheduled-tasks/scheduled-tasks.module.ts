@@ -12,6 +12,7 @@ import { InboxModule } from 'src/inbox/inbox.module';
 import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
 import { PrizeItemEbaySoldListing } from 'src/prize/entities/prize-item-ebay-sold-listing.entity';
 import { PrizeItemEbaySyncState } from 'src/prize/entities/prize-item-ebay-sync-state.entity';
+import { PrizeModule } from 'src/prize/prize.module';
 import { EbayModule } from 'src/integrations/ebay/ebay.module';
 import { EbaySoldMarketSyncService } from './ebay-sold-market-sync.service';
 import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controller';
@@ -27,6 +28,7 @@ import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controll
     ]),
     ReviewsModule,
     InboxModule,
+    PrizeModule,
     EbayModule,
   ],
   providers: [

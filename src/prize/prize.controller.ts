@@ -136,6 +136,28 @@ export class PrizeController {
     return this.prizeService.getItemEbayMarketSummary(id, req.user?.id);
   }
 
+  @Get('ebay-feature-flags')
+  @ApiOperation({
+    summary:
+      'Get public eBay feature flags for CardCade UI controls (hotfix)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns public eBay feature flags',
+    schema: {
+      properties: {
+        ebaySoldAvgEnabled: { type: 'boolean' },
+        ebayManualSyncEnabled: { type: 'boolean' },
+      },
+    },
+  })
+  async getEbayFeatureFlags(): Promise<{
+    ebaySoldAvgEnabled: boolean;
+    ebayManualSyncEnabled: boolean;
+  }> {
+    return this.prizeService.getEbayFeatureFlags();
+  }
+
   @Get('shop-items/:id/ebay-market-history')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get sold-market history rows for one shop item' })
