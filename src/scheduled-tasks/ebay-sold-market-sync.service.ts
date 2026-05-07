@@ -1,7 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
+import { EBAY_MIGRATION_QUEUE } from 'src/common/constants/queue.constants';
 import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
 import { PrizeItemEbaySoldListing } from 'src/prize/entities/prize-item-ebay-sold-listing.entity';
 import { PrizeItemEbaySyncState } from 'src/prize/entities/prize-item-ebay-sync-state.entity';
@@ -37,6 +40,8 @@ export class EbaySoldMarketSyncService {
     @InjectRepository(PrizeItemEbaySyncState)
     private readonly syncStateRepository: Repository<PrizeItemEbaySyncState>,
     private readonly ebayService: EbayService,
+    @InjectQueue(EBAY_MIGRATION_QUEUE)
+    private readonly migrationQueue: Queue,
   ) {}
 
   private isSyncAllRunning = false;
@@ -146,7 +151,63 @@ export class EbaySoldMarketSyncService {
     return this.syncItem(item);
   }
 
-  async migratePsaGradeFlags(): Promise<{
+  async queuePsaGradeFlagsMigration(): Promise<{
+    jobId: string;
+    message: string;
+    estimatedItems: number;
+  }> {
+    const itemCount = await this.itemRepository.count();
+    
+    const job = await this.migrationQueue.add('migrate-psa-flags', { totalItems: itemCount }, {
+      jobId: `psa-migration-${Date.now()}`,
+    });
+
+    this.logger.log(
+      `PSA grade migration queued: jobId=${job.id}, estimatedItems=${itemCount}`,
+    );
+
+    return {
+      jobId: job.id as string,
+      message: 'Migration job queued successfully. This will run in the background and may take several minutes.',
+      estimatedItems: itemCount,
+    };
+  }
+
+  async getPsaGradeFlagsMigrationStatus(jobId: string): Promise<{
+    jobId: string;
+    state: string;
+    progress: number;
+    processedItems: number;
+    totalItems: number;
+    result?: any;
+  }> {
+    const job = await this.migrationQueue.getJob(jobId);
+    
+    if (!job) {
+      return {
+        jobId,
+        state: 'not-found',
+        progress: 0,
+        processedItems: 0,
+        totalItems: 0,
+      };
+    }
+
+    const state = await job.getState();
+    const progress = job.progress as any;
+    const jobData = job.data as any;
+
+    return {
+      jobId,
+      state,
+      progress: typeof progress === 'number' ? progress : progress?.percent || 0,
+      processedItems: progress?.processedItems || 0,
+      totalItems: jobData?.totalItems || 0,
+      result: state === 'completed' ? job.returnvalue : undefined,
+    };
+  }
+
+  async migratePsaGradeFlags(job?: any): Promise<{
     totalListings: number;
     flaggedCount: number;
     unflaggedCount: number;
@@ -159,10 +220,12 @@ export class EbaySoldMarketSyncService {
       select: ['id', 'name', 'ebaySearchQuery'],
     });
 
+    const totalItems = items.length;
     let totalListings = 0;
     let flaggedCount = 0;
     let unflaggedCount = 0;
     let unchangedCount = 0;
+    let processedItems = 0;
 
     for (const item of items) {
       const rawQuery = (item.ebaySearchQuery || item.name || '').trim();
@@ -172,6 +235,14 @@ export class EbaySoldMarketSyncService {
 
       // Skip items without PSA grades, card numbers, or year - they don't need filtering
       if (!itemPsaGrade && !itemCardNumber && !itemYear) {
+        processedItems++;
+        if (job) {
+          await job.updateProgress({
+            percent: Math.round((processedItems / totalItems) * 100),
+            processedItems,
+            totalItems,
+          });
+        }
         continue;
       }
 
@@ -242,6 +313,15 @@ export class EbaySoldMarketSyncService {
       this.logger.debug(
         `Migrated item ${item.id}: psaGrade=${itemPsaGrade || 'none'}, cardNumber=${itemCardNumber ? '#' + itemCardNumber : 'none'}, year=${itemYear || 'none'}, listings=${listings.length}`,
       );
+
+      processedItems++;
+      if (job) {
+        await job.updateProgress({
+          percent: Math.round((processedItems / totalItems) * 100),
+          processedItems,
+          totalItems,
+        });
+      }
     }
 
     this.logger.log(

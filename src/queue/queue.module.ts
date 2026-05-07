@@ -5,6 +5,7 @@ import { QueueService } from './queue.service';
 import { StreamModule } from 'src/stream/stream.module';
 import {
   COINFLOW_WEBHOOK_QUEUE,
+  EBAY_MIGRATION_QUEUE,
   EMAIL_QUEUE,
   STREAM_LIVE_QUEUE,
 } from 'src/common/constants/queue.constants';
@@ -13,6 +14,7 @@ import { EmailProcessor } from './processor/email.processor';
 import { EmailsModule } from 'src/emails/email.module';
 import { CoinflowWebhookProcessor } from './processor/coinflow-webhook.processor';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { EbayMigrationProcessor } from './processor/ebay-migration.processor';
 
 @Module({
   imports: [
@@ -73,6 +75,19 @@ import { PaymentsModule } from 'src/payments/payments.module';
           ),
         }),
       },
+      {
+        name: EBAY_MIGRATION_QUEUE,
+        imports: [ConfigModule],
+        inject: [ConfigService],
+        useFactory: () => ({
+          name: EBAY_MIGRATION_QUEUE,
+          defaultJobOptions: {
+            attempts: 1,
+            removeOnComplete: { count: 10 },
+            removeOnFail: { count: 20 },
+          },
+        }),
+      },
     ),
     EmailsModule,
   ],
@@ -81,6 +96,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     QueueService,
     EmailProcessor,
     CoinflowWebhookProcessor,
+    EbayMigrationProcessor,
   ],
   exports: [QueueService],
 })

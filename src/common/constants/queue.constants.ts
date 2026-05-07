@@ -16,3 +16,6 @@ export const AUCTION_QUEUE = `${prefix}AUCTION`;
 export const AUCTION_CLOSE_JOB = 'auction-close';
 export const AUCTION_CLOSING_SOON_JOB = 'auction-closing-soon';
 export const AUCTION_AUTOPAY_RETRY_JOB = 'auction-autopay-retry';
+
+export const EBAY_MIGRATION_QUEUE = `${prefix}EBAY_MIGRATION`;
+export const EBAY_MIGRATE_PSA_FLAGS_JOB = 'migrate-psa-flags';
