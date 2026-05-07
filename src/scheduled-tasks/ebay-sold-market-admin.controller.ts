@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   Param,
   Patch,
   Post,
@@ -92,29 +93,59 @@ export class EbaySoldMarketAdminController {
 
   @Post('migrate-psa-grade-flags')
   @ApiOperation({ 
-    summary: 'One-time migration: Retroactively apply PSA grade, card number, and year filtering to all existing sold listings (admin)' 
+    summary: 'Queue migration: Retroactively apply PSA grade, card number, and year filtering to all existing sold listings (admin)' 
   })
   @ApiResponse({
     status: 201,
-    description: 'Migration completed',
+    description: 'Migration job queued',
     schema: {
       properties: {
-        totalListings: { type: 'number' },
-        flaggedCount: { type: 'number' },
-        unflaggedCount: { type: 'number' },
-        unchangedCount: { type: 'number' },
+        jobId: { type: 'string' },
+        message: { type: 'string' },
+        estimatedItems: { type: 'number' },
       },
     },
   })
   async migratePsaGradeFlags(
     @Request() req: RequestWithUser,
   ): Promise<{
-    totalListings: number;
-    flaggedCount: number;
-    unflaggedCount: number;
-    unchangedCount: number;
+    jobId: string;
+    message: string;
+    estimatedItems: number;
   }> {
     this.ensureAdmin(req.user);
-    return this.syncService.migratePsaGradeFlags();
+    return this.syncService.queuePsaGradeFlagsMigration();
+  }
+
+  @Get('migrate-psa-grade-flags/:jobId/status')
+  @ApiOperation({ summary: 'Get PSA grade migration job status (admin)' })
+  @ApiParam({ name: 'jobId', description: 'Migration job ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Job status',
+    schema: {
+      properties: {
+        jobId: { type: 'string' },
+        state: { type: 'string' },
+        progress: { type: 'number' },
+        processedItems: { type: 'number' },
+        totalItems: { type: 'number' },
+        result: { type: 'object' },
+      },
+    },
+  })
+  async getPsaGradeFlagsJobStatus(
+    @Request() req: RequestWithUser,
+    @Param('jobId') jobId: string,
+  ): Promise<{
+    jobId: string;
+    state: string;
+    progress: number;
+    processedItems: number;
+    totalItems: number;
+    result?: any;
+  }> {
+    this.ensureAdmin(req.user);
+    return this.syncService.getPsaGradeFlagsMigrationStatus(jobId);
   }
 }

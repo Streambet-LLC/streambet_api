@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
+import { EBAY_MIGRATION_QUEUE } from 'src/common/constants/queue.constants';
 import { BettingRound } from 'src/betting/entities/betting-round.entity';
 import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
 import { AutoLockerService } from './auto-locker.service';
@@ -30,6 +32,9 @@ import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controll
     InboxModule,
     PrizeModule,
     EbayModule,
+    BullModule.registerQueue({
+      name: EBAY_MIGRATION_QUEUE,
+    }),
   ],
   providers: [
     AutoLockerService,
@@ -40,5 +45,6 @@ import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controll
     EmailsService,
   ],
   controllers: [EbaySoldMarketAdminController],
+  exports: [EbaySoldMarketSyncService],
 })
 export class ScheduledTaskModule {}
