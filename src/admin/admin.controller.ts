@@ -71,6 +71,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
 import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
+import { getEffectiveSellerFeePercent } from 'src/common/utils/fee-utils';
 import {
   ConciergeRequest,
   ConciergeRequestStatus,
@@ -829,42 +830,107 @@ export class AdminController {
     });
 
     // Concierge requests (pending — claimed ones are excluded)
-    const totalConciergeRequests = await this.conciergeRequestRepository.count(
-      { where: { status: ConciergeRequestStatus.PENDING } },
-    );
+    const totalConciergeRequests = await this.conciergeRequestRepository.count({
+      where: { status: ConciergeRequestStatus.PENDING },
+    });
 
-    // Monthly fees earned (current calendar month, paid orders)
-    // Uses same approximation as getAdminSalesSummary:
-    //   - Non-crypto: ~6.796% of totalPrice (3% buyer + 4% seller, backed out)
-    //   - Crypto:     2% of totalPrice (200 bps combined)
-    const NON_CRYPTO_FEE_RATE_OF_TOTAL = (3 + 4) / 100 / (1 + 3 / 100);
-    const CRYPTO_FEE_RATE_OF_TOTAL = 200 / 10000;
+    // Monthly fees earned (current calendar month)
+    const NON_CRYPTO_BUYER_FEE_PCT = 3;
+    const CRYPTO_BUYER_FEE_BPS = 100;
+    const CRYPTO_DEFAULT_SELLER_FEE_BPS = 100;
+
     const now = new Date();
     const monthStart = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
     );
-    const feeRow = await this.prizeOrderRepository
-      .createQueryBuilder('o')
-      .select(
-        `COALESCE(SUM(CASE WHEN o.payment_method = 'crypto' THEN o.total_price ELSE 0 END), 0)`,
-        'crypto_revenue',
-      )
-      .addSelect(
-        `COALESCE(SUM(CASE WHEN o.payment_method <> 'crypto' THEN o.total_price ELSE 0 END), 0)`,
-        'noncrypto_revenue',
-      )
-      .where("o.status IN ('paid', 'processing', 'shipped', 'delivered')")
-      .andWhere('o.createdAt >= :monthStart', { monthStart })
-      .getRawOne<{ crypto_revenue: string; noncrypto_revenue: string }>();
 
-    const cryptoRevenue = parseFloat(feeRow?.crypto_revenue ?? '0');
-    const nonCryptoRevenue = parseFloat(feeRow?.noncrypto_revenue ?? '0');
-    const monthlyFeesEarned =
-      Math.round(
-        (cryptoRevenue * CRYPTO_FEE_RATE_OF_TOTAL +
-          nonCryptoRevenue * NON_CRYPTO_FEE_RATE_OF_TOTAL) *
-          100,
-      ) / 100;
+    const feeRows = await this.prizeOrderRepository
+      .createQueryBuilder('o')
+      .leftJoin('o.prizeConfiguration', 'prize')
+      .leftJoin('prize.creator', 'seller')
+      .leftJoin('seller.wallet', 'wallet')
+      .select('o.payment_method', 'payment_method')
+      .addSelect('COALESCE(o.total_price, 0)', 'total_price')
+      .addSelect('COALESCE(prize.shipping_cost_usd, 0)', 'shipping_cost_usd')
+      .addSelect('seller.stripe_account_id', 'seller_stripe_account_id')
+      .addSelect(
+        'seller.admin_fee_override_percent',
+        'seller_admin_fee_override_percent',
+      )
+      .addSelect('wallet.lifetime_coins_earned', 'seller_lifetime_coins_earned')
+      .addSelect(
+        'seller.crypto_override_fee_bps',
+        'seller_crypto_override_fee_bps',
+      )
+      .where("o.status IN ('paid', 'shipped', 'delivered')")
+      .andWhere('o.createdAt >= :monthStart', { monthStart })
+      .getRawMany<{
+        payment_method: 'coins' | 'usd' | 'combined' | 'crypto';
+        total_price: string | null;
+        shipping_cost_usd: string | null;
+        seller_stripe_account_id: string | null;
+        seller_admin_fee_override_percent: string | null;
+        seller_lifetime_coins_earned: string | null;
+        seller_crypto_override_fee_bps: string | null;
+      }>();
+
+    const toCents = (usd: number): number => Math.round(usd * 100);
+    const toUsd = (cents: number): number => cents / 100;
+    const round2 = (usd: number): number => Math.round(usd * 100) / 100;
+
+    let monthlyFeesEarned = 0;
+    for (const row of feeRows) {
+      const totalPriceUsd = parseFloat(row.total_price ?? '0');
+      if (!Number.isFinite(totalPriceUsd) || totalPriceUsd <= 0) {
+        continue;
+      }
+
+      if (row.payment_method === 'crypto') {
+        const sellerFeeBps =
+          row.seller_crypto_override_fee_bps !== null &&
+          row.seller_crypto_override_fee_bps !== undefined
+            ? Number(row.seller_crypto_override_fee_bps)
+            : CRYPTO_DEFAULT_SELLER_FEE_BPS;
+        monthlyFeesEarned +=
+          (totalPriceUsd * (CRYPTO_BUYER_FEE_BPS + sellerFeeBps)) / 10000;
+        continue;
+      }
+
+      // If seller has no Stripe Connect account, checkout settles to
+      // platform and there is no seller transfer split.
+      if (!row.seller_stripe_account_id) {
+        monthlyFeesEarned += totalPriceUsd;
+        continue;
+      }
+
+      // total_price = subtotal + buyerFee, where buyerFee is 3% of
+      // (subtotal - shipping). Solve subtotal from stored total_price.
+      const shippingUsd = Math.max(0, parseFloat(row.shipping_cost_usd ?? '0'));
+      const subtotalUsd =
+        (totalPriceUsd + (NON_CRYPTO_BUYER_FEE_PCT / 100) * shippingUsd) /
+        (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
+      const itemSubtotalUsd = Math.max(0, subtotalUsd - shippingUsd);
+
+      const buyerFeeCents = Math.round(
+        toCents(itemSubtotalUsd) * (NON_CRYPTO_BUYER_FEE_PCT / 100),
+      );
+
+      const sellerFeePercent = getEffectiveSellerFeePercent({
+        lifetimeCadeCoins: Number(row.seller_lifetime_coins_earned ?? 0),
+        adminFeeOverridePercent:
+          row.seller_admin_fee_override_percent !== null &&
+          row.seller_admin_fee_override_percent !== undefined
+            ? Number(row.seller_admin_fee_override_percent)
+            : null,
+      });
+      const sellerFeeCents = Math.round(
+        toCents(subtotalUsd) * (sellerFeePercent / 100),
+      );
+
+      monthlyFeesEarned += toUsd(buyerFeeCents + sellerFeeCents);
+    }
+
+    monthlyFeesEarned = round2(monthlyFeesEarned);
 
     return {
       statusCode: HttpStatus.OK,

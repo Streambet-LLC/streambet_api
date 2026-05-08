@@ -55,16 +55,20 @@ export class CreatorService {
       let application;
 
       if (existing) {
-        // Update existing application
+        // Update existing application and reset to pending so admin re-reviews it
         const updateData: any = {
           firstName: applicationDto.firstName,
           lastName: applicationDto.lastName,
           email: applicationDto.email,
           applicationType: ApplicationType.SELLER,
+          socials: applicationDto.socials ?? null,
           collectorBackground: applicationDto.collectorBackground,
           cityState: applicationDto.cityState,
           cardsCollected: applicationDto.cardsCollected,
           cardPreference: applicationDto.cardPreference,
+          applicationStatus: 'pending',
+          reviewedAt: null,
+          reviewedByUserId: null,
         };
 
         await this.creatorApplicationsRepository.update(
@@ -82,6 +86,7 @@ export class CreatorService {
         lastName: applicationDto.lastName,
         email: applicationDto.email,
         applicationType: ApplicationType.SELLER,
+        socials: applicationDto.socials ?? null,
         collectorBackground: applicationDto.collectorBackground,
         cityState: applicationDto.cityState,
         cardsCollected: applicationDto.cardsCollected,
@@ -93,7 +98,7 @@ export class CreatorService {
 
       // Send email notification for new seller applications
       try {
-          const emailHTML = `
+        const emailHTML = `
             <html>
               <body style="font-family: Arial, sans-serif; padding: 20px;">
                 <h2>New Seller Application Submitted</h2>
@@ -108,22 +113,22 @@ export class CreatorService {
             </html>
           `;
 
-          const emailParams = {
-            to: 'contact@cardcade.fun',
-            subject: 'New Seller Application Submitted',
-          };
+        const emailParams = {
+          to: 'contact@cardcade.fun',
+          subject: 'New Seller Application Submitted',
+        };
 
-          await this.emailsService.sendEmailFn(emailParams, emailHTML);
-          this.logger.log(
-            'Seller application notification email sent to contact@cardcade.fun',
-          );
-        } catch (emailError) {
-          this.logger.error(
-            'Failed to send seller application notification email',
-            emailError,
-          );
-          // Don't throw - we don't want email failure to block the application
-        }
+        await this.emailsService.sendEmailFn(emailParams, emailHTML);
+        this.logger.log(
+          'Seller application notification email sent to contact@cardcade.fun',
+        );
+      } catch (emailError) {
+        this.logger.error(
+          'Failed to send seller application notification email',
+          emailError,
+        );
+        // Don't throw - we don't want email failure to block the application
+      }
 
       return;
     } catch (e) {
@@ -175,6 +180,7 @@ export class CreatorService {
 
   async getAllApplications(filters: {
     status?: string;
+    applicationType?: string;
     page?: number;
     limit?: number;
   }) {
@@ -189,11 +195,15 @@ export class CreatorService {
         where.applicationStatus = filters.status;
       }
 
+      if (filters.applicationType) {
+        where.applicationType = filters.applicationType;
+      }
+
       const [applications, total] =
         await this.creatorApplicationsRepository.findAndCount({
           where,
           relations: ['user'],
-          order: { createdAt: 'DESC' },
+          order: { updatedAt: 'DESC', createdAt: 'DESC' },
           skip,
           take: limit,
         });

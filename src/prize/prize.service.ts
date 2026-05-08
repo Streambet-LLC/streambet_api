@@ -556,7 +556,10 @@ export class PrizeService implements OnModuleInit {
     });
   }
 
-  async getItemEbayMarketSummary(itemId: string, requesterId?: string | null): Promise<EbayMarketSummaryDto> {
+  async getItemEbayMarketSummary(
+    itemId: string,
+    requesterId?: string | null,
+  ): Promise<EbayMarketSummaryDto> {
     const item = await this.prizeConfigRepository.findOne({
       where: { id: itemId, isActive: true },
       select: ['id', 'amount', 'ebayMarketLastCalculatedAt'],
@@ -578,11 +581,17 @@ export class PrizeService implements OnModuleInit {
       const pendingListingRows = await this.ebaySoldListingReportRepository
         .createQueryBuilder('report')
         .select('report.listing_id', 'listingId')
-        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
-        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .where('report.reporter_user_id = :reporterId', {
+          reporterId: requesterId,
+        })
+        .andWhere('report.status = :pendingStatus', {
+          pendingStatus: 'pending',
+        })
         .getRawMany<{ listingId: string }>();
 
-      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      const excludedIds = pendingListingRows
+        .map((row) => row.listingId)
+        .filter(Boolean);
       if (excludedIds.length > 0) {
         latestQb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
       }
@@ -619,11 +628,17 @@ export class PrizeService implements OnModuleInit {
       const pendingListingRows = await this.ebaySoldListingReportRepository
         .createQueryBuilder('report')
         .select('report.listing_id', 'listingId')
-        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
-        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .where('report.reporter_user_id = :reporterId', {
+          reporterId: requesterId,
+        })
+        .andWhere('report.status = :pendingStatus', {
+          pendingStatus: 'pending',
+        })
         .getRawMany<{ listingId: string }>();
 
-      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      const excludedIds = pendingListingRows
+        .map((row) => row.listingId)
+        .filter(Boolean);
       if (excludedIds.length > 0) {
         qb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
       }
@@ -701,11 +716,17 @@ export class PrizeService implements OnModuleInit {
       const pendingListingRows = await this.ebaySoldListingReportRepository
         .createQueryBuilder('report')
         .select('report.listing_id', 'listingId')
-        .where('report.reporter_user_id = :reporterId', { reporterId: requesterId })
-        .andWhere('report.status = :pendingStatus', { pendingStatus: 'pending' })
+        .where('report.reporter_user_id = :reporterId', {
+          reporterId: requesterId,
+        })
+        .andWhere('report.status = :pendingStatus', {
+          pendingStatus: 'pending',
+        })
         .getRawMany<{ listingId: string }>();
 
-      const excludedIds = pendingListingRows.map((row) => row.listingId).filter(Boolean);
+      const excludedIds = pendingListingRows
+        .map((row) => row.listingId)
+        .filter(Boolean);
       if (excludedIds.length > 0) {
         qb.andWhere('sold.id NOT IN (:...excludedIds)', { excludedIds });
       }
@@ -800,7 +821,7 @@ export class PrizeService implements OnModuleInit {
     limit?: number,
   ): Promise<AdminReportedEbaySoldListingDto[]> {
     const normalizedLimit = Math.max(1, Math.min(500, limit ?? 240));
-    
+
     // Fetch pending reports with their related sold listings
     const reports = await this.ebaySoldListingReportRepository.find({
       where: { status: 'pending' },
@@ -851,7 +872,9 @@ export class PrizeService implements OnModuleInit {
     }
 
     const normalized = ebaySearchQuery?.trim() || null;
-    await this.prizeConfigRepository.update(itemId, { ebaySearchQuery: normalized });
+    await this.prizeConfigRepository.update(itemId, {
+      ebaySearchQuery: normalized,
+    });
     return { id: itemId, ebaySearchQuery: normalized };
   }
 
@@ -891,7 +914,9 @@ export class PrizeService implements OnModuleInit {
   async bulkDeleteEbaySoldListings(
     listingIds: string[],
   ): Promise<{ deleted: number }> {
-    const result = await this.ebaySoldListingRepository.delete({ id: In(listingIds) });
+    const result = await this.ebaySoldListingRepository.delete({
+      id: In(listingIds),
+    });
     return { deleted: result.affected ?? 0 };
   }
 
@@ -983,7 +1008,8 @@ export class PrizeService implements OnModuleInit {
 
     if (existingReport) {
       // Update existing pending report reason and timestamp
-      existingReport.reason = dto.reason?.trim() || existingReport.reason || null;
+      existingReport.reason =
+        dto.reason?.trim() || existingReport.reason || null;
       existingReport.updatedAt = new Date();
       await this.ebaySoldListingReportRepository.save(existingReport);
     } else {
@@ -3602,8 +3628,7 @@ export class PrizeService implements OnModuleInit {
       status: order.status,
       buyerUsername: order.user?.username || 'Unknown',
       buyerEmail: order.user?.email || null,
-      sellerUsername:
-        order.prizeConfiguration?.creator?.username || 'CardCade',
+      sellerUsername: order.prizeConfiguration?.creator?.username || 'CardCade',
       cryptoTxSignature: order.cryptoTxSignature || null,
       cryptoBuyerWallet: order.cryptoBuyerWallet || null,
     }));
@@ -3616,11 +3641,11 @@ export class PrizeService implements OnModuleInit {
    * month for the requested window, including crypto vs non-crypto splits so
    * the UI can render a "How much we made / how much in crypto" overview.
    *
-   * Numbers are USD (PrizeOrder.totalPrice is stored in USD already).
+   * Numbers are USD (PrizeOrder.totalPrice is stored in USD already), and
+   * platform fees are reconstructed per order (not estimated) using the same
+   * fee rules used at checkout.
    */
-  async getAdminSalesSummary(filterDto?: {
-    months?: number;
-  }): Promise<{
+  async getAdminSalesSummary(filterDto?: { months?: number }): Promise<{
     months: Array<{
       month: string; // ISO date for the first day of the month (UTC)
       totalRevenue: number;
@@ -3660,63 +3685,16 @@ export class PrizeService implements OnModuleInit {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
     );
 
-    let rows: Array<{
-      month: Date | string;
-      total_revenue: string | null;
-      crypto_revenue: string | null;
-      noncrypto_revenue: string | null;
-      order_count: string;
-      crypto_order_count: string;
-      noncrypto_order_count: string;
-    }> = [];
+    const NON_CRYPTO_BUYER_FEE_PCT = BUYER_PROCESSING_FEE_PERCENT;
+    const NON_CRYPTO_BASE_SELLER_FEE_PCT = 4;
+    const CRYPTO_BUYER_FEE_BPS = 100;
+    const CRYPTO_DEFAULT_SELLER_FEE_BPS = 100;
 
-    try {
-      rows = await this.prizeOrderRepository
-        .createQueryBuilder('order')
-        .select(`date_trunc('month', "order"."createdAt")`, 'month')
-        .addSelect(`COALESCE(SUM("order"."total_price"), 0)`, 'total_revenue')
-        .addSelect(
-          `COALESCE(SUM(CASE WHEN "order"."payment_method" = 'crypto' THEN "order"."total_price" ELSE 0 END), 0)`,
-          'crypto_revenue',
-        )
-        .addSelect(
-          `COALESCE(SUM(CASE WHEN "order"."payment_method" <> 'crypto' THEN "order"."total_price" ELSE 0 END), 0)`,
-          'noncrypto_revenue',
-        )
-        .addSelect(`COUNT(*)`, 'order_count')
-        .addSelect(
-          `COUNT(*) FILTER (WHERE "order"."payment_method" = 'crypto')`,
-          'crypto_order_count',
-        )
-        .addSelect(
-          `COUNT(*) FILTER (WHERE "order"."payment_method" <> 'crypto')`,
-          'noncrypto_order_count',
-        )
-        .where('order.status IN (:...statuses)', {
-          statuses: ['paid', 'shipped', 'delivered'],
-        })
-        .andWhere(`"order"."createdAt" >= :cutoff`, { cutoff })
-        .groupBy(`date_trunc('month', "order"."createdAt")`)
-        .orderBy(`month`, 'DESC')
-        .getRawMany();
-    } catch (err) {
-      this.logger.error(
-        `getAdminSalesSummary aggregate query failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      throw err;
-    }
+    const toCents = (usd: number): number => Math.round(usd * 100);
+    const toUsd = (cents: number): number => cents / 100;
+    const round2 = (usd: number): number => Math.round(usd * 100) / 100;
 
-    // Build a dense series so months with zero sales still show up.
-    const map = new Map(
-      rows.map((r) => [
-        new Date(r.month).toISOString().slice(0, 7), // YYYY-MM
-        r,
-      ]),
-    );
-
-    const monthsOut: Array<{
+    type MonthlyBucket = {
       month: string;
       totalRevenue: number;
       cryptoRevenue: number;
@@ -3727,49 +3705,173 @@ export class PrizeService implements OnModuleInit {
       orderCount: number;
       cryptoOrderCount: number;
       nonCryptoOrderCount: number;
-    }> = [];
+    };
 
-    // Platform-fee estimates. Stored orders don't capture the exact platform
-    // cut, so we approximate with the standard rates:
-    //   - Non-crypto: 3% buyer + 4% seller of subtotal (totalPrice already
-    //     includes the buyer fee, so divide by 1.03 to back out subtotal).
-    //   - Crypto:   200 bps combined (buyer + default seller) of total.
-    //               Per-seller group overrides on-chain are ignored here.
-    const NON_CRYPTO_BUYER_FEE_PCT = 3;
-    const NON_CRYPTO_SELLER_FEE_PCT = 4;
-    const NON_CRYPTO_FEE_RATE_OF_TOTAL =
-      (NON_CRYPTO_BUYER_FEE_PCT + NON_CRYPTO_SELLER_FEE_PCT) /
-      100 /
-      (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
-    const CRYPTO_COMBINED_BPS = 200;
-    const CRYPTO_FEE_RATE_OF_TOTAL = CRYPTO_COMBINED_BPS / 10000;
+    const emptyBucket = (monthIso: string): MonthlyBucket => ({
+      month: monthIso,
+      totalRevenue: 0,
+      cryptoRevenue: 0,
+      nonCryptoRevenue: 0,
+      platformFees: 0,
+      cryptoPlatformFees: 0,
+      nonCryptoPlatformFees: 0,
+      orderCount: 0,
+      cryptoOrderCount: 0,
+      nonCryptoOrderCount: 0,
+    });
+
+    const monthMap = new Map<string, MonthlyBucket>();
+
+    type SummaryOrderRow = {
+      created_at: Date | string;
+      payment_method: 'coins' | 'usd' | 'combined' | 'crypto';
+      total_price: string | null;
+      shipping_cost_usd: string | null;
+      seller_stripe_account_id: string | null;
+      seller_admin_fee_override_percent: string | null;
+      seller_lifetime_coins_earned: string | null;
+      seller_crypto_override_fee_bps: string | null;
+    };
+
+    let rows: SummaryOrderRow[] = [];
+
+    try {
+      rows = await this.prizeOrderRepository
+        .createQueryBuilder('o')
+        .leftJoin('o.prizeConfiguration', 'prize')
+        .leftJoin('prize.creator', 'seller')
+        .leftJoin('seller.wallet', 'wallet')
+        .select('o.createdAt', 'created_at')
+        .addSelect('o.payment_method', 'payment_method')
+        .addSelect('COALESCE(o.total_price, 0)', 'total_price')
+        .addSelect('COALESCE(prize.shipping_cost_usd, 0)', 'shipping_cost_usd')
+        .addSelect('seller.stripe_account_id', 'seller_stripe_account_id')
+        .addSelect(
+          'seller.admin_fee_override_percent',
+          'seller_admin_fee_override_percent',
+        )
+        .addSelect(
+          'wallet.lifetime_coins_earned',
+          'seller_lifetime_coins_earned',
+        )
+        .addSelect(
+          'seller.crypto_override_fee_bps',
+          'seller_crypto_override_fee_bps',
+        )
+        .where('o.status IN (:...statuses)', {
+          statuses: ['paid', 'shipped', 'delivered'],
+        })
+        .andWhere('o.createdAt >= :cutoff', { cutoff })
+        .getRawMany();
+    } catch (err) {
+      this.logger.error(
+        `getAdminSalesSummary aggregate query failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw err;
+    }
+
+    for (const row of rows) {
+      const createdAt = new Date(row.created_at);
+      if (Number.isNaN(createdAt.getTime())) {
+        continue;
+      }
+
+      const monthStart = new Date(
+        Date.UTC(createdAt.getUTCFullYear(), createdAt.getUTCMonth(), 1),
+      );
+      const monthKey = monthStart.toISOString().slice(0, 7);
+      const bucket =
+        monthMap.get(monthKey) ?? emptyBucket(monthStart.toISOString());
+
+      const totalPriceUsd = parseFloat(row.total_price ?? '0');
+      if (!Number.isFinite(totalPriceUsd) || totalPriceUsd <= 0) {
+        monthMap.set(monthKey, bucket);
+        continue;
+      }
+
+      bucket.totalRevenue += totalPriceUsd;
+      bucket.orderCount += 1;
+
+      let orderPlatformFeeUsd = 0;
+      if (row.payment_method === 'crypto') {
+        bucket.cryptoRevenue += totalPriceUsd;
+        bucket.cryptoOrderCount += 1;
+
+        const sellerFeeBps =
+          row.seller_crypto_override_fee_bps !== null &&
+          row.seller_crypto_override_fee_bps !== undefined
+            ? Number(row.seller_crypto_override_fee_bps)
+            : CRYPTO_DEFAULT_SELLER_FEE_BPS;
+        const combinedBps = CRYPTO_BUYER_FEE_BPS + sellerFeeBps;
+        orderPlatformFeeUsd = (totalPriceUsd * combinedBps) / 10000;
+        bucket.cryptoPlatformFees += orderPlatformFeeUsd;
+      } else {
+        bucket.nonCryptoRevenue += totalPriceUsd;
+        bucket.nonCryptoOrderCount += 1;
+
+        // If seller has no Stripe Connect account, checkout settles to
+        // platform and there is no seller transfer split.
+        if (!row.seller_stripe_account_id) {
+          orderPlatformFeeUsd = totalPriceUsd;
+        } else {
+          // total_price = subtotal + buyerFee, where buyerFee is 3% of
+          // (subtotal - shipping). Solve subtotal from stored total_price.
+          const shippingUsd = Math.max(
+            0,
+            parseFloat(row.shipping_cost_usd ?? '0'),
+          );
+          const subtotalUsd =
+            (totalPriceUsd + (NON_CRYPTO_BUYER_FEE_PCT / 100) * shippingUsd) /
+            (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
+
+          const subtotalCents = toCents(subtotalUsd);
+          const shippingCents = toCents(shippingUsd);
+          const buyerFeeCents = calculateBuyerItemFeeCents(
+            subtotalCents,
+            shippingCents,
+          );
+
+          const sellerFeePercent = getEffectiveSellerFeePercent({
+            lifetimeCadeCoins: Number(row.seller_lifetime_coins_earned ?? 0),
+            adminFeeOverridePercent:
+              row.seller_admin_fee_override_percent !== null &&
+              row.seller_admin_fee_override_percent !== undefined
+                ? Number(row.seller_admin_fee_override_percent)
+                : null,
+          });
+          const sellerFeeCents = calculateSellerFeeCents(
+            subtotalCents,
+            sellerFeePercent,
+          );
+
+          orderPlatformFeeUsd = toUsd(buyerFeeCents + sellerFeeCents);
+        }
+
+        bucket.nonCryptoPlatformFees += orderPlatformFeeUsd;
+      }
+
+      bucket.platformFees += orderPlatformFeeUsd;
+      monthMap.set(monthKey, bucket);
+    }
+
+    const monthsOut: MonthlyBucket[] = [];
 
     const cursor = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
     );
     for (let i = 0; i < months; i++) {
       const key = cursor.toISOString().slice(0, 7);
-      const r = map.get(key);
-      const cryptoRevenue = parseFloat(r?.crypto_revenue ?? '0');
-      const nonCryptoRevenue = parseFloat(r?.noncrypto_revenue ?? '0');
-      const cryptoPlatformFees =
-        Math.round(cryptoRevenue * CRYPTO_FEE_RATE_OF_TOTAL * 100) / 100;
-      const nonCryptoPlatformFees =
-        Math.round(nonCryptoRevenue * NON_CRYPTO_FEE_RATE_OF_TOTAL * 100) /
-        100;
+      const bucket = monthMap.get(key) ?? emptyBucket(cursor.toISOString());
       monthsOut.push({
-        month: cursor.toISOString(),
-        totalRevenue: parseFloat(r?.total_revenue ?? '0'),
-        cryptoRevenue,
-        nonCryptoRevenue,
-        platformFees:
-          Math.round((cryptoPlatformFees + nonCryptoPlatformFees) * 100) /
-          100,
-        cryptoPlatformFees,
-        nonCryptoPlatformFees,
-        orderCount: parseInt(r?.order_count ?? '0', 10),
-        cryptoOrderCount: parseInt(r?.crypto_order_count ?? '0', 10),
-        nonCryptoOrderCount: parseInt(r?.noncrypto_order_count ?? '0', 10),
+        ...bucket,
+        totalRevenue: round2(bucket.totalRevenue),
+        cryptoRevenue: round2(bucket.cryptoRevenue),
+        nonCryptoRevenue: round2(bucket.nonCryptoRevenue),
+        platformFees: round2(bucket.platformFees),
+        cryptoPlatformFees: round2(bucket.cryptoPlatformFees),
+        nonCryptoPlatformFees: round2(bucket.nonCryptoPlatformFees),
       });
       // Step back one month
       cursor.setUTCMonth(cursor.getUTCMonth() - 1);
@@ -3803,11 +3905,19 @@ export class PrizeService implements OnModuleInit {
 
     return {
       months: monthsOut,
-      totals,
+      totals: {
+        ...totals,
+        totalRevenue: round2(totals.totalRevenue),
+        cryptoRevenue: round2(totals.cryptoRevenue),
+        nonCryptoRevenue: round2(totals.nonCryptoRevenue),
+        platformFees: round2(totals.platformFees),
+        cryptoPlatformFees: round2(totals.cryptoPlatformFees),
+        nonCryptoPlatformFees: round2(totals.nonCryptoPlatformFees),
+      },
       feeAssumptions: {
         nonCryptoBuyerFeePercent: NON_CRYPTO_BUYER_FEE_PCT,
-        nonCryptoSellerFeePercent: NON_CRYPTO_SELLER_FEE_PCT,
-        cryptoCombinedBps: CRYPTO_COMBINED_BPS,
+        nonCryptoSellerFeePercent: NON_CRYPTO_BASE_SELLER_FEE_PCT,
+        cryptoCombinedBps: CRYPTO_BUYER_FEE_BPS + CRYPTO_DEFAULT_SELLER_FEE_BPS,
       },
     };
   }
