@@ -61,7 +61,8 @@ export class CreatorService {
           lastName: applicationDto.lastName,
           email: applicationDto.email,
           applicationType: ApplicationType.SELLER,
-          socials: applicationDto.socials ?? null,
+          socials: applicationDto.socials ?? '',
+          message: '',
           collectorBackground: applicationDto.collectorBackground,
           cityState: applicationDto.cityState,
           cardsCollected: applicationDto.cardsCollected,
@@ -86,7 +87,8 @@ export class CreatorService {
         lastName: applicationDto.lastName,
         email: applicationDto.email,
         applicationType: ApplicationType.SELLER,
-        socials: applicationDto.socials ?? null,
+        socials: applicationDto.socials ?? '',
+        message: '',
         collectorBackground: applicationDto.collectorBackground,
         cityState: applicationDto.cityState,
         cardsCollected: applicationDto.cardsCollected,
@@ -132,11 +134,11 @@ export class CreatorService {
 
       return;
     } catch (e) {
-      Logger.error('Unable to upsert creator application', e);
-      throw new HttpException(
-        `Unable to upsert creator application at the moment. Please try again later`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      Logger.error('Unable to upsert creator application', e?.stack || e);
+      const detail =
+        (e && (e.detail || e.message)) ||
+        'Unable to upsert creator application at the moment. Please try again later';
+      throw new HttpException(detail, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -437,9 +439,10 @@ export class CreatorService {
   }
 
   async createConnectLink(user) {
+    const sellerId = user?.userId ?? user?.id;
     const seller = await this.userRepository.findOne({
       where: {
-        id: user.userId,
+        id: sellerId,
       },
     });
 
