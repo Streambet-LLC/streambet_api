@@ -297,6 +297,61 @@ export class AuctionsNotificationsService {
           ? 'Awaiting card authentication (3DS)'
           : 'Charge failed — please update your card';
 
+    // Failed / pending payment: branch off into the dedicated
+    // "update payment" email + inbox flow. This way the user gets a
+    // single, action-oriented notification (with a deep-link to the
+    // retry page) instead of the generic "you won" email which would
+    // be confusing when no charge actually went through. We still
+    // suppress the inbox's auto-email so the user only gets one email.
+    if (
+      params.chargeStatus === 'failed' ||
+      params.chargeStatus === 'pending_action'
+    ) {
+      const retryUrl = `${this.appHost().replace(/\/$/, '')}/auctions/${
+        auction.id
+      }/retry-payment`;
+      const failureReason =
+        params.chargeStatus === 'pending_action'
+          ? 'Your card requires additional authentication (3DS).'
+          : '';
+
+      await Promise.allSettled([
+        this.inboxService
+          .sendSystemMessageToUser(
+            params.winnerUserId,
+            `You won ${itemName} for ${winningBid} but we couldn't charge your card (total ${totalCharged}). Your win is held for 24 hours — [update payment & complete purchase](${retryUrl}) before the next bidder is offered the item.`,
+            { suppressEmail: true },
+          )
+          .catch((err) =>
+            this.logger.warn(`Winner-failed inbox failed: ${err?.message}`),
+          ),
+        user.email
+          ? this.queueService
+              .addEmailJob(
+                {
+                  toAddress: [user.email],
+                  subject: `Action needed: payment failed for ${itemName}`,
+                  params: {
+                    userName: user.username || 'there',
+                    itemName,
+                    winningBid,
+                    buyerFee,
+                    shippingFee,
+                    totalCharged,
+                    failureReason,
+                    retryUrl,
+                  },
+                } as never,
+                EmailType.AuctionPaymentFailed,
+              )
+              .catch((err) =>
+                this.logger.warn(`Winner-failed email failed: ${err?.message}`),
+              )
+          : Promise.resolve(),
+      ]);
+      return;
+    }
+
     await Promise.allSettled([
       this.inboxService
         .sendSystemMessageToUser(

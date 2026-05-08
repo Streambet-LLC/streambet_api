@@ -35,6 +35,7 @@ import { User } from 'src/users/entities/user.entity';
 import { Webhook } from 'src/webhook/entities/webhook.entity';
 import { EmailsService } from 'src/emails/email.service';
 import { CartService } from 'src/cart/cart.service';
+import { AuctionsService } from 'src/auctions/auctions.service';
 
 @Injectable()
 export class PaymentsService {
@@ -71,6 +72,8 @@ export class PaymentsService {
     private readonly emailsService: EmailsService,
     @Inject(forwardRef(() => CartService))
     private readonly cartService: CartService,
+    @Inject(forwardRef(() => AuctionsService))
+    private readonly auctionsService: AuctionsService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -387,6 +390,40 @@ export class PaymentsService {
       } catch (error) {
         this.logger.error(
           `Stripe webhook: failed to confirm prize order ${orderId}: ${error}`,
+        );
+      }
+    }
+
+    // Handle auction retry-payment purchases (winner-initiated payment
+    // after the off-session autopay charge declined). Keyed off the
+    // metadata flag set by `AuctionsPaymentsService.createRetryPaymentCheckoutSession`.
+    if (
+      session.metadata?.type === 'auction_retry' &&
+      session.metadata?.auctionId &&
+      session.metadata?.userId
+    ) {
+      try {
+        const paymentIntentId =
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? '');
+        if (!paymentIntentId) {
+          this.logger.warn(
+            `Auction retry checkout ${session.id} completed without a payment_intent id; skipping finalize`,
+          );
+        } else {
+          await this.auctionsService.handleRetryCheckoutCompleted({
+            auctionId: session.metadata.auctionId,
+            userId: session.metadata.userId,
+            paymentIntentId,
+          });
+          this.logger.log(
+            `Stripe webhook: auction retry session ${session.id} finalized auction ${session.metadata.auctionId}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Stripe webhook: failed to finalize auction retry for session ${session.id}: ${error}`,
         );
       }
     }

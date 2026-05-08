@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment failed: <%= params.itemName %></title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background-color:#000;font-family:'Inter',sans-serif;color:#fff;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#000;margin:0;padding:0;width:100%;">
+      <tr>
+        <td>
+          <div style="max-width:100%;margin:0 auto;padding:40px 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:40px;">
+              <tr>
+                <td align="center">
+                  <img src="https://cardcades3prod.s3.us-east-1.amazonaws.com/cardcade-machine-wordmark.png" alt="CardCade Logo" width="280" style="display:block;width:280px;height:auto;" />
+                </td>
+              </tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
+              <tr>
+                <td align="center">
+                  <h1 style="font-size:28px;font-weight:700;color:#ff6b6b;margin:0;font-family:'Inter',sans-serif;">
+                    Payment couldn't be processed
+                  </h1>
+                </td>
+              </tr>
+            </table>
+            <div style="background-color:#181818;border-radius:16px;border:1px solid #2c2c2c;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
+              <div style="max-width:700px;margin:0 auto;color:#fff;">
+                <p style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;text-transform:capitalize;color:#fff;">Hi <%= params.userName %>,</p>
+                <p style="font-size:18px;line-height:1.6;margin-bottom:24px;opacity:0.7;color:#fff;">
+                  Congratulations on winning <strong style="color:#fff"><%= params.itemName %></strong> — but we weren't able to charge your card. The auction is on hold for you for the next 24 hours so you can update your payment details and complete the purchase.
+                </p>
+                <div style="background-color:#222;border-left:4px solid #ff6b6b;padding:16px 20px;margin:0 0 28px 0;border-radius:8px;">
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Winning bid:</span>
+                    <span style="opacity:0.8;"><%= params.winningBid %></span>
+                  </p>
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Buyer processing fee (3%):</span>
+                    <span style="opacity:0.8;"><%= params.buyerFee %></span>
+                  </p>
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Shipping:</span>
+                    <span style="opacity:0.8;"><%= params.shippingFee %></span>
+                  </p>
+                  <p style="margin:8px 0;font-size:16px;color:#fff;">
+                    <span style="font-weight:600;">Total due:</span>
+                    <span style="opacity:0.8;color:#ff6b6b;"><%= params.totalCharged %></span>
+                  </p>
+                  <% if (params.failureReason) { %>
+                    <p style="margin:14px 0 0 0;font-size:14px;color:#fff;opacity:0.8;">
+                      <span style="font-weight:600;">Reason from your bank:</span>
+                      <span><%= params.failureReason %></span>
+                    </p>
+                  <% } %>
+                </div>
+                <p style="font-size:15px;line-height:1.6;opacity:0.7;color:#fff;margin:0 0 24px 0;">
+                  Click the button below to retry the same card or pay with a different card. If we don't receive payment within 24 hours, the next-highest bidder may be offered the item.
+                </p>
+                <a href="<%= params.retryUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:340px;margin:auto;margin-top:20px;margin-bottom:20px;display:block;text-align:center;">
+                  Update payment &amp; complete purchase
+                </a>
+                <p style="font-size:13px;line-height:1.5;opacity:0.5;color:#fff;margin:24px 0 0 0;text-align:center;">
+                  Need help? Reply to this email or message us through the in-app inbox.
+                </p>
+              </div>
+            </div>
+            <div style="margin-top:60px;font-size:14px;text-align:center;color:#fff;">© CardCade 2026</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
