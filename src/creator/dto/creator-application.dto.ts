@@ -24,6 +24,25 @@ export class CreatorApplicationDto {
 
   @ApiProperty({
     type: String,
+    description:
+      'Social handles / links the applicant trades cards on (free-form text)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  socials?: string;
+
+  @ApiProperty({
+    enum: ApplicationType,
+    description: 'Application type (only "seller" is supported)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  applicationType?: ApplicationType;
+
+  @ApiProperty({
+    type: String,
     description: 'Tell us about yourself from a collector perspective',
     required: false,
   })
