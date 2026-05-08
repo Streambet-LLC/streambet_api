@@ -14,6 +14,15 @@ export class ApplicationFilterDto {
 
   @ApiProperty({
     required: false,
+    enum: ['creator', 'seller'],
+    description: 'Filter by application type',
+  })
+  @IsOptional()
+  @IsIn(['creator', 'seller'])
+  applicationType?: string;
+
+  @ApiProperty({
+    required: false,
     minimum: 1,
     default: 1,
     description: 'Page number',

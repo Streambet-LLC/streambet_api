@@ -14,7 +14,7 @@ import { CreatorService } from './creator.service';
 import { CreatorApplicationDto } from './dto/creator-application.dto';
 
 interface RequestWithUser extends ExpressRequest {
-  user: { userId: string; email?: string };
+  user: { id: string; userId?: string; email?: string };
 }
 
 /**
@@ -33,7 +33,7 @@ export class CreatorController {
     @Request() req: RequestWithUser,
   ) {
     return this.creatorService.upsertCreatorApplication({
-      userId: req.user.userId,
+      userId: req.user.userId ?? req.user.id,
       applicationDto,
     });
   }
@@ -44,7 +44,7 @@ export class CreatorController {
     @Request() req: RequestWithUser,
   ) {
     return this.creatorService.upsertCreatorApplication({
-      userId: req.user.userId,
+      userId: req.user.userId ?? req.user.id,
       applicationDto,
     });
   }
@@ -52,14 +52,14 @@ export class CreatorController {
   @Get('application')
   async getApplication(@Request() req: RequestWithUser) {
     return this.creatorService.getCreatorApplication({
-      userId: req.user.userId,
+      userId: req.user.userId ?? req.user.id,
     });
   }
 
   @Delete('application')
   async cancelApplication(@Request() req: RequestWithUser) {
     return this.creatorService.cancelCreatorApplication({
-      userId: req.user.userId,
+      userId: req.user.userId ?? req.user.id,
     });
   }
 

@@ -6,7 +6,7 @@ export class AdminAnalyticsSummaryResponseDto {
 
   @ApiProperty({
     type: Number,
-    description: 'Approximate platform fees earned this calendar month (USD)',
+    description: 'Platform fees earned this calendar month (USD)',
   })
   monthlyFeesEarned: number;
 
