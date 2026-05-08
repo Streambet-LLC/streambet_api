@@ -1535,4 +1535,240 @@ export class AuctionsService implements OnModuleInit {
       `Scheduled autopay-retry for auction ${auctionId} in 24h, excluding user ${excludeUserId}`,
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Manual retry (winner-initiated payment after autopay decline)
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns enough information for the dedicated retry-payment page to
+   * render: the item, the breakdown owed, a flag indicating whether
+   * the auction is still in a state where the winner can pay, and the
+   * 24h grace-period deadline (after which the runner-up may be
+   * offered the item if no payment is made).
+   *
+   * Authz: caller must be the original winner of the auction. We treat
+   * `winnerUserId ?? currentLeaderUserId` as the authoritative winner
+   * because the close flow only writes `winnerUserId` after a charge
+   * status is determined.
+   */
+  async getRetryPaymentInfo(
+    callerUserId: string,
+    auctionId: string,
+  ): Promise<{
+    auctionId: string;
+    status: AuctionStatus;
+    canRetry: boolean;
+    itemName: string;
+    prizeConfigurationId: string;
+    winningBidUsd: number;
+    buyerProcessingFeeUsd: number;
+    shippingUsd: number;
+    totalDueUsd: number;
+    graceDeadline: string | null;
+    paymentIntentId: string | null;
+  }> {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+      relations: ['prizeConfiguration'],
+    });
+    if (!auction) throw new NotFoundException('Auction not found');
+
+    const intendedWinnerId =
+      auction.winnerUserId ?? auction.currentLeaderUserId ?? null;
+    if (!intendedWinnerId || intendedWinnerId !== callerUserId) {
+      throw new ForbiddenException(
+        'Only the auction winner can access the retry-payment flow.',
+      );
+    }
+
+    // The retry page is meaningful when:
+    //  - status = FAILED (autopay declined, runner-up grace timer running)
+    //  - status = ENDED with a paymentIntentId (3DS pending or processing)
+    // PAID/UNSOLD/CANCELLED are terminal — no retry needed/allowed.
+    const isPending =
+      auction.status === AuctionStatus.ENDED && !!auction.paymentIntentId;
+    const canRetry = auction.status === AuctionStatus.FAILED || isPending;
+
+    const winningBidUsd =
+      auction.winningAmountUsd != null
+        ? Number(auction.winningAmountUsd)
+        : auction.currentBidUsd != null
+          ? Number(auction.currentBidUsd)
+          : 0;
+    const shippingUsd =
+      auction.prizeConfiguration?.shippingCostUsd != null
+        ? Number(auction.prizeConfiguration.shippingCostUsd)
+        : 5;
+    const fees = this.computeAuctionFees(winningBidUsd, shippingUsd);
+
+    const graceDeadline = new Date(
+      auction.endsAt.getTime() + 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    return {
+      auctionId: auction.id,
+      status: auction.status,
+      canRetry,
+      itemName: auction.prizeConfiguration?.name ?? 'Auction item',
+      prizeConfigurationId: auction.prizeConfigurationId,
+      winningBidUsd: fees.bidUsd,
+      buyerProcessingFeeUsd: fees.buyerProcessingFeeUsd,
+      shippingUsd: fees.shippingUsd,
+      totalDueUsd: fees.totalChargedUsd,
+      graceDeadline,
+      paymentIntentId: auction.paymentIntentId,
+    };
+  }
+
+  /**
+   * Build a hosted Stripe Checkout (mode=payment) URL the winner can
+   * redirect to in order to retry the failed charge or pay with a
+   * different card. Cancels the pending runner-up retry job so the
+   * runner-up doesn't get the item out from under them while the
+   * original winner is mid-checkout. If the winner abandons the
+   * checkout the next decline path / 24h job re-arming logic takes
+   * over.
+   */
+  async createRetryCheckout(params: {
+    callerUserId: string;
+    auctionId: string;
+    returnUrl: string;
+  }): Promise<{ url: string }> {
+    const info = await this.getRetryPaymentInfo(
+      params.callerUserId,
+      params.auctionId,
+    );
+    if (!info.canRetry) {
+      throw new BadRequestException(
+        'This auction is no longer eligible for a retry payment.',
+      );
+    }
+
+    const result = await this.paymentsService.createRetryPaymentCheckoutSession(
+      {
+        userId: params.callerUserId,
+        auctionId: params.auctionId,
+        amountUsd: info.totalDueUsd,
+        itemName: info.itemName,
+        returnUrl: params.returnUrl,
+      },
+    );
+
+    await this.auctionQueue
+      .remove(`auction-autopay-retry__${params.auctionId}`)
+      .catch(() => undefined);
+
+    return result;
+  }
+
+  /**
+   * Webhook entry-point for `checkout.session.completed` on an
+   * `auction_retry` Checkout Session. Idempotent — short-circuits if
+   * the auction is already PAID. Mirrors the post-charge bookkeeping
+   * in `attemptAutopayAndFinalize` so the order is created and the
+   * winner gets the standard "you won" email instead of the failure
+   * one.
+   */
+  async handleRetryCheckoutCompleted(params: {
+    auctionId: string;
+    userId: string;
+    paymentIntentId: string;
+  }): Promise<void> {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: params.auctionId },
+    });
+    if (!auction) {
+      this.logger.warn(
+        `Auction retry webhook: auction ${params.auctionId} not found`,
+      );
+      return;
+    }
+    if (auction.status === AuctionStatus.PAID) {
+      this.logger.log(
+        `Auction retry webhook: ${params.auctionId} already PAID, skipping`,
+      );
+      return;
+    }
+
+    const intendedWinnerId =
+      auction.winnerUserId ?? auction.currentLeaderUserId ?? null;
+    if (intendedWinnerId !== params.userId) {
+      this.logger.warn(
+        `Auction retry webhook: payer ${params.userId} != winner ${intendedWinnerId} for ${params.auctionId}; ignoring`,
+      );
+      return;
+    }
+
+    let shippingUsd = 5;
+    const prize = await this.prizeRepository.findOne({
+      where: { id: auction.prizeConfigurationId },
+    });
+    if (prize?.shippingCostUsd != null) {
+      shippingUsd = Number(prize.shippingCostUsd);
+    }
+    const winningBidUsd =
+      auction.winningAmountUsd != null
+        ? Number(auction.winningAmountUsd)
+        : auction.currentBidUsd != null
+          ? Number(auction.currentBidUsd)
+          : 0;
+    const fees = this.computeAuctionFees(winningBidUsd, shippingUsd);
+
+    await this.auctionQueue
+      .remove(`auction-autopay-retry__${params.auctionId}`)
+      .catch(() => undefined);
+
+    const order = await this.createOrderForWinner({
+      auction,
+      winnerUserId: params.userId,
+      fees,
+      paymentIntentId: params.paymentIntentId,
+    });
+
+    auction.status = AuctionStatus.PAID;
+    auction.winnerUserId = params.userId;
+    auction.winningAmountUsd = fees.bidUsd.toFixed(2);
+    auction.paidAt = new Date();
+    auction.paymentIntentId = params.paymentIntentId;
+    auction.prizeOrderId = order.id;
+    await this.auctionRepository.save(auction);
+
+    if (prize) {
+      await this.prizeRepository.update(
+        { id: auction.prizeConfigurationId },
+        { stock: 0 },
+      );
+    }
+
+    this.gateway.emitAuctionUpdate(auction.id, {
+      type: 'auction.closed',
+      auctionId: auction.id,
+      outcome: 'paid',
+      winnerUserId: params.userId,
+      winningBidUsd: fees.bidUsd,
+    });
+
+    await Promise.allSettled([
+      this.notifications.notifyWinner({
+        winnerUserId: params.userId,
+        auctionId: auction.id,
+        winningBidUsd: fees.bidUsd,
+        buyerFeeUsd: fees.buyerProcessingFeeUsd,
+        shippingUsd: fees.shippingUsd,
+        totalChargedUsd: fees.totalChargedUsd,
+        chargeStatus: 'charged',
+        orderId: order.id,
+      }),
+      this.notifications.notifyLosers({
+        auctionId: auction.id,
+        winnerUserId: params.userId,
+        winningBidUsd: fees.bidUsd,
+      }),
+    ]);
+
+    this.logger.log(
+      `Auction ${auction.id} PAID via retry checkout: pi=${params.paymentIntentId}`,
+    );
+  }
 }

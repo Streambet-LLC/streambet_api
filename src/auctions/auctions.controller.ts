@@ -148,6 +148,47 @@ export class AuctionsController {
   async listCards(@Request() req: RequestWithUser) {
     return this.paymentsService.listSavedCards(req.user.id);
   }
+
+  /**
+   * Read-only summary used by the retry-payment page so the winner
+   * can see what they owe before clicking through to Stripe Checkout.
+   */
+  @Get(':id/payment-status')
+  @ApiOperation({
+    summary:
+      'Auction payment status for the winner — used by the retry-payment page when an autopay charge declined.',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async getPaymentStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: RequestWithUser,
+  ) {
+    return this.auctionsService.getRetryPaymentInfo(req.user.id, id);
+  }
+
+  /**
+   * Build a hosted Stripe Checkout (mode=payment) URL the winner can
+   * use to retry the failed charge or pay with a different card.
+   */
+  @Post(':id/retry-checkout')
+  @ApiOperation({
+    summary:
+      'Create a hosted Stripe Checkout (mode=payment) so the winner can retry the failed auction charge or use a different card.',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async createRetryCheckout(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { returnUrl: string },
+    @Request() req: RequestWithUser,
+  ): Promise<{ url: string }> {
+    return this.auctionsService.createRetryCheckout({
+      callerUserId: req.user.id,
+      auctionId: id,
+      returnUrl: body.returnUrl,
+    });
+  }
 }
 
 /**

@@ -14,6 +14,7 @@ import { User } from 'src/users/entities/user.entity';
 import { Webhook } from 'src/webhook/entities/webhook.entity';
 import { EmailsModule } from 'src/emails/email.module';
 import { CartModule } from 'src/cart/cart.module';
+import { AuctionsModule } from 'src/auctions/auctions.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CartModule } from 'src/cart/cart.module';
     forwardRef(() => PrizeModule),
     forwardRef(() => EmailsModule),
     forwardRef(() => CartModule),
+    forwardRef(() => AuctionsModule),
     TypeOrmModule.forFeature([Transaction, PrizeOrder, User, Webhook]),
   ],
   controllers: [PaymentsController],

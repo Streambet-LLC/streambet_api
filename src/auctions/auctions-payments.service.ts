@@ -204,4 +204,81 @@ export class AuctionsPaymentsService {
     );
     return intent;
   }
+
+  /**
+   * Hosted Stripe Checkout (mode=payment) for the auction-retry flow.
+   * Used when the off-session autopay charge declined and the winner
+   * wants to either retry the same card or pay with a different one.
+   *
+   * The hosted page handles 3DS, surfaces saved cards on the customer
+   * record, and saves any new card for future use. We finalize the
+   * auction in the `checkout.session.completed` webhook keyed off
+   * `metadata.type === 'auction_retry'`.
+   */
+  async createRetryPaymentCheckoutSession(params: {
+    userId: string;
+    auctionId: string;
+    amountUsd: number;
+    itemName: string;
+    returnUrl: string;
+  }): Promise<{ url: string }> {
+    const customerId = await this.getOrCreateCustomerForUser(params.userId);
+    const amountCents = Math.round(params.amountUsd * 100);
+    if (amountCents <= 0) {
+      throw new BadRequestException('Retry amount must be > 0');
+    }
+
+    const baseReturn = params.returnUrl || '';
+    const successUrl = `${baseReturn}${
+      baseReturn.includes('?') ? '&' : '?'
+    }auction_retry=success`;
+    const cancelUrl = `${baseReturn}${
+      baseReturn.includes('?') ? '&' : '?'
+    }auction_retry=cancel`;
+
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountCents,
+            product_data: {
+              name: params.itemName || 'CardCade auction win',
+              description: 'Winning bid + processing fee + shipping',
+            },
+          },
+        },
+      ],
+      // Persist any new card on the customer for future auctions and
+      // attach the auction id to the underlying PaymentIntent so we
+      // can correlate via webhook.
+      payment_intent_data: {
+        setup_future_usage: 'off_session',
+        description: `CardCade auction ${params.auctionId} (retry payment)`,
+        metadata: {
+          auctionId: params.auctionId,
+          userId: params.userId,
+          source: 'auctions.retry',
+        },
+      },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        type: 'auction_retry',
+        auctionId: params.auctionId,
+        userId: params.userId,
+      },
+    });
+
+    if (!session.url) {
+      throw new BadRequestException(
+        'Failed to create auction retry checkout session',
+      );
+    }
+    return { url: session.url };
+  }
 }
