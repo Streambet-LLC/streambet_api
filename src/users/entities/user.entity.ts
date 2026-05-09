@@ -160,6 +160,14 @@ export class User extends BaseEntity {
   })
   socials: { [social: string]: string };
 
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    default: '[]',
+    name: 'collection_preferences',
+  })
+  collectionPreferences: string[];
+
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
   promoCode: string;
 
