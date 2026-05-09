@@ -154,6 +154,17 @@ export class ProfileUpdateDto {
   @IsOptional()
   sellerOnboardingCompleted?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'Collection item preferences (sealed, raw, slab, other, pokemon, one_piece, sports)',
+    example: ['sealed', 'pokemon'],
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  collectionPreferences?: string[];
+
   @Exclude()
   @IsOptional()
   password?: string;

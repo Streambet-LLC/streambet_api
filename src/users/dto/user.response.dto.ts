@@ -92,6 +92,35 @@ export class PublicUserProfileDto {
     description: 'Number of currently listed items (sellers only)',
   })
   listedItemCount?: number;
+
+  @ApiProperty({
+    required: false,
+    example: ['sealed', 'pokemon'],
+    description:
+      'Collection item preferences (sealed, raw, slab, other, pokemon, one_piece, sports)',
+  })
+  collectionPreferences?: string[];
+
+  @ApiProperty({
+    required: false,
+    example: 'San Francisco',
+    description: 'City',
+  })
+  city?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'California',
+    description: 'State',
+  })
+  state?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'United States',
+    description: 'Country',
+  })
+  country?: string;
 }
 
 export class UserProfileResponseDto {

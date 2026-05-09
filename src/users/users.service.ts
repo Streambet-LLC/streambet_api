@@ -374,6 +374,13 @@ export class UsersService {
         title: prizeData.title,
         badgeLevel: prizeData.badgeLevel,
         prizeProgress: prizeData.prizeProgress,
+        ...(user.collectionPreferences &&
+          user.collectionPreferences.length > 0 && {
+            collectionPreferences: user.collectionPreferences,
+          }),
+        ...(user.city && { city: user.city }),
+        ...(user.state && { state: user.state }),
+        ...(user.country && { country: user.country }),
         ...(user.isSeller && {
           isSeller: true,
           listedItemCount,
