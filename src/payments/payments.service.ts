@@ -596,8 +596,8 @@ export class PaymentsService {
       updates.stripeAccountConnected = true;
     }
     // Ensure the seller fee is always set to the current default
-    if (user.applicationFeePercent !== 4) {
-      updates.applicationFeePercent = 4;
+    if (user.applicationFeePercent !== 2) {
+      updates.applicationFeePercent = 2;
     }
 
     if (Object.keys(updates).length > 0) {
