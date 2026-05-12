@@ -55,7 +55,6 @@ import { StreamStatus } from 'src/enums/stream.enum';
 import { UserRole } from 'src/enums/user-role.enum';
 import { ViewBetDto } from 'src/betting/dto/view-bet.dto';
 import { CreatorService } from 'src/creator/creator.service';
-import { ApplicationFilterDto } from 'src/creator/dto/application-filter.dto';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import { SubscriptionPlan } from 'src/enums/subscription-plan.enum';
 import { PromoCodeService } from 'src/promo-code/promo-code.service';
@@ -1160,95 +1159,6 @@ export class AdminController {
       message: 'Successfully Listed',
       data,
       total,
-    };
-  }
-
-  // Application Management
-  @ApiOperation({
-    summary: 'Get all applications (admin only)',
-  })
-  @SwaggerApiResponse({
-    status: 200,
-    description: 'Applications fetched successfully',
-  })
-  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
-  @SwaggerApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @Get('applications')
-  async getAllApplications(
-    @Request() req: RequestWithUser,
-    @Query() filters: ApplicationFilterDto,
-  ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const result = await this.creatorService.getAllApplications(filters);
-    return {
-      status: HttpStatus.OK,
-      message: 'Applications fetched successfully',
-      data: result,
-    };
-  }
-
-  @ApiOperation({
-    summary: 'Approve application (admin only)',
-  })
-  @ApiParam({ name: 'id', description: 'Application ID' })
-  @SwaggerApiResponse({
-    status: 200,
-    description: 'Application approved successfully',
-  })
-  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
-  @SwaggerApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @SwaggerApiResponse({ status: 404, description: 'Application not found' })
-  @Patch('applications/:id/approve')
-  async approveApplication(
-    @Request() req: RequestWithUser,
-    @Param('id') id: string,
-  ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const application = await this.creatorService.approveApplication(
-      id,
-      req.user.id,
-    );
-    return {
-      status: HttpStatus.OK,
-      message: 'Application approved successfully',
-      data: application,
-    };
-  }
-
-  @ApiOperation({
-    summary: 'Reject application (admin only)',
-  })
-  @ApiParam({ name: 'id', description: 'Application ID' })
-  @SwaggerApiResponse({
-    status: 200,
-    description: 'Application rejected successfully',
-  })
-  @SwaggerApiResponse({ status: 401, description: 'Unauthorized' })
-  @SwaggerApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  @SwaggerApiResponse({ status: 404, description: 'Application not found' })
-  @Patch('applications/:id/reject')
-  async rejectApplication(
-    @Request() req: RequestWithUser,
-    @Param('id') id: string,
-  ): Promise<ApiResponse> {
-    this.ensureAdmin(req.user);
-    const application = await this.creatorService.rejectApplication(
-      id,
-      req.user.id,
-    );
-    return {
-      status: HttpStatus.OK,
-      message: 'Application rejected successfully',
-      data: application,
     };
   }
 

@@ -154,6 +154,13 @@ export class ProfileUpdateDto {
   @IsOptional()
   sellerOnboardingCompleted?: boolean;
 
+  @ApiProperty({
+    description:
+      'Seller profile (questionnaire) completed flag. Setting this to true also flips is_seller to true on the user.',
+  })
+  @IsOptional()
+  sellerProfileCompleted?: boolean;
+
   @ApiPropertyOptional({
     description:
       'Collection item preferences (sealed, raw, slab, other, pokemon, one_piece, sports)',

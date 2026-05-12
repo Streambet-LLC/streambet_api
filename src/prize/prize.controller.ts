@@ -33,6 +33,8 @@ import {
   ReportEbaySoldListingDto,
   UpdateItemEbaySearchQueryDto,
   BulkDeleteEbaySoldListingsDto,
+  BulkModerateEbaySoldListingsDto,
+  BulkUpdateEbayVisibilityDto,
   CreatePrizeTierDto,
   UpdatePrizeTierDto,
   AdminRedemptionResponseDto,
@@ -1135,6 +1137,56 @@ export class AdminPrizeController {
   ): Promise<{ deleted: number }> {
     this.ensureAdmin(req.user);
     return this.prizeService.bulkDeleteEbaySoldListings(dto.listingIds);
+  }
+
+  @Patch('ebay-sold-listings/bulk-moderate')
+  @ApiOperation({ summary: 'Bulk flag/unflag sold listings (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Listings moderated',
+    schema: {
+      properties: {
+        updated: { type: 'number' },
+      },
+    },
+  })
+  async bulkModerateEbaySoldListings(
+    @Request() req: RequestWithUser,
+    @Body() dto: BulkModerateEbaySoldListingsDto,
+  ): Promise<{ updated: number }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.bulkModerateEbaySoldListings(
+      dto.listingIds,
+      req.user.id,
+      { isInaccurate: dto.isInaccurate, reason: dto.reason },
+    );
+  }
+
+  @Patch('items/bulk-update-ebay-visibility')
+  @ApiOperation({
+    summary: 'Bulk update eBay public visibility flag (admin)',
+    description:
+      'Set showEbayAvgPublicly flag for multiple items at once. Controls whether eBay sold average is visible to all users (not just admins) on item cards.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Items updated',
+    schema: {
+      properties: {
+        updated: { type: 'number' },
+      },
+    },
+  })
+  async bulkUpdateEbayVisibility(
+    @Request() req: RequestWithUser,
+    @Body() dto: BulkUpdateEbayVisibilityDto,
+  ): Promise<{ updated: number }> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.bulkUpdateEbayPublicVisibility(
+      dto.itemIds,
+      req.user.id,
+      { showPublicly: dto.showPublicly },
+    );
   }
 
   @Delete('ebay-sold-listings/:listingId')

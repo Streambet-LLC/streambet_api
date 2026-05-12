@@ -508,7 +508,7 @@ export class PrizeService implements OnModuleInit {
       ? await this.auctionsService.getBidderAuctionIds(requesterId, auctionIds)
       : new Set<string>();
 
-    return sellerItems.map((item) =>
+    const dtos = sellerItems.map((item) =>
       this.mapToDto(item, {
         isWatching: watched.has(item.id),
         auctionViewerUserId: requesterId ?? null,
@@ -516,6 +516,8 @@ export class PrizeService implements OnModuleInit {
           !!item.auction && bidderAuctionIds.has(item.auction.id),
       }),
     );
+
+    return dtos;
   }
 
   async getShopItemById(
@@ -562,11 +564,26 @@ export class PrizeService implements OnModuleInit {
   ): Promise<EbayMarketSummaryDto> {
     const item = await this.prizeConfigRepository.findOne({
       where: { id: itemId, isActive: true },
-      select: ['id', 'amount', 'ebayMarketLastCalculatedAt'],
+      select: ['id', 'amount', 'ebayMarketLastCalculatedAt', 'showEbayAvgPublicly'],
     });
 
     if (!item) {
       throw new NotFoundException('Shop item not found');
+    }
+
+    // Check visibility permissions
+    const isAdmin = requesterId
+      ? await this.userRepository.findOne({
+          where: { id: requesterId, role: UserRole.ADMIN },
+          select: ['id'],
+        })
+      : null;
+
+    // Allow if admin, otherwise check showEbayAvgPublicly flag
+    if (!isAdmin && !item.showEbayAvgPublicly) {
+      throw new ForbiddenException(
+        'eBay market data is not publicly visible for this item',
+      );
     }
 
     // Build query to exclude globally inaccurate listings and pending reports by requester
@@ -918,6 +935,58 @@ export class PrizeService implements OnModuleInit {
       id: In(listingIds),
     });
     return { deleted: result.affected ?? 0 };
+  }
+
+  async bulkModerateEbaySoldListings(
+    listingIds: string[],
+    adminUserId: string,
+    dto: { isInaccurate: boolean; reason?: string },
+  ): Promise<{ updated: number }> {
+    const now = new Date();
+    const updateData: Partial<PrizeItemEbaySoldListing> = {
+      isInaccurate: dto.isInaccurate,
+      inaccurateReason: dto.isInaccurate ? (dto.reason?.trim() || null) : null,
+      inaccurateFlaggedByUserId: dto.isInaccurate ? adminUserId : null,
+      inaccurateFlaggedAt: dto.isInaccurate ? now : null,
+    };
+
+    const result = await this.ebaySoldListingRepository.update(
+      { id: In(listingIds) },
+      updateData,
+    );
+    return { updated: result.affected ?? 0 };
+  }
+
+  /**
+   * Admin action: Bulk update public visibility of eBay sold average data.
+   * Controls whether the eBay market data is shown to all users (not just admins)
+   * on item cards. Respects the global feature flags but allows per-item override.
+   */
+  async bulkUpdateEbayPublicVisibility(
+    itemIds: string[],
+    adminUserId: string,
+    dto: { showPublicly: boolean },
+  ): Promise<{ updated: number }> {
+    this.logger.log(
+      `[bulkUpdateEbayPublicVisibility] Updating ${itemIds.length} items, showPublicly=${dto.showPublicly}`,
+    );
+    this.logger.debug(
+      `[bulkUpdateEbayPublicVisibility] Item IDs: ${itemIds.join(', ')}`,
+    );
+
+    const result = await this.prizeConfigRepository.update(
+      { id: In(itemIds) },
+      { 
+        showEbayAvgPublicly: dto.showPublicly,
+        updatedBy: adminUserId,
+      },
+    );
+
+    this.logger.log(
+      `[bulkUpdateEbayPublicVisibility] Updated ${result.affected ?? 0} items`,
+    );
+
+    return { updated: result.affected ?? 0 };
   }
 
   /**
@@ -1928,6 +1997,7 @@ export class PrizeService implements OnModuleInit {
         dto.ebaySearchQuery !== undefined
           ? dto.ebaySearchQuery?.trim() || null
           : existingTier.ebaySearchQuery,
+      ebayMarketLastCalculatedAt: existingTier.ebayMarketLastCalculatedAt,
       // Per-item shipping fee. Preserve previous value when the admin
       // doesn't include it in the patch.
       shippingCostUsd:
@@ -1987,13 +2057,28 @@ export class PrizeService implements OnModuleInit {
         `UPDATE auctions SET prize_configuration_id = $1 WHERE prize_configuration_id = $2`,
         [saved.id, id],
       );
+      // Re-point eBay sold listings at the new prize_configurations row.
+      // Without this, editing an item would make all fetched eBay market
+      // data disappear (sold listings would still exist but point to the
+      // old inactive item_id).
+      await this.prizeConfigRepository.manager.query(
+        `UPDATE prize_item_ebay_sold_listings SET item_id = $1 WHERE item_id = $2`,
+        [saved.id, id],
+      );
+      // Re-point eBay sync state at the new prize_configurations row.
+      // Without this, the system would lose track of when it last fetched
+      // eBay data and would unnecessarily re-fetch or fail to sync.
+      await this.prizeConfigRepository.manager.query(
+        `UPDATE prize_item_ebay_sync_state SET item_id = $1 WHERE item_id = $2`,
+        [saved.id, id],
+      );
       // Mirror the cached counters onto the new row.
       saved.watcherCount = existingTier.watcherCount ?? 0;
       saved.viewCount = existingTier.viewCount ?? 0;
       await this.prizeConfigRepository.save(saved);
     } catch (err) {
       this.logger.warn(
-        `Failed to migrate watchers/views/auction from ${id} -> ${saved.id}: ${(err as Error).message}`,
+        `Failed to migrate watchers/views/auction/ebay from ${id} -> ${saved.id}: ${(err as Error).message}`,
       );
     }
 
@@ -4968,6 +5053,7 @@ export class PrizeService implements OnModuleInit {
       updatedBy: entity.updatedBy,
       ebaySearchQuery: entity.ebaySearchQuery,
       ebayMarketLastCalculatedAt: entity.ebayMarketLastCalculatedAt,
+      showEbayAvgPublicly: entity.showEbayAvgPublicly ?? false,
       profileFeatured: entity.profileFeatured ?? false,
       isProOnly: entity.isProOnly ?? false,
       proEarlyAccessUntil: entity.proEarlyAccessUntil ?? null,
