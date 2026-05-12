@@ -1,7 +1,7 @@
 export const BUYER_PROCESSING_FEE_PERCENT = 3;
-export const SELLER_FEE_DEFAULT_PERCENT = 4;
+export const SELLER_FEE_DEFAULT_PERCENT = 2;
 export const SELLER_FEE_MIN_PERCENT = 2;
-export const SELLER_FEE_MAX_PERCENT = 4;
+export const SELLER_FEE_MAX_PERCENT = 2;
 
 export const MILESTONE_STEP_CADECOINS = 25000;
 export const MILESTONE_FEE_REDUCTION_PERCENT = 0.5;
@@ -41,7 +41,7 @@ export function getEffectiveSellerFeePercent(params: {
   lifetimeCadeCoins: number;
   adminFeeOverridePercent?: number | null;
 }): number {
-  const { lifetimeCadeCoins, adminFeeOverridePercent } = params;
+  const { adminFeeOverridePercent } = params;
 
   if (
     adminFeeOverridePercent !== null &&
@@ -50,7 +50,8 @@ export function getEffectiveSellerFeePercent(params: {
     return clampFeePercent(adminFeeOverridePercent);
   }
 
-  return getSellerMilestoneFeePercent(lifetimeCadeCoins);
+  // Flat 2% fee for all sellers (milestone system disabled)
+  return SELLER_FEE_DEFAULT_PERCENT;
 }
 
 export function calculateBuyerProcessingFeeCents(

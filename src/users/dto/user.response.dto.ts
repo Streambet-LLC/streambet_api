@@ -122,6 +122,13 @@ export class PublicUserProfileDto {
     description: 'Country',
   })
   country?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 2,
+    description: 'Effective seller fee percentage (only visible on own profile)',
+  })
+  effectiveSellerFeePercent?: number;
 }
 
 export class UserProfileResponseDto {

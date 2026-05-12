@@ -4,7 +4,7 @@ import { IsDefined, IsNumber, Max, Min } from 'class-validator';
 export class UpdateUserFeeOverrideDto {
   @ApiProperty({
     description: 'Permanent seller fee override percent',
-    example: 3.5,
+    example: 2,
     minimum: 2,
     maximum: 4,
   })

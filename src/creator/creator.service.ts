@@ -382,8 +382,8 @@ export class CreatorService {
                   seller.sellerOnboardingCompleted = true;
                 }
                 // Ensure the seller fee is always set to the current default
-                if (seller.applicationFeePercent !== 4) {
-                  updates.applicationFeePercent = 4;
+                if (seller.applicationFeePercent !== 2) {
+                  updates.applicationFeePercent = 2;
                 }
                 if (Object.keys(updates).length > 0) {
                   await this.userRepository.update(seller.id, updates);
@@ -432,7 +432,7 @@ export class CreatorService {
     await this.userRepository.update(userId, {
       stripeAccountConnected: true,
       sellerOnboardingCompleted: true,
-      applicationFeePercent: 4,
+      applicationFeePercent: 2,
     });
 
     return { message: 'Seller marked as onboarded' };

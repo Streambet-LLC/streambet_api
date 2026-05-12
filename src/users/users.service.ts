@@ -399,6 +399,17 @@ export class UsersService {
         ...(user.auctionsEnabled && {
           auctionsEnabled: true,
         }),
+        // Include effective seller fee only when viewing own profile
+        ...(user.isSeller && requestor === user.id && {
+          effectiveSellerFeePercent: getEffectiveSellerFeePercent({
+            lifetimeCadeCoins: lifetimeCoins,
+            adminFeeOverridePercent:
+              user.adminFeeOverridePercent !== null &&
+              user.adminFeeOverridePercent !== undefined
+                ? Number(user.adminFeeOverridePercent)
+                : null,
+          }),
+        }),
       };
 
       return response;
