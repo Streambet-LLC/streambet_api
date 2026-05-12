@@ -1,0 +1,39 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "params": {
+      "type": "object",
+      "required": [
+        "username",
+        "email",
+        "shopName",
+        "shopLink",
+        "adminUserLink",
+        "signupDate"
+      ],
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Username of the new seller"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the new seller"
+        },
+        "shopName": {
+          "type": "string",
+          "description": "Auto-generated or chosen shop name"
+        },
+        "shopLink": {
+          "type": "string",
+          "description": "Public link to the new seller shop"
+        },
+        "adminUserLink": {
+          "type": "string",
+          "description": "Admin panel link to the new seller user"
+        },
+        "signupDate": {
+          "type": "string",
+          "description": "ISO timestamp of when the user became a seller"

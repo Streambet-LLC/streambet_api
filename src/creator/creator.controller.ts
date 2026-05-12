@@ -1,70 +1,33 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Patch,
-  Post,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreatorService } from './creator.service';
-import { CreatorApplicationDto } from './dto/creator-application.dto';
 
 interface RequestWithUser extends ExpressRequest {
   user: { id: string; userId?: string; email?: string };
 }
 
 /**
- * Application + seller-onboarding endpoints. Mounted at `/creator/*` for
- * backward compatibility with the existing frontend client. Creator-role
- * endpoints (streams, analytics, payouts) were removed in Phase 3 cleanup.
+ * Seller-onboarding endpoints. Mounted at `/creator/*` for backward
+ * compatibility with the existing frontend client. The legacy
+ * application/approval flow was removed when sellers became self-serve;
+ * `is_seller` now flips automatically once the in-app questionnaire is
+ * completed (see `users.service#profileUpdate`).
  */
 @Controller('creator')
 @UseGuards(JwtAuthGuard)
 export class CreatorController {
   constructor(private readonly creatorService: CreatorService) {}
 
-  @Post('application')
-  async createApplication(
-    @Body() applicationDto: CreatorApplicationDto,
-    @Request() req: RequestWithUser,
-  ) {
-    return this.creatorService.upsertCreatorApplication({
-      userId: req.user.userId ?? req.user.id,
-      applicationDto,
-    });
-  }
-
-  @Patch('application')
-  async updateApplication(
-    @Body() applicationDto: CreatorApplicationDto,
-    @Request() req: RequestWithUser,
-  ) {
-    return this.creatorService.upsertCreatorApplication({
-      userId: req.user.userId ?? req.user.id,
-      applicationDto,
-    });
-  }
-
-  @Get('application')
-  async getApplication(@Request() req: RequestWithUser) {
-    return this.creatorService.getCreatorApplication({
-      userId: req.user.userId ?? req.user.id,
-    });
-  }
-
-  @Delete('application')
-  async cancelApplication(@Request() req: RequestWithUser) {
-    return this.creatorService.cancelCreatorApplication({
-      userId: req.user.userId ?? req.user.id,
-    });
-  }
-
   @Post('create-connect-link')
   async createConnectLink(@Request() req: RequestWithUser) {
     return this.creatorService.createConnectLink(req.user);
+  }
+
+  @Get('stripe-status')
+  async getMyStripeStatus(@Request() req: RequestWithUser) {
+    const userId = req.user.userId ?? req.user.id;
+    const data = await this.creatorService.getMyStripeStatus(userId);
+    return { data };
   }
 }

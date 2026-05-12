@@ -223,6 +223,21 @@ export class User extends BaseEntity {
   })
   sellerOnboardingCompleted: boolean;
 
+  /**
+   * `true` once the user has completed the in-app seller questionnaire
+   * (location, trading experience, shop name, socials, profile picture).
+   * This flag flips `is_seller` to `true` and is independent from
+   * `seller_onboarding_completed`, which is reserved for Stripe Connect
+   * verification (charges_enabled + payouts_enabled).
+   */
+  @Column({
+    type: 'boolean',
+    default: false,
+    nullable: false,
+    name: 'seller_profile_completed',
+  })
+  sellerProfileCompleted: boolean;
+
   @Column({
     type: 'boolean',
     default: true,
