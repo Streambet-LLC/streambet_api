@@ -55,8 +55,7 @@ export class UsersService {
   private async notifyAdminOfNewSeller(user: User, shopName: string) {
     try {
       const adminEmail =
-        this.configService.get<string>('ADMIN_EMAIL') ||
-        'contact@cardcade.fun';
+        this.configService.get<string>('ADMIN_EMAIL') || 'contact@cardcade.fun';
       if (!adminEmail) return;
       if (user.email && user.email.indexOf('@example.com') !== -1) {
         return;
@@ -439,7 +438,7 @@ export class UsersService {
       // Get prize information based on lifetime coins using PrizeService
       const lifetimeCoins = Number(user.wallet?.lifetimeCoinsEarned ?? 0);
       let prizeData = null;
-      
+
       try {
         prizeData = await this.prizeService.getPrizeInfo(lifetimeCoins);
       } catch (error) {
@@ -489,16 +488,17 @@ export class UsersService {
           auctionsEnabled: true,
         }),
         // Include effective seller fee only when viewing own profile
-        ...(user.isSeller && requestor === user.id && {
-          effectiveSellerFeePercent: getEffectiveSellerFeePercent({
-            lifetimeCadeCoins: lifetimeCoins,
-            adminFeeOverridePercent:
-              user.adminFeeOverridePercent !== null &&
-              user.adminFeeOverridePercent !== undefined
-                ? Number(user.adminFeeOverridePercent)
-                : null,
+        ...(user.isSeller &&
+          requestor === user.id && {
+            effectiveSellerFeePercent: getEffectiveSellerFeePercent({
+              lifetimeCadeCoins: lifetimeCoins,
+              adminFeeOverridePercent:
+                user.adminFeeOverridePercent !== null &&
+                user.adminFeeOverridePercent !== undefined
+                  ? Number(user.adminFeeOverridePercent)
+                  : null,
+            }),
           }),
-        }),
       };
 
       return response;
