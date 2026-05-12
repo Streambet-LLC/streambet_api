@@ -349,7 +349,13 @@ export class UsersService {
 
       // Get prize information based on lifetime coins using PrizeService
       const lifetimeCoins = Number(user.wallet?.lifetimeCoinsEarned ?? 0);
-      const prizeData = await this.prizeService.getPrizeInfo(lifetimeCoins);
+      let prizeData = null;
+      
+      try {
+        prizeData = await this.prizeService.getPrizeInfo(lifetimeCoins);
+      } catch (error) {
+        // Silently handle missing prize data - prize fields will be omitted from response
+      }
 
       // Get listed item count for sellers
       const listedItemCount = user.isSeller
@@ -371,9 +377,11 @@ export class UsersService {
         // Gamification data for ALL roles
         currentCadeCoins: Number(user.wallet?.cadeCoins || 0),
         lifetimeCadeCoins: lifetimeCoins,
-        title: prizeData.title,
-        badgeLevel: prizeData.badgeLevel,
-        prizeProgress: prizeData.prizeProgress,
+        ...(prizeData && {
+          title: prizeData.title,
+          badgeLevel: prizeData.badgeLevel,
+          prizeProgress: prizeData.prizeProgress,
+        }),
         ...(user.collectionPreferences &&
           user.collectionPreferences.length > 0 && {
             collectionPreferences: user.collectionPreferences,

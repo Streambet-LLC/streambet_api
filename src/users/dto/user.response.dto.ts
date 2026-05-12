@@ -45,17 +45,18 @@ export class PublicUserProfileDto {
   @ApiProperty({ example: 15000, description: 'Lifetime CadeCoins earned' })
   lifetimeCadeCoins: number;
 
-  @ApiProperty({ example: 'Master', description: 'Current achievement title' })
-  title: string;
+  @ApiProperty({ example: 'Master', description: 'Current achievement title', required: false })
+  title?: string;
 
-  @ApiProperty({ example: 'Dealer', description: 'Current badge level' })
-  badgeLevel: string;
+  @ApiProperty({ example: 'Dealer', description: 'Current badge level', required: false })
+  badgeLevel?: string;
 
   @ApiProperty({
     type: PrizeProgressDto,
     description: 'Prize progression details',
+    required: false,
   })
-  prizeProgress: PrizeProgressDto;
+  prizeProgress?: PrizeProgressDto;
 
   @ApiProperty({
     required: false,
