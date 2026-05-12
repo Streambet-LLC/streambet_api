@@ -20,4 +20,5 @@ export enum EmailType {
   AuctionPaymentFailed = 'auction_payment_failed',
   AuctionsEnabled = 'auctions_enabled',
   CryptoEnabled = 'crypto_enabled',
+  NewSellerSignup = 'new_seller_signup',
 }

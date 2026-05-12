@@ -166,5 +166,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/auction_payment_failed.ejs',
       schemaPath: './src/templates/auction_payment_failed.json',
     },
+    new_seller_signup: {
+      templatePath: './src/templates/new_seller_signup.ejs',
+      schemaPath: './src/templates/new_seller_signup.json',
+    },
   },
 }));

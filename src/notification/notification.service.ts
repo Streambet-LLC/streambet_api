@@ -59,7 +59,7 @@ export class NotificationService {
           params: {
             fullName: username,
             dashboardLink,
-            creatorSignUpForm: `${dashboardLink}/seller-application`,
+            creatorSignUpForm: `${dashboardLink}/seller/shop/manage`,
           },
         };
 

@@ -26,6 +26,9 @@ import { Transaction } from 'src/wallets/entities/transaction.entity';
 import { CurrencyType } from 'src/enums/currency.enum';
 import { TransactionType } from 'src/enums/transaction-type.enum';
 import { getEffectiveSellerFeePercent } from 'src/common/utils/fee-utils';
+import { ConfigService } from '@nestjs/config';
+import { QueueService } from 'src/queue/queue.service';
+import { EmailType } from 'src/enums/email-type.enum';
 
 @Injectable()
 export class UsersService {
@@ -40,7 +43,55 @@ export class UsersService {
     private readonly transactionRepository: Repository<Transaction>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly prizeService: PrizeService,
+    private readonly configService: ConfigService,
+    private readonly queueService: QueueService,
   ) {}
+
+  /**
+   * Notify the CardCade admin inbox that a new seller has completed
+   * the in-app questionnaire and been auto-promoted. Stripe Connect
+   * onboarding is tracked separately and may still be pending.
+   */
+  private async notifyAdminOfNewSeller(user: User, shopName: string) {
+    try {
+      const adminEmail =
+        this.configService.get<string>('ADMIN_EMAIL') ||
+        'contact@cardcade.fun';
+      if (!adminEmail) return;
+      if (user.email && user.email.indexOf('@example.com') !== -1) {
+        return;
+      }
+      const host = (
+        this.configService.get<string>('email.HOST_URL') ||
+        this.configService.get<string>('APP_HOST_URL') ||
+        ''
+      ).replace(/\/$/, '');
+      const shopLink = `${host}/shop/${user.username}`;
+      const adminUserLink = `${host}/admin/users/${user.id}`;
+
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [adminEmail],
+          subject: `New CardCade seller: ${user.username}`,
+          params: {
+            username: user.username || '',
+            email: user.email || '',
+            shopName,
+            shopLink,
+            adminUserLink,
+            signupDate: new Date().toISOString(),
+          },
+        } as never,
+        EmailType.NewSellerSignup,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to dispatch new_seller_signup admin email for ${user.username}: ${
+          (err as Error)?.message
+        }`,
+      );
+    }
+  }
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find({
@@ -254,7 +305,45 @@ export class UsersService {
       this.logger.log(
         `[PROFILE UPDATE] ProfileUpdateDto socials after filter: ${JSON.stringify(profileUpdateDto.socials)}`,
       );
+
+      // Auto-promote to seller when the user finishes the in-app
+      // questionnaire. We only flip on the false → true transition so
+      // editing other profile fields after the fact never triggers it.
+      let justBecameSeller = false;
+      let promotedShopName: string | undefined;
+      if (
+        profileUpdateDto.sellerProfileCompleted === true &&
+        !existingUserObj.sellerProfileCompleted
+      ) {
+        if (!existingUserObj.isSeller) {
+          (profileUpdateDto as Partial<User>).isSeller = true;
+        }
+        // Default the shop name so the marketplace has something to render
+        // before the user customizes it.
+        if (!existingUserObj.shopName && !profileUpdateDto.shopName) {
+          (profileUpdateDto as Partial<User>).shopName =
+            `${existingUserObj.username}'s Shop`;
+        }
+        promotedShopName =
+          profileUpdateDto.shopName ||
+          existingUserObj.shopName ||
+          `${existingUserObj.username}'s Shop`;
+        justBecameSeller = true;
+        this.logger.log(
+          `[PROFILE UPDATE] Auto-promoting user ${existingUserObj.username} (${id}) to seller via questionnaire`,
+        );
+      }
+
       await this.usersRepository.update({ id }, profileUpdateDto);
+
+      if (justBecameSeller) {
+        // Fire-and-forget; failure is logged inside the helper.
+        void this.notifyAdminOfNewSeller(
+          existingUserObj,
+          promotedShopName ?? `${existingUserObj.username}'s Shop`,
+        );
+      }
+
       return this.findOne(id);
     } catch (e) {
       this.logger.error(`Error updating profile for user with ID ${id}:`, e);
