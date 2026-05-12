@@ -36,4 +36,10 @@
         },
         "signupDate": {
           "type": "string",
-          "description": "ISO timestamp of when the user became a seller"
+          "description": "ISO timestamp of when the user became a seller"
+        }
+      }
+    }
+  },
+  "required": ["params"]
+}
