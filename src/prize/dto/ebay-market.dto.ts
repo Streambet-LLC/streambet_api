@@ -157,6 +157,36 @@ export class BulkDeleteEbaySoldListingsDto {
   listingIds: string[];
 }
 
+export class BulkModerateEbaySoldListingsDto {
+  @ApiProperty({
+    example: ['uuid-1', 'uuid-2'],
+    description: 'Array of sold listing IDs to flag/unflag (1–200 at a time)',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID('4', { each: true })
+  listingIds: string[];
+
+  @ApiProperty({
+    example: true,
+    description: 'Set true to mark inaccurate, false to clear inaccurate status.',
+  })
+  @IsBoolean()
+  isInaccurate: boolean;
+
+  @ApiProperty({
+    example: 'Bulk flagged by admin',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  reason?: string;
+}
+
 export class ReportEbaySoldListingDto {
   @ApiProperty({
     example: 'This listing title does not match the card shown',
@@ -167,6 +197,26 @@ export class ReportEbaySoldListingDto {
   @IsString()
   @MaxLength(2000)
   reason?: string;
+}
+
+export class BulkUpdateEbayVisibilityDto {
+  @ApiProperty({
+    example: ['uuid-1', 'uuid-2'],
+    description: 'Array of prize configuration item IDs to update (1–200 at a time)',
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID('4', { each: true })
+  itemIds: string[];
+
+  @ApiProperty({
+    example: true,
+    description: 'Set true to show eBay avg publicly, false to hide it (admin only).',
+  })
+  @IsBoolean()
+  showPublicly: boolean;
 }
 
 export class EbayMarketHistoryDto {
