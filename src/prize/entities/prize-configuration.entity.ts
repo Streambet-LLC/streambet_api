@@ -203,6 +203,16 @@ export class PrizeConfiguration extends BaseEntity {
   })
   ebayMarketLastCalculatedAt: Date | null;
 
+  /**
+   * Per-item flag controlling whether eBay sold average data is visible
+   * to all users (not just admins) on item cards. When true, the eBay
+   * market data will be shown publicly (subject to global feature flags).
+   * When false, only admins see the eBay data. Defaults to false to
+   * preserve existing privacy-by-default behavior.
+   */
+  @Column({ type: 'boolean', name: 'show_ebay_avg_publicly', default: false })
+  showEbayAvgPublicly: boolean;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   createdBy: string | null;
 

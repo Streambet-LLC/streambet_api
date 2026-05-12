@@ -424,6 +424,13 @@ export class PrizeConfigurationDto {
 
   @ApiProperty({
     example: false,
+    description:
+      'Whether eBay sold average data is visible to all users on item cards (not just admins).',
+  })
+  showEbayAvgPublicly: boolean;
+
+  @ApiProperty({
+    example: false,
     description: 'Whether this item is featured on the seller profile page',
   })
   profileFeatured: boolean;
