@@ -67,11 +67,38 @@ export class AuctionsNotificationsService {
     return `$${n.toFixed(2)}`;
   }
 
+  /**
+   * Format a date for inclusion in reminder/notification emails.
+   *
+   * We don't store a per-user timezone, so rather than emitting an
+   * ambiguous server-local string (which renders as UTC in production
+   * with no zone label), we render the same instant in ET plus UTC,
+   * e.g.:
+   *
+   *   "May 12, 2026, 6:45 PM ET (22:45 UTC)"
+   *
+   * That keeps the primary line short and US-readable while making the
+   * exact instant unambiguous for any recipient regardless of locale.
+   */
   private fmtDate(d: Date): string {
-    return d.toLocaleString('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+    const inZone = (timeZone: string, opts: Intl.DateTimeFormatOptions) =>
+      d.toLocaleString('en-US', { ...opts, timeZone });
+
+    const eastern = inZone('America/New_York', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
     });
+    const utc = inZone('UTC', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    return `${eastern} ET (${utc} UTC)`;
   }
 
   // ─────────────────────────────────────────────────────────────────────
