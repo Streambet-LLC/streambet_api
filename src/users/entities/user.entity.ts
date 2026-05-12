@@ -240,7 +240,7 @@ export class User extends BaseEntity {
 
   @Column({
     type: 'decimal',
-    default: 4,
+    default: 2,
     nullable: false,
     name: 'application_fee_percent',
   })
