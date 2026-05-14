@@ -36,6 +36,38 @@
         "purchaseDate": {
           "type": "string",
           "description": "Date the item was purchased"
+        },
+        "buyerFullName": {
+          "type": "string",
+          "description": "Full name of the buyer for shipping (optional)"
+        },
+        "shippingAddressLine1": {
+          "type": "string",
+          "description": "Shipping address line 1 (optional)"
+        },
+        "shippingAddressLine2": {
+          "type": "string",
+          "description": "Shipping address line 2 (optional)"
+        },
+        "shippingCity": {
+          "type": "string",
+          "description": "Shipping city (optional)"
+        },
+        "shippingState": {
+          "type": "string",
+          "description": "Shipping state/province (optional)"
+        },
+        "shippingZipCode": {
+          "type": "string",
+          "description": "Shipping ZIP/postal code (optional)"
+        },
+        "shippingCountry": {
+          "type": "string",
+          "description": "Shipping country (optional)"
+        },
+        "markShippedUrl": {
+          "type": "string",
+          "description": "Deep link to the seller dashboard to mark this order as shipped (optional)"
         }
       },
       "required": [

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
@@ -13,6 +14,7 @@ export class ShippingReminderService {
     @InjectRepository(PrizeOrder)
     private prizeOrderRepository: Repository<PrizeOrder>,
     private emailsService: EmailsService,
+    private configService: ConfigService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -79,6 +81,35 @@ export class ShippingReminderService {
     }
 
     try {
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+
+      // Seller-owned items go to the seller dashboard; CardCade items
+      // (no createdBy / 'cardcade' creator) go to the admin redemptions
+      // panel. Mirrors the routing used in PrizeService.sendSellerShopPurchaseNotification.
+      const isCardCadeItem =
+        !prize.createdBy || prize.createdBy === 'cardcade';
+      const markShippedUrl = isCardCadeItem
+        ? `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`
+        : `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+
+      const shipping: PrizeOrder['shippingAddress'] = order.shippingAddress || {
+        firstName: '',
+        lastName: '',
+        addressLine1: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: '',
+      };
+      const buyerFullName =
+        [shipping.firstName, shipping.lastName].filter(Boolean).join(' ') ||
+        order.user?.name ||
+        order.user?.username ||
+        '';
+
       await this.emailsService.sendEmailSMTP(
         {
           toAddress: [seller.email],
@@ -93,6 +124,14 @@ export class ShippingReminderService {
               month: 'long',
               day: 'numeric',
             }),
+            buyerFullName,
+            shippingAddressLine1: shipping.addressLine1 || '',
+            shippingAddressLine2: shipping.addressLine2 || '',
+            shippingCity: shipping.city || '',
+            shippingState: shipping.state || '',
+            shippingZipCode: shipping.zipCode || '',
+            shippingCountry: shipping.country || '',
+            markShippedUrl,
           },
         },
         'seller_shipping_reminder',
