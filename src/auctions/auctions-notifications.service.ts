@@ -460,14 +460,19 @@ export class AuctionsNotificationsService {
       // Route to admin (CardCade-owned items) vs seller dashboard.
       let recipientEmail: string | null = null;
       let recipientName = 'Seller';
-      let markShippedUrl: string;
+      // In-person items don't ship — omit the Mark-as-Shipped CTA. The EJS
+      // template's `<% if (params.markShippedUrl) %>` guard hides the button.
+      let markShippedUrl: string | undefined;
+      const isInPerson = prize.isInPerson === true;
 
       if (!prize.createdBy) {
         recipientEmail =
           this.configService.get<string>('ADMIN_EMAIL') ||
           'contact@cardcade.fun';
         recipientName = 'CardCade Admin';
-        markShippedUrl = `${frontendUrl.replace(/\/$/, '')}/admin/prizes/redemptions?orderId=${order.id}`;
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl.replace(/\/$/, '')}/admin/prizes/redemptions?orderId=${order.id}`;
       } else {
         const seller = await this.userRepository.findOne({
           where: { id: prize.createdBy },
@@ -481,7 +486,9 @@ export class AuctionsNotificationsService {
         recipientEmail = seller.email;
         recipientName =
           seller.shopName || seller.name || seller.username || 'Seller';
-        markShippedUrl = `${frontendUrl.replace(/\/$/, '')}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl.replace(/\/$/, '')}/seller/shop/manage?tab=orders&orderId=${order.id}`;
       }
 
       // Show seller the amount net of buyer fee (matches shop email).
@@ -523,12 +530,12 @@ export class AuctionsNotificationsService {
               day: 'numeric',
             }),
             buyerFullName,
-            shippingAddressLine1: shipping.addressLine1 || '',
-            shippingAddressLine2: shipping.addressLine2 || '',
-            shippingCity: shipping.city || '',
-            shippingState: shipping.state || '',
-            shippingZipCode: shipping.zipCode || '',
-            shippingCountry: shipping.country || '',
+            shippingAddressLine1: isInPerson ? '' : shipping.addressLine1 || '',
+            shippingAddressLine2: isInPerson ? '' : shipping.addressLine2 || '',
+            shippingCity: isInPerson ? '' : shipping.city || '',
+            shippingState: isInPerson ? '' : shipping.state || '',
+            shippingZipCode: isInPerson ? '' : shipping.zipCode || '',
+            shippingCountry: isInPerson ? '' : shipping.country || '',
             markShippedUrl,
           },
         },

@@ -37,6 +37,10 @@ export class ShippingReminderService {
         .leftJoinAndSelect('prizeConfiguration.creator', 'creator')
         .where('order.status = :status', { status: 'paid' })
         .andWhere('order.shippedAt IS NULL')
+        // In-person items don't ship, so they never need a shipping reminder.
+        .andWhere(
+          '(prizeConfiguration.isInPerson IS NULL OR prizeConfiguration.isInPerson = false)',
+        )
         .andWhere('order.createdAt < :fourDaysAgo', { fourDaysAgo })
         .andWhere(
           new Brackets((qb) => {
