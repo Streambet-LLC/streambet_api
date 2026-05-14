@@ -10,7 +10,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { DataSource, LessThan, Repository } from 'typeorm';
+import { DataSource, LessThan, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity';
@@ -31,6 +31,7 @@ import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_CLOSE_JOB,
   AUCTION_CLOSING_SOON_JOB,
+  AUCTION_ACTIVATE_JOB,
   AUCTION_QUEUE,
 } from '../common/constants/queue.constants';
 import {
@@ -274,30 +275,60 @@ export class AuctionsService implements OnModuleInit {
    */
   async onModuleInit(): Promise<void> {
     try {
+      const now = new Date();
       const stuck = await this.auctionRepository.find({
         where: [
           {
             status: AuctionStatus.ACTIVE,
-            endsAt: LessThan(new Date()),
+            endsAt: LessThan(now),
           },
           {
             status: AuctionStatus.SCHEDULED,
-            endsAt: LessThan(new Date()),
+            endsAt: LessThan(now),
           },
         ],
         select: ['id', 'endsAt', 'status'],
       });
-      if (stuck.length === 0) return;
-      this.logger.warn(
-        `Auction sweeper: found ${stuck.length} overdue auction(s) — running close flow.`,
-      );
-      for (const a of stuck) {
-        try {
-          await this.runCloseJob(a.id);
-        } catch (err) {
-          this.logger.error(
-            `Auction sweeper: runCloseJob(${a.id}) failed: ${(err as Error).message}`,
-          );
+      if (stuck.length > 0) {
+        this.logger.warn(
+          `Auction sweeper: found ${stuck.length} overdue auction(s) — running close flow.`,
+        );
+        for (const a of stuck) {
+          try {
+            await this.runCloseJob(a.id);
+          } catch (err) {
+            this.logger.error(
+              `Auction sweeper: runCloseJob(${a.id}) failed: ${(err as Error).message}`,
+            );
+          }
+        }
+      }
+
+      // Catch any SCHEDULED auctions whose startsAt has passed but
+      // endsAt is still in the future — these would otherwise sit
+      // forever in SCHEDULED if the activate job was lost (Redis
+      // flush, worker downtime crossing the start instant, etc.) and
+      // every bid would be rejected with "Auction is not active".
+      const toActivate = await this.auctionRepository.find({
+        where: {
+          status: AuctionStatus.SCHEDULED,
+          startsAt: LessThanOrEqual(now),
+          endsAt: MoreThan(now),
+        },
+        select: ['id'],
+      });
+      if (toActivate.length > 0) {
+        this.logger.warn(
+          `Auction sweeper: activating ${toActivate.length} overdue-SCHEDULED auction(s).`,
+        );
+        for (const a of toActivate) {
+          try {
+            await this.runActivateJob(a.id);
+          } catch (err) {
+            this.logger.error(
+              `Auction sweeper: runActivateJob(${a.id}) failed: ${(err as Error).message}`,
+            );
+          }
         }
       }
     } catch (err) {
@@ -724,6 +755,27 @@ export class AuctionsService implements OnModuleInit {
           .getOne();
         if (!auction) throw new NotFoundException('Auction not found');
 
+        // Self-heal SCHEDULED → ACTIVE if startsAt has passed but the
+        // activate job never fired (lost in Redis flush, worker was
+        // offline, etc.). Without this, scheduled auctions would
+        // forever reject bids with "Auction is not active" even after
+        // their start time. We do this inside the SERIALIZABLE bid
+        // transaction so the flip is atomic with the bid itself.
+        if (
+          auction.status === AuctionStatus.SCHEDULED &&
+          auction.startsAt.getTime() <= Date.now()
+        ) {
+          auction.status = AuctionStatus.ACTIVE;
+          await auctionRepo.save(auction);
+          this.gateway.emitAuctionUpdate(auction.id, {
+            type: 'auction.activated',
+            auctionId: auction.id,
+          });
+          this.logger.log(
+            `Auction ${auction.id} self-healed SCHEDULED → ACTIVE on bid attempt`,
+          );
+        }
+
         if (auction.status !== AuctionStatus.ACTIVE) {
           throw new BadRequestException('Auction is not active');
         }
@@ -1028,14 +1080,25 @@ export class AuctionsService implements OnModuleInit {
     // Use '__' as a delimiter that's safe across Redis + URL contexts.
     const closeJobId = `auction-close__${auctionId}`;
     const soonJobId = `auction-closing-soon__${auctionId}`;
+    const activateJobId = `auction-activate__${auctionId}`;
     const now = Date.now();
     const closeDelay = Math.max(0, endsAt.getTime() - now);
     const soonDelay = Math.max(0, endsAt.getTime() - 60 * 60 * 1000 - now);
+
+    // Look up the auction to determine if we also need an "activate"
+    // job (auctions created with a future startsAt sit in SCHEDULED
+    // until the activate job flips them to ACTIVE — without it, bids
+    // are rejected even after startsAt is in the past).
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+      select: ['id', 'startsAt', 'status'],
+    });
 
     // Remove any existing scheduled jobs (idempotent reschedule).
     await Promise.allSettled([
       this.auctionQueue.remove(closeJobId).catch(() => undefined),
       this.auctionQueue.remove(soonJobId).catch(() => undefined),
+      this.auctionQueue.remove(activateJobId).catch(() => undefined),
     ]);
 
     await this.auctionQueue.add(
@@ -1065,11 +1128,75 @@ export class AuctionsService implements OnModuleInit {
       );
     }
 
+    // Activate job: only needed for SCHEDULED auctions whose startsAt
+    // is still in the future. If the auction is already ACTIVE (or
+    // startsAt has already passed) we skip — placeBid has its own
+    // self-heal and the boot sweeper handles missed activations.
+    let activateDelay = 0;
+    if (
+      auction &&
+      auction.status === AuctionStatus.SCHEDULED &&
+      auction.startsAt.getTime() > now
+    ) {
+      activateDelay = auction.startsAt.getTime() - now;
+      await this.auctionQueue.add(
+        AUCTION_ACTIVATE_JOB,
+        { auctionId },
+        {
+          jobId: activateJobId,
+          delay: activateDelay,
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        },
+      );
+    }
+
     this.logger.log(
       `Scheduled auction jobs for ${auctionId}: close in ${Math.round(
         closeDelay / 1000,
-      )}s, closing-soon in ${Math.round(soonDelay / 1000)}s`,
+      )}s, closing-soon in ${Math.round(soonDelay / 1000)}s, activate in ${Math.round(
+        activateDelay / 1000,
+      )}s`,
     );
+  }
+
+  /**
+   * Flip a SCHEDULED auction to ACTIVE once its startsAt is reached.
+   * Idempotent: a no-op if the auction is already ACTIVE or in any
+   * terminal status.
+   *
+   * Run by the AUCTION_ACTIVATE_JOB worker, also invoked directly by
+   * the boot sweeper for auctions whose activate job was lost.
+   */
+  async runActivateJob(auctionId: string): Promise<void> {
+    const auction = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (!auction) {
+      this.logger.warn(`runActivateJob: auction ${auctionId} not found`);
+      return;
+    }
+    if (auction.status !== AuctionStatus.SCHEDULED) {
+      // Already activated, cancelled, or closed — nothing to do.
+      return;
+    }
+    if (auction.startsAt.getTime() > Date.now()) {
+      // Job fired early (clock skew or manual nudge) — leave it.
+      this.logger.warn(
+        `runActivateJob: ${auctionId} fired ${
+          auction.startsAt.getTime() - Date.now()
+        }ms before startsAt; skipping`,
+      );
+      return;
+    }
+
+    auction.status = AuctionStatus.ACTIVE;
+    await this.auctionRepository.save(auction);
+    this.gateway.emitAuctionUpdate(auction.id, {
+      type: 'auction.activated',
+      auctionId: auction.id,
+    });
+    this.logger.log(`Auction ${auctionId} activated (SCHEDULED → ACTIVE)`);
   }
 
   /** Remove all pending jobs for an auction (used on cancel). */
@@ -1080,6 +1207,9 @@ export class AuctionsService implements OnModuleInit {
         .catch(() => undefined),
       this.auctionQueue
         .remove(`auction-closing-soon__${auctionId}`)
+        .catch(() => undefined),
+      this.auctionQueue
+        .remove(`auction-activate__${auctionId}`)
         .catch(() => undefined),
     ]);
   }

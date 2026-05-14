@@ -5,6 +5,7 @@ import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_CLOSE_JOB,
   AUCTION_CLOSING_SOON_JOB,
+  AUCTION_ACTIVATE_JOB,
   AUCTION_QUEUE,
 } from '../../common/constants/queue.constants';
 import { AuctionsService } from '../auctions.service';
@@ -50,6 +51,9 @@ export class AuctionJobsProcessor extends WorkerHost {
           return;
         case AUCTION_CLOSE_JOB:
           await this.auctionsService.runCloseJob(auctionId);
+          return;
+        case AUCTION_ACTIVATE_JOB:
+          await this.auctionsService.runActivateJob(auctionId);
           return;
         case AUCTION_AUTOPAY_RETRY_JOB:
           await this.auctionsService.runAutopayRetry(
