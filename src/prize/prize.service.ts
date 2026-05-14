@@ -3257,7 +3257,10 @@ export class PrizeService implements OnModuleInit {
       // Determine recipient: admin for CardCade items, seller for seller-owned items
       let recipientEmail: string;
       let recipientName: string;
-      let markShippedUrl: string;
+      // In-person items don't need a Mark-as-Shipped CTA — leave undefined
+      // so the EJS template's `<% if (params.markShippedUrl) %>` guard hides it.
+      let markShippedUrl: string | undefined;
+      const isInPerson = prize.isInPerson === true;
 
       const frontendUrl = this.configService.get<string>(
         'CLIENT_URL',
@@ -3270,7 +3273,9 @@ export class PrizeService implements OnModuleInit {
           this.configService.get<string>('ADMIN_EMAIL') ||
           'contact@cardcade.fun';
         recipientName = 'CardCade Admin';
-        markShippedUrl = `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
       } else {
         // Seller-owned item
         const seller = await this.userRepository.findOne({
@@ -3286,7 +3291,9 @@ export class PrizeService implements OnModuleInit {
 
         recipientEmail = seller.email;
         recipientName = seller.name || seller.username;
-        markShippedUrl = `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
       }
 
       // Show the recipient the amount without the buyer service fee
@@ -3323,12 +3330,12 @@ export class PrizeService implements OnModuleInit {
               day: 'numeric',
             }),
             buyerFullName: buyer.name || buyer.username,
-            shippingAddressLine1: shipping.addressLine1 || '',
-            shippingAddressLine2: shipping.addressLine2 || '',
-            shippingCity: shipping.city || '',
-            shippingState: shipping.state || '',
-            shippingZipCode: shipping.zipCode || '',
-            shippingCountry: shipping.country || '',
+            shippingAddressLine1: isInPerson ? '' : shipping.addressLine1 || '',
+            shippingAddressLine2: isInPerson ? '' : shipping.addressLine2 || '',
+            shippingCity: isInPerson ? '' : shipping.city || '',
+            shippingState: isInPerson ? '' : shipping.state || '',
+            shippingZipCode: isInPerson ? '' : shipping.zipCode || '',
+            shippingCountry: isInPerson ? '' : shipping.country || '',
             markShippedUrl,
           },
         },

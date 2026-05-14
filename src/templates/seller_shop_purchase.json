@@ -80,14 +80,7 @@
         "buyerName",
         "amount",
         "orderId",
-        "purchaseDate",
-        "buyerFullName",
-        "shippingAddressLine1",
-        "shippingCity",
-        "shippingState",
-        "shippingZipCode",
-        "shippingCountry",
-        "markShippedUrl"
+        "purchaseDate"
       ]
     }
   },

@@ -90,6 +90,21 @@ const cases: Case[] = [
       purchaseDate: 'May 1, 2026',
     },
   },
+  {
+    id: 'seller_shop_purchase_in_person',
+    template: path.join(TPL, 'seller_shop_purchase.ejs'),
+    schema: path.join(TPL, 'seller_shop_purchase.json'),
+    // In-person fulfillment: no shipping address, no Mark-as-Shipped CTA.
+    // Template should render the "In-Person Pickup" note instead.
+    params: {
+      sellerName: 'Acme Cards',
+      itemName: 'PSA 10 Charizard (in-person hand-off)',
+      buyerName: 'jbuyer',
+      amount: 999,
+      orderId: 'ord_in_person_001',
+      purchaseDate: 'May 13, 2026',
+    },
+  },
 ];
 
 (async () => {
