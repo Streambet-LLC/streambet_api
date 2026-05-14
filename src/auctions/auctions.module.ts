@@ -23,6 +23,7 @@ import { AuthModule } from '../auth/auth.module';
 import { InboxModule } from '../inbox/inbox.module';
 import { RedisModule } from '../redis/redis.module';
 import { QueueModule } from '../queue/queue.module';
+import { EmailsModule } from '../emails/email.module';
 import { AUCTION_QUEUE } from '../common/constants/queue.constants';
 
 /**
@@ -67,6 +68,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     InboxModule,
     RedisModule,
     forwardRef(() => QueueModule),
+    EmailsModule,
   ],
   controllers: [
     AuctionsController,

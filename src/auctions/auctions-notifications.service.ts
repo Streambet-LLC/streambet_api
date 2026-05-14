@@ -6,10 +6,12 @@ import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity';
 import { PrizeItemWatcher } from '../prize/entities/prize-item-watcher.entity';
+import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
 import { QueueService } from '../queue/queue.service';
 import { InboxService } from '../inbox/inbox.service';
+import { EmailsService } from '../emails/email.service';
 
 /**
  * Centralized auction notification dispatch.
@@ -39,9 +41,12 @@ export class AuctionsNotificationsService {
     private readonly watcherRepository: Repository<PrizeItemWatcher>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(PrizeOrder)
+    private readonly prizeOrderRepository: Repository<PrizeOrder>,
     private readonly queueService: QueueService,
     private readonly inboxService: InboxService,
     private readonly configService: ConfigService,
+    private readonly emailsService: EmailsService,
   ) {}
 
   /** Public site host used in inbox/email links. */
@@ -415,6 +420,131 @@ export class AuctionsNotificationsService {
             )
         : Promise.resolve(),
     ]);
+  }
+
+  /**
+   * Notify the seller (or CardCade admin for house items) that their
+   * auction item has sold + paid. Mirrors `seller_shop_purchase` from
+   * the shop flow so we can re-use the existing template (which already
+   * renders buyer name, shipping address block and a "Mark as Shipped &
+   * Add Tracking" CTA pointing at the seller dashboard / admin
+   * redemptions page).
+   *
+   * Best-effort: failures are logged, never thrown.
+   */
+  async notifySellerOfSale(params: {
+    auctionId: string;
+    orderId: string;
+  }): Promise<void> {
+    try {
+      const auction = await this.auctionRepository.findOne({
+        where: { id: params.auctionId },
+      });
+      if (!auction) return;
+      const prize = await this.prizeRepository.findOne({
+        where: { id: auction.prizeConfigurationId },
+      });
+      if (!prize) return;
+      const order = await this.prizeOrderRepository.findOne({
+        where: { id: params.orderId },
+        relations: ['user'],
+      });
+      if (!order) return;
+      const buyer = order.user;
+
+      const frontendUrl =
+        this.configService.get<string>('CLIENT_URL') ||
+        this.appHost() ||
+        'http://localhost:3000';
+
+      // Route to admin (CardCade-owned items) vs seller dashboard.
+      let recipientEmail: string | null = null;
+      let recipientName = 'Seller';
+      let markShippedUrl: string;
+
+      if (!prize.createdBy) {
+        recipientEmail =
+          this.configService.get<string>('ADMIN_EMAIL') ||
+          'contact@cardcade.fun';
+        recipientName = 'CardCade Admin';
+        markShippedUrl = `${frontendUrl.replace(/\/$/, '')}/admin/prizes/redemptions?orderId=${order.id}`;
+      } else {
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (!seller || !seller.email) {
+          this.logger.warn(
+            `Seller ${prize.createdBy} not found / no email for auction ${auction.id}`,
+          );
+          return;
+        }
+        recipientEmail = seller.email;
+        recipientName =
+          seller.shopName || seller.name || seller.username || 'Seller';
+        markShippedUrl = `${frontendUrl.replace(/\/$/, '')}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+      }
+
+      // Show seller the amount net of buyer fee (matches shop email).
+      const charged = parseFloat(order.usdCharged?.toString() || '0');
+      const sellerVisibleAmount =
+        charged > 0
+          ? parseFloat((charged / 1.05).toFixed(2)) // ~5% buyer fee
+          : Number(order.totalPrice ?? 0);
+
+      const shipping: PrizeOrder['shippingAddress'] =
+        order.shippingAddress || {
+          firstName: '',
+          lastName: '',
+          addressLine1: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: '',
+        };
+      const buyerFullName =
+        [shipping.firstName, shipping.lastName].filter(Boolean).join(' ') ||
+        buyer?.name ||
+        buyer?.username ||
+        'Buyer';
+
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [recipientEmail],
+          subject: `New Sale! ${prize.name} won at auction 🎉`,
+          params: {
+            sellerName: recipientName,
+            itemName: prize.name,
+            buyerName: buyer?.name || buyer?.username || 'Buyer',
+            amount: sellerVisibleAmount,
+            orderId: order.id,
+            purchaseDate: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            }),
+            buyerFullName,
+            shippingAddressLine1: shipping.addressLine1 || '',
+            shippingAddressLine2: shipping.addressLine2 || '',
+            shippingCity: shipping.city || '',
+            shippingState: shipping.state || '',
+            shippingZipCode: shipping.zipCode || '',
+            shippingCountry: shipping.country || '',
+            markShippedUrl,
+          },
+        },
+        'seller_shop_purchase',
+      );
+
+      this.logger.log(
+        `Auction-sale notification sent to ${recipientEmail} for order ${order.id}`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `notifySellerOfSale failed for auction ${params.auctionId}: ${
+          (err as Error)?.message
+        }`,
+      );
+    }
   }
 
   async notifyLosers(params: {

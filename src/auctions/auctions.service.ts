@@ -1390,6 +1390,10 @@ export class AuctionsService implements OnModuleInit {
           winnerUserId,
           winningBidUsd: fees.bidUsd,
         }),
+        this.notifications.notifySellerOfSale({
+          auctionId: auction.id,
+          orderId: order.id,
+        }),
       ]);
 
       this.logger.log(
@@ -1764,6 +1768,10 @@ export class AuctionsService implements OnModuleInit {
         auctionId: auction.id,
         winnerUserId: params.userId,
         winningBidUsd: fees.bidUsd,
+      }),
+      this.notifications.notifySellerOfSale({
+        auctionId: auction.id,
+        orderId: order.id,
       }),
     ]);
 
