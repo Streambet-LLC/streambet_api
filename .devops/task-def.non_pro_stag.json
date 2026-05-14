@@ -259,12 +259,24 @@
           "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_HOST"
         },
         {
-          "name": "RAPIDAPI_EBAY_COMPLETED_KEY",
-          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY"
-        },
-        {
           "name": "RAPIDAPI_EBAY_COMPLETED_URL",
           "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_URL"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_KEY_1",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY_1"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_KEY_2",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY_2"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_KEY_3",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY_3"
+        },
+        {
+          "name": "RAPIDAPI_EBAY_COMPLETED_KEY_4",
+          "valueFrom": "/cardcade/non_pro_stag/RAPIDAPI_EBAY_COMPLETED_KEY_4"
         },
         {
           "name": "SOLANA_RPC_URL",
