@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { EbayListingDto, EbaySearchResponseDto } from './dto/ebay-search.dto';
 import { normalizeEbaySearchKeywords } from './ebay-query.utils';
+import { EbayKeyManagerService } from './ebay-key-manager.service';
 
 type CompletedItemProduct = {
   title?: string;
@@ -61,7 +62,10 @@ export type EbayCompletedItemsResult = {
 export class EbayService {
   private readonly logger = new Logger(EbayService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly keyManager: EbayKeyManagerService,
+  ) {}
 
   private normalizeListings(items: any[], safeLimit: number): EbayListingDto[] {
     return items
@@ -178,8 +182,6 @@ export class EbayService {
       this.configService.get<string>('EBAY_COMPLETED_DIRECT_URL') || // legacy alias
       'https://ebay-api.scrapechain.com/findCompletedItems';
 
-    const rapidApiKey =
-      this.configService.get<string>('RAPIDAPI_EBAY_COMPLETED_KEY') || '';
     const rapidApiHost =
       this.configService.get<string>('RAPIDAPI_EBAY_COMPLETED_HOST') || '';
     const rapidApiUrl =
@@ -198,7 +200,7 @@ export class EbayService {
         undefined,
     };
 
-    const hasRapidApiFallback = !!(rapidApiKey && rapidApiHost && rapidApiUrl);
+    const hasRapidApiFallback = this.keyManager.hasKeys() && rapidApiHost && rapidApiUrl;
 
     // Primary: scrapechain
     try {
@@ -242,46 +244,98 @@ export class EbayService {
       );
     }
 
-    // Fallback: RapidAPI
-    try {
-      const response = await axios.post<CompletedItemsResponse>(rapidApiUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-rapidapi-key': rapidApiKey,
-          'x-rapidapi-host': rapidApiHost,
-        },
-        timeout: timeoutMs,
-      });
-
-      const products = Array.isArray(response.data?.products)
-        ? response.data.products
-        : [];
-
-      return {
-        query: trimmedKeywords,
-        source: 'rapidapi',
-        responseUrl: response.data?.response_url || null,
-        products: products.map((item) => this.normalizeCompletedItem(item)),
-        resultCount: response.data?.results ?? products.length,
-      };
-    } catch (error: any) {
-      if (error?.response?.status === 429) {
-        const retryAfterSeconds = this.getRetryAfterSeconds(
-          error?.response?.headers?.['retry-after'],
-        );
-        throw new HttpException(
-          {
-            message:
-              'eBay completed-items rate limit reached. Please retry after the provided delay.',
-            retryAfterSeconds,
-          },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-
-      this.logger.error('eBay completed-items fetch failed (RapidAPI fallback)', error);
+    // Fallback: RapidAPI with key rotation
+    if (!hasRapidApiFallback) {
+      this.logger.error('No RapidAPI keys available for fallback');
       throw new InternalServerErrorException('eBay completed-items fetch failed');
     }
+
+    const availableKeys = this.keyManager.getAvailableKeys();
+    const maxAttempts = availableKeys.length;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const keyInfo = await this.keyManager.getNextAvailableKey();
+
+      if (!keyInfo) {
+        this.logger.warn('All RapidAPI keys are rate-limited');
+        break;
+      }
+
+      const { key: rapidApiKey, keyIndex } = keyInfo;
+
+      try {
+        this.logger.debug(
+          `Attempting RapidAPI request with KEY_${keyIndex} (attempt ${attempt + 1}/${maxAttempts})`,
+        );
+
+        const response = await axios.post<CompletedItemsResponse>(rapidApiUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-rapidapi-key': rapidApiKey,
+            'x-rapidapi-host': rapidApiHost,
+          },
+          timeout: timeoutMs,
+        });
+
+        const products = Array.isArray(response.data?.products)
+          ? response.data.products
+          : [];
+
+        this.logger.log(`Successfully fetched eBay data using KEY_${keyIndex}`);
+
+        return {
+          query: trimmedKeywords,
+          source: `rapidapi-key${keyIndex}`,
+          responseUrl: response.data?.response_url || null,
+          products: products.map((item) => this.normalizeCompletedItem(item)),
+          resultCount: response.data?.results ?? products.length,
+        };
+      } catch (error: any) {
+        lastError = error;
+
+        if (error?.response?.status === 429) {
+          // Rate limit hit - mark this key and try next
+          const retryAfterSeconds = this.getRetryAfterSeconds(
+            error?.response?.headers?.['retry-after'],
+          );
+          await this.keyManager.markKeyRateLimited(
+            keyIndex,
+            retryAfterSeconds || 60,
+          );
+
+          this.logger.warn(
+            `KEY_${keyIndex} rate limited, rotating to next key (${attempt + 1}/${maxAttempts} attempts)`,
+          );
+          continue; // Try next key
+        }
+
+        // Non-429 error - log and try next key
+        this.logger.error(
+          `KEY_${keyIndex} failed with status ${error?.response?.status ?? 'unknown'}`,
+          error,
+        );
+        continue;
+      }
+    }
+
+    // All keys exhausted or failed
+    if (lastError?.response?.status === 429) {
+      const retryAfterSeconds = this.getRetryAfterSeconds(
+        lastError?.response?.headers?.['retry-after'],
+      );
+      throw new HttpException(
+        {
+          message:
+            'All eBay API keys are rate limited. Please retry after the provided delay.',
+          retryAfterSeconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    this.logger.error('eBay completed-items fetch failed with all available keys', lastError);
+    throw new InternalServerErrorException('eBay completed-items fetch failed');
   }
 
   private async getAccessToken(): Promise<string> {

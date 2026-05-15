@@ -149,13 +149,17 @@ export class PrizeController {
     schema: {
       properties: {
         ebaySoldAvgEnabled: { type: 'boolean' },
+        ebaySoldAvgAdminOnly: { type: 'boolean' },
         ebayManualSyncEnabled: { type: 'boolean' },
+        ebayItemCardButtonPublic: { type: 'boolean' },
       },
     },
   })
   async getEbayFeatureFlags(): Promise<{
     ebaySoldAvgEnabled: boolean;
+    ebaySoldAvgAdminOnly: boolean;
     ebayManualSyncEnabled: boolean;
+    ebayItemCardButtonPublic: boolean;
   }> {
     return this.prizeService.getEbayFeatureFlags();
   }
