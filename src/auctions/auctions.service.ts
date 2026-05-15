@@ -33,6 +33,7 @@ import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import { PrizeRedemption } from '../prize/entities/prize-redemption.entity';
 import { PrizeCategory } from '../prize/enums/prize-category.enum';
 import { ShippingStatus } from '../prize/dto/prize-redemption.dto';
+import { WalletsService } from '../wallets/wallets.service';
 import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_CLOSE_JOB,
@@ -47,12 +48,15 @@ import {
   calculateRewardCadeCoinsFromCents,
   calculateSellerFeeCents,
 } from '../common/utils/fee-utils';
+import { CurrencyType } from '../enums/currency.enum';
+import { TransactionType } from '../enums/transaction-type.enum';
 
 /**
  * Anti-snipe window in seconds. A bid landing within this window of
  * `endsAt` extends the auction by the same amount. No cap on extensions.
  */
 const ANTI_SNIPE_WINDOW_SECONDS = 30;
+const BID_REWARD_CADE_COINS = 10;
 
 /**
  * Dynamic minimum bid increments by current price tier. The increment is
@@ -104,6 +108,7 @@ export class AuctionsService implements OnModuleInit {
     private readonly paymentsService: AuctionsPaymentsService,
     private readonly gateway: AuctionsGateway,
     private readonly notifications: AuctionsNotificationsService,
+    private readonly walletsService: WalletsService,
     @InjectQueue(AUCTION_QUEUE) private readonly auctionQueue: Queue,
   ) {}
 
@@ -832,6 +837,22 @@ export class AuctionsService implements OnModuleInit {
           auction.proxyMaxUsd = proxyMax.toFixed(2);
           auction.bidCount += 1;
           const savedAuction = await auctionRepo.save(auction);
+          await this.walletsService.updateBalance(
+            userId,
+            BID_REWARD_CADE_COINS,
+            CurrencyType.CADE_COINS,
+            TransactionType.BONUS,
+            'Auction bid reward',
+            {
+              auctionId: auction.id,
+              action: 'raise_max',
+            },
+            {
+              relatedEntityId: `auction-bid:${raiseBid.id}`,
+              relatedEntityType: 'auction_bid_reward',
+            },
+            manager,
+          );
           return {
             auction: savedAuction,
             bid: raiseBid,
@@ -951,6 +972,22 @@ export class AuctionsService implements OnModuleInit {
         auction.bidCount += autoCounterAmount !== null ? 2 : 1;
 
         const savedAuction = await auctionRepo.save(auction);
+        await this.walletsService.updateBalance(
+          userId,
+          BID_REWARD_CADE_COINS,
+          CurrencyType.CADE_COINS,
+          TransactionType.BONUS,
+          'Auction bid reward',
+          {
+            auctionId: auction.id,
+            action: 'place_bid',
+          },
+          {
+            relatedEntityId: `auction-bid:${challengerBid.id}`,
+            relatedEntityType: 'auction_bid_reward',
+          },
+          manager,
+        );
         return {
           auction: savedAuction,
           bid: challengerBid,
