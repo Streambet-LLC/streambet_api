@@ -6,6 +6,8 @@ import {
   ConflictException,
   ForbiddenException,
   OnModuleInit,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -108,6 +110,7 @@ export class AuctionsService implements OnModuleInit {
     private readonly paymentsService: AuctionsPaymentsService,
     private readonly gateway: AuctionsGateway,
     private readonly notifications: AuctionsNotificationsService,
+    @Inject(forwardRef(() => WalletsService))
     private readonly walletsService: WalletsService,
     @InjectQueue(AUCTION_QUEUE) private readonly auctionQueue: Queue,
   ) {}

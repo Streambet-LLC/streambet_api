@@ -70,7 +70,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     RedisModule,
     forwardRef(() => QueueModule),
     EmailsModule,
-    WalletsModule,
+    forwardRef(() => WalletsModule),
   ],
   controllers: [
     AuctionsController,
