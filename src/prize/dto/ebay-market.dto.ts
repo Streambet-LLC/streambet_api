@@ -36,8 +36,17 @@ export class EbayMarketSummaryDto {
   @ApiProperty({ example: '2026-05-01T14:00:00.000Z', nullable: true })
   lastCalculatedAt: Date | null;
 
+  @ApiProperty({ example: '2026-05-01T14:05:00.000Z', nullable: true, description: 'Last time eBay sold data was successfully fetched' })
+  lastFetchedAt: Date | null;
+
   @ApiProperty({ example: 83 })
   totalValidSoldCount: number;
+
+  @ApiProperty({ example: 189.5, nullable: true, description: 'Sale price of the most recent sold listing' })
+  mostRecentSalePrice: number | null;
+
+  @ApiProperty({ example: '2026-04-29T09:25:00.000Z', nullable: true, description: 'Date of the most recent sold listing' })
+  mostRecentSaleDate: Date | null;
 
   @ApiProperty({ type: [EbayMarketWindowAverageDto] })
   windows: EbayMarketWindowAverageDto[];
