@@ -628,6 +628,7 @@ export class PrizeService implements OnModuleInit {
 
     const latestRows = await latestQb
       .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .addOrderBy('sold.id', 'DESC')
       .limit(10)
       .getMany();
 
@@ -775,6 +776,7 @@ export class PrizeService implements OnModuleInit {
 
     const rows = await qb
       .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .addOrderBy('sold.id', 'DESC')
       .limit(normalizedLimit)
       .getMany();
 
