@@ -573,6 +573,12 @@ export class PrizeService implements OnModuleInit {
       select: ['id', 'amount', 'ebayMarketLastCalculatedAt', 'showEbayAvgPublicly'],
     });
 
+    // Fetch sync state to get last fetch timestamp
+    const syncState = await this.ebaySyncStateRepository.findOne({
+      where: { itemId },
+      select: ['lastFetchSucceededAt'],
+    });
+
     if (!item) {
       throw new NotFoundException('Shop item not found');
     }
@@ -636,6 +642,15 @@ export class PrizeService implements OnModuleInit {
               latestPrices.length,
           )
         : null;
+
+    // Extract most recent sale price and date
+    const mostRecentListing = latestRows[0] ?? null;
+    const mostRecentSalePrice = mostRecentListing
+      ? this.parseNumeric(mostRecentListing.salePrice)
+      : null;
+    const mostRecentSaleDate = mostRecentListing
+      ? (mostRecentListing.dateSold ?? mostRecentListing.createdAt)
+      : null;
 
     const now = new Date();
     let qb = this.ebaySoldListingRepository
@@ -715,7 +730,10 @@ export class PrizeService implements OnModuleInit {
       soldCountUsed: latestPrices.length,
       percentDifference,
       lastCalculatedAt: item.ebayMarketLastCalculatedAt ?? null,
+      lastFetchedAt: syncState?.lastFetchSucceededAt ?? null,
       totalValidSoldCount: this.parseCount(stats?.all_count),
+      mostRecentSalePrice,
+      mostRecentSaleDate,
       windows,
     };
   }
