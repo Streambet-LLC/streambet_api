@@ -843,6 +843,10 @@ export class AdminController {
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
     );
 
+    // New users created month-to-date
+    const newUsersMonthToDate =
+      await this.usersService.getUsersCountSince(monthStart);
+
     const feeRows = await this.prizeOrderRepository
       .createQueryBuilder('o')
       .leftJoin('o.prizeConfiguration', 'prize')
@@ -878,6 +882,11 @@ export class AdminController {
     const round2 = (usd: number): number => Math.round(usd * 100) / 100;
 
     let monthlyFeesEarned = 0;
+    // CardCade primary sales = orders where CardCade itself is the seller
+    // (admin-owned prizes — no seller Stripe Connect account). We report the
+    // item subtotal (excluding the buyer service fee) here so the two cards
+    // on the dashboard don't double-count revenue.
+    let monthlyPrimarySales = 0;
     for (const row of feeRows) {
       const totalPriceUsd = parseFloat(row.total_price ?? '0');
       if (!Number.isFinite(totalPriceUsd) || totalPriceUsd <= 0) {
@@ -895,13 +904,6 @@ export class AdminController {
         continue;
       }
 
-      // If seller has no Stripe Connect account, checkout settles to
-      // platform and there is no seller transfer split.
-      if (!row.seller_stripe_account_id) {
-        monthlyFeesEarned += totalPriceUsd;
-        continue;
-      }
-
       // total_price = subtotal + buyerFee, where buyerFee is 3% of
       // (subtotal - shipping). Solve subtotal from stored total_price.
       const shippingUsd = Math.max(0, parseFloat(row.shipping_cost_usd ?? '0'));
@@ -913,6 +915,15 @@ export class AdminController {
       const buyerFeeCents = Math.round(
         toCents(itemSubtotalUsd) * (NON_CRYPTO_BUYER_FEE_PCT / 100),
       );
+
+      // CardCade-as-seller (admin-owned prize): the platform keeps the full
+      // capture but only the buyer service fee is a fee — the rest is
+      // primary-sale revenue. There is no seller transfer/split.
+      if (!row.seller_stripe_account_id) {
+        monthlyFeesEarned += toUsd(buyerFeeCents);
+        monthlyPrimarySales += subtotalUsd;
+        continue;
+      }
 
       const sellerFeePercent = getEffectiveSellerFeePercent({
         lifetimeCadeCoins: Number(row.seller_lifetime_coins_earned ?? 0),
@@ -930,13 +941,16 @@ export class AdminController {
     }
 
     monthlyFeesEarned = round2(monthlyFeesEarned);
+    monthlyPrimarySales = round2(monthlyPrimarySales);
 
     return {
       statusCode: HttpStatus.OK,
       message: 'Analytics summary fetched successfully',
       data: {
         totalUsers,
+        newUsersMonthToDate,
         monthlyFeesEarned,
+        monthlyPrimarySales,
         totalCardsListed,
         totalConciergeRequests,
       },

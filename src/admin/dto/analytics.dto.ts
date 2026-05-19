@@ -6,9 +6,22 @@ export class AdminAnalyticsSummaryResponseDto {
 
   @ApiProperty({
     type: Number,
+    description: 'Number of new users created month-to-date (UTC)',
+  })
+  newUsersMonthToDate: number;
+
+  @ApiProperty({
+    type: Number,
     description: 'Platform month-to-date fees earned (USD)',
   })
   monthlyFeesEarned: number;
+
+  @ApiProperty({
+    type: Number,
+    description:
+      'CardCade month-to-date primary sales (USD) — admin-owned items sold via buys and auctions, excluding buyer service fees',
+  })
+  monthlyPrimarySales: number;
 
   @ApiProperty({
     type: Number,

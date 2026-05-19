@@ -766,6 +766,20 @@ export class UsersService {
   }
 
   /**
+   * Returns the count of active, non-deleted USER-role users created on or
+   * after the given cutoff (e.g. start of the current calendar month UTC).
+   */
+  getUsersCountSince(cutoff: Date): Promise<number> {
+    return this.usersRepository
+      .createQueryBuilder('u')
+      .where('u.isActive = :isActive', { isActive: true })
+      .andWhere('u.deletedAt IS NULL')
+      .andWhere('u.role = :role', { role: UserRole.USER })
+      .andWhere('u.createdAt >= :cutoff', { cutoff })
+      .getCount();
+  }
+
+  /**
    * Retrieves the top 20 users by cadeCoins balance for the leaderboard.
    * @returns Promise<Array<{username: string, cadeCoins: number, profileImageUrl: string, monthToDateCoins: number, lifetimeCadeCoins: number}>>
    */
