@@ -6,7 +6,7 @@ COPY . .
 
 RUN npm install -g pm2
 
-RUN npm install
+RUN npm ci
 RUN npm run build
 
 CMD ["pm2-docker", "npm run start:prod"]

@@ -628,6 +628,7 @@ export class PrizeService implements OnModuleInit {
 
     const latestRows = await latestQb
       .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .addOrderBy('sold.id', 'DESC')
       .limit(10)
       .getMany();
 
@@ -775,6 +776,7 @@ export class PrizeService implements OnModuleInit {
 
     const rows = await qb
       .orderBy('COALESCE(sold.date_sold, sold."createdAt")', 'DESC')
+      .addOrderBy('sold.id', 'DESC')
       .limit(normalizedLimit)
       .getMany();
 
@@ -3927,28 +3929,31 @@ export class PrizeService implements OnModuleInit {
         bucket.nonCryptoRevenue += totalPriceUsd;
         bucket.nonCryptoOrderCount += 1;
 
-        // If seller has no Stripe Connect account, checkout settles to
-        // platform and there is no seller transfer split.
+        // total_price = subtotal + buyerFee, where buyerFee is 3% of
+        // (subtotal - shipping). Solve subtotal from stored total_price.
+        const shippingUsd = Math.max(
+          0,
+          parseFloat(row.shipping_cost_usd ?? '0'),
+        );
+        const subtotalUsd =
+          (totalPriceUsd + (NON_CRYPTO_BUYER_FEE_PCT / 100) * shippingUsd) /
+          (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
+
+        const subtotalCents = toCents(subtotalUsd);
+        const shippingCents = toCents(shippingUsd);
+        const buyerFeeCents = calculateBuyerItemFeeCents(
+          subtotalCents,
+          shippingCents,
+        );
+
+        // CardCade-as-seller (admin-owned prize, no Stripe Connect account):
+        // platform captures the full amount, but only the buyer service fee
+        // is actually a fee — the rest is CardCade primary-sale revenue.
+        // Without this guard the platform fees number double-counts the
+        // primary-sale revenue.
         if (!row.seller_stripe_account_id) {
-          orderPlatformFeeUsd = totalPriceUsd;
+          orderPlatformFeeUsd = toUsd(buyerFeeCents);
         } else {
-          // total_price = subtotal + buyerFee, where buyerFee is 3% of
-          // (subtotal - shipping). Solve subtotal from stored total_price.
-          const shippingUsd = Math.max(
-            0,
-            parseFloat(row.shipping_cost_usd ?? '0'),
-          );
-          const subtotalUsd =
-            (totalPriceUsd + (NON_CRYPTO_BUYER_FEE_PCT / 100) * shippingUsd) /
-            (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
-
-          const subtotalCents = toCents(subtotalUsd);
-          const shippingCents = toCents(shippingUsd);
-          const buyerFeeCents = calculateBuyerItemFeeCents(
-            subtotalCents,
-            shippingCents,
-          );
-
           const sellerFeePercent = getEffectiveSellerFeePercent({
             lifetimeCadeCoins: Number(row.seller_lifetime_coins_earned ?? 0),
             adminFeeOverridePercent:
