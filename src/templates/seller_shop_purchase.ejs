@@ -42,6 +42,19 @@
                   Great news! One of your shop items has been purchased. Here are the details:
                 </p>
 
+                <% if (params.isPaymentProcessing) { %>
+                <!-- ACH "Do Not Ship" Banner -->
+                <div style="background-color:#3a1a00;border:2px solid #ff7a00;border-radius:12px;padding:20px 24px;margin:0 0 28px 0;">
+                  <p style="margin:0 0 10px 0;font-size:20px;font-weight:700;color:#ff7a00;font-family:'Inter',sans-serif;">⚠️ DO NOT SHIP YET — Payment Still Processing</p>
+                  <p style="margin:0 0 8px 0;font-size:16px;line-height:1.6;color:#FFFFFF;font-family:'Inter',sans-serif;">
+                    The buyer paid via <b>ACH bank transfer</b>, which takes <b>3–5 business days to clear</b>. Their funds have <b>not settled yet</b>.
+                  </p>
+                  <p style="margin:0;font-size:16px;line-height:1.6;color:#FFFFFF;font-family:'Inter',sans-serif;">
+                    We will email you again <b>as soon as the payment settles</b> and the order is safe to ship. Shipping before settlement risks losing the item if the debit bounces.
+                  </p>
+                </div>
+                <% } %>
+
                 <!-- Order Details -->
                 <div style="background-color:#222222;border-left:4px solid #bdff00;padding:16px 20px;margin:0 0 28px 0;border-radius:8px;">
                   <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Item:</span> <span style="opacity:0.8;"><%= params.itemName %></span></p>
@@ -72,7 +85,7 @@
                 <% } %>
 
                 <!-- CTA Button -->
-                <% if (params.markShippedUrl) { %>
+                <% if (params.markShippedUrl && !params.isPaymentProcessing) { %>
                 <a href="<%= params.markShippedUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:20px !important;margin-bottom:20px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Mark as Shipped</a>
                 <% } %>
 

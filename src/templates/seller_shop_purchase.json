@@ -72,6 +72,10 @@
         "markShippedUrl": {
           "type": "string",
           "description": "URL to the seller dashboard to mark the order as shipped"
+        },
+        "isPaymentProcessing": {
+          "type": "boolean",
+          "description": "True when the buyer paid via ACH and funds have not yet settled. Suppresses Mark-as-Shipped CTA and shows a 'do not ship yet' banner."
         }
       },
       "required": [

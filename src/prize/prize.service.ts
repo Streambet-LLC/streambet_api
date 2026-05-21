@@ -2966,8 +2966,13 @@ export class PrizeService implements OnModuleInit {
         }
 
         const sessionParams = {
+          // Allow buyers to pay with either a card or US bank account
+          // (ACH). ACH settles in 3-5 business days but carries far
+          // lower processing fees, so we expose both options on the
+          // hosted Stripe Checkout page and let the buyer pick.
           payment_method_types: [
             'card',
+            'us_bank_account',
           ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
           line_items: [
             {
@@ -3139,7 +3144,20 @@ export class PrizeService implements OnModuleInit {
   }
 
   /**
-   * Handle Stripe checkout success and deduct coins if combined payment
+   * Handle Stripe checkout success and deduct coins if combined payment.
+   *
+   * `paymentStatus` controls the terminal order state:
+   *   - `'succeeded'` (default, card flow): mark the order `paid` and
+   *     send the standard buyer/seller purchase emails.
+   *   - `'processing'` (ACH / us_bank_account): the buyer has authorised
+   *     the debit but Stripe is still settling the funds (3-5 business
+   *     days). We still reserve stock, create the redemption and award
+   *     reward coins so the buyer is "as good as paid" from our side,
+   *     but we mark the order `payment_processing` and send a seller
+   *     email that is **painfully clear** about NOT shipping until
+   *     the funds clear. A later `payment_intent.succeeded` webhook
+   *     flips the order to `paid`; `payment_intent.payment_failed`
+   *     reverts everything via `handleAchPaymentFailed`.
    */
   async handlePaymentSuccess(
     orderId: string,
@@ -3147,6 +3165,7 @@ export class PrizeService implements OnModuleInit {
     discountCodeId?: string,
     discountCentsStr?: string,
     stripeSessionId?: string,
+    paymentStatus: 'succeeded' | 'processing' = 'succeeded',
   ): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
 
@@ -3169,7 +3188,9 @@ export class PrizeService implements OnModuleInit {
       }
     }
 
-    if (order.status === 'paid') {
+    // Idempotency: if we've already finalised this order (either fully
+    // paid or already reserved while ACH settles) skip side-effects.
+    if (order.status === 'paid' || order.status === 'payment_processing') {
       return this.mapOrderToDto(order);
     }
 
@@ -3193,8 +3214,9 @@ export class PrizeService implements OnModuleInit {
       }
     }
 
-    // Mark order as paid
-    order.status = 'paid';
+    // Mark order as paid (card) or payment_processing (ACH still settling)
+    order.status =
+      paymentStatus === 'processing' ? 'payment_processing' : 'paid';
     const updated = await this.prizeOrderRepository.save(order);
 
     // Update user shipping address and create redemption
@@ -3250,11 +3272,21 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
-    this.logger.log(`Order ${orderId} marked as paid after Stripe success`);
+    this.logger.log(
+      `Order ${orderId} marked as ${updated.status} after Stripe ${paymentStatus}`,
+    );
 
-    // Send notification emails
+    // Send notification emails. For ACH-processing orders the seller
+    // email contains a prominent DO-NOT-SHIP banner; the buyer email
+    // notes payment is still settling.
+    const isPaymentProcessing = paymentStatus === 'processing';
     try {
-      await this.sendSellerShopPurchaseNotification(updated, prize, order.user);
+      await this.sendSellerShopPurchaseNotification(
+        updated,
+        prize,
+        order.user,
+        { isPaymentProcessing },
+      );
     } catch (error) {
       this.logger.error(
         `Failed to send seller notification email for order ${orderId}:`,
@@ -3263,7 +3295,9 @@ export class PrizeService implements OnModuleInit {
     }
 
     try {
-      await this.sendBuyerShopPurchaseNotification(updated, prize, order.user);
+      await this.sendBuyerShopPurchaseNotification(updated, prize, order.user, {
+        isPaymentProcessing,
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send buyer notification email for order ${orderId}:`,
@@ -3274,10 +3308,150 @@ export class PrizeService implements OnModuleInit {
     return this.mapOrderToDto(updated);
   }
 
+  /**
+   * Called from the `payment_intent.succeeded` webhook when an ACH
+   * debit finally settles for an order that has been sitting in
+   * `payment_processing`. Flips the order to `paid` and notifies the
+   * seller that they may now ship. No-op for orders that are already
+   * `paid` (card flow) or in a non-processing state.
+   */
+  async handleAchPaymentSettled(orderId: string): Promise<void> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status === 'paid') {
+      // Card flow finalises at checkout.session.completed; the
+      // subsequent payment_intent.succeeded is a no-op.
+      return;
+    }
+    if (order.status !== 'payment_processing') {
+      this.logger.warn(
+        `handleAchPaymentSettled: order ${orderId} is in unexpected status "${order.status}"; skipping`,
+      );
+      return;
+    }
+
+    order.status = 'paid';
+    const updated = await this.prizeOrderRepository.save(order);
+    this.logger.log(
+      `Order ${orderId} flipped from payment_processing -> paid (ACH settled)`,
+    );
+
+    // Notify the seller that the ACH debit has cleared and they can
+    // safely ship. We send a lightweight follow-up email (separate
+    // template) rather than re-sending the full purchase email.
+    try {
+      const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+      await this.sendSellerPaymentSettledNotification(
+        updated,
+        prize,
+        order.user,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send ACH-settled seller email for order ${orderId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Called from the `payment_intent.payment_failed` webhook when an
+   * ACH debit bounces (insufficient funds, closed account, etc.) for
+   * an order that was sitting in `payment_processing`. Reverts every
+   * side-effect that `handlePaymentSuccess` applied: restores stock,
+   * refunds any combined-payment CadeCoins, cancels the redemption,
+   * marks the order `payment_failed`, and notifies both the buyer
+   * (via the standard payment-failed email upstream) and the seller.
+   *
+   * Returns `true` if the order was reverted (i.e. it was actually
+   * in `payment_processing`), so callers can decide whether to also
+   * send the buyer-facing failure email.
+   */
+  async handleAchPaymentFailed(orderId: string): Promise<boolean> {
+    const order = await this.getPrizeOrderById(orderId);
+
+    if (order.status !== 'payment_processing') {
+      // Pre-success failures (status === 'buy_attempted' or 'pending')
+      // never decremented stock/created redemption, so there's
+      // nothing to revert here.
+      return false;
+    }
+
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+
+    // Restore stock (the slot we reserved at checkout.session.completed)
+    try {
+      const prizeToUpdate = await this.prizeConfigRepository.findOne({
+        where: { id: order.prizeConfigurationId },
+      });
+      if (prizeToUpdate) {
+        prizeToUpdate.stock = (prizeToUpdate.stock || 0) + 1;
+        await this.prizeConfigRepository.save(prizeToUpdate);
+        this.logger.log(
+          `Stock restored for prize ${order.prizeConfigurationId} (ACH failure). New stock: ${prizeToUpdate.stock}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to restore stock for prize ${order.prizeConfigurationId}: ${error}`,
+      );
+    }
+
+    // Refund any combined-payment CadeCoins that were deducted up-front
+    if (order.paymentMethod === 'combined' && order.coinsDeducted > 0) {
+      try {
+        await this.walletService.addCadeCoins(
+          order.userId,
+          order.coinsDeducted,
+          `Refund: ACH payment failed for ${prize.name}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to refund CadeCoins for order ${orderId} after ACH failure: ${error}`,
+        );
+      }
+    }
+
+    // Delete the redemption row we created at checkout.session.completed.
+    // The ShippingStatus enum has no CANCELLED value, so we just remove
+    // the row entirely; ops can rebuild it from the prize_order audit
+    // trail if the buyer ever pays via another method.
+    try {
+      await this.prizeRedemptionRepository.delete({ prizeOrderId: order.id });
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete redemption for order ${orderId}: ${error}`,
+      );
+    }
+
+    order.status = 'payment_failed';
+    const updated = await this.prizeOrderRepository.save(order);
+    this.logger.log(
+      `Order ${orderId} marked as payment_failed after ACH bounce`,
+    );
+
+    // Notify the seller that the sale fell through.
+    try {
+      await this.sendSellerPaymentFailedNotification(
+        updated,
+        prize,
+        order.user,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send ACH-failed seller email for order ${orderId}:`,
+        error,
+      );
+    }
+
+    return true;
+  }
+
   private async sendSellerShopPurchaseNotification(
     order: PrizeOrder,
     prize: PrizeConfiguration,
     buyer: User,
+    options: { isPaymentProcessing?: boolean } = {},
   ): Promise<void> {
     try {
       // Determine recipient: admin for CardCade items, seller for seller-owned items
@@ -3363,6 +3537,7 @@ export class PrizeService implements OnModuleInit {
             shippingZipCode: isInPerson ? '' : shipping.zipCode || '',
             shippingCountry: isInPerson ? '' : shipping.country || '',
             markShippedUrl,
+            isPaymentProcessing: options.isPaymentProcessing === true,
           },
         },
         'seller_shop_purchase',
@@ -3382,6 +3557,7 @@ export class PrizeService implements OnModuleInit {
     order: PrizeOrder,
     prize: PrizeConfiguration,
     buyer: User,
+    options: { isPaymentProcessing?: boolean } = {},
   ): Promise<void> {
     if (!buyer.email) {
       this.logger.warn(`Buyer ${buyer.id} has no email for order ${order.id}`);
@@ -3421,6 +3597,7 @@ export class PrizeService implements OnModuleInit {
               day: 'numeric',
             }),
             shopUrl: `${frontendUrl}/shop`,
+            isPaymentProcessing: options.isPaymentProcessing === true,
           },
         },
         'buyer_shop_purchase',
@@ -3431,6 +3608,132 @@ export class PrizeService implements OnModuleInit {
     } catch (emailError) {
       this.logger.error(
         `Failed to send buyer shop purchase email for order ${order.id}:`,
+        emailError,
+      );
+    }
+  }
+
+  /**
+   * Notify seller/admin that an ACH payment has fully settled and the
+   * order is now safe to ship.
+   */
+  private async sendSellerPaymentSettledNotification(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    buyer: User,
+  ): Promise<void> {
+    try {
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+      const isInPerson = prize.isInPerson === true;
+
+      let recipientEmail: string;
+      let recipientName: string;
+      let markShippedUrl: string | undefined;
+
+      if (!prize.createdBy) {
+        recipientEmail =
+          this.configService.get<string>('ADMIN_EMAIL') ||
+          'contact@cardcade.fun';
+        recipientName = 'CardCade Admin';
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
+      } else {
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (!seller || !seller.email) {
+          this.logger.warn(
+            `Seller ${prize.createdBy} not found or has no email for settled order ${order.id}`,
+          );
+          return;
+        }
+        recipientEmail = seller.email;
+        recipientName = seller.name || seller.username;
+        markShippedUrl = isInPerson
+          ? undefined
+          : `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
+      }
+
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [recipientEmail],
+          subject: `Payment Settled — Safe to Ship: ${prize.name}`,
+          params: {
+            sellerName: recipientName,
+            itemName: prize.name,
+            buyerName: buyer.name || buyer.username,
+            orderId: order.id,
+            markShippedUrl,
+          },
+        },
+        'seller_payment_settled',
+      );
+      this.logger.log(
+        `Payment-settled notification sent to ${recipientEmail} for order ${order.id}`,
+      );
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send payment-settled email for order ${order.id}:`,
+        emailError,
+      );
+    }
+  }
+
+  /**
+   * Notify seller/admin that an ACH payment failed and the order has been
+   * reverted (stock restored, redemption removed).
+   */
+  private async sendSellerPaymentFailedNotification(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    buyer: User,
+  ): Promise<void> {
+    try {
+      let recipientEmail: string;
+      let recipientName: string;
+
+      if (!prize.createdBy) {
+        recipientEmail =
+          this.configService.get<string>('ADMIN_EMAIL') ||
+          'contact@cardcade.fun';
+        recipientName = 'CardCade Admin';
+      } else {
+        const seller = await this.userRepository.findOne({
+          where: { id: prize.createdBy },
+        });
+        if (!seller || !seller.email) {
+          this.logger.warn(
+            `Seller ${prize.createdBy} not found or has no email for failed order ${order.id}`,
+          );
+          return;
+        }
+        recipientEmail = seller.email;
+        recipientName = seller.name || seller.username;
+      }
+
+      await this.emailsService.sendEmailSMTP(
+        {
+          toAddress: [recipientEmail],
+          subject: `Payment Failed — Order Cancelled: ${prize.name}`,
+          params: {
+            sellerName: recipientName,
+            itemName: prize.name,
+            buyerName: buyer.name || buyer.username,
+            orderId: order.id,
+          },
+        },
+        'seller_payment_failed',
+      );
+      this.logger.log(
+        `Payment-failed notification sent to ${recipientEmail} for order ${order.id}`,
+      );
+    } catch (emailError) {
+      this.logger.error(
+        `Failed to send payment-failed email for order ${order.id}:`,
         emailError,
       );
     }
@@ -4135,6 +4438,8 @@ export class PrizeService implements OnModuleInit {
       | 'buy_attempted'
       | 'paid'
       | 'processing'
+      | 'payment_processing'
+      | 'payment_failed'
       | 'shipped'
       | 'delivered'
       | 'cancelled',
@@ -4418,8 +4723,10 @@ export class PrizeService implements OnModuleInit {
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
     const acceptOfferSessionParams = {
+      // Card + ACH (us_bank_account). See note on the buy-now flow above.
       payment_method_types: [
         'card',
+        'us_bank_account',
       ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
@@ -4605,8 +4912,10 @@ export class PrizeService implements OnModuleInit {
 
     // Create Stripe checkout session
     const counterOfferSessionParams = {
+      // Card + ACH (us_bank_account). See note on the buy-now flow above.
       payment_method_types: [
         'card',
+        'us_bank_account',
       ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
