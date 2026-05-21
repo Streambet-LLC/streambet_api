@@ -239,7 +239,11 @@ export class AuctionsPaymentsService {
     const session = await this.stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId,
-      payment_method_types: ['card'],
+      // Allow card or ACH (us_bank_account) on the retry page so the
+      // winner can pick whichever is most convenient. ACH is cheaper
+      // but settles in 3-5 business days, so the auction won't be
+      // marked paid until Stripe confirms via webhook.
+      payment_method_types: ['card', 'us_bank_account'],
       line_items: [
         {
           quantity: 1,

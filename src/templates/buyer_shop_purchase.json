@@ -44,6 +44,10 @@
         "shopUrl": {
           "type": "string",
           "description": "URL to the shop page"
+        },
+        "isPaymentProcessing": {
+          "type": "boolean",
+          "description": "True when the buyer paid via ACH and funds have not yet settled."
         }
       },
       "required": [

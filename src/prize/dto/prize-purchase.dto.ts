@@ -151,6 +151,8 @@ export class PrizeOrderResponseDto {
     enum: [
       'pending',
       'buy_attempted',
+      'payment_processing',
+      'payment_failed',
       'paid',
       'processing',
       'shipped',
@@ -165,6 +167,8 @@ export class PrizeOrderResponseDto {
   status:
     | 'pending'
     | 'buy_attempted'
+    | 'payment_processing'
+    | 'payment_failed'
     | 'paid'
     | 'processing'
     | 'shipped'

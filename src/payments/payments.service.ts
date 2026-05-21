@@ -190,9 +190,12 @@ export class PaymentsService {
       }
     }
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session. We accept both card and ACH
+    // (us_bank_account) so buyers can choose the cheaper bank-transfer
+    // path; ACH takes 3-5 business days but the deposit only credits
+    // coins after Stripe confirms success via webhook.
     const session = await this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'us_bank_account'],
       line_items: [
         {
           price_data: {
@@ -315,6 +318,22 @@ export class PaymentsService {
         await this.handlePaymentIntentFailed(event.data.object);
         break;
 
+      case 'payment_intent.succeeded':
+        await this.handlePaymentIntentSucceeded(event.data.object);
+        break;
+
+      case 'checkout.session.async_payment_succeeded':
+        // Canonical Stripe event for delayed payment methods (ACH) when
+        // funds finally settle. Reuses the same finalize path as
+        // payment_intent.succeeded so the order flips payment_processing
+        // → paid even if PI events arrive out of order.
+        await this.handleAsyncPaymentSucceeded(event.data.object);
+        break;
+
+      case 'checkout.session.async_payment_failed':
+        await this.handleAsyncPaymentFailed(event.data.object);
+        break;
+
       case 'account.updated':
         await this.handleAccountUpdated(event.data.object);
         break;
@@ -368,7 +387,7 @@ export class PaymentsService {
 
         if (order) {
           this.logger.log(
-            `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed (status=${order.status})`,
+            `Stripe webhook: confirming prize order ${orderId} via checkout.session.completed (order.status=${order.status}, session.payment_status=${session.payment_status}, session.id=${session.id})`,
           );
           const transactionSubtotalCents = session.metadata
             ?.transactionSubtotalCents
@@ -376,12 +395,18 @@ export class PaymentsService {
             : undefined;
           const discountCodeId = session.metadata?.discountCodeId || undefined;
           const discountCents = session.metadata?.discountCents || undefined;
+          // ACH payments leave session.payment_status='unpaid' (or
+          // 'processing') at checkout.session.completed time — funds
+          // settle 3–5 business days later via payment_intent.succeeded.
+          const paymentStatus: 'succeeded' | 'processing' =
+            session.payment_status === 'paid' ? 'succeeded' : 'processing';
           await this.prizeService.handlePaymentSuccess(
             orderId,
             transactionSubtotalCents,
             discountCodeId,
             discountCents,
             session.id,
+            paymentStatus,
           );
           this.logger.log(
             `Stripe webhook: prize order ${orderId} successfully confirmed`,
@@ -532,6 +557,20 @@ export class PaymentsService {
       `Stripe webhook: payment failed for order ${order.id} (payment intent ${paymentIntent.id})`,
     );
 
+    // If this is an ACH failure on an order that was already marked
+    // payment_processing, fully revert the order (restore stock, refund
+    // any combined CadeCoins, delete the redemption row) and notify the
+    // seller before sending the buyer email.
+    if (order.status === 'payment_processing') {
+      try {
+        await this.prizeService.handleAchPaymentFailed(order.id);
+      } catch (revertErr) {
+        this.logger.error(
+          `Failed to revert ACH-failed order ${order.id}: ${revertErr}`,
+        );
+      }
+    }
+
     // Notify buyer via email — do NOT change stock or remove item
     if (order.user?.email) {
       const itemName = order.prizeConfiguration?.name || 'your item';
@@ -556,6 +595,159 @@ export class PaymentsService {
       } catch (emailErr) {
         this.logger.error(
           `Failed to send payment failure email for order ${order.id}: ${emailErr}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle successful payment intent — ACH settlement. For card payments
+   * Stripe also fires this, but the order is already in 'paid' state and
+   * handleAchPaymentSettled is a no-op for any non-payment_processing
+   * order.
+   */
+  private async handlePaymentIntentSucceeded(
+    paymentIntent: Stripe.PaymentIntent,
+  ) {
+    // Find ALL prize orders attached to this payment intent. A single-item
+    // checkout produces 1 order; a cart checkout produces N orders that
+    // all share the same payment_intent.
+    let orders: PrizeOrder[] = [];
+    try {
+      orders = await this.prizeOrderRepository.find({
+        where: { stripePaymentIntentId: paymentIntent.id },
+      });
+    } catch {
+      // ignore
+    }
+    if (orders.length === 0 && paymentIntent.metadata?.orderId) {
+      const o = await this.prizeOrderRepository.findOne({
+        where: { id: paymentIntent.metadata.orderId },
+      });
+      if (o) orders = [o];
+    }
+    if (orders.length === 0) {
+      // Not a prize/cart payment intent (e.g. coin package, subscription).
+      return;
+    }
+
+    // Skip if none are in payment_processing — card flows already
+    // finalized at checkout.session.completed time.
+    const pending = orders.filter((o) => o.status === 'payment_processing');
+    if (pending.length === 0) return;
+
+    // Decide cart vs single. Cart orders share a stripeSessionId AND the
+    // session metadata.type === 'cart_checkout'.
+    const sessionId = pending[0].stripeSessionId;
+    let isCart = false;
+    if (sessionId && pending.length > 1) {
+      isCart = true;
+    } else if (sessionId) {
+      try {
+        const session =
+          await this.stripe.checkout.sessions.retrieve(sessionId);
+        isCart = session.metadata?.type === 'cart_checkout';
+      } catch (err) {
+        this.logger.warn(
+          `handlePaymentIntentSucceeded: could not retrieve session ${sessionId} to detect cart: ${err}`,
+        );
+      }
+    }
+
+    try {
+      if (isCart && sessionId) {
+        await this.cartService.handleCartAchSettled(sessionId);
+        this.logger.log(
+          `Stripe webhook: ACH settled for cart session ${sessionId} (payment intent ${paymentIntent.id})`,
+        );
+      } else {
+        for (const order of pending) {
+          await this.prizeService.handleAchPaymentSettled(order.id);
+        }
+        this.logger.log(
+          `Stripe webhook: ACH settled for ${pending.length} order(s) (payment intent ${paymentIntent.id})`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `Stripe webhook: failed to settle ACH for payment intent ${paymentIntent.id}: ${err}`,
+      );
+    }
+  }
+
+  /**
+   * Handle checkout.session.async_payment_succeeded — canonical event for
+   * delayed payment methods (ACH) when funds settle. Functionally
+   * equivalent to payment_intent.succeeded for our purposes, but we
+   * dispatch through the same code paths to be safe against duplicate
+   * webhooks (idempotency is enforced inside handleAchPaymentSettled /
+   * handleCartAchSettled).
+   */
+  private async handleAsyncPaymentSucceeded(
+    session: Stripe.Checkout.Session,
+  ) {
+    this.logger.log(
+      `Stripe webhook: async_payment_succeeded session=${session.id} payment_status=${session.payment_status}`,
+    );
+
+    // Cart checkout
+    if (session.metadata?.type === 'cart_checkout') {
+      try {
+        await this.cartService.handleCartAchSettled(session.id);
+      } catch (err) {
+        this.logger.error(
+          `async_payment_succeeded: failed to settle cart session ${session.id}: ${err}`,
+        );
+      }
+      return;
+    }
+
+    // Single prize order
+    if (session.metadata?.orderId) {
+      try {
+        await this.prizeService.handleAchPaymentSettled(
+          session.metadata.orderId,
+        );
+      } catch (err) {
+        this.logger.error(
+          `async_payment_succeeded: failed to settle order ${session.metadata.orderId}: ${err}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle checkout.session.async_payment_failed — ACH debit bounced.
+   * Reverts the order (stock, redemption, CadeCoins refund) and notifies
+   * the seller.
+   */
+  private async handleAsyncPaymentFailed(session: Stripe.Checkout.Session) {
+    this.logger.warn(
+      `Stripe webhook: async_payment_failed session=${session.id} payment_status=${session.payment_status}`,
+    );
+
+    if (session.metadata?.type === 'cart_checkout' && session.metadata.orderIds) {
+      const orderIds = session.metadata.orderIds.split(',');
+      for (const orderId of orderIds) {
+        try {
+          await this.prizeService.handleAchPaymentFailed(orderId);
+        } catch (err) {
+          this.logger.error(
+            `async_payment_failed: failed to revert order ${orderId}: ${err}`,
+          );
+        }
+      }
+      return;
+    }
+
+    if (session.metadata?.orderId) {
+      try {
+        await this.prizeService.handleAchPaymentFailed(
+          session.metadata.orderId,
+        );
+      } catch (err) {
+        this.logger.error(
+          `async_payment_failed: failed to revert order ${session.metadata.orderId}: ${err}`,
         );
       }
     }

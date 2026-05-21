@@ -106,13 +106,15 @@ export class PrizeOrder extends BaseEntity {
 
   @Column({
     type: 'varchar',
-    length: 20,
+    length: 25,
     default: 'pending',
     name: 'status',
   })
   status:
     | 'pending'
     | 'buy_attempted'
+    | 'payment_processing'
+    | 'payment_failed'
     | 'paid'
     | 'processing'
     | 'shipped'

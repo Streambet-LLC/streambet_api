@@ -890,23 +890,37 @@ export class CartService {
 
     const orderIds = metadata.orderIds.split(',');
     const userId = metadata.userId;
+    // ACH leaves session.payment_status='unpaid' or 'processing' until
+    // funds clear (3–5 business days). We finalize seller transfers and
+    // CadeCoin rewards only after payment_intent.succeeded fires.
+    const isPaymentProcessing = session.payment_status !== 'paid';
+    const orderStatus: 'paid' | 'payment_processing' = isPaymentProcessing
+      ? 'payment_processing'
+      : 'paid';
 
-    // Mark all orders as paid
+    // Mark all orders
     for (const orderId of orderIds) {
       const order = await this.prizeOrderRepository.findOne({
         where: { id: orderId },
         relations: ['prizeConfiguration'],
       });
-      if (!order || order.status === 'paid') continue;
+      if (
+        !order ||
+        order.status === 'paid' ||
+        order.status === 'payment_processing'
+      ) {
+        continue;
+      }
 
-      order.status = 'paid';
+      order.status = orderStatus;
       order.stripePaymentIntentId =
         typeof session.payment_intent === 'string'
           ? session.payment_intent
           : session.payment_intent?.id;
       await this.prizeOrderRepository.save(order);
 
-      // Decrement stock
+      // Decrement stock immediately so the item is reserved even while
+      // ACH is settling — it will be restored if ACH fails.
       await this.prizeConfigRepository.decrement(
         { id: order.prizeConfigurationId },
         'stock',
@@ -962,8 +976,10 @@ export class CartService {
       );
     }
 
-    // Process transfers to sellers
-    if (metadata.transferInstructions) {
+    // Process transfers to sellers — only when funds have actually
+    // settled. For ACH, transfers are deferred until
+    // handleCartAchSettled() is called from payment_intent.succeeded.
+    if (metadata.transferInstructions && !isPaymentProcessing) {
       try {
         const transfers = JSON.parse(metadata.transferInstructions) as Array<{
           orderId: string;
@@ -1006,10 +1022,11 @@ export class CartService {
       }
     }
 
-    // Award CadeCoins reward
+    // Award CadeCoins reward — only after settlement so an ACH failure
+    // doesn't leave the buyer with free reward coins.
     const totalCents = session.amount_total || 0;
     const rewardCoins = calculateRewardCadeCoinsFromCents(totalCents);
-    if (rewardCoins > 0) {
+    if (rewardCoins > 0 && !isPaymentProcessing) {
       try {
         await this.walletsService.addCadeCoins(
           userId,
@@ -1046,6 +1063,98 @@ export class CartService {
         zipCode: addr.zipCode || null,
         country: addr.country || null,
       });
+    }
+  }
+
+  /**
+   * Called from payments.service.ts:handlePaymentIntentSucceeded when an
+   * ACH cart-checkout payment finally settles. Flips orders from
+   * payment_processing → paid, runs deferred seller transfers, awards
+   * CadeCoins, and emits seller "safe to ship" notifications.
+   */
+  async handleCartAchSettled(stripeSessionId: string): Promise<void> {
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await this.stripe.checkout.sessions.retrieve(stripeSessionId);
+    } catch (err) {
+      this.logger.error(
+        `handleCartAchSettled: failed to retrieve session ${stripeSessionId}: ${err}`,
+      );
+      return;
+    }
+
+    const metadata = session.metadata;
+    if (!metadata || metadata.type !== 'cart_checkout') return;
+
+    const orderIds = metadata.orderIds.split(',');
+    const userId = metadata.userId;
+
+    // Flip orders to paid
+    for (const orderId of orderIds) {
+      const order = await this.prizeOrderRepository.findOne({
+        where: { id: orderId },
+      });
+      if (!order || order.status !== 'payment_processing') continue;
+      order.status = 'paid';
+      await this.prizeOrderRepository.save(order);
+    }
+
+    // Deferred seller transfers
+    if (metadata.transferInstructions) {
+      try {
+        const transfers = JSON.parse(metadata.transferInstructions) as Array<{
+          orderId: string;
+          sellerId: string;
+          stripeAccountId: string;
+          amountCents: number;
+        }>;
+        const paymentIntentId =
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : session.payment_intent?.id;
+        for (const transfer of transfers) {
+          try {
+            const chargeId = paymentIntentId
+              ? ((await this.stripe.paymentIntents.retrieve(paymentIntentId))
+                  .latest_charge as string)
+              : undefined;
+            await this.stripe.transfers.create({
+              amount: transfer.amountCents,
+              currency: 'usd',
+              destination: transfer.stripeAccountId,
+              source_transaction: chargeId,
+              metadata: {
+                orderId: transfer.orderId,
+                sellerId: transfer.sellerId,
+                type: 'cart_seller_payout',
+              },
+            });
+          } catch (err) {
+            this.logger.error(
+              `Failed deferred transfer to seller ${transfer.sellerId}: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+        }
+      } catch (err) {
+        this.logger.error(
+          `Failed to parse deferred transfer instructions: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    // Deferred CadeCoins reward
+    const totalCents = session.amount_total || 0;
+    const rewardCoins = calculateRewardCadeCoinsFromCents(totalCents);
+    if (rewardCoins > 0) {
+      try {
+        await this.walletsService.addCadeCoins(
+          userId,
+          rewardCoins,
+          `CadeCoins reward for cart purchase (ACH settled)`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to award CadeCoins on ACH settle: ${err}`);
+      }
     }
   }
 

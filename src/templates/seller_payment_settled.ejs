@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Purchase Successful! 🎉</title>
+    <title>Payment Settled — Safe to Ship ✅</title>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
@@ -26,8 +26,8 @@
             <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:30px;">
               <tr>
                 <td align="center">
-                  <h1 style="font-size:28px;font-weight:700;color:#bdff00;margin:0;font-family:'Inter',sans-serif;">✅ Purchase Successful!</h1>
-                  <p style="font-size:16px;color:#FFFFFF;opacity:0.7;margin-top:8px;font-family:'Inter',sans-serif;">Thank you for your order</p>
+                  <h1 style="font-size:28px;font-weight:700;color:#bdff00;margin:0;font-family:'Inter',sans-serif;">✅ Payment Settled — Safe to Ship</h1>
+                  <p style="font-size:16px;color:#FFFFFF;opacity:0.7;margin-top:8px;font-family:'Inter',sans-serif;">The ACH transfer has cleared</p>
                 </td>
               </tr>
             </table>
@@ -36,40 +36,27 @@
             <div style="background-color:#181818;border-radius:16px;border:1px solid #2C2C2C;padding:40px;max-width:700px;width:100%;box-sizing:border-box;margin:0 auto;">
               <div style="max-width:700px;margin:0 auto;color:#FFFFFF;">
                 <p style="font-size:18px;line-height:1.6;margin-bottom:10px;opacity:0.7;font-family:'Inter',sans-serif;text-transform:capitalize;color:#FFFFFF;">
-                  Hi <%= params.buyerName %>,
+                  Hi <%= params.sellerName %>,
                 </p>
                 <p style="font-size:18px;line-height:1.6;margin-bottom:24px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                  Your purchase has been confirmed! Here are your order details:
+                  Good news! The buyer's ACH bank transfer for <b><%= params.itemName %></b> has fully settled. The order is now <b>safe to ship</b>.
                 </p>
-
-                <% if (params.isPaymentProcessing) { %>
-                <div style="background-color:#3a1a00;border:2px solid #ff7a00;border-radius:12px;padding:20px 24px;margin:0 0 28px 0;">
-                  <p style="margin:0 0 10px 0;font-size:18px;font-weight:700;color:#ff7a00;font-family:'Inter',sans-serif;">⏳ Payment Processing</p>
-                  <p style="margin:0;font-size:16px;line-height:1.6;color:#FFFFFF;font-family:'Inter',sans-serif;">
-                    You paid via <b>ACH bank transfer</b>, which typically takes <b>3–5 business days to settle</b>. We'll email you the moment it clears and the seller is cleared to ship.
-                  </p>
-                </div>
-                <% } %>
 
                 <!-- Order Details -->
                 <div style="background-color:#222222;border-left:4px solid #bdff00;padding:16px 20px;margin:0 0 28px 0;border-radius:8px;">
                   <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Item:</span> <span style="opacity:0.8;"><%= params.itemName %></span></p>
-                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Seller:</span> <span style="opacity:0.8;"><%= params.sellerName %></span></p>
-                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Total Paid:</span> <span style="opacity:0.8;">$<%= params.amount %></span></p>
+                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Buyer:</span> <span style="opacity:0.8;"><%= params.buyerName %></span></p>
                   <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Order ID:</span> <span style="opacity:0.8;"><%= params.orderId %></span></p>
-                  <p style="margin:8px 0;font-size:16px;font-family:'Inter',sans-serif;color:#FFFFFF;"><span style="font-weight:600;color:#FFFFFF;">Date:</span> <span style="opacity:0.8;"><%= params.purchaseDate %></span></p>
                 </div>
 
                 <p style="font-size:18px;line-height:1.6;margin-bottom:24px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
-                  <% if (params.isPaymentProcessing) { %>
-                  Once your payment settles, the seller will be notified to ship your item. You'll receive another email with tracking information once it's on its way.
-                  <% } else { %>
-                  The seller has been notified and will be shipping your item soon. You'll receive another email with tracking information once it's on its way.
-                  <% } %>
+                  Please ship the item and add tracking information so the buyer can follow their delivery.
                 </p>
 
                 <!-- CTA Button -->
-                <a href="<%= params.shopUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:20px !important;margin-bottom:20px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Continue Shopping</a>
+                <% if (params.markShippedUrl) { %>
+                <a href="<%= params.markShippedUrl %>" style="padding:14px 24px;font-size:15px;background-color:#bdff00;color:#000;font-weight:600;text-decoration:none;border-radius:8px;max-width:300px;margin:auto;margin-top:20px !important;margin-bottom:20px !important;display:block;text-align:center;font-family:'Inter',sans-serif;">Mark as Shipped</a>
+                <% } %>
 
                 <p style="margin-top:24px;font-size:18px;line-height:1.6;margin-bottom:30px;opacity:0.7;font-family:'Inter',sans-serif;color:#FFFFFF;">
                   Cheers,<br /><b style="font-size:20px;">The CardCade Team</b>
