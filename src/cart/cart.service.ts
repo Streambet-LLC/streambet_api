@@ -26,6 +26,7 @@ import { PrizeSaleType } from '../prize/enums/prize-sale-type.enum';
 import {
   calculateBuyerItemFeeCents,
   calculateSellerFeeCents,
+  getBuyerFeePercentForStripeMethod,
   getEffectiveSellerFeePercent,
   calculateRewardCadeCoinsFromCents,
   CADECOINS_PER_USD,
@@ -490,11 +491,19 @@ export class CartService {
               : SHIPPING_FEE;
           return sum + Math.round(perItemShippingUsd * 100) * item.quantity;
         }, 0);
+        // Buyer fee rate depends on the chosen Stripe payment method.
+        // For seller items (everything except the CardCade group) we
+        // use the rate the buyer locked in for this checkout. CardCade
+        // items charge no buyer fee.
+        const checkoutBuyerFeePercent = getBuyerFeePercentForStripeMethod(
+          dto.stripePaymentMethod,
+        );
         const buyerFeeCents = isCardCade
           ? 0
           : calculateBuyerItemFeeCents(
               itemSubtotalCents + shippingCents,
               shippingCents,
+              checkoutBuyerFeePercent,
             );
 
         buyableGroups.push({
@@ -821,8 +830,24 @@ export class CartService {
 
     let stripeSession: Stripe.Checkout.Session;
     try {
+      // If we got this far we always have USD items to charge — the
+      // all-coins branch early-returned above. Require & restrict the
+      // hosted Checkout to the single payment method the buyer chose
+      // so the fee tier they were quoted matches what Stripe actually
+      // charges (and a tampered client can't pay 0.8% by card).
+      if (
+        dto.stripePaymentMethod !== 'card' &&
+        dto.stripePaymentMethod !== 'us_bank_account'
+      ) {
+        throw new BadRequestException(
+          'stripePaymentMethod ("card" or "us_bank_account") is required when the cart contains USD items.',
+        );
+      }
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'payment',
+        payment_method_types: [
+          dto.stripePaymentMethod,
+        ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
         line_items: lineItems,
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -871,6 +896,7 @@ export class CartService {
     for (const orderId of cartOrderIds) {
       await this.prizeOrderRepository.update(orderId, {
         stripeSessionId: stripeSession.id,
+        stripePaymentMethod: dto.stripePaymentMethod,
         status: 'buy_attempted',
       });
     }

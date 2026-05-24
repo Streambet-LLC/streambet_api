@@ -100,6 +100,15 @@ export class CartCheckoutDto {
   @IsOptional()
   @IsString()
   discountCode?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Stripe Checkout payment method the buyer chose. Required when the cart contains any USD items so the server can restrict the hosted Checkout to that single method and apply the correct buyer fee tier (card = 3%, us_bank_account = 0.8%).',
+    enum: ['card', 'us_bank_account'],
+  })
+  @IsOptional()
+  @IsEnum(['card', 'us_bank_account'])
+  stripePaymentMethod?: 'card' | 'us_bank_account';
 }
 
 export class ValidateDiscountCodeDto {
