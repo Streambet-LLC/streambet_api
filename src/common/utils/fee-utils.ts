@@ -1,4 +1,44 @@
+/**
+ * Legacy single-rate buyer fee. Kept for any callers that haven't been
+ * updated to the Card/ACH split. New code should use
+ * {@link BUYER_CARD_FEE_PERCENT} / {@link BUYER_ACH_FEE_PERCENT} via
+ * {@link getBuyerFeePercentForStripeMethod}.
+ */
 export const BUYER_PROCESSING_FEE_PERCENT = 3;
+
+/**
+ * Buyer service fee tiers, split by Stripe payment method. Card pays a
+ * higher rate because Stripe's interchange + scheme fees are ~2.9% +
+ * $0.30; ACH (us_bank_account) is a flat 0.8% capped at $5 on Stripe's
+ * side. We charge the buyer slightly above cost so the fee covers
+ * Stripe's processing on the item subtotal only (shipping is excluded
+ * via {@link calculateBuyerItemFeeCents}).
+ *
+ * Values are PERCENT (not basis points) so they read naturally in code.
+ */
+export const BUYER_CARD_FEE_PERCENT = 3;
+export const BUYER_ACH_FEE_PERCENT = 0.8;
+
+/**
+ * Allowed Stripe Checkout payment_method_types we offer to buyers for
+ * non-coin-pack flows. Storing the raw Stripe identifier keeps the
+ * mapping into `payment_method_types` trivial server-side.
+ */
+export type StripePaymentMethod = 'card' | 'us_bank_account';
+
+/**
+ * Resolve the buyer fee percentage for a chosen Stripe payment method.
+ * Falls back to the card rate when the caller passes `null`/`undefined`
+ * so legacy rows (created before the column existed) charge the safer
+ * higher rate rather than under-billing.
+ */
+export function getBuyerFeePercentForStripeMethod(
+  method?: StripePaymentMethod | null,
+): number {
+  if (method === 'us_bank_account') return BUYER_ACH_FEE_PERCENT;
+  return BUYER_CARD_FEE_PERCENT;
+}
+
 export const SELLER_FEE_DEFAULT_PERCENT = 2;
 export const SELLER_FEE_MIN_PERCENT = 2;
 export const SELLER_FEE_MAX_PERCENT = 2;

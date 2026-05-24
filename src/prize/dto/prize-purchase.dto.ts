@@ -99,6 +99,16 @@ export class CreatePrizeOrderDto {
   @IsOptional()
   @IsString()
   discountCode?: string;
+
+  @ApiProperty({
+    description:
+      'Stripe Checkout payment method the buyer chose. Required when paymentMethod is `usd` or `combined` so the server can both restrict the hosted Checkout to that single method and apply the correct buyer fee tier (card = 3%, us_bank_account = 0.8%).',
+    enum: ['card', 'us_bank_account'],
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(['card', 'us_bank_account'])
+  stripePaymentMethod?: 'card' | 'us_bank_account';
 }
 
 export class PrizeOrderResponseDto {
@@ -140,6 +150,14 @@ export class PrizeOrderResponseDto {
 
   @ApiProperty({ nullable: true })
   stripeSessionId?: string;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Stripe payment method locked in for this order: `card` or `us_bank_account`. Null for coin-only or crypto orders.',
+    enum: ['card', 'us_bank_account'],
+  })
+  stripePaymentMethod?: 'card' | 'us_bank_account' | null;
 
   @ApiProperty({
     nullable: true,
@@ -230,6 +248,14 @@ export class MakeOfferDto {
   @IsOptional()
   @IsString()
   offerNotes?: string;
+
+  @ApiProperty({
+    description:
+      'Stripe Checkout payment method the buyer agrees to pay with if the offer is accepted. Locked in at submission so the buyer fee can be computed at the rate they were quoted (card = 3%, us_bank_account = 0.8%).',
+    enum: ['card', 'us_bank_account'],
+  })
+  @IsEnum(['card', 'us_bank_account'])
+  stripePaymentMethod: 'card' | 'us_bank_account';
 }
 
 export class CounterOfferDto {

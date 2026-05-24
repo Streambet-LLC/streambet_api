@@ -1814,6 +1814,7 @@ export class AuctionsService implements OnModuleInit {
     callerUserId: string;
     auctionId: string;
     returnUrl: string;
+    stripePaymentMethod: 'card' | 'us_bank_account';
   }): Promise<{ url: string }> {
     const info = await this.getRetryPaymentInfo(
       params.callerUserId,
@@ -1832,6 +1833,7 @@ export class AuctionsService implements OnModuleInit {
         amountUsd: info.totalDueUsd,
         itemName: info.itemName,
         returnUrl: params.returnUrl,
+        stripePaymentMethod: params.stripePaymentMethod,
       },
     );
 
