@@ -7,6 +7,7 @@ import {
   Request,
   UseGuards,
   ForbiddenException,
+  BadRequestException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import {
@@ -180,13 +181,22 @@ export class AuctionsController {
   @UseGuards(JwtAuthGuard)
   async createRetryCheckout(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { returnUrl: string },
+    @Body() body: { returnUrl: string; stripePaymentMethod: 'card' | 'us_bank_account' },
     @Request() req: RequestWithUser,
   ): Promise<{ url: string }> {
+    if (
+      body.stripePaymentMethod !== 'card' &&
+      body.stripePaymentMethod !== 'us_bank_account'
+    ) {
+      throw new BadRequestException(
+        'stripePaymentMethod ("card" or "us_bank_account") is required.',
+      );
+    }
     return this.auctionsService.createRetryCheckout({
       callerUserId: req.user.id,
       auctionId: id,
       returnUrl: body.returnUrl,
+      stripePaymentMethod: body.stripePaymentMethod,
     });
   }
 }

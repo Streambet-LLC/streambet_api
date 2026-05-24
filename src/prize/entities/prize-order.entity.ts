@@ -104,6 +104,23 @@ export class PrizeOrder extends BaseEntity {
   })
   stripePaymentIntentId?: string;
 
+  /**
+   * Stripe Checkout payment_method_types the buyer locked in when this
+   * order was created (buy-now) or when their offer was submitted.
+   * `null` for coin-only or crypto orders. Used at offer-acceptance
+   * time to compute the buyer fee at the correct rate (card = 3%,
+   * us_bank_account = 0.8%) and to restrict the hosted Checkout
+   * session to that single method so the rate the buyer was quoted
+   * is the rate they're actually charged.
+   */
+  @Column({
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+    name: 'stripe_payment_method',
+  })
+  stripePaymentMethod?: 'card' | 'us_bank_account' | null;
+
   @Column({
     type: 'varchar',
     length: 25,

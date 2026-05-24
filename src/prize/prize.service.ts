@@ -71,6 +71,7 @@ import {
   calculateBuyerItemFeeCents,
   calculateRewardCadeCoinsFromCents,
   calculateSellerFeeCents,
+  getBuyerFeePercentForStripeMethod,
   getEffectiveSellerFeePercent,
 } from 'src/common/utils/fee-utils';
 
@@ -2910,6 +2911,21 @@ export class PrizeService implements OnModuleInit {
     ) {
       // Create Stripe checkout session for USD portion
       try {
+        // Lock in the buyer's chosen Stripe payment method. Required
+        // for USD/combined because card and ACH have different fee
+        // tiers (3% vs 0.8%) — falling back silently would let a
+        // tampered client pay the higher fee at the lower rate.
+        const chosenStripeMethod: 'card' | 'us_bank_account' =
+          dto.stripePaymentMethod === 'us_bank_account'
+            ? 'us_bank_account'
+            : dto.stripePaymentMethod === 'card'
+              ? 'card'
+              : (() => {
+                  throw new BadRequestException(
+                    'stripePaymentMethod ("card" or "us_bank_account") is required for USD or combined payments.',
+                  );
+                })();
+
         const subtotalCents = Math.round(dto.usdAmount * 100);
 
         // Load seller to check for Stripe Connect account and application fee
@@ -2921,10 +2937,14 @@ export class PrizeService implements OnModuleInit {
           : null;
 
         // Buyer fee applies to item subtotal only (shipping excluded).
+        // Rate depends on the chosen Stripe payment method.
         const shippingCents = Math.round(SHIPPING_FEE * 100);
+        const buyerFeePercent =
+          getBuyerFeePercentForStripeMethod(chosenStripeMethod);
         const buyerFeeCents = calculateBuyerItemFeeCents(
           subtotalCents,
           shippingCents,
+          buyerFeePercent,
         );
         const totalChargeCents = subtotalCents + buyerFeeCents;
 
@@ -2966,13 +2986,12 @@ export class PrizeService implements OnModuleInit {
         }
 
         const sessionParams = {
-          // Allow buyers to pay with either a card or US bank account
-          // (ACH). ACH settles in 3-5 business days but carries far
-          // lower processing fees, so we expose both options on the
-          // hosted Stripe Checkout page and let the buyer pick.
+          // Restrict to the single payment method the buyer agreed
+          // to. Stripe will then refuse anything else server-side,
+          // so a tampered client can't sneak a card payment through
+          // at the cheaper ACH fee tier (or vice versa).
           payment_method_types: [
-            'card',
-            'us_bank_account',
+            chosenStripeMethod,
           ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
           line_items: [
             {
@@ -3043,6 +3062,7 @@ export class PrizeService implements OnModuleInit {
 
         // Save Stripe session ID and update totals to include buyer fee
         savedOrder.stripeSessionId = session.id;
+        savedOrder.stripePaymentMethod = chosenStripeMethod;
         const buyerFeeUsd = buyerFeeCents / 100;
         savedOrder.usdCharged = parseFloat(
           (dto.usdAmount + buyerFeeUsd).toString(),
@@ -4468,6 +4488,7 @@ export class PrizeService implements OnModuleInit {
       usdCharged: parseFloat(order.usdCharged.toString()),
       totalPrice: parseFloat(order.totalPrice.toString()),
       stripeSessionId: order.stripeSessionId,
+      stripePaymentMethod: order.stripePaymentMethod ?? null,
       cryptoTxSignature: order.cryptoTxSignature ?? undefined,
       status: order.status,
       offerAmount: order.offerAmount
@@ -4560,6 +4581,10 @@ export class PrizeService implements OnModuleInit {
       totalPrice: totalWithShipping,
       offerAmount: dto.offerAmount,
       offerNotes: dto.offerNotes,
+      // Lock in the buyer's chosen Stripe method now. Re-read at
+      // accept / counter-accept time so the fee rate is the rate the
+      // buyer agreed to, with zero client trust at that point.
+      stripePaymentMethod: dto.stripePaymentMethod,
       status: 'offer_made',
     });
 
@@ -4715,18 +4740,24 @@ export class PrizeService implements OnModuleInit {
       : null;
 
     // Buyer fee applies to item subtotal only (shipping excluded).
+    // Rate depends on the Stripe method the buyer locked in when the
+    // offer was submitted. Null = legacy row → default to card rate.
+    const acceptOfferStripeMethod: 'card' | 'us_bank_account' =
+      order.stripePaymentMethod === 'us_bank_account'
+        ? 'us_bank_account'
+        : 'card';
     const offerShippingCents = Math.round(SHIPPING_FEE * 100);
     const buyerFeeCents = calculateBuyerItemFeeCents(
       offerAmountCents,
       offerShippingCents,
+      getBuyerFeePercentForStripeMethod(acceptOfferStripeMethod),
     );
     const totalChargeCents = offerAmountCents + buyerFeeCents;
 
     const acceptOfferSessionParams = {
-      // Card + ACH (us_bank_account). See note on the buy-now flow above.
+      // Locked to the buyer's chosen method (see makeOffer).
       payment_method_types: [
-        'card',
-        'us_bank_account',
+        acceptOfferStripeMethod,
       ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
@@ -4903,19 +4934,25 @@ export class PrizeService implements OnModuleInit {
       : null;
 
     // Buyer fee applies to item subtotal only (shipping excluded).
+    // Rate depends on the Stripe method the buyer locked in when the
+    // offer was submitted; null = legacy row → default to card rate.
+    const counterOfferStripeMethod: 'card' | 'us_bank_account' =
+      order.stripePaymentMethod === 'us_bank_account'
+        ? 'us_bank_account'
+        : 'card';
     const counterOfferShippingCents = Math.round(SHIPPING_FEE * 100);
     const buyerFeeCents = calculateBuyerItemFeeCents(
       counterOfferAmountCents,
       counterOfferShippingCents,
+      getBuyerFeePercentForStripeMethod(counterOfferStripeMethod),
     );
     const totalChargeCents = counterOfferAmountCents + buyerFeeCents;
 
     // Create Stripe checkout session
     const counterOfferSessionParams = {
-      // Card + ACH (us_bank_account). See note on the buy-now flow above.
+      // Locked to the buyer's chosen method (see makeOffer).
       payment_method_types: [
-        'card',
-        'us_bank_account',
+        counterOfferStripeMethod,
       ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
       line_items: [
         {
