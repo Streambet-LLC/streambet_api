@@ -783,7 +783,9 @@ export class UsersService {
    * Retrieves the top 20 users by cadeCoins balance for the leaderboard.
    * @returns Promise<Array<{username: string, cadeCoins: number, profileImageUrl: string, monthToDateCoins: number, lifetimeCadeCoins: number}>>
    */
-  async getLeaderboard(): Promise<
+  async getLeaderboard(
+    sortBy: 'balance' | 'monthly' | 'lifetime' = 'balance',
+  ): Promise<
     Array<{
       username: string;
       cadeCoins: number;
@@ -792,7 +794,8 @@ export class UsersService {
       lifetimeCadeCoins: number;
     }>
   > {
-    const users = await this.usersRepository
+    // Build base query with appropriate sorting
+    let queryBuilder = this.usersRepository
       .createQueryBuilder('u')
       .innerJoin('u.wallet', 'w')
       .addSelect(['w.cadeCoins', 'w.lifetimeCoinsEarned'])
@@ -800,10 +803,21 @@ export class UsersService {
       .andWhere('(u.isBanned IS NULL OR u.isBanned = false)')
       .andWhere('(u.isSuspended IS NULL OR u.isSuspended = false)')
       .andWhere('u.deletedAt IS NULL')
-      .andWhere('u.username != :excludedUser', { excludedUser: 'Tom396' })
-      .orderBy('w.cadeCoins', 'DESC')
-      .limit(20)
-      .getMany();
+      .andWhere('u.username != :excludedUser', { excludedUser: 'Tom396' });
+
+    // Apply sorting based on sortBy parameter
+    if (sortBy === 'lifetime') {
+      queryBuilder = queryBuilder.orderBy('w.lifetimeCoinsEarned', 'DESC');
+    } else if (sortBy === 'balance') {
+      queryBuilder = queryBuilder.orderBy('w.cadeCoins', 'DESC');
+    }
+    // For 'monthly', we'll sort in-memory after calculating
+
+    // Get more users for monthly sorting, or top 20 for others
+    const limit = sortBy === 'monthly' ? 100 : 20;
+    queryBuilder = queryBuilder.limit(limit);
+
+    const users = await queryBuilder.getMany();
 
     // Calculate month-to-date coins for each user
     const startOfMonth = new Date();
@@ -827,18 +841,8 @@ export class UsersService {
         for (const transaction of monthlyTransactions) {
           const amount = Number(transaction.amount || 0);
 
-          // BET_WON: Only count net profit (same as lifetime logic)
-          if (transaction.type === TransactionType.BET_WON) {
-            const originalBetAmount = Number(
-              transaction.metadata?.originalBetAmount || 0,
-            );
-            const netProfit = amount - originalBetAmount;
-            if (netProfit > 0) {
-              monthToDateCoins += netProfit;
-            }
-          }
           // Bonuses and credits: full amount
-          else if (
+          if (
             [
               TransactionType.INITIAL_CREDIT,
               TransactionType.ADMIN_CREDIT,
@@ -852,7 +856,7 @@ export class UsersService {
           else if (transaction.type === TransactionType.ADMIN_DEBITED) {
             monthToDateCoins -= amount;
           }
-          // REFUND and BET_PLACEMENT: skip (not earned)
+          // REFUND, BET_PLACEMENT, BET_WON: skip (not earned)
         }
 
         return {
@@ -864,6 +868,13 @@ export class UsersService {
         };
       }),
     );
+
+    // Sort by monthly if requested (in-memory since it's calculated)
+    if (sortBy === 'monthly') {
+      leaderboardData.sort((a, b) => b.monthToDateCoins - a.monthToDateCoins);
+      // Return top 20 after sorting
+      return leaderboardData.slice(0, 20);
+    }
 
     return leaderboardData;
   }

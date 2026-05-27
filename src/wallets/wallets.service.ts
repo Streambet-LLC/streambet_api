@@ -518,31 +518,15 @@ export class WalletsService {
       return;
     }
 
-    let lifetimeIncrement = amount;
-
-    // Handle bet winnings - only count net profit
+    // Skip bet winnings - no longer count toward lifetime earnings
     if (transactionType === TransactionType.BET_WON) {
-      if (metadata?.originalBetAmount) {
-        const originalBet = Number(metadata.originalBetAmount);
-        lifetimeIncrement = amount - originalBet;
-
-        this.logger.log(
-          `Bet win for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net profit=${lifetimeIncrement}`,
-        );
-
-        // Warn if net profit is negative (shouldn't happen)
-        if (lifetimeIncrement < 0) {
-          this.logger.warn(
-            `Negative net profit for user ${wallet.userId}: payout=${amount}, bet=${originalBet}, net=${lifetimeIncrement}`,
-          );
-        }
-      } else {
-        this.logger.warn(
-          `BET_WON transaction for user ${wallet.userId} missing originalBetAmount in metadata - skipping lifetime coins increment`,
-        );
-        return; // Skip lifetime coins update if we can't calculate net profit
-      }
+      this.logger.debug(
+        `Skipping lifetime coins update for user ${wallet.userId}: BET_WON transactions don't count toward lifetime earnings`,
+      );
+      return;
     }
+
+    let lifetimeIncrement = amount;
 
     // Only increment if there's actual profit
     if (lifetimeIncrement > 0) {

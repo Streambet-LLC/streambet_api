@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
@@ -149,15 +150,17 @@ export class UsersController {
 
   @ApiOperation({
     summary: 'Gets leaderboard',
-    description: 'This endpoint gets the top 20 users by gold balance',
+    description: 'This endpoint gets the top 20 users sorted by the specified metric (balance, monthly, or lifetime)',
   })
   @ApiResponse({
     status: 200,
     description: 'Leaderboard fetched successfully',
   })
   @Get('leaderboard')
-  async getLeaderboard() {
-    const data = await this.usersService.getLeaderboard();
+  async getLeaderboard(
+    @Query('sortBy') sortBy?: 'balance' | 'monthly' | 'lifetime',
+  ) {
+    const data = await this.usersService.getLeaderboard(sortBy || 'balance');
 
     return {
       data,
