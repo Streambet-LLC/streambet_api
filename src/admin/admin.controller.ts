@@ -42,6 +42,12 @@ import {
   UserUpdateDto,
 } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
+import { CollectorAnalyticsService } from './collector-analytics.service';
+import {
+  CollectorAnalyticsOverviewDto,
+  CollectorProfileDetailDto,
+  CollectorProfileSummaryDto,
+} from './dto/collector-analytics.dto';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
 import { StreamService } from 'src/stream/stream.service';
@@ -91,6 +97,7 @@ export class AdminController {
     private readonly usersService: UsersService,
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
+    private readonly collectorAnalyticsService: CollectorAnalyticsService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
@@ -1010,6 +1017,86 @@ export class AdminController {
       },
     };
   }
+
+  /**
+   * Aggregated collector analytics overview (real buy/sell data).
+   */
+  @ApiOperation({ summary: 'Collector analytics overview (real buy/sell data)' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Collector analytics overview fetched successfully',
+    type: CollectorAnalyticsOverviewDto,
+  })
+  @Get('analytics/collectors/overview')
+  async getCollectorsOverview(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.getOverview();
+    return {
+      status: HttpStatus.OK,
+      message: 'Collector analytics overview fetched successfully',
+      data,
+    };
+  }
+
+  /**
+   * Paginated collector profiles enriched with spend + category mix + socials.
+   */
+  @ApiOperation({ summary: 'List collector profiles with real buy/sell aggregates' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Collector profiles fetched successfully',
+  })
+  @Get('analytics/collectors')
+  async listCollectorProfiles(
+    @Request() req: RequestWithUser,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('search') search?: string,
+    @Query('onlySellers') onlySellers?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
+    const result: { total: number; data: CollectorProfileSummaryDto[] } =
+      await this.collectorAnalyticsService.listProfiles({
+        limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+        offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
+        search,
+        onlySellers: onlySellers === 'true' || onlySellers === '1',
+      });
+    return {
+      status: HttpStatus.OK,
+      message: 'Collector profiles fetched successfully',
+      data: result,
+    };
+  }
+
+  /**
+   * Single collector profile detail with category breakdown + recent orders.
+   */
+  @ApiOperation({ summary: 'Get a single collector profile detail' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Collector profile fetched successfully',
+    type: CollectorProfileDetailDto,
+  })
+  @Get('analytics/collectors/:id')
+  async getCollectorProfile(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.getProfileDetail(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Collector profile fetched successfully',
+      data,
+    };
+  }
+
   /**
    * Cancel a scheduled stream by its stream ID.
    *

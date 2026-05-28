@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { CollectorAnalyticsService } from './collector-analytics.service';
 import { UsersModule } from '../users/users.module';
 import { BettingModule } from '../betting/betting.module';
 import { WalletsModule } from '../wallets/wallets.module';
@@ -33,6 +34,6 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     QueueModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, CollectorAnalyticsService],
 })
 export class AdminModule {}
