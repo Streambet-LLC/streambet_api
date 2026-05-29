@@ -361,6 +361,14 @@ export class AdminRedemptionResponseDto {
   paymentMethod?: string | null;
 
   @ApiProperty({
+    example: 'us_bank_account',
+    nullable: true,
+    description:
+      'Stripe Checkout method actually used (card vs us_bank_account / ACH). Only meaningful for usd/combined orders.',
+  })
+  stripePaymentMethod?: 'card' | 'us_bank_account' | null;
+
+  @ApiProperty({
     example: 100,
     nullable: true,
     description: 'CadeCoins deducted for this purchase',
