@@ -47,6 +47,8 @@ import {
   CollectorAnalyticsOverviewDto,
   CollectorProfileDetailDto,
   CollectorProfileSummaryDto,
+  UpdateCollectorAnalyticsProfileDto,
+  UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
 import { SoftDeleteUserDto } from './dto/soft-delete-user.dto';
 import { StreamFilterDto } from 'src/stream/dto/list-stream.dto';
@@ -1093,6 +1095,62 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Collector profile fetched successfully',
+      data,
+    };
+  }
+
+  /**
+   * Admin-only: replace the user's `socials` jsonb. Used by the Analytics
+   * surface to inject / correct connected social accounts.
+   */
+  @ApiOperation({
+    summary: "Update a collector's connected socials (admin-only)",
+  })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @Patch('analytics/collectors/:id/socials')
+  async updateCollectorSocials(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateCollectorSocialsDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.updateSocials(
+      id,
+      dto,
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Collector socials updated successfully',
+      data,
+    };
+  }
+
+  /**
+   * Admin-only: merge analytics annotations (notes, persona override,
+   * interests, etc.) into `users.analytics_profile`. Consumed by the
+   * future AI integration.
+   */
+  @ApiOperation({
+    summary:
+      "Update a collector's analytics profile annotations (admin-only)",
+  })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @Patch('analytics/collectors/:id/profile')
+  async updateCollectorAnalyticsProfile(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateCollectorAnalyticsProfileDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.updateAnalyticsProfile(
+      id,
+      dto,
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Collector analytics profile updated successfully',
       data,
     };
   }

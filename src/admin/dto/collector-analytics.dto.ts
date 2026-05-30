@@ -1,4 +1,16 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
  * Maps the canonical PrizeBrand enum to the four "asset categories" the
@@ -46,6 +58,25 @@ export class CollectorSocialDto {
 
   @ApiProperty({ description: 'Best-guess profile URL.' })
   url: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Stable id for analytics-only entries (allows multiple per platform).',
+  })
+  id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional admin-supplied label (e.g. "Personal", "Shop", "Pokémon-only").',
+  })
+  label?: string;
+
+  @ApiProperty({
+    enum: ['public', 'analytics'],
+    description:
+      '`public` comes from `users.socials` (one per platform, visible on the user’s profile/shop). `analytics` is admin-curated, allows multiple per platform, and never leaks to the public profile unless explicitly mirrored.',
+  })
+  source: 'public' | 'analytics';
 }
 
 export class CollectorCategorySpendDto {
@@ -144,6 +175,15 @@ export class CollectorOrderEventDto {
   @ApiProperty({ enum: ['coins', 'usd', 'combined', 'crypto'] })
   paymentMethod: 'coins' | 'usd' | 'combined' | 'crypto';
 
+  @ApiProperty({
+    enum: ['card', 'us_bank_account'],
+    required: false,
+    nullable: true,
+    description:
+      'Stripe Checkout method used (card vs us_bank_account / ACH). Only meaningful for usd/combined orders; null otherwise.',
+  })
+  stripePaymentMethod: 'card' | 'us_bank_account' | null;
+
   @ApiProperty()
   status: string;
 
@@ -157,6 +197,15 @@ export class CollectorProfileDetailDto extends CollectorProfileSummaryDto {
 
   @ApiProperty({ type: [CollectorOrderEventDto] })
   recentOrders: CollectorOrderEventDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Free-form admin-injected analytics annotations (notes, tags, persona override, interests, etc.). Consumed by the future AI integration.',
+    type: 'object',
+    additionalProperties: true,
+    nullable: true,
+  })
+  analyticsProfile?: AnalyticsProfileAnnotations | null;
 }
 
 export class CollectorOverviewCategoryDto {
@@ -243,4 +292,179 @@ export class CollectorAnalyticsOverviewDto {
 
   @ApiProperty({ type: [CollectorOverviewSpendWeekDto] })
   spendTrend: CollectorOverviewSpendWeekDto[];
+}
+
+// ---------------------------------------------------------------------------
+// Admin write DTOs (collector socials + analytics annotations)
+// ---------------------------------------------------------------------------
+
+const SUPPORTED_SOCIAL_PLATFORMS: AnalyticsSocialPlatform[] = [
+  'instagram',
+  'twitter',
+  'tiktok',
+  'youtube',
+  'facebook',
+  'twitch',
+  'ebay',
+];
+
+/**
+ * A single analytics social entry. Unlike `users.socials` (a one-per-platform
+ * map), multiple entries per platform are allowed so admins can capture e.g.
+ * a personal Instagram + a shop Instagram + a Pokémon-only Instagram on the
+ * same collector.
+ */
+export class UpdateCollectorSocialEntryDto {
+  @ApiPropertyOptional({
+    description: 'Stable id for an existing entry. Omit when adding a new row.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  id?: string;
+
+  @ApiProperty({ enum: SUPPORTED_SOCIAL_PLATFORMS })
+  @IsIn(SUPPORTED_SOCIAL_PLATFORMS)
+  platform: AnalyticsSocialPlatform;
+
+  @ApiProperty({
+    description: 'Handle, full URL, or empty string. Empty rows are dropped.',
+    example: '@cardcade',
+  })
+  @IsString()
+  @MaxLength(255)
+  value: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional admin label (e.g. "Personal", "Shop").',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  label?: string;
+}
+
+/**
+ * Replace the user's **analytics** socials (stored on
+ * `analytics_profile.socials`) with the supplied entries. Multiple entries
+ * per platform are allowed.
+ *
+ * When `applyToPublic` is true the canonical public map (`users.socials`,
+ * which feeds the user's profile + shop pages) is also overwritten using the
+ * **first** entry per platform. When false (default) the public profile is
+ * left untouched and analytics edits stay admin-only.
+ */
+export class UpdateCollectorSocialsDto {
+  @ApiProperty({ type: [UpdateCollectorSocialEntryDto] })
+  @IsArray()
+  @ArrayMaxSize(64)
+  @ValidateNested({ each: true })
+  @Type(() => UpdateCollectorSocialEntryDto)
+  entries: UpdateCollectorSocialEntryDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'When true, also overwrite the public `users.socials` map (one per platform, last wins) so the changes surface on the user’s profile/shop. Defaults to false (analytics-only).',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  applyToPublic?: boolean;
+}
+
+/**
+ * Loose shape for admin-injected analytics annotations. Anything outside
+ * these documented fields is dropped server-side to keep the column tidy.
+ */
+export interface AnalyticsProfileAnnotations {
+  /** Internal display name override (admin notes only). */
+  displayName?: string;
+  /** Short bio summary admins maintain about the collector. */
+  bio?: string;
+  /** Persona override label (e.g. "Whale Collector"). */
+  personaOverride?: string;
+  /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
+  interests?: string[];
+  /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
+  preferences?: string[];
+  /** Loose JSON of any custom KV pairs admins want to track. */
+  customAttributes?: Record<string, string>;
+  /** Internal notes only visible to admins. */
+  notes?: string;
+  /**
+   * Admin-curated socials. Allows multiple per platform (e.g. a personal
+   * IG + a shop IG) and is independent from `users.socials` so analytics
+   * edits don't leak to the public profile by default.
+   */
+  socials?: AnalyticsProfileSocialEntry[];
+  /** ISO timestamp of the last admin edit; managed server-side. */
+  lastEditedAt?: string;
+  /** Admin user id that last edited; managed server-side. */
+  lastEditedBy?: string;
+}
+
+export interface AnalyticsProfileSocialEntry {
+  id: string;
+  platform: AnalyticsSocialPlatform;
+  /** Raw value the admin entered (handle or URL). */
+  value: string;
+  /** Optional label like "Personal", "Shop", "Pokémon-only". */
+  label?: string;
+}
+
+export class UpdateCollectorAnalyticsProfileDto
+  implements AnalyticsProfileAnnotations
+{
+  @ApiPropertyOptional({ description: 'Internal display name override.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  displayName?: string;
+
+  @ApiPropertyOptional({ description: 'Short bio summary.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  bio?: string;
+
+  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  personaOverride?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Free-form interest tags.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  interests?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Buyer preferences / brands.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  preferences?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Custom KV pairs admins want to track.',
+    type: 'object',
+    additionalProperties: { type: 'string' },
+  })
+  @IsOptional()
+  @IsObject()
+  customAttributes?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Internal admin-only notes.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8000)
+  notes?: string;
 }

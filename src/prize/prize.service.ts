@@ -68,6 +68,8 @@ import { UserRole } from '../enums/user-role.enum';
 import { InboxService } from '../inbox/inbox.service';
 import {
   BUYER_PROCESSING_FEE_PERCENT,
+  BUYER_ACH_FEE_PERCENT,
+  BUYER_CARD_FEE_PERCENT,
   calculateBuyerItemFeeCents,
   calculateRewardCadeCoinsFromCents,
   calculateSellerFeeCents,
@@ -2637,6 +2639,7 @@ export class PrizeService implements OnModuleInit {
         ? this.mapPrizeConfigToSummary(redemption.prizeConfiguration)
         : undefined,
       paymentMethod: redemption.prizeOrder?.paymentMethod || null,
+      stripePaymentMethod: redemption.prizeOrder?.stripePaymentMethod ?? null,
       coinsDeducted: redemption.prizeOrder?.coinsDeducted || null,
       usdCharged: redemption.prizeOrder
         ? redemption.prizeOrder.usdCharged.toString()
@@ -3980,6 +3983,8 @@ export class PrizeService implements OnModuleInit {
       itemCategory: order.prizeConfiguration?.category || null,
       totalPrice: parseFloat(order.totalPrice?.toString() || '0'),
       paymentMethod: order.paymentMethod,
+      // Surface Stripe method so the UI can label ACH vs card without an extra fetch.
+      stripePaymentMethod: order.stripePaymentMethod ?? null,
       buyerUsername: order.user?.username || 'Unknown',
       sellerUsername: order.prizeConfiguration?.creator?.username || 'CardCade',
       sellerDisplayName:
@@ -3998,20 +4003,37 @@ export class PrizeService implements OnModuleInit {
   }
 
   /**
-   * Admin: paginated list of all completed sales transactions across the
-   * platform. Supports date-range, payment-method, and free-text filters.
+   * Admin: paginated list of all sales transactions across the platform that
+   * have either captured money or are actively settling. Supports
+   * date-range, payment-method, and free-text filters.
    *
-   * Completed = order.status IN (paid, shipped, delivered). We intentionally
-   * exclude pending/buy_attempted/offer_* so totals reflect captured revenue.
+   * Visible = order.status IN (paid, shipped, delivered, payment_processing).
+   * We include `payment_processing` so admins can see ACH (us_bank_account)
+   * debits that have been authorised by the buyer but are still 3-5 business
+   * days from settling — without this, those orders are completely invisible
+   * to ops between checkout and `payment_intent.succeeded`.
+   *
+   * We intentionally exclude pending/buy_attempted/offer_* (no money in
+   * flight) and payment_failed (ACH bounced; already reverted).
+   *
+   * NOTE: `getAdminSalesSummary` deliberately keeps the stricter
+   * paid/shipped/delivered filter so revenue totals only count *captured*
+   * dollars. Don't unify the two without also splitting "pending ACH" out
+   * of the revenue tiles.
    */
   async getAdminSalesHistory(filterDto?: {
     from?: string;
     to?: string;
-    paymentMethod?: 'crypto' | 'noncrypto' | 'all';
+    paymentMethod?: 'crypto' | 'noncrypto' | 'card' | 'ach' | 'all';
     range?: string;
     q?: string;
   }): Promise<{ data: any[]; total: number }> {
-    const completedStatuses = ['paid', 'shipped', 'delivered'];
+    const completedStatuses = [
+      'paid',
+      'shipped',
+      'delivered',
+      'payment_processing',
+    ];
 
     const query = this.prizeOrderRepository
       .createQueryBuilder('order')
@@ -4038,6 +4060,26 @@ export class PrizeService implements OnModuleInit {
       query.andWhere(`order.paymentMethod = :pm`, { pm: 'crypto' });
     } else if (filterDto?.paymentMethod === 'noncrypto') {
       query.andWhere(`order.paymentMethod <> :pm`, { pm: 'crypto' });
+    } else if (filterDto?.paymentMethod === 'ach') {
+      // Stripe ACH (us_bank_account). Only relevant for usd/combined.
+      query
+        .andWhere(`order.paymentMethod IN (:...stripePms)`, {
+          stripePms: ['usd', 'combined'],
+        })
+        .andWhere(`order.stripePaymentMethod = :spm`, {
+          spm: 'us_bank_account',
+        });
+    } else if (filterDto?.paymentMethod === 'card') {
+      // Stripe card. Includes legacy usd/combined orders predating the
+      // stripe_payment_method column (NULL == card by default).
+      query
+        .andWhere(`order.paymentMethod IN (:...stripePms)`, {
+          stripePms: ['usd', 'combined'],
+        })
+        .andWhere(
+          `(order.stripePaymentMethod = :spm OR order.stripePaymentMethod IS NULL)`,
+          { spm: 'card' },
+        );
     }
     if (filterDto?.q) {
       query.andWhere(
@@ -4066,6 +4108,9 @@ export class PrizeService implements OnModuleInit {
       usdCharged: parseFloat(order.usdCharged?.toString() || '0'),
       coinsDeducted: order.coinsDeducted ?? 0,
       paymentMethod: order.paymentMethod,
+      // Stripe Checkout method the buyer actually used (card vs us_bank_account / ACH).
+      // Only meaningful for usd/combined orders; null for coins/crypto and legacy rows.
+      stripePaymentMethod: order.stripePaymentMethod ?? null,
       status: order.status,
       buyerUsername: order.user?.username || 'Unknown',
       buyerEmail: order.user?.email || null,
@@ -4092,26 +4137,43 @@ export class PrizeService implements OnModuleInit {
       totalRevenue: number;
       cryptoRevenue: number;
       nonCryptoRevenue: number;
+      // Stripe ACH (us_bank_account) slice of non-crypto revenue.
+      achRevenue: number;
+      // Stripe card slice of non-crypto revenue (includes legacy rows where
+      // stripe_payment_method is NULL — treated as card by default).
+      cardRevenue: number;
       platformFees: number;
       cryptoPlatformFees: number;
       nonCryptoPlatformFees: number;
+      achPlatformFees: number;
+      cardPlatformFees: number;
       orderCount: number;
       cryptoOrderCount: number;
       nonCryptoOrderCount: number;
+      achOrderCount: number;
+      cardOrderCount: number;
     }>;
     totals: {
       totalRevenue: number;
       cryptoRevenue: number;
       nonCryptoRevenue: number;
+      achRevenue: number;
+      cardRevenue: number;
       platformFees: number;
       cryptoPlatformFees: number;
       nonCryptoPlatformFees: number;
+      achPlatformFees: number;
+      cardPlatformFees: number;
       orderCount: number;
       cryptoOrderCount: number;
       nonCryptoOrderCount: number;
+      achOrderCount: number;
+      cardOrderCount: number;
     };
     feeAssumptions: {
       nonCryptoBuyerFeePercent: number;
+      nonCryptoBuyerCardFeePercent: number;
+      nonCryptoBuyerAchFeePercent: number;
       nonCryptoSellerFeePercent: number;
       cryptoCombinedBps: number;
     };
@@ -4140,12 +4202,18 @@ export class PrizeService implements OnModuleInit {
       totalRevenue: number;
       cryptoRevenue: number;
       nonCryptoRevenue: number;
+      achRevenue: number;
+      cardRevenue: number;
       platformFees: number;
       cryptoPlatformFees: number;
       nonCryptoPlatformFees: number;
+      achPlatformFees: number;
+      cardPlatformFees: number;
       orderCount: number;
       cryptoOrderCount: number;
       nonCryptoOrderCount: number;
+      achOrderCount: number;
+      cardOrderCount: number;
     };
 
     const emptyBucket = (monthIso: string): MonthlyBucket => ({
@@ -4153,12 +4221,18 @@ export class PrizeService implements OnModuleInit {
       totalRevenue: 0,
       cryptoRevenue: 0,
       nonCryptoRevenue: 0,
+      achRevenue: 0,
+      cardRevenue: 0,
       platformFees: 0,
       cryptoPlatformFees: 0,
       nonCryptoPlatformFees: 0,
+      achPlatformFees: 0,
+      cardPlatformFees: 0,
       orderCount: 0,
       cryptoOrderCount: 0,
       nonCryptoOrderCount: 0,
+      achOrderCount: 0,
+      cardOrderCount: 0,
     });
 
     const monthMap = new Map<string, MonthlyBucket>();
@@ -4166,6 +4240,7 @@ export class PrizeService implements OnModuleInit {
     type SummaryOrderRow = {
       created_at: Date | string;
       payment_method: 'coins' | 'usd' | 'combined' | 'crypto';
+      stripe_payment_method: 'card' | 'us_bank_account' | null;
       total_price: string | null;
       shipping_cost_usd: string | null;
       seller_stripe_account_id: string | null;
@@ -4184,6 +4259,7 @@ export class PrizeService implements OnModuleInit {
         .leftJoin('seller.wallet', 'wallet')
         .select('o.createdAt', 'created_at')
         .addSelect('o.payment_method', 'payment_method')
+        .addSelect('o.stripe_payment_method', 'stripe_payment_method')
         .addSelect('COALESCE(o.total_price, 0)', 'total_price')
         .addSelect('COALESCE(prize.shipping_cost_usd, 0)', 'shipping_cost_usd')
         .addSelect('seller.stripe_account_id', 'seller_stripe_account_id')
@@ -4252,21 +4328,42 @@ export class PrizeService implements OnModuleInit {
         bucket.nonCryptoRevenue += totalPriceUsd;
         bucket.nonCryptoOrderCount += 1;
 
-        // total_price = subtotal + buyerFee, where buyerFee is 3% of
-        // (subtotal - shipping). Solve subtotal from stored total_price.
+        // Stripe checkout-method slice. Only `usd`/`combined` orders go
+        // through Stripe Checkout; `coins`-only orders never produce a
+        // Stripe payment so they're left out of the ach/card split (they
+        // still count toward nonCryptoRevenue / orderCount as platform
+        // activity). Legacy rows where `stripe_payment_method` is NULL
+        // default to `card`, matching the original Stripe defaults
+        // before ACH was offered.
+        const usesStripe =
+          row.payment_method === 'usd' || row.payment_method === 'combined';
+        const isAch =
+          usesStripe && row.stripe_payment_method === 'us_bank_account';
+        const isCard = usesStripe && !isAch;
+
+        // Buyer fee percent depends on the Stripe method (card vs ACH).
+        // Important: we use this to reverse-derive subtotal from the
+        // stored total_price so ACH orders aren't over-stated.
+        const buyerFeePercent = getBuyerFeePercentForStripeMethod(
+          row.stripe_payment_method,
+        );
+
+        // total_price = subtotal + buyerFee, where buyerFee is
+        // `buyerFeePercent`% of (subtotal - shipping). Solve subtotal.
         const shippingUsd = Math.max(
           0,
           parseFloat(row.shipping_cost_usd ?? '0'),
         );
         const subtotalUsd =
-          (totalPriceUsd + (NON_CRYPTO_BUYER_FEE_PCT / 100) * shippingUsd) /
-          (1 + NON_CRYPTO_BUYER_FEE_PCT / 100);
+          (totalPriceUsd + (buyerFeePercent / 100) * shippingUsd) /
+          (1 + buyerFeePercent / 100);
 
         const subtotalCents = toCents(subtotalUsd);
         const shippingCents = toCents(shippingUsd);
         const buyerFeeCents = calculateBuyerItemFeeCents(
           subtotalCents,
           shippingCents,
+          buyerFeePercent,
         );
 
         // CardCade-as-seller (admin-owned prize, no Stripe Connect account):
@@ -4294,6 +4391,16 @@ export class PrizeService implements OnModuleInit {
         }
 
         bucket.nonCryptoPlatformFees += orderPlatformFeeUsd;
+
+        if (isAch) {
+          bucket.achRevenue += totalPriceUsd;
+          bucket.achOrderCount += 1;
+          bucket.achPlatformFees += orderPlatformFeeUsd;
+        } else if (isCard) {
+          bucket.cardRevenue += totalPriceUsd;
+          bucket.cardOrderCount += 1;
+          bucket.cardPlatformFees += orderPlatformFeeUsd;
+        }
       }
 
       bucket.platformFees += orderPlatformFeeUsd;
@@ -4313,9 +4420,13 @@ export class PrizeService implements OnModuleInit {
         totalRevenue: round2(bucket.totalRevenue),
         cryptoRevenue: round2(bucket.cryptoRevenue),
         nonCryptoRevenue: round2(bucket.nonCryptoRevenue),
+        achRevenue: round2(bucket.achRevenue),
+        cardRevenue: round2(bucket.cardRevenue),
         platformFees: round2(bucket.platformFees),
         cryptoPlatformFees: round2(bucket.cryptoPlatformFees),
         nonCryptoPlatformFees: round2(bucket.nonCryptoPlatformFees),
+        achPlatformFees: round2(bucket.achPlatformFees),
+        cardPlatformFees: round2(bucket.cardPlatformFees),
       });
       // Step back one month
       cursor.setUTCMonth(cursor.getUTCMonth() - 1);
@@ -4326,24 +4437,36 @@ export class PrizeService implements OnModuleInit {
         totalRevenue: acc.totalRevenue + m.totalRevenue,
         cryptoRevenue: acc.cryptoRevenue + m.cryptoRevenue,
         nonCryptoRevenue: acc.nonCryptoRevenue + m.nonCryptoRevenue,
+        achRevenue: acc.achRevenue + m.achRevenue,
+        cardRevenue: acc.cardRevenue + m.cardRevenue,
         platformFees: acc.platformFees + m.platformFees,
         cryptoPlatformFees: acc.cryptoPlatformFees + m.cryptoPlatformFees,
         nonCryptoPlatformFees:
           acc.nonCryptoPlatformFees + m.nonCryptoPlatformFees,
+        achPlatformFees: acc.achPlatformFees + m.achPlatformFees,
+        cardPlatformFees: acc.cardPlatformFees + m.cardPlatformFees,
         orderCount: acc.orderCount + m.orderCount,
         cryptoOrderCount: acc.cryptoOrderCount + m.cryptoOrderCount,
         nonCryptoOrderCount: acc.nonCryptoOrderCount + m.nonCryptoOrderCount,
+        achOrderCount: acc.achOrderCount + m.achOrderCount,
+        cardOrderCount: acc.cardOrderCount + m.cardOrderCount,
       }),
       {
         totalRevenue: 0,
         cryptoRevenue: 0,
         nonCryptoRevenue: 0,
+        achRevenue: 0,
+        cardRevenue: 0,
         platformFees: 0,
         cryptoPlatformFees: 0,
         nonCryptoPlatformFees: 0,
+        achPlatformFees: 0,
+        cardPlatformFees: 0,
         orderCount: 0,
         cryptoOrderCount: 0,
         nonCryptoOrderCount: 0,
+        achOrderCount: 0,
+        cardOrderCount: 0,
       },
     );
 
@@ -4354,12 +4477,18 @@ export class PrizeService implements OnModuleInit {
         totalRevenue: round2(totals.totalRevenue),
         cryptoRevenue: round2(totals.cryptoRevenue),
         nonCryptoRevenue: round2(totals.nonCryptoRevenue),
+        achRevenue: round2(totals.achRevenue),
+        cardRevenue: round2(totals.cardRevenue),
         platformFees: round2(totals.platformFees),
         cryptoPlatformFees: round2(totals.cryptoPlatformFees),
         nonCryptoPlatformFees: round2(totals.nonCryptoPlatformFees),
+        achPlatformFees: round2(totals.achPlatformFees),
+        cardPlatformFees: round2(totals.cardPlatformFees),
       },
       feeAssumptions: {
         nonCryptoBuyerFeePercent: NON_CRYPTO_BUYER_FEE_PCT,
+        nonCryptoBuyerCardFeePercent: BUYER_CARD_FEE_PERCENT,
+        nonCryptoBuyerAchFeePercent: BUYER_ACH_FEE_PERCENT,
         nonCryptoSellerFeePercent: NON_CRYPTO_BASE_SELLER_FEE_PCT,
         cryptoCombinedBps: CRYPTO_BUYER_FEE_BPS + CRYPTO_DEFAULT_SELLER_FEE_BPS,
       },

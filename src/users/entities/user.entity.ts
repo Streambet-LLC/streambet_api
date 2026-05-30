@@ -327,4 +327,19 @@ export class User extends BaseEntity {
     name: 'crypto_override_fee_bps',
   })
   cryptoOverrideFeeBps?: number;
+
+  /**
+   * Admin-injected analytics annotations used by the Collector Analytics
+   * surface. Free-form JSON so admins can experiment with persona overrides,
+   * interest tags, bio notes, etc. before we wire a real AI model. The
+   * shape is intentionally loose — see `AnalyticsProfileAnnotations` in
+   * `admin/dto/collector-analytics.dto.ts` for the canonical TypeScript
+   * shape consumed by the API.
+   */
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    name: 'analytics_profile',
+  })
+  analyticsProfile?: Record<string, unknown> | null;
 }

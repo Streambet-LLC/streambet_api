@@ -580,7 +580,7 @@ export class AdminPrizeController {
     filterDto: {
       from?: string;
       to?: string;
-      paymentMethod?: 'crypto' | 'noncrypto' | 'all';
+      paymentMethod?: 'crypto' | 'noncrypto' | 'card' | 'ach' | 'all';
       range?: string;
       q?: string;
     },
