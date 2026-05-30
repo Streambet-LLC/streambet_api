@@ -26,6 +26,17 @@ const PAID_STATUSES = ['paid', 'shipped', 'delivered'] as const;
 const PAID_STATUSES_SQL = "('paid','shipped','delivered')";
 
 /**
+ * Statuses considered "visible" for event-log queries (collector detail
+ * page → Recent Orders). Same as PAID_STATUSES_SQL plus `payment_processing`
+ * so admins can see ACH (us_bank_account) debits that have been authorised
+ * but are still 3-5 business days from settling. We intentionally DO NOT use
+ * this for aggregate spend / LTV / top-buyer queries — those must stay
+ * captured-only so a bounced ACH doesn't inflate analytics.
+ */
+const VISIBLE_STATUSES_SQL =
+  "('paid','shipped','delivered','payment_processing')";
+
+/**
  * Coerce a raw row's string/number/null amount into a finite number. SUM()
  * comes back as a string from pg, COUNT() comes back as a string too.
  */
@@ -797,7 +808,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        LEFT JOIN users seller ON seller.id = p.created_by
        WHERE o.user_id = $1
-         AND o.status IN ${PAID_STATUSES_SQL}
+         AND o.status IN ${VISIBLE_STATUSES_SQL}
        ORDER BY o."createdAt" DESC
        LIMIT $2`,
       [userId, RECENT_LIMIT],
@@ -816,7 +827,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        LEFT JOIN users buyer ON buyer.id = o.user_id
        WHERE p.created_by = $1
-         AND o.status IN ${PAID_STATUSES_SQL}
+         AND o.status IN ${VISIBLE_STATUSES_SQL}
        ORDER BY o."createdAt" DESC
        LIMIT $2`,
       [userId, RECENT_LIMIT],

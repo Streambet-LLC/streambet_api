@@ -4003,11 +4003,23 @@ export class PrizeService implements OnModuleInit {
   }
 
   /**
-   * Admin: paginated list of all completed sales transactions across the
-   * platform. Supports date-range, payment-method, and free-text filters.
+   * Admin: paginated list of all sales transactions across the platform that
+   * have either captured money or are actively settling. Supports
+   * date-range, payment-method, and free-text filters.
    *
-   * Completed = order.status IN (paid, shipped, delivered). We intentionally
-   * exclude pending/buy_attempted/offer_* so totals reflect captured revenue.
+   * Visible = order.status IN (paid, shipped, delivered, payment_processing).
+   * We include `payment_processing` so admins can see ACH (us_bank_account)
+   * debits that have been authorised by the buyer but are still 3-5 business
+   * days from settling — without this, those orders are completely invisible
+   * to ops between checkout and `payment_intent.succeeded`.
+   *
+   * We intentionally exclude pending/buy_attempted/offer_* (no money in
+   * flight) and payment_failed (ACH bounced; already reverted).
+   *
+   * NOTE: `getAdminSalesSummary` deliberately keeps the stricter
+   * paid/shipped/delivered filter so revenue totals only count *captured*
+   * dollars. Don't unify the two without also splitting "pending ACH" out
+   * of the revenue tiles.
    */
   async getAdminSalesHistory(filterDto?: {
     from?: string;
@@ -4016,7 +4028,12 @@ export class PrizeService implements OnModuleInit {
     range?: string;
     q?: string;
   }): Promise<{ data: any[]; total: number }> {
-    const completedStatuses = ['paid', 'shipped', 'delivered'];
+    const completedStatuses = [
+      'paid',
+      'shipped',
+      'delivered',
+      'payment_processing',
+    ];
 
     const query = this.prizeOrderRepository
       .createQueryBuilder('order')
