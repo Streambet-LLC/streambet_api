@@ -1,7 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
+import { UserRole } from '../enums/user-role.enum';
 import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import {
   AnalyticsAssetCategory,
@@ -14,6 +22,7 @@ import {
   CollectorProfileDetailDto,
   CollectorProfileSummaryDto,
   CollectorSocialDto,
+  CreateCollectorProfileDto,
   UpdateCollectorAnalyticsProfileDto,
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
@@ -887,6 +896,206 @@ export class CollectorAnalyticsService {
   // ---------------------------------------------------------------------------
   // Admin writes — socials + analytics annotations
   // ---------------------------------------------------------------------------
+
+  /**
+   * Create a brand-new collector profile from the Analytics surface.
+   *
+   * Backs a real `users` row so the profile lists + can be annotated like
+   * any other, but it is NOT a usable login: a random password is generated
+   * and the record is tagged (`analytics_profile.customAttributes.source =
+   * 'admin-analytics'`) so we can tell apart manually-added profiles later.
+   *
+   * Nothing is strictly required beyond a single piece of data — admins can
+   * add a collector from whatever fragment they have (e.g. just an eBay
+   * handle). `username` + `email` are auto-generated when omitted so the
+   * underlying NOT NULL / UNIQUE columns are always satisfied.
+   */
+  async createProfile(
+    dto: CreateCollectorProfileDto,
+    editorId?: string,
+  ): Promise<CollectorProfileDetailDto> {
+    // Build the seeded analytics socials (same normalization as updateSocials).
+    const cleanedEntries: AnalyticsProfileSocialEntry[] = [];
+    for (const entry of dto.socials ?? []) {
+      const value = (entry.value ?? '').trim();
+      if (!value) continue;
+      const normalized = /^https?:\/\//i.test(value)
+        ? value
+        : value.replace(/^@+/, '');
+      cleanedEntries.push({
+        id: entry.id?.trim() || makeSocialEntryId(),
+        platform: entry.platform,
+        value: normalized,
+        ...(entry.label?.trim() && {
+          label: entry.label.trim().slice(0, 64),
+        }),
+      });
+      if (cleanedEntries.length >= 64) break;
+    }
+
+    // Require at least ONE meaningful field so we don't create empty rows.
+    const hasAnyData =
+      !!dto.username?.trim() ||
+      !!dto.email?.trim() ||
+      !!dto.displayName?.trim() ||
+      !!dto.bio?.trim() ||
+      !!dto.personaOverride?.trim() ||
+      !!dto.interests?.length ||
+      !!dto.preferences?.length ||
+      !!(dto.customAttributes && Object.keys(dto.customAttributes).length) ||
+      !!dto.notes?.trim() ||
+      cleanedEntries.length > 0;
+    if (!hasAnyData) {
+      throw new BadRequestException(
+        'Provide at least one field to create a collector profile.',
+      );
+    }
+
+    // Resolve a unique username. Prefer the supplied one; otherwise derive a
+    // slug from any available signal (display name → first social handle →
+    // generic) and de-dupe with a random suffix.
+    const providedUsername = dto.username?.trim();
+    if (providedUsername) {
+      const clash = await this.userRepository
+        .createQueryBuilder('u')
+        .where('LOWER(u.username) = :username', {
+          username: providedUsername.toLowerCase(),
+        })
+        .getOne();
+      if (clash) {
+        throw new ConflictException(
+          'A user with this username already exists.',
+        );
+      }
+    }
+    const username = providedUsername
+      ? providedUsername
+      : await this.generateUniqueUsername(
+          dto.displayName?.trim() || cleanedEntries[0]?.value || 'collector',
+        );
+
+    // Resolve a unique email. Prefer the supplied one; otherwise mint a
+    // non-routable placeholder so the NOT NULL / UNIQUE constraints hold.
+    const providedEmail = dto.email?.trim().toLowerCase();
+    if (providedEmail) {
+      const clash = await this.userRepository
+        .createQueryBuilder('u')
+        .where('LOWER(u.email) = :email', { email: providedEmail })
+        .getOne();
+      if (clash) {
+        throw new ConflictException('A user with this email already exists.');
+      }
+    }
+    const email = providedEmail
+      ? providedEmail
+      : await this.generateUniqueEmail(username);
+
+    // Assemble the annotations payload, flagging the profile's origin.
+    const annotations: AnalyticsProfileAnnotations = {
+      ...(dto.displayName?.trim() && { displayName: dto.displayName.trim() }),
+      ...(dto.bio?.trim() && { bio: dto.bio.trim() }),
+      ...(dto.personaOverride?.trim() && {
+        personaOverride: dto.personaOverride.trim(),
+      }),
+      ...(dto.interests?.length && { interests: dto.interests }),
+      ...(dto.preferences?.length && { preferences: dto.preferences }),
+      customAttributes: {
+        ...(dto.customAttributes ?? {}),
+        source: 'admin-analytics',
+        ...(!providedEmail && { placeholderEmail: 'true' }),
+      },
+      ...(dto.notes?.trim() && { notes: dto.notes.trim() }),
+      ...(cleanedEntries.length && { socials: cleanedEntries }),
+      lastEditedAt: new Date().toISOString(),
+      ...(editorId && { lastEditedBy: editorId }),
+    };
+
+    // Random, non-recoverable password — these profiles aren't login accounts.
+    const password = await bcrypt.hash(randomBytes(24).toString('hex'), 10);
+
+    const publicSocials: Record<string, string> = {};
+    if (dto.applyToPublic) {
+      for (const entry of cleanedEntries) {
+        if (!publicSocials[entry.platform]) {
+          publicSocials[entry.platform] = entry.value;
+        }
+      }
+    }
+
+    const cleanedAnnotations = sanitizeAnnotations(annotations);
+    const user = this.userRepository.create({
+      username,
+      email,
+      password,
+      name: dto.displayName?.trim() || null,
+      role: UserRole.USER,
+      isActive: true,
+      isVerify: false,
+      tosAccepted: false,
+      ...(dto.applyToPublic && { socials: publicSocials }),
+      analyticsProfile: (cleanedAnnotations ?? null) as Record<
+        string,
+        unknown
+      > | null,
+    });
+    const saved = await this.userRepository.save(user);
+
+    return this.getProfileDetail(saved.id);
+  }
+
+  /**
+   * Turn an arbitrary signal (name, handle, URL) into a unique, schema-valid
+   * username. Strips to `[a-z0-9_-]`, falls back to `collector`, and appends
+   * a short random suffix until the username is free.
+   */
+  private async generateUniqueUsername(seed: string): Promise<string> {
+    const base =
+      seed
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 32) || 'collector';
+
+    // Try the bare base first, then base + random suffix.
+    for (let attempt = 0; attempt < 25; attempt++) {
+      const candidate =
+        attempt === 0
+          ? base
+          : `${base}-${randomBytes(3).toString('hex')}`.slice(0, 50);
+      const clash = await this.userRepository
+        .createQueryBuilder('u')
+        .where('LOWER(u.username) = :username', {
+          username: candidate.toLowerCase(),
+        })
+        .getOne();
+      if (!clash) return candidate;
+    }
+    // Extremely unlikely fallback.
+    return `collector-${randomBytes(8).toString('hex')}`;
+  }
+
+  /**
+   * Mint a unique, non-routable placeholder email for profiles created
+   * without one. Uses the reserved `.invalid` TLD (RFC 2606) so it can never
+   * collide with or accidentally reach a real inbox.
+   */
+  private async generateUniqueEmail(username: string): Promise<string> {
+    const base =
+      username.toLowerCase().replace(/[^a-z0-9_.-]+/g, '') || 'collector';
+    for (let attempt = 0; attempt < 25; attempt++) {
+      const candidate =
+        attempt === 0
+          ? `${base}@analytics.invalid`
+          : `${base}-${randomBytes(3).toString('hex')}@analytics.invalid`;
+      const clash = await this.userRepository
+        .createQueryBuilder('u')
+        .where('LOWER(u.email) = :email', { email: candidate })
+        .getOne();
+      if (!clash) return candidate;
+    }
+    return `collector-${randomBytes(8).toString('hex')}@analytics.invalid`;
+  }
 
   /**
    * Persist the analytics-side social list (multiple entries per platform

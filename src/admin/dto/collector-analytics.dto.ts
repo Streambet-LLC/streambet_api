@@ -3,14 +3,17 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsEmail,
   IsIn,
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 /**
  * Maps the canonical PrizeBrand enum to the four "asset categories" the
@@ -467,4 +470,120 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(8000)
   notes?: string;
+}
+
+/**
+ * Create a brand-new collector profile from the admin Analytics surface.
+ *
+ * Backs a real `users` row (so the new profile shows up in the list and can
+ * be annotated like any other), but it is not a login-capable account: a
+ * random password is generated server-side and the record is flagged as
+ * admin-created. `username` + `email` are the only hard requirements; every
+ * other field maps onto the same analytics annotations / socials that the
+ * edit dialog manages.
+ */
+export class CreateCollectorProfileDto {
+  @ApiPropertyOptional({
+    description:
+      'Optional unique username. Auto-generated server-side when omitted.',
+    example: 'cardcade_whale',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(50)
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message:
+      'Username can only contain alphanumeric characters, underscores, and hyphens',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() : (value as string),
+  )
+  username?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional unique email. A placeholder is generated server-side when omitted.',
+    example: 'whale@example.com',
+  })
+  @IsOptional()
+  @IsEmail()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : (value as string),
+  )
+  email?: string;
+
+  @ApiPropertyOptional({ description: 'Display name / real name.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  displayName?: string;
+
+  @ApiPropertyOptional({ description: 'Short bio summary.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  bio?: string;
+
+  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  personaOverride?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Free-form interest tags.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  interests?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Buyer preferences / brands.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  preferences?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Custom KV pairs admins want to track.',
+    type: 'object',
+    additionalProperties: { type: 'string' },
+  })
+  @IsOptional()
+  @IsObject()
+  customAttributes?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Internal admin-only notes.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(8000)
+  notes?: string;
+
+  @ApiPropertyOptional({
+    type: [UpdateCollectorSocialEntryDto],
+    description:
+      'Optional analytics socials to seed (multiple per platform allowed).',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(64)
+  @ValidateNested({ each: true })
+  @Type(() => UpdateCollectorSocialEntryDto)
+  socials?: UpdateCollectorSocialEntryDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'When true, also write the seeded socials onto the public `users.socials` map (one per platform). Defaults to false.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  applyToPublic?: boolean;
 }
