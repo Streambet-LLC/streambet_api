@@ -28,19 +28,27 @@ import {
 } from './dto/collector-analytics.dto';
 
 /**
- * Statuses we treat as a "real" paid transaction for analytics. Excludes
+ * Statuses we treat as a "real" paid transaction for analytics. Includes
+ * `payment_processing` so ACH (us_bank_account) debits that have been
+ * authorised but are still 3-5 business days from settling are counted —
+ * the rest of the system already treats these as good-as-paid (reserves
+ * stock, awards reward coins, creates the redemption). If an ACH debit
+ * bounces, `handleAchPaymentFailed` flips the order to `payment_failed`,
+ * so it drops back out of these aggregates automatically. Excludes
  * pending / failed / cancelled to keep revenue numbers honest.
  */
-const PAID_STATUSES = ['paid', 'shipped', 'delivered'] as const;
-const PAID_STATUSES_SQL = "('paid','shipped','delivered')";
+const PAID_STATUSES = [
+  'paid',
+  'shipped',
+  'delivered',
+  'payment_processing',
+] as const;
+const PAID_STATUSES_SQL = "('paid','shipped','delivered','payment_processing')";
 
 /**
  * Statuses considered "visible" for event-log queries (collector detail
- * page → Recent Orders). Same as PAID_STATUSES_SQL plus `payment_processing`
- * so admins can see ACH (us_bank_account) debits that have been authorised
- * but are still 3-5 business days from settling. We intentionally DO NOT use
- * this for aggregate spend / LTV / top-buyer queries — those must stay
- * captured-only so a bounced ACH doesn't inflate analytics.
+ * page → Recent Orders). Currently identical to PAID_STATUSES_SQL now that
+ * in-flight ACH debits also count toward aggregate spend / LTV.
  */
 const VISIBLE_STATUSES_SQL =
   "('paid','shipped','delivered','payment_processing')";
@@ -542,64 +550,159 @@ export class CollectorAnalyticsService {
     offset?: number;
     search?: string;
     onlySellers?: boolean;
+    sort?: 'lifetime' | 'last30d' | 'recent';
+    category?: 'all' | AnalyticsAssetCategory;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
     const offset = Math.max(opts.offset ?? 0, 0);
     const search = (opts.search ?? '').trim().toLowerCase();
     const onlySellers = !!opts.onlySellers;
+    const sort = opts.sort ?? 'lifetime';
+    const category =
+      opts.category && opts.category !== 'all' ? opts.category : null;
     const now = new Date();
     const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // First we resolve the page of users so subsequent aggregates only need
-    // to scan a bounded set. Sort by `createdAt` desc so newest profiles
-    // land first by default.
-    const qb = this.userRepository
-      .createQueryBuilder('u')
-      .where('u.deletedAt IS NULL')
-      .andWhere('u.isActive = true');
-
+    // Build the shared user-filter WHERE clause + positional params. We
+    // intentionally aggregate spend and sort/paginate at the DB level so a
+    // buyer surfaces by their actual spend across the WHOLE user base —
+    // NOT just within the newest N accounts. The previous implementation
+    // paginated users by `createdAt` first and only then summed spend for
+    // that slice, so real spenders (e.g. auction winners who registered
+    // earlier) were silently dropped off the list and the "spend" sort
+    // could only reorder whichever accounts happened to be newest.
+    const whereParts: string[] = [
+      'u."deletedAt" IS NULL',
+      'u.is_active = true',
+    ];
+    const whereParams: unknown[] = [];
     if (onlySellers) {
-      qb.andWhere('u.isSeller = true');
+      whereParts.push('u.is_seller = true');
     }
     if (search) {
-      qb.andWhere(
-        "(LOWER(u.username) LIKE :q OR LOWER(u.email) LIKE :q OR LOWER(COALESCE(u.name, '')) LIKE :q)",
-        { q: `%${search}%` },
+      whereParams.push(`%${search}%`);
+      const idx = whereParams.length;
+      whereParts.push(
+        `(LOWER(u.username) LIKE $${idx} OR LOWER(u.email) LIKE $${idx} OR LOWER(COALESCE(u.name, '')) LIKE $${idx})`,
       );
     }
+    if (category) {
+      // Restrict to users who have at least one *paid* order whose prize
+      // brand maps to the requested category. `other` is everything that
+      // isn't one of the three known brands (including NULL), mirroring
+      // `brandToCategory`. Done as an EXISTS so it filters the user set
+      // without changing the spend aggregate (which stays lifetime-total).
+      let brandPredicate: string;
+      if (category === 'other') {
+        brandPredicate =
+          "(p2.brand IS NULL OR p2.brand NOT IN ('pokemon','one_piece','sports'))";
+      } else {
+        whereParams.push(category);
+        brandPredicate = `p2.brand = $${whereParams.length}`;
+      }
+      whereParts.push(
+        `EXISTS (
+           SELECT 1 FROM prize_orders o2
+           JOIN prize_configurations p2 ON p2.id = o2.prize_configuration_id
+           WHERE o2.user_id = u.id
+             AND o2.status IN ${PAID_STATUSES_SQL}
+             AND ${brandPredicate}
+         )`,
+      );
+    }
+    const whereSql = whereParts.join(' AND ');
 
-    const total = await qb.clone().getCount();
-    const users = await qb
-      .orderBy('u.createdAt', 'DESC')
-      .skip(offset)
-      .take(limit)
-      .getMany();
-
-    if (users.length === 0) {
+    // Total matching users (independent of spend) for pagination.
+    const [countRow] = await this.rawQuery<{ c: number | string }>(
+      `SELECT COUNT(*)::int AS c FROM users u WHERE ${whereSql}`,
+      whereParams,
+    );
+    const total = num(countRow?.c);
+    if (total === 0) {
       return { total, data: [] };
     }
 
-    const userIds = users.map((u) => u.id);
+    const orderExpr =
+      sort === 'last30d'
+        ? 'COALESCE(bo.last30d, 0)'
+        : sort === 'recent'
+          ? 'u."createdAt"'
+          : 'COALESCE(bo.lifetime, 0)';
 
-    // Buy-side aggregates per user.
-    const buyAggRows = await this.rawQuery<{
-      user_id: string;
+    // Continue param numbering after the WHERE params: cutoff (for the
+    // 30-day sum), then limit + offset.
+    const pageParams = [...whereParams];
+    pageParams.push(cutoff30d);
+    const cutoffIdx = pageParams.length;
+    pageParams.push(limit);
+    const limitIdx = pageParams.length;
+    pageParams.push(offset);
+    const offsetIdx = pageParams.length;
+
+    const userRows = await this.rawQuery<{
+      id: string;
+      username: string;
+      email: string;
+      name: string | null;
+      is_seller: boolean;
+      created_at: Date | string;
+      account_creation_date: Date | string | null;
+      socials: unknown;
       lifetime: number | string;
-      last_30d: number | string;
+      last30d: number | string;
       purchases: number | string;
       last_purchase: Date | string | null;
     }>(
-      `SELECT o.user_id AS user_id,
-              COALESCE(SUM(o.total_price), 0)::float AS lifetime,
-              COALESCE(SUM(CASE WHEN o."createdAt" >= $2 THEN o.total_price ELSE 0 END), 0)::float AS last_30d,
-              COUNT(*)::int AS purchases,
-              MAX(o."createdAt") AS last_purchase
-       FROM prize_orders o
-       WHERE o.user_id = ANY($1::uuid[])
-         AND o.status IN ${PAID_STATUSES_SQL}
-       GROUP BY o.user_id`,
-      [userIds, cutoff30d],
+      `SELECT u.id AS id,
+              u.username AS username,
+              u.email AS email,
+              u.name AS name,
+              u.is_seller AS is_seller,
+              u."createdAt" AS created_at,
+              u.account_creation_date AS account_creation_date,
+              u.socials AS socials,
+              COALESCE(bo.lifetime, 0)::float AS lifetime,
+              COALESCE(bo.last30d, 0)::float AS last30d,
+              COALESCE(bo.purchases, 0)::int AS purchases,
+              bo.last_purchase AS last_purchase
+       FROM users u
+       LEFT JOIN (
+         SELECT o.user_id AS user_id,
+                SUM(o.total_price) AS lifetime,
+                SUM(CASE WHEN o."createdAt" >= $${cutoffIdx} THEN o.total_price ELSE 0 END) AS last30d,
+                COUNT(*) AS purchases,
+                MAX(o."createdAt") AS last_purchase
+         FROM prize_orders o
+         WHERE o.status IN ${PAID_STATUSES_SQL}
+         GROUP BY o.user_id
+       ) bo ON bo.user_id = u.id
+       WHERE ${whereSql}
+       ORDER BY ${orderExpr} DESC NULLS LAST, u."createdAt" DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      pageParams,
     );
+
+    if (userRows.length === 0) {
+      return { total, data: [] };
+    }
+
+    // Normalise raw rows into the shape the downstream mapper expects so the
+    // rest of this method (sell-side + category mix) is unchanged.
+    const users = userRows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      name: r.name,
+      email: r.email,
+      isSeller: r.is_seller,
+      accountCreationDate: r.account_creation_date
+        ? new Date(r.account_creation_date)
+        : null,
+      createdAt: new Date(r.created_at),
+      socials: (r.socials ?? null) as { [social: string]: string } | null,
+    }));
+
+    const userIds = users.map((u) => u.id);
+
     const buyAgg = new Map<
       string,
       {
@@ -609,10 +712,10 @@ export class CollectorAnalyticsService {
         lastPurchase: Date | null;
       }
     >();
-    for (const r of buyAggRows) {
-      buyAgg.set(r.user_id, {
+    for (const r of userRows) {
+      buyAgg.set(r.id, {
         lifetime: num(r.lifetime),
-        last30d: num(r.last_30d),
+        last30d: num(r.last30d),
         purchases: num(r.purchases),
         lastPurchase: r.last_purchase ? new Date(r.last_purchase) : null,
       });

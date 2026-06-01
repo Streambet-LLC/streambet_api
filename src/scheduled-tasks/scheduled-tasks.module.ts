@@ -18,6 +18,9 @@ import { PrizeModule } from 'src/prize/prize.module';
 import { EbayModule } from 'src/integrations/ebay/ebay.module';
 import { EbaySoldMarketSyncService } from './ebay-sold-market-sync.service';
 import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controller';
+import { PaymentsModule } from 'src/payments/payments.module';
+import { AchSettlementReconcilerService } from './ach-settlement-reconciler.service';
+import { AchReconcilerAdminController } from './ach-reconciler-admin.controller';
 
 @Module({
   imports: [
@@ -31,6 +34,7 @@ import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controll
     ReviewsModule,
     InboxModule,
     PrizeModule,
+    PaymentsModule,
     EbayModule,
     BullModule.registerQueue({
       name: EBAY_MIGRATION_QUEUE,
@@ -42,9 +46,10 @@ import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controll
     ShippingReminderService,
     ReviewReminderService,
     EbaySoldMarketSyncService,
+    AchSettlementReconcilerService,
     EmailsService,
   ],
-  controllers: [EbaySoldMarketAdminController],
+  controllers: [EbaySoldMarketAdminController, AchReconcilerAdminController],
   exports: [EbaySoldMarketSyncService],
 })
 export class ScheduledTaskModule {}
