@@ -4834,12 +4834,24 @@ export class PrizeService implements OnModuleInit {
   async acceptOffer(orderId: string): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
 
-    if (order.status !== 'offer_made' && order.status !== 'countered') {
+    // Allow accepting a pending offer. Also allow *retrying* an offer that
+    // was already flipped to `offer_accepted` but never got a Stripe checkout
+    // session created (e.g. a transient Stripe error left it bricked) so the
+    // seller can simply accept again to self-heal instead of being stuck.
+    const isRetryableStuckAccept =
+      order.status === 'offer_accepted' && !order.stripeSessionId;
+    if (
+      order.status !== 'offer_made' &&
+      order.status !== 'countered' &&
+      !isRetryableStuckAccept
+    ) {
       throw new BadRequestException('Can only accept pending offers');
     }
 
     // Determine amount to charge before updating status
-    const wasCountered = order.status === 'countered';
+    const wasCountered =
+      order.status === 'countered' ||
+      (isRetryableStuckAccept && order.counterOfferAmount != null);
     const acceptOfferPrize = await this.getPrizeTierById(
       order.prizeConfigurationId,
     );
@@ -4856,10 +4868,10 @@ export class PrizeService implements OnModuleInit {
         ? negotiatedAmount
         : negotiatedAmount + SHIPPING_FEE;
 
-    order.status = 'offer_accepted';
-    const updated = await this.prizeOrderRepository.save(order);
-
-    // Create Stripe checkout session
+    // NOTE: we intentionally do NOT persist `offer_accepted` yet. The status
+    // is only flipped once the Stripe checkout session is successfully
+    // created (below), so a Stripe failure leaves the order in its original
+    // pending state and the seller can retry instead of bricking the order.
     const prize = acceptOfferPrize;
 
     const offerAmountCents = Math.round(amountToCharge * 100);
@@ -4946,14 +4958,18 @@ export class PrizeService implements OnModuleInit {
       acceptOfferSessionParams,
     );
 
-    // Save Stripe session ID and update totals to include buyer fee
+    // Now that the Stripe session exists, atomically flip the order to
+    // `offer_accepted`, attach the session, and fold the buyer fee into the
+    // totals in a single save. Doing this only after Stripe succeeds means a
+    // transient Stripe error can never leave the order bricked.
     const offerBuyerFeeUsd = buyerFeeCents / 100;
+    order.status = 'offer_accepted';
     order.stripeSessionId = session.id;
     order.usdCharged = amountToCharge + offerBuyerFeeUsd;
     order.totalPrice = parseFloat(
       (order.totalPrice + offerBuyerFeeUsd).toString(),
     );
-    await this.prizeOrderRepository.save(order);
+    const updated = await this.prizeOrderRepository.save(order);
 
     // Send email to user with Stripe checkout link
     try {
