@@ -571,10 +571,7 @@ export class CollectorAnalyticsService {
     // that slice, so real spenders (e.g. auction winners who registered
     // earlier) were silently dropped off the list and the "spend" sort
     // could only reorder whichever accounts happened to be newest.
-    const whereParts: string[] = [
-      'u."deletedAt" IS NULL',
-      'u.is_active = true',
-    ];
+    const whereParts: string[] = ['u.deleted_at IS NULL', 'u.is_active = true'];
     const whereParams: unknown[] = [];
     if (onlySellers) {
       whereParts.push('u.is_seller = true');
