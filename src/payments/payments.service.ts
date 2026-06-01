@@ -676,6 +676,174 @@ export class PaymentsService {
   }
 
   /**
+   * Reconcile prize orders stuck in `payment_processing` against Stripe.
+   *
+   * ACH (us_bank_account) orders flip `payment_processing -> paid` only when
+   * the `payment_intent.succeeded` / `checkout.session.async_payment_succeeded`
+   * webhook is received AND processed. If that webhook was never delivered
+   * (endpoint not subscribed to the event, deploy gap, transient 5xx that
+   * Stripe stopped retrying, etc.) the order is stranded forever — funds have
+   * settled at Stripe but our DB never hears about it.
+   *
+   * This polls Stripe for the *actual* PaymentIntent status of every stuck
+   * order and re-drives the exact same finalize paths the webhook would have:
+   *   - PI `succeeded`  -> {@link handlePaymentIntentSucceeded} (flips to paid,
+   *     emails the seller, handles cart vs single).
+   *   - PI `canceled`   -> {@link handlePaymentIntentFailed} (reverts stock,
+   *     refunds combined CadeCoins, deletes redemption, emails buyer/seller).
+   *   - anything else (still processing / requires action) -> left untouched.
+   *
+   * Every downstream handler is idempotent, so running this alongside live
+   * webhooks (or repeatedly) is safe.
+   *
+   * @param options.olderThanMinutes Only consider orders created at least this
+   *   many minutes ago (default 0 = all). Lets the cron skip orders that are
+   *   still mid-checkout.
+   * @param options.limit Max number of stuck orders to scan in one pass.
+   */
+  async reconcileProcessingAchOrders(options?: {
+    olderThanMinutes?: number;
+    limit?: number;
+  }): Promise<{
+    scanned: number;
+    settled: number;
+    failed: number;
+    stillProcessing: number;
+    skippedNoPaymentIntent: number;
+    errors: number;
+  }> {
+    const olderThanMinutes = options?.olderThanMinutes ?? 0;
+    const limit = options?.limit ?? 200;
+
+    const qb = this.prizeOrderRepository
+      .createQueryBuilder('o')
+      .where('o.status = :status', { status: 'payment_processing' })
+      .orderBy('o.createdAt', 'ASC')
+      .take(limit);
+
+    if (olderThanMinutes > 0) {
+      const cutoff = new Date(Date.now() - olderThanMinutes * 60_000);
+      qb.andWhere('o.createdAt <= :cutoff', { cutoff });
+    }
+
+    const stuckOrders = await qb.getMany();
+
+    const summary = {
+      scanned: stuckOrders.length,
+      settled: 0,
+      failed: 0,
+      stillProcessing: 0,
+      skippedNoPaymentIntent: 0,
+      errors: 0,
+    };
+
+    if (stuckOrders.length === 0) {
+      return summary;
+    }
+
+    this.logger.log(
+      `ACH reconciler: scanning ${stuckOrders.length} order(s) in payment_processing`,
+    );
+
+    // Resolve a PaymentIntent id for each order, then dedupe — cart
+    // checkouts share a single PaymentIntent across N orders, so we only
+    // need to retrieve + drive each PI once.
+    const piIds = new Set<string>();
+    for (const order of stuckOrders) {
+      try {
+        const piId = await this.resolvePaymentIntentIdForOrder(order);
+        if (piId) {
+          piIds.add(piId);
+        } else {
+          summary.skippedNoPaymentIntent += 1;
+          this.logger.warn(
+            `ACH reconciler: order ${order.id} has no resolvable PaymentIntent; skipping`,
+          );
+        }
+      } catch (err) {
+        summary.errors += 1;
+        this.logger.error(
+          `ACH reconciler: failed to resolve PaymentIntent for order ${order.id}: ${err}`,
+        );
+      }
+    }
+
+    for (const piId of piIds) {
+      try {
+        const paymentIntent =
+          await this.stripe.paymentIntents.retrieve(piId);
+
+        if (paymentIntent.status === 'succeeded') {
+          await this.handlePaymentIntentSucceeded(paymentIntent);
+          summary.settled += 1;
+          this.logger.log(
+            `ACH reconciler: settled order(s) for PaymentIntent ${piId} (Stripe status=succeeded)`,
+          );
+        } else if (paymentIntent.status === 'canceled') {
+          await this.handlePaymentIntentFailed(paymentIntent);
+          summary.failed += 1;
+          this.logger.warn(
+            `ACH reconciler: reverted order(s) for PaymentIntent ${piId} (Stripe status=canceled)`,
+          );
+        } else {
+          summary.stillProcessing += 1;
+          this.logger.log(
+            `ACH reconciler: PaymentIntent ${piId} still ${paymentIntent.status}; leaving order(s) in payment_processing`,
+          );
+        }
+      } catch (err) {
+        summary.errors += 1;
+        this.logger.error(
+          `ACH reconciler: failed to reconcile PaymentIntent ${piId}: ${err}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `ACH reconciler: done — scanned=${summary.scanned} settled=${summary.settled} failed=${summary.failed} stillProcessing=${summary.stillProcessing} skippedNoPaymentIntent=${summary.skippedNoPaymentIntent} errors=${summary.errors}`,
+    );
+
+    return summary;
+  }
+
+  /**
+   * Resolve the Stripe PaymentIntent id for a prize order. Prefers the
+   * stored `stripePaymentIntentId`; falls back to retrieving the Checkout
+   * Session (and backfills the id on the order so later passes are cheap).
+   */
+  private async resolvePaymentIntentIdForOrder(
+    order: PrizeOrder,
+  ): Promise<string | null> {
+    if (order.stripePaymentIntentId) {
+      return order.stripePaymentIntentId;
+    }
+    if (!order.stripeSessionId) {
+      return null;
+    }
+
+    const session = await this.stripe.checkout.sessions.retrieve(
+      order.stripeSessionId,
+    );
+    const piId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : (session.payment_intent?.id ?? null);
+
+    if (piId) {
+      try {
+        await this.prizeOrderRepository.update(order.id, {
+          stripePaymentIntentId: piId,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `ACH reconciler: failed to backfill stripePaymentIntentId on order ${order.id}: ${err}`,
+        );
+      }
+    }
+    return piId;
+  }
+
+  /**
    * Handle checkout.session.async_payment_succeeded — canonical event for
    * delayed payment methods (ACH) when funds settle. Functionally
    * equivalent to payment_intent.succeeded for our purposes, but we

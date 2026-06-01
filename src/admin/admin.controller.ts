@@ -875,7 +875,13 @@ export class AdminController {
         'seller.crypto_override_fee_bps',
         'seller_crypto_override_fee_bps',
       )
-      .where("o.status IN ('paid', 'shipped', 'delivered')")
+      // Include `payment_processing` so in-flight ACH (us_bank_account)
+      // orders count as good-as-paid, consistent with collector analytics
+      // and the monthly sales summary. A bounced ACH reverts to
+      // `payment_failed` and drops back out automatically.
+      .where(
+        "o.status IN ('paid', 'shipped', 'delivered', 'payment_processing')",
+      )
       .andWhere('o.createdAt >= :monthStart', { monthStart })
       .getRawMany<{
         payment_method: 'coins' | 'usd' | 'combined' | 'crypto';
@@ -1058,16 +1064,38 @@ export class AdminController {
     @Query('offset') offset?: string,
     @Query('search') search?: string,
     @Query('onlySellers') onlySellers?: string,
+    @Query('sort') sort?: string,
+    @Query('category') category?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
+    const parsedSort: 'lifetime' | 'last30d' | 'recent' | undefined =
+      sort === 'lifetime' || sort === 'last30d' || sort === 'recent'
+        ? sort
+        : undefined;
+    const parsedCategory:
+      | 'all'
+      | 'pokemon'
+      | 'one_piece'
+      | 'sports'
+      | 'other'
+      | undefined =
+      category === 'pokemon' ||
+      category === 'one_piece' ||
+      category === 'sports' ||
+      category === 'other' ||
+      category === 'all'
+        ? category
+        : undefined;
     const result: { total: number; data: CollectorProfileSummaryDto[] } =
       await this.collectorAnalyticsService.listProfiles({
         limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
         offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
         search,
         onlySellers: onlySellers === 'true' || onlySellers === '1',
+        sort: parsedSort,
+        category: parsedCategory,
       });
     return {
       status: HttpStatus.OK,

@@ -4275,8 +4275,12 @@ export class PrizeService implements OnModuleInit {
           'seller.crypto_override_fee_bps',
           'seller_crypto_override_fee_bps',
         )
+        // Include `payment_processing` so in-flight ACH (us_bank_account)
+        // orders count as good-as-paid, consistent with collector analytics
+        // and the dashboard month-to-date card. A bounced ACH reverts to
+        // `payment_failed` and drops back out automatically.
         .where('o.status IN (:...statuses)', {
-          statuses: ['paid', 'shipped', 'delivered'],
+          statuses: ['paid', 'shipped', 'delivered', 'payment_processing'],
         })
         .andWhere('o.createdAt >= :cutoff', { cutoff })
         .getRawMany();
