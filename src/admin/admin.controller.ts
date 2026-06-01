@@ -47,6 +47,7 @@ import {
   CollectorAnalyticsOverviewDto,
   CollectorProfileDetailDto,
   CollectorProfileSummaryDto,
+  CreateCollectorProfileDto,
   UpdateCollectorAnalyticsProfileDto,
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
@@ -1072,6 +1073,34 @@ export class AdminController {
       status: HttpStatus.OK,
       message: 'Collector profiles fetched successfully',
       data: result,
+    };
+  }
+
+  /**
+   * Admin-only: create a new collector profile. Backs a real (non-login)
+   * `users` row so it shows up in the Analytics list and can be annotated
+   * like any other profile.
+   */
+  @ApiOperation({ summary: 'Create a new collector profile (admin-only)' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Collector profile created successfully',
+    type: CollectorProfileDetailDto,
+  })
+  @Post('analytics/collectors')
+  async createCollectorProfile(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateCollectorProfileDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.createProfile(
+      dto,
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.CREATED,
+      message: 'Collector profile created successfully',
+      data,
     };
   }
 
