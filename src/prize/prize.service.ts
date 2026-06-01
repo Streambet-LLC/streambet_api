@@ -4859,12 +4859,23 @@ export class PrizeService implements OnModuleInit {
       acceptOfferPrize.shippingCostUsd != null
         ? Number(acceptOfferPrize.shippingCostUsd)
         : 5;
+    // TypeORM returns `numeric` columns as strings, so coerce every monetary
+    // field to a real number before doing arithmetic. Otherwise `+` performs
+    // string concatenation (e.g. "450.00" + 20 => "450.0020") and the later
+    // numeric save throws `invalid input syntax for type numeric`.
+    const orderTotalPriceNum = Number(order.totalPrice);
+    const orderOfferAmountNum =
+      order.offerAmount != null ? Number(order.offerAmount) : null;
+    const orderCounterAmountNum =
+      order.counterOfferAmount != null
+        ? Number(order.counterOfferAmount)
+        : null;
     const negotiatedAmount =
-      wasCountered && order.counterOfferAmount
-        ? order.counterOfferAmount
-        : order.offerAmount || order.totalPrice;
+      wasCountered && orderCounterAmountNum != null
+        ? orderCounterAmountNum
+        : (orderOfferAmountNum ?? orderTotalPriceNum);
     const amountToCharge =
-      negotiatedAmount === order.totalPrice
+      negotiatedAmount === orderTotalPriceNum
         ? negotiatedAmount
         : negotiatedAmount + SHIPPING_FEE;
 
@@ -4967,7 +4978,7 @@ export class PrizeService implements OnModuleInit {
     order.stripeSessionId = session.id;
     order.usdCharged = amountToCharge + offerBuyerFeeUsd;
     order.totalPrice = parseFloat(
-      (order.totalPrice + offerBuyerFeeUsd).toString(),
+      (orderTotalPriceNum + offerBuyerFeeUsd).toFixed(2),
     );
     const updated = await this.prizeOrderRepository.save(order);
 
