@@ -1070,8 +1070,16 @@ export class AdminController {
     this.ensureAdmin(req.user);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
-    const parsedSort: 'lifetime' | 'last30d' | 'recent' | undefined =
-      sort === 'lifetime' || sort === 'last30d' || sort === 'recent'
+    const parsedSort:
+      | 'lifetime'
+      | 'last30d'
+      | 'recent'
+      | 'predicted'
+      | undefined =
+      sort === 'lifetime' ||
+      sort === 'last30d' ||
+      sort === 'recent' ||
+      sort === 'predicted'
         ? sort
         : undefined;
     const parsedCategory:

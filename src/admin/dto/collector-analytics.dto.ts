@@ -123,6 +123,15 @@ export class CollectorProfileSummaryDto {
   last30dSpendUsd: number;
 
   @ApiProperty({
+    description:
+      'Heuristic forecast of USD this buyer will spend in the next 30 days: ' +
+      'recent monthly run-rate (trailing 90d / 3) decayed by days since last ' +
+      'purchase. Buy-side only, so sellers who also buy sealed get a value. ' +
+      '0 when there is no purchase history.',
+  })
+  predicted30dSpendUsd: number;
+
+  @ApiProperty({
     description: 'Total number of paid/shipped/delivered purchase orders.',
   })
   purchaseCount: number;
@@ -281,6 +290,14 @@ export class CollectorAnalyticsOverviewDto {
     description: 'Sum of paid order USD across all categories, last 30 days.',
   })
   spend30dUsd: number;
+
+  @ApiProperty({
+    description:
+      'Sum of every buyer’s heuristic predicted next-30-day spend (same ' +
+      'run-rate × recency-decay formula as the per-collector figure). ' +
+      'Forward-looking companion to spend30dUsd, which is the actual.',
+  })
+  predicted30dSpendUsd: number;
 
   @ApiProperty({
     description: 'Sum of paid order USD across all categories, all-time.',
