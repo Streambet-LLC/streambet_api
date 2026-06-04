@@ -54,6 +54,24 @@ const VISIBLE_STATUSES_SQL =
   "('paid','shipped','delivered','payment_processing')";
 
 /**
+ * Heuristic "predicted next-30-day spend" as a reusable SQL aggregate
+ * expression. Assumes the orders table is aliased `o` and filtered to paid
+ * statuses by the surrounding query. Computed as:
+ *
+ *   recent monthly run-rate (trailing-90d spend / 3)  ×  recency decay
+ *
+ * where the decay is exp(-daysSinceLastPurchase / 60) so dormant buyers
+ * forecast lower. It is buy-side only (keyed on the order's buyer), so a
+ * seller who also buys sealed product still gets a forecast. Must be used in
+ * a query that aggregates over a single user's orders (GROUP BY user_id, or a
+ * WHERE user_id = $n rollup) — MAX/SUM make it an aggregate expression.
+ *
+ * The 90-day window, /3 divisor, and 60-day decay constant are the tunable
+ * knobs for this v1.
+ */
+const PREDICTED_30D_SQL = `GREATEST(0, (SUM(CASE WHEN o."createdAt" >= now() - interval '90 days' THEN o.total_price ELSE 0 END) / 3.0) * exp(- (EXTRACT(EPOCH FROM (now() - MAX(o."createdAt"))) / 86400.0) / 60.0))`;
+
+/**
  * Coerce a raw row's string/number/null amount into a finite number. SUM()
  * comes back as a string from pg, COUNT() comes back as a string too.
  */
@@ -410,6 +428,20 @@ export class CollectorAnalyticsService {
     );
     const lifetimeSpendUsd = num(lifetimeRow?.s);
 
+    // Forward-looking companion to spend30dUsd: sum each buyer's heuristic
+    // predicted next-30-day spend. Per-user forecast computed by the shared
+    // PREDICTED_30D_SQL fragment (grouped by buyer), then summed.
+    const [predicted30dRow] = await this.rawQuery<{ s: number | string }>(
+      `SELECT COALESCE(SUM(per_user.predicted30d), 0)::float AS s
+       FROM (
+         SELECT ${PREDICTED_30D_SQL} AS predicted30d
+         FROM prize_orders o
+         WHERE o.status IN ${PAID_STATUSES_SQL}
+         GROUP BY o.user_id
+       ) per_user`,
+    );
+    const predicted30dSpendUsd = num(predicted30dRow?.s);
+
     // -- Category affinity (last 30d) --------------------------------------
     const categoryRows = await this.rawQuery<{
       brand: string | null;
@@ -534,6 +566,7 @@ export class CollectorAnalyticsService {
       activeBuyers30d,
       activeSellers30d,
       spend30dUsd,
+      predicted30dSpendUsd,
       lifetimeSpendUsd,
       categoryAffinity,
       topAssets,
@@ -550,7 +583,7 @@ export class CollectorAnalyticsService {
     offset?: number;
     search?: string;
     onlySellers?: boolean;
-    sort?: 'lifetime' | 'last30d' | 'recent';
+    sort?: 'lifetime' | 'last30d' | 'recent' | 'predicted';
     category?: 'all' | AnalyticsAssetCategory;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
@@ -622,9 +655,11 @@ export class CollectorAnalyticsService {
     const orderExpr =
       sort === 'last30d'
         ? 'COALESCE(bo.last30d, 0)'
-        : sort === 'recent'
-          ? 'u."createdAt"'
-          : 'COALESCE(bo.lifetime, 0)';
+        : sort === 'predicted'
+          ? 'COALESCE(bo.predicted30d, 0)'
+          : sort === 'recent'
+            ? 'u."createdAt"'
+            : 'COALESCE(bo.lifetime, 0)';
 
     // Continue param numbering after the WHERE params: cutoff (for the
     // 30-day sum), then limit + offset.
@@ -647,6 +682,7 @@ export class CollectorAnalyticsService {
       socials: unknown;
       lifetime: number | string;
       last30d: number | string;
+      predicted30d: number | string;
       purchases: number | string;
       last_purchase: Date | string | null;
     }>(
@@ -660,6 +696,7 @@ export class CollectorAnalyticsService {
               u.socials AS socials,
               COALESCE(bo.lifetime, 0)::float AS lifetime,
               COALESCE(bo.last30d, 0)::float AS last30d,
+              COALESCE(bo.predicted30d, 0)::float AS predicted30d,
               COALESCE(bo.purchases, 0)::int AS purchases,
               bo.last_purchase AS last_purchase
        FROM users u
@@ -667,6 +704,7 @@ export class CollectorAnalyticsService {
          SELECT o.user_id AS user_id,
                 SUM(o.total_price) AS lifetime,
                 SUM(CASE WHEN o."createdAt" >= $${cutoffIdx} THEN o.total_price ELSE 0 END) AS last30d,
+                ${PREDICTED_30D_SQL} AS predicted30d,
                 COUNT(*) AS purchases,
                 MAX(o."createdAt") AS last_purchase
          FROM prize_orders o
@@ -705,6 +743,7 @@ export class CollectorAnalyticsService {
       {
         lifetime: number;
         last30d: number;
+        predicted30d: number;
         purchases: number;
         lastPurchase: Date | null;
       }
@@ -713,6 +752,7 @@ export class CollectorAnalyticsService {
       buyAgg.set(r.id, {
         lifetime: num(r.lifetime),
         last30d: num(r.last30d),
+        predicted30d: num(r.predicted30d),
         purchases: num(r.purchases),
         lastPurchase: r.last_purchase ? new Date(r.last_purchase) : null,
       });
@@ -788,6 +828,7 @@ export class CollectorAnalyticsService {
         isSeller: !!u.isSeller,
         lifetimeSpendUsd: Math.round((buy?.lifetime ?? 0) * 100) / 100,
         last30dSpendUsd: Math.round((buy?.last30d ?? 0) * 100) / 100,
+        predicted30dSpendUsd: Math.round((buy?.predicted30d ?? 0) * 100) / 100,
         purchaseCount: buy?.purchases ?? 0,
         saleCount: sell?.sales ?? 0,
         lifetimeSalesUsd: Math.round((sell?.revenue ?? 0) * 100) / 100,
@@ -818,11 +859,13 @@ export class CollectorAnalyticsService {
     const [buyRow] = await this.rawQuery<{
       lifetime: number | string;
       last_30d: number | string;
+      predicted_30d: number | string;
       purchases: number | string;
       last_purchase: Date | string | null;
     }>(
       `SELECT COALESCE(SUM(o.total_price), 0)::float AS lifetime,
               COALESCE(SUM(CASE WHEN o."createdAt" >= $2 THEN o.total_price ELSE 0 END), 0)::float AS last_30d,
+              COALESCE(${PREDICTED_30D_SQL}, 0)::float AS predicted_30d,
               COUNT(*)::int AS purchases,
               MAX(o."createdAt") AS last_purchase
        FROM prize_orders o
@@ -976,6 +1019,7 @@ export class CollectorAnalyticsService {
       isSeller: !!user.isSeller,
       lifetimeSpendUsd: Math.round(num(buyRow?.lifetime) * 100) / 100,
       last30dSpendUsd: Math.round(num(buyRow?.last_30d) * 100) / 100,
+      predicted30dSpendUsd: Math.round(num(buyRow?.predicted_30d) * 100) / 100,
       purchaseCount: num(buyRow?.purchases),
       saleCount: num(sellRow?.sales),
       lifetimeSalesUsd: Math.round(num(sellRow?.revenue) * 100) / 100,
