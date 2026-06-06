@@ -231,24 +231,12 @@
           "valueFrom": "/cardcade/non_pro_prod/PSA_ACCESS_TOKEN"
         },
         {
-          "name": "EBAY_APP_ID",
-          "valueFrom": "/cardcade/non_pro_prod/EBAY_APP_ID"
-        },
-        {
           "name": "EBAY_CLIENT_ID",
           "valueFrom": "/cardcade/non_pro_prod/EBAY_CLIENT_ID"
         },
         {
           "name": "EBAY_CLIENT_SECRET",
           "valueFrom": "/cardcade/non_pro_prod/EBAY_CLIENT_SECRET"
-        },
-        {
-          "name": "EBAY_DEV_ID",
-          "valueFrom": "/cardcade/non_pro_prod/EBAY_DEV_ID"
-        },
-        {
-          "name": "EBAY_GLOBAL_ID",
-          "valueFrom": "/cardcade/non_pro_prod/EBAY_GLOBAL_ID"
         },
         {
           "name": "SCRAPECHAIN_EBAY_COMPLETED_URL",
