@@ -142,6 +142,32 @@ export class PrizeOrder extends BaseEntity {
     | 'rejected'
     | 'offer_accepted';
 
+  /**
+   * High-level order type for admin visibility (distinct from `status`,
+   * which is the payment/fulfilment state). 'single' = one-item purchase,
+   * 'cart' = multi-item cart checkout, 'bundle_offer' = multi-item offer,
+   * 'offer' = single-item make-an-offer.
+   */
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'single',
+    name: 'order_type',
+  })
+  orderType: 'single' | 'cart' | 'bundle_offer' | 'offer';
+
+  /**
+   * Shared id linking orders created together (a cart checkout group or a
+   * bundle-offer group). Null for standalone single orders.
+   */
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'order_group_id',
+  })
+  orderGroupId?: string | null;
+
   @Column({
     type: 'varchar',
     length: 255,

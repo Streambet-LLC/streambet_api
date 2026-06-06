@@ -59,12 +59,12 @@
         <h1>Payment Failed</h1>
       </div>
       <div class="content">
-        <p>Hi <%= buyerName %>,</p>
+        <p>Hi <%= params.buyerName %>,</p>
         <div class="order-details">
-          <p><span class="label">Item:</span> <%= itemName %></p>
-          <p><span class="label">Order ID:</span> <%= orderId %></p>
+          <p><span class="label">Item:</span> <%= params.itemName %></p>
+          <p><span class="label">Order ID:</span> <%= params.orderId %></p>
         </div>
-        <p><%= message %></p>
+        <p><%= params.message %></p>
         <p>
           If you have any questions, please don't hesitate to reach out to our
           support team.

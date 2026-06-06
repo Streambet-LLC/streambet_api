@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
   HttpStatus,
@@ -99,6 +100,22 @@ export class CartController {
       message: 'Cart retrieved successfully',
       statusCode: HttpStatus.OK,
     };
+  }
+
+  @Get('checkout-success')
+  @ApiOperation({
+    summary: 'Summary of all orders in a checkout session (cart or bundle)',
+  })
+  @ApiResponse({ status: 200, description: 'Checkout summary retrieved' })
+  async getCheckoutSuccess(
+    @Request() req: RequestWithUser,
+    @Query('session_id') sessionId: string,
+  ) {
+    const data = await this.cartService.getCheckoutSessionSummary(
+      req.user.id,
+      sessionId,
+    );
+    return { data };
   }
 
   @Get('count')

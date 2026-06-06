@@ -32,6 +32,7 @@ import {
   CADECOINS_PER_USD,
 } from '../common/utils/fee-utils';
 import { EmailsService } from '../emails/email.service';
+import { PurchaseNotificationsService } from '../emails/purchase-notifications.service';
 import { CurrencyType } from '../enums/currency.enum';
 import { TransactionType } from '../enums/transaction-type.enum';
 import {
@@ -110,6 +111,7 @@ export class CartService {
     private walletRepository: Repository<Wallet>,
     private walletsService: WalletsService,
     private emailsService: EmailsService,
+    private purchaseNotifications: PurchaseNotificationsService,
     private configService: ConfigService,
     private promoCodeService: PromoCodeService,
   ) {
@@ -426,6 +428,10 @@ export class CartService {
   }> {
     const summary = await this.getCartSummary(userId);
 
+    // Shared id linking every order created in this checkout, so the admin
+    // Orders view can group a multi-item cart as one purchase.
+    const cartGroupId = `cart_${Date.now()}_${userId.slice(0, 8)}`;
+
     if (summary.removedItems.length > 0 && summary.sellerGroups.length === 0) {
       throw new BadRequestException({
         message: 'All items in your cart are unavailable',
@@ -569,6 +575,11 @@ export class CartService {
           throw new BadRequestException('Insufficient coin balance');
         }
 
+        // Buyer for the purchase-confirmation emails (looked up once).
+        const coinBuyer = await this.userRepository.findOne({
+          where: { id: userId },
+        });
+
         // Create orders and deduct coins
         for (const item of cardcadeGroup.items) {
           const order = await this.createOrder(
@@ -578,6 +589,7 @@ export class CartService {
             'coins',
             Math.round(Number(item.prizeConfiguration.amount) * item.quantity),
             0,
+            cartGroupId,
           );
           order.status = 'paid';
           await this.prizeOrderRepository.save(order);
@@ -589,6 +601,23 @@ export class CartService {
             'stock',
             item.quantity,
           );
+
+          // Coin purchases settle instantly — notify seller (safe to ship)
+          // and buyer. isPaymentProcessing is always false here.
+          if (item.prizeConfiguration && coinBuyer) {
+            await this.purchaseNotifications.sendSellerShopPurchaseNotification(
+              order,
+              item.prizeConfiguration,
+              coinBuyer,
+              { isPaymentProcessing: false },
+            );
+            await this.purchaseNotifications.sendBuyerShopPurchaseNotification(
+              order,
+              item.prizeConfiguration,
+              coinBuyer,
+              { isPaymentProcessing: false },
+            );
+          }
         }
 
         // Deduct coins
@@ -651,6 +680,7 @@ export class CartService {
           0,
           (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
             item.quantity,
+          cartGroupId,
         );
         cartOrderIds.push(order.id);
         allOrderIds.push(order.id);
@@ -731,6 +761,7 @@ export class CartService {
           0,
           (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
             item.quantity,
+          cartGroupId,
         );
         cartOrderIds.push(order.id);
         allOrderIds.push(order.id);
@@ -924,6 +955,9 @@ export class CartService {
       ? 'payment_processing'
       : 'paid';
 
+    // Buyer for the purchase-confirmation emails (looked up once).
+    const buyer = await this.userRepository.findOne({ where: { id: userId } });
+
     // Mark all orders
     for (const orderId of orderIds) {
       const order = await this.prizeOrderRepository.findOne({
@@ -952,6 +986,24 @@ export class CartService {
         'stock',
         order.coinsDeducted > 0 ? 1 : 1, // quantity is always per-order
       );
+
+      // Notify seller + buyer of the purchase. For ACH (isPaymentProcessing)
+      // the seller email carries a DO-NOT-SHIP banner; the "safe to ship"
+      // email is sent later from handleCartAchSettled once funds clear.
+      if (order.prizeConfiguration && buyer) {
+        await this.purchaseNotifications.sendSellerShopPurchaseNotification(
+          order,
+          order.prizeConfiguration,
+          buyer,
+          { isPaymentProcessing },
+        );
+        await this.purchaseNotifications.sendBuyerShopPurchaseNotification(
+          order,
+          order.prizeConfiguration,
+          buyer,
+          { isPaymentProcessing },
+        );
+      }
     }
 
     // Record discount code redemption if one was applied
@@ -1115,14 +1167,27 @@ export class CartService {
     const orderIds = metadata.orderIds.split(',');
     const userId = metadata.userId;
 
+    // Buyer for the settled notification (looked up once).
+    const buyer = await this.userRepository.findOne({ where: { id: userId } });
+
     // Flip orders to paid
     for (const orderId of orderIds) {
       const order = await this.prizeOrderRepository.findOne({
         where: { id: orderId },
+        relations: ['prizeConfiguration'],
       });
       if (!order || order.status !== 'payment_processing') continue;
       order.status = 'paid';
       await this.prizeOrderRepository.save(order);
+
+      // ACH has now cleared — tell the seller it's safe to ship.
+      if (order.prizeConfiguration && buyer) {
+        await this.purchaseNotifications.sendSellerPaymentSettledNotification(
+          order,
+          order.prizeConfiguration,
+          buyer,
+        );
+      }
     }
 
     // Deferred seller transfers
@@ -1182,6 +1247,89 @@ export class CartService {
         this.logger.error(`Failed to award CadeCoins on ACH settle: ${err}`);
       }
     }
+  }
+
+  /**
+   * Called from `payment_intent.payment_failed` for a cart checkout whose ACH
+   * debit bounced. Reverts every order in the group (restores stock, refunds
+   * any combined CadeCoins, flips → payment_failed) and notifies the seller and
+   * buyer for each. Mirrors the single-item `PrizeService.handleAchPaymentFailed`.
+   */
+  async handleCartAchFailed(stripeSessionId: string): Promise<void> {
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await this.stripe.checkout.sessions.retrieve(stripeSessionId);
+    } catch (err) {
+      this.logger.error(
+        `handleCartAchFailed: failed to retrieve session ${stripeSessionId}: ${err}`,
+      );
+      return;
+    }
+
+    const metadata = session.metadata;
+    if (!metadata || metadata.type !== 'cart_checkout') return;
+
+    const orderIds = metadata.orderIds.split(',');
+    const userId = metadata.userId;
+    const buyer = await this.userRepository.findOne({ where: { id: userId } });
+
+    for (const orderId of orderIds) {
+      const order = await this.prizeOrderRepository.findOne({
+        where: { id: orderId },
+        relations: ['prizeConfiguration'],
+      });
+      // Idempotency: only revert orders still reserved while ACH settled.
+      if (!order || order.status !== 'payment_processing') continue;
+
+      // Restore the stock slot reserved at checkout.
+      try {
+        await this.prizeConfigRepository.increment(
+          { id: order.prizeConfigurationId },
+          'stock',
+          1,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to restore stock for order ${order.id} on ACH failure: ${err}`,
+        );
+      }
+
+      // Refund any combined-payment CadeCoins deducted up-front.
+      if (order.paymentMethod === 'combined' && order.coinsDeducted > 0) {
+        try {
+          await this.walletsService.addCadeCoins(
+            userId,
+            order.coinsDeducted,
+            `Refund: ACH payment failed for cart order ${order.id}`,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Failed to refund CadeCoins for order ${order.id} on ACH failure: ${err}`,
+          );
+        }
+      }
+
+      order.status = 'payment_failed';
+      await this.prizeOrderRepository.save(order);
+
+      // Notify seller + buyer that the sale fell through.
+      if (order.prizeConfiguration && buyer) {
+        await this.purchaseNotifications.sendSellerPaymentFailedNotification(
+          order,
+          order.prizeConfiguration,
+          buyer,
+        );
+        await this.purchaseNotifications.sendBuyerPaymentFailedNotification(
+          order,
+          order.prizeConfiguration,
+          buyer,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Stripe webhook: cart ACH failed reverted for session ${stripeSessionId}`,
+    );
   }
 
   /**
@@ -1262,6 +1410,8 @@ export class CartService {
           ? `[Bundle: ${bundleOfferId}] ${dto.offerNotes}`
           : `[Bundle: ${bundleOfferId}]`,
         status: 'offer_made',
+        orderType: 'bundle_offer',
+        orderGroupId: bundleOfferId,
       });
       const savedOrder = await this.prizeOrderRepository.save(order);
       orders.push(savedOrder);
@@ -1283,17 +1433,24 @@ export class CartService {
         const itemNames = items
           .map((i) => i.prizeConfiguration.name)
           .join(', ');
+        const frontendUrl = this.configService.get<string>(
+          'CLIENT_URL',
+          'http://localhost:3000',
+        );
         await this.emailsService.sendEmailSMTP(
           {
             toAddress: [seller.email],
             subject: 'New Bundle Offer Received',
             params: {
-              buyerName: buyer.username,
+              sellerName: seller.name || seller.username,
+              buyerName: buyer.name || buyer.username,
               itemNames,
+              itemCount: items.length,
               offerAmount: dto.offerAmount.toFixed(2),
+              reviewUrl: `${frontendUrl}/seller/shop/manage?tab=offers`,
             },
           },
-          'bundle-offer',
+          'bundle_offer',
         );
       } catch (err) {
         this.logger.error(`Failed to send bundle offer email: ${err}`);
@@ -1301,6 +1458,224 @@ export class CartService {
     }
 
     return orders;
+  }
+
+  /**
+   * Summary of all orders in a checkout session (cart or accepted bundle),
+   * for the post-checkout success page. Scoped to the requesting user.
+   */
+  async getCheckoutSessionSummary(
+    userId: string,
+    sessionId: string,
+  ): Promise<{
+    sessionId: string;
+    isPaymentProcessing: boolean;
+    orderCount: number;
+    total: number;
+    items: Array<{
+      orderId: string;
+      itemName: string;
+      itemImage: string | null;
+      itemCategory: string | null;
+      status: string;
+      totalPrice: number;
+      usdCharged: number;
+      paymentMethod: string;
+      sellerName: string | null;
+      sellerUsername: string | null;
+    }>;
+  }> {
+    if (!sessionId) {
+      throw new BadRequestException('session_id is required');
+    }
+    const orders = await this.prizeOrderRepository.find({
+      where: { userId, stripeSessionId: sessionId },
+      relations: [
+        'prizeConfiguration',
+        'prizeConfiguration.itemImages',
+        'prizeConfiguration.creator',
+      ],
+      order: { createdAt: 'ASC' },
+    });
+
+    const items = orders.map((o) => {
+      const pc = o.prizeConfiguration;
+      const sortedImages = (pc?.itemImages || [])
+        .slice()
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+      const itemImage = pc?.imageUrl || sortedImages[0]?.imageUrl || null;
+      return {
+        orderId: o.id,
+        itemName: pc?.name || 'Item',
+        itemImage,
+        itemCategory: pc?.category || null,
+        status: o.status,
+        totalPrice: Number(o.totalPrice),
+        usdCharged: Number(o.usdCharged),
+        paymentMethod: o.paymentMethod,
+        sellerName: pc?.creator?.name || pc?.creator?.username || null,
+        sellerUsername: pc?.creator?.username || null,
+      };
+    });
+
+    const isPaymentProcessing = orders.some(
+      (o) => o.status === 'payment_processing',
+    );
+    const total = items.reduce(
+      (sum, i) => sum + (i.usdCharged > 0 ? i.usdCharged : i.totalPrice),
+      0,
+    );
+
+    return {
+      sessionId,
+      isPaymentProcessing,
+      orderCount: items.length,
+      total: Math.round(total * 100) / 100,
+      items,
+    };
+  }
+
+  /**
+   * Build ONE Stripe checkout session for an accepted bundle offer over its
+   * existing orders, then flip them all to `offer_accepted`. Reuses the
+   * `cart_checkout` session shape so handleCheckoutSuccess / handleCartAchSettled
+   * / handleCartAchFailed finalize the bundle (status, stock, per-order emails,
+   * single seller transfer). Bundles are single-seller.
+   *
+   * Called by PrizeService.acceptBundleOffer (seller/admin accept or buyer
+   * accept-counter). The orders passed in are the ones being accepted (already
+   * loaded with prizeConfiguration + user).
+   */
+  async createBundleAcceptCheckout(
+    orders: PrizeOrder[],
+  ): Promise<Stripe.Checkout.Session> {
+    if (orders.length === 0) {
+      throw new BadRequestException('No bundle orders to accept');
+    }
+    const buyerUserId = orders[0].userId;
+    const prize0 = orders[0].prizeConfiguration;
+    const sellerId = prize0?.createdBy;
+    if (!sellerId) {
+      throw new BadRequestException('Bundle offers require a seller');
+    }
+
+    // Negotiated whole-bundle subtotal (identical on each order; read once,
+    // do NOT sum). Counter wins if the seller countered.
+    const subtotalUsd =
+      orders[0].counterOfferAmount != null
+        ? Number(orders[0].counterOfferAmount)
+        : Number(orders[0].offerAmount || 0);
+    const subtotalCents = Math.round(subtotalUsd * 100);
+
+    // One shipping fee for the whole bundle.
+    const shippingUsd =
+      prize0?.shippingCostUsd != null
+        ? Number(prize0.shippingCostUsd)
+        : SHIPPING_FEE;
+    const shippingCents = Math.round(shippingUsd * 100);
+
+    // Bundle offers don't capture the buyer's Stripe method at offer time, so
+    // default to card (also the conservative fee tier).
+    const stripeMethod: 'card' | 'us_bank_account' =
+      orders[0].stripePaymentMethod === 'us_bank_account'
+        ? 'us_bank_account'
+        : 'card';
+
+    const buyerFeeCents = calculateBuyerItemFeeCents(
+      subtotalCents,
+      shippingCents,
+      getBuyerFeePercentForStripeMethod(stripeMethod),
+    );
+    const totalChargeCents = subtotalCents + shippingCents + buyerFeeCents;
+
+    // Single seller + deferred transfer (same model as cart checkout).
+    const seller = await this.userRepository.findOne({
+      where: { id: sellerId },
+      relations: ['wallet'],
+    });
+    const sellerName = seller?.name || seller?.username || 'Seller';
+    const transferInstructions: Array<{
+      orderId: string;
+      sellerId: string;
+      stripeAccountId: string;
+      amountCents: number;
+    }> = [];
+    if (seller?.stripeAccountId) {
+      const sellerFeePercent = getEffectiveSellerFeePercent({
+        lifetimeCadeCoins: Number(seller.wallet?.lifetimeCoinsEarned || 0),
+        adminFeeOverridePercent:
+          seller.adminFeeOverridePercent != null
+            ? Number(seller.adminFeeOverridePercent)
+            : null,
+      });
+      const sellerFeeCents = calculateSellerFeeCents(
+        subtotalCents,
+        sellerFeePercent,
+      );
+      transferInstructions.push({
+        orderId: orders[0].id,
+        sellerId,
+        stripeAccountId: seller.stripeAccountId,
+        amountCents: subtotalCents + shippingCents - sellerFeeCents,
+      });
+    }
+
+    const clientUrl =
+      this.configService.get<string>('CLIENT_URL') || 'http://localhost:8080';
+    const orderIds = orders.map((o) => o.id);
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'payment',
+      payment_method_types: [
+        stripeMethod,
+      ] as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${sellerName}'s bundle — ${orders.length} item${
+                orders.length > 1 ? 's' : ''
+              }`,
+            },
+            unit_amount: totalChargeCents,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${clientUrl}/cart/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl}/shop?status=cancel`,
+      metadata: {
+        type: 'cart_checkout',
+        userId: buyerUserId,
+        orderIds: orderIds.join(','),
+        transferInstructions: JSON.stringify(transferInstructions),
+      },
+      payment_intent_data: {
+        metadata: {
+          type: 'cart_checkout',
+          userId: buyerUserId,
+          orderIds: orderIds.join(','),
+        },
+      },
+    };
+
+    const session = await this.stripe.checkout.sessions.create(sessionParams);
+
+    // Flip all accepted orders → offer_accepted, attach session, distribute the
+    // total charge across them for reporting. The webhook (cart_checkout path)
+    // moves them to paid/payment_processing on payment.
+    const perOrderUsd =
+      Math.round(totalChargeCents / orders.length) / 100;
+    for (const o of orders) {
+      o.status = 'offer_accepted';
+      o.stripeSessionId = session.id;
+      o.stripePaymentMethod = stripeMethod;
+      o.usdCharged = perOrderUsd;
+    }
+    await this.prizeOrderRepository.save(orders);
+
+    return session;
   }
 
   /**
@@ -1313,6 +1688,7 @@ export class CartService {
     paymentMethod: 'coins' | 'usd' | 'combined',
     coinsDeducted: number,
     usdCharged: number,
+    orderGroupId?: string,
   ): Promise<PrizeOrder> {
     const totalPrice =
       (Number(item.prizeConfiguration.amount) / CADECOINS_PER_USD) *
@@ -1328,6 +1704,8 @@ export class CartService {
       usdCharged,
       totalPrice,
       status: 'pending',
+      orderType: 'cart',
+      orderGroupId: orderGroupId ?? null,
     });
 
     return this.prizeOrderRepository.save(order);

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "toAddress": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "email"
+      },
+      "description": "Recipient email addresses"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject line"
+    },
+    "params": {
+      "type": "object",
+      "properties": {
+        "sellerName": {
+          "type": "string",
+          "description": "Name of the seller receiving the offer"
+        },
+        "buyerName": {
+          "type": "string",
+          "description": "Name of the buyer who made the bundle offer"
+        },
+        "itemNames": {
+          "type": "string",
+          "description": "Comma-separated names of the items in the bundle"
+        },
+        "itemCount": {
+          "type": "number",
+          "description": "Number of items in the bundle"
+        },
+        "offerAmount": {
+          "type": "string",
+          "description": "Total bundle offer amount in USD (formatted, 2 decimals)"
+        },
+        "reviewUrl": {
+          "type": "string",
+          "description": "URL to the seller dashboard offers tab to review the bundle offer"
+        }
+      },
+      "required": [
+        "sellerName",
+        "buyerName",
+        "itemNames",
+        "offerAmount",
+        "reviewUrl"
+      ]
+    }
+  },
+  "required": ["toAddress", "subject", "params"]
+}
