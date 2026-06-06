@@ -44,7 +44,15 @@
         { "name": "N8N_ENABLED", "value": "true" },
         { "name": "N8N_RETRIES", "value": "3" },
         { "name": "N8N_RETRY_DELAY_MS", "value": "1000" },
-        { "name": "N8N_TIMEOUT_MS", "value": "5000" }
+        { "name": "N8N_TIMEOUT_MS", "value": "5000" },
+        {
+          "name": "EBAY_VERIFICATION_TOKEN",
+          "value": "33d987a0692fc4b5bbb4f55391548d38cf66a45497a2d15baee76fb43ad9c738"
+        },
+        {
+          "name": "EBAY_DELETION_ENDPOINT",
+          "value": "https://api.cardcade.fun/api/webhook/ebay/account-deletion"
+        }
       ],
       "secrets": [
         {
