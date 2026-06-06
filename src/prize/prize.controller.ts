@@ -22,6 +22,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { PrizeService } from './prize.service';
+import { EmailLogService } from '../emails/email-log.service';
 import { PrizeEngagementService } from './prize-engagement.service';
 import {
   PrizeConfigurationDto,
@@ -533,7 +534,10 @@ export class PrizeController {
 @Controller('admin/prizes')
 @UseGuards(JwtAuthGuard)
 export class AdminPrizeController {
-  constructor(private readonly prizeService: PrizeService) {}
+  constructor(
+    private readonly prizeService: PrizeService,
+    private readonly emailLogService: EmailLogService,
+  ) {}
 
   /**
    * Helper method to check if user is admin
@@ -964,6 +968,61 @@ export class AdminPrizeController {
   ): Promise<PrizeOrderResponseDto> {
     this.ensureAdmin(req.user);
     return this.prizeService.rejectOffer(orderId);
+  }
+
+  /**
+   * Admin endpoint: Mark any paid order as shipped (e.g. CardCade-owned items,
+   * or fulfilling on a seller's behalf). Sets tracking + emails the buyer.
+   */
+  @Patch('orders/:orderId/mark-shipped')
+  @ApiOperation({ summary: 'Mark any order as shipped (admin only)' })
+  @ApiParam({ name: 'orderId', description: 'Prize order ID' })
+  @ApiResponse({ status: 200, type: PrizeOrderResponseDto })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async adminMarkAsShipped(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+    @Body() dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
+    this.ensureAdmin(req.user);
+    return this.prizeService.adminMarkAsShipped(orderId, dto);
+  }
+
+  /** Admin: email send history for an order. */
+  @Get('orders/:orderId/email-logs')
+  @ApiOperation({ summary: 'List email send attempts for an order (admin)' })
+  async getOrderEmailLogs(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ) {
+    this.ensureAdmin(req.user);
+    const data = await this.emailLogService.listForOrder(orderId);
+    return { data };
+  }
+
+  /** Admin: re-send a previously-logged email by replaying its payload. */
+  @Post('email-logs/:id/resend')
+  @ApiOperation({ summary: 'Resend a logged email (admin)' })
+  async resendEmailLog(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ) {
+    this.ensureAdmin(req.user);
+    return this.emailLogService.resendLog(id);
+  }
+
+  /**
+   * Admin: reconstruct + send the buyer/seller purchase emails for an order
+   * (works for orders that never sent any — e.g. pre-fix cart purchases).
+   */
+  @Post('orders/:orderId/resend-emails')
+  @ApiOperation({ summary: 'Resend purchase emails for an order (admin)' })
+  async resendOrderEmails(
+    @Request() req: RequestWithUser,
+    @Param('orderId') orderId: string,
+  ) {
+    this.ensureAdmin(req.user);
+    return this.prizeService.resendOrderPurchaseEmails(orderId);
   }
 
   /**

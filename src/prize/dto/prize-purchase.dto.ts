@@ -197,6 +197,36 @@ export class PrizeOrderResponseDto {
     | 'rejected'
     | 'offer_accepted';
 
+  @ApiProperty({
+    enum: ['single', 'cart', 'bundle_offer', 'offer'],
+    description:
+      'High-level order type for admin visibility (distinct from status).',
+  })
+  orderType?: 'single' | 'cart' | 'bundle_offer' | 'offer';
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Shared id linking orders created together (cart checkout / bundle offer).',
+  })
+  orderGroupId?: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Number of orders sharing this order_group_id (e.g. items in the cart/bundle).',
+  })
+  groupItemCount?: number;
+
+  @ApiProperty({ nullable: true, description: 'Tracking number once shipped.' })
+  trackingNumber?: string;
+
+  @ApiProperty({ nullable: true, description: 'Shipping carrier once shipped.' })
+  shippingCarrier?: string;
+
+  @ApiProperty({ nullable: true, description: 'ISO date the order shipped.' })
+  shippedAt?: string | null;
+
   @ApiProperty()
   createdAt: string;
 

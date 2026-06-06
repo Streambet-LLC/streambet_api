@@ -25,6 +25,8 @@ import { PrizeEngagementService } from './prize-engagement.service';
 import { User } from '../users/entities/user.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { EmailsService } from '../emails/email.service';
+import { PurchaseNotificationsService } from '../emails/purchase-notifications.service';
+import { CartService } from '../cart/cart.service';
 import { CurrencyType } from '../enums/currency.enum';
 import { TransactionType } from '../enums/transaction-type.enum';
 import {
@@ -142,6 +144,9 @@ export class PrizeService implements OnModuleInit {
     private readonly walletService: WalletsService,
     private readonly configService: ConfigService,
     private readonly emailsService: EmailsService,
+    private readonly purchaseNotifications: PurchaseNotificationsService,
+    @Inject(forwardRef(() => CartService))
+    private readonly cartService: CartService,
     private readonly promoCodeService: PromoCodeService,
     private readonly engagementService: PrizeEngagementService,
     private readonly inboxService: InboxService,
@@ -3467,6 +3472,20 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
+    // Notify the buyer that their ACH payment failed and the order was cancelled.
+    try {
+      await this.purchaseNotifications.sendBuyerPaymentFailedNotification(
+        updated,
+        prize,
+        order.user,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send ACH-failed buyer email for order ${orderId}:`,
+        error,
+      );
+    }
+
     return true;
   }
 
@@ -3476,104 +3495,12 @@ export class PrizeService implements OnModuleInit {
     buyer: User,
     options: { isPaymentProcessing?: boolean } = {},
   ): Promise<void> {
-    try {
-      // Determine recipient: admin for CardCade items, seller for seller-owned items
-      let recipientEmail: string;
-      let recipientName: string;
-      // In-person items don't need a Mark-as-Shipped CTA — leave undefined
-      // so the EJS template's `<% if (params.markShippedUrl) %>` guard hides it.
-      let markShippedUrl: string | undefined;
-      const isInPerson = prize.isInPerson === true;
-
-      const frontendUrl = this.configService.get<string>(
-        'CLIENT_URL',
-        'http://localhost:3000',
-      );
-
-      if (!prize.createdBy) {
-        // CardCade (admin) item - send to admin email
-        recipientEmail =
-          this.configService.get<string>('ADMIN_EMAIL') ||
-          'contact@cardcade.fun';
-        recipientName = 'CardCade Admin';
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
-      } else {
-        // Seller-owned item
-        const seller = await this.userRepository.findOne({
-          where: { id: prize.createdBy },
-        });
-
-        if (!seller || !seller.email) {
-          this.logger.warn(
-            `Seller ${prize.createdBy} not found or has no email for order ${order.id}`,
-          );
-          return;
-        }
-
-        recipientEmail = seller.email;
-        recipientName = seller.name || seller.username;
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
-      }
-
-      // Show the recipient the amount without the buyer service fee
-      const BUYER_FEE_PERCENT = BUYER_PROCESSING_FEE_PERCENT;
-      const charged = parseFloat(order.usdCharged?.toString() || '0');
-      const sellerVisibleAmount =
-        charged > 0
-          ? parseFloat((charged / (1 + BUYER_FEE_PERCENT / 100)).toFixed(2))
-          : order.totalPrice;
-
-      const shipping: PrizeOrder['shippingAddress'] = order.shippingAddress || {
-        firstName: '',
-        lastName: '',
-        addressLine1: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: '',
-      };
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [recipientEmail],
-          subject: `New Sale! ${prize.name} has been purchased 🎉`,
-          params: {
-            sellerName: recipientName,
-            itemName: prize.name,
-            buyerName: buyer.name || buyer.username,
-            amount: sellerVisibleAmount,
-            orderId: order.id,
-            purchaseDate: new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-            buyerFullName: buyer.name || buyer.username,
-            shippingAddressLine1: isInPerson ? '' : shipping.addressLine1 || '',
-            shippingAddressLine2: isInPerson ? '' : shipping.addressLine2 || '',
-            shippingCity: isInPerson ? '' : shipping.city || '',
-            shippingState: isInPerson ? '' : shipping.state || '',
-            shippingZipCode: isInPerson ? '' : shipping.zipCode || '',
-            shippingCountry: isInPerson ? '' : shipping.country || '',
-            markShippedUrl,
-            isPaymentProcessing: options.isPaymentProcessing === true,
-          },
-        },
-        'seller_shop_purchase',
-      );
-      this.logger.log(
-        `Shop purchase notification sent to ${recipientEmail} for order ${order.id}`,
-      );
-    } catch (emailError) {
-      this.logger.error(
-        `Failed to send shop purchase email for order ${order.id}:`,
-        emailError,
-      );
-    }
+    return this.purchaseNotifications.sendSellerShopPurchaseNotification(
+      order,
+      prize,
+      buyer,
+      options,
+    );
   }
 
   private async sendBuyerShopPurchaseNotification(
@@ -3582,58 +3509,12 @@ export class PrizeService implements OnModuleInit {
     buyer: User,
     options: { isPaymentProcessing?: boolean } = {},
   ): Promise<void> {
-    if (!buyer.email) {
-      this.logger.warn(`Buyer ${buyer.id} has no email for order ${order.id}`);
-      return;
-    }
-
-    try {
-      const frontendUrl = this.configService.get<string>(
-        'CLIENT_URL',
-        'http://localhost:3000',
-      );
-
-      // Look up seller name
-      let sellerName = 'CardCade';
-      if (prize.createdBy) {
-        const seller = await this.userRepository.findOne({
-          where: { id: prize.createdBy },
-        });
-        if (seller) {
-          sellerName = seller.name || seller.username;
-        }
-      }
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [buyer.email],
-          subject: `Purchase Confirmed! ${prize.name} 🎉`,
-          params: {
-            buyerName: buyer.name || buyer.username,
-            itemName: prize.name,
-            sellerName,
-            amount: parseFloat(order.totalPrice?.toString() || '0'),
-            orderId: order.id,
-            purchaseDate: new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-            shopUrl: `${frontendUrl}/shop`,
-            isPaymentProcessing: options.isPaymentProcessing === true,
-          },
-        },
-        'buyer_shop_purchase',
-      );
-      this.logger.log(
-        `Buyer shop purchase notification sent to ${buyer.email} for order ${order.id}`,
-      );
-    } catch (emailError) {
-      this.logger.error(
-        `Failed to send buyer shop purchase email for order ${order.id}:`,
-        emailError,
-      );
-    }
+    return this.purchaseNotifications.sendBuyerShopPurchaseNotification(
+      order,
+      prize,
+      buyer,
+      options,
+    );
   }
 
   /**
@@ -3645,65 +3526,11 @@ export class PrizeService implements OnModuleInit {
     prize: PrizeConfiguration,
     buyer: User,
   ): Promise<void> {
-    try {
-      const frontendUrl = this.configService.get<string>(
-        'CLIENT_URL',
-        'http://localhost:3000',
-      );
-      const isInPerson = prize.isInPerson === true;
-
-      let recipientEmail: string;
-      let recipientName: string;
-      let markShippedUrl: string | undefined;
-
-      if (!prize.createdBy) {
-        recipientEmail =
-          this.configService.get<string>('ADMIN_EMAIL') ||
-          'contact@cardcade.fun';
-        recipientName = 'CardCade Admin';
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl}/admin/prizes/redemptions?orderId=${order.id}`;
-      } else {
-        const seller = await this.userRepository.findOne({
-          where: { id: prize.createdBy },
-        });
-        if (!seller || !seller.email) {
-          this.logger.warn(
-            `Seller ${prize.createdBy} not found or has no email for settled order ${order.id}`,
-          );
-          return;
-        }
-        recipientEmail = seller.email;
-        recipientName = seller.name || seller.username;
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl}/seller/shop/manage?tab=orders&orderId=${order.id}`;
-      }
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [recipientEmail],
-          subject: `Payment Settled — Safe to Ship: ${prize.name}`,
-          params: {
-            sellerName: recipientName,
-            itemName: prize.name,
-            buyerName: buyer.name || buyer.username,
-            orderId: order.id,
-            markShippedUrl,
-          },
-        },
-        'seller_payment_settled',
-      );
-      this.logger.log(
-        `Payment-settled notification sent to ${recipientEmail} for order ${order.id}`,
-      );
-    } catch (emailError) {
-      this.logger.error(
-        `Failed to send payment-settled email for order ${order.id}:`,
-        emailError,
-      );
-    }
+    return this.purchaseNotifications.sendSellerPaymentSettledNotification(
+      order,
+      prize,
+      buyer,
+    );
   }
 
   /**
@@ -3715,51 +3542,11 @@ export class PrizeService implements OnModuleInit {
     prize: PrizeConfiguration,
     buyer: User,
   ): Promise<void> {
-    try {
-      let recipientEmail: string;
-      let recipientName: string;
-
-      if (!prize.createdBy) {
-        recipientEmail =
-          this.configService.get<string>('ADMIN_EMAIL') ||
-          'contact@cardcade.fun';
-        recipientName = 'CardCade Admin';
-      } else {
-        const seller = await this.userRepository.findOne({
-          where: { id: prize.createdBy },
-        });
-        if (!seller || !seller.email) {
-          this.logger.warn(
-            `Seller ${prize.createdBy} not found or has no email for failed order ${order.id}`,
-          );
-          return;
-        }
-        recipientEmail = seller.email;
-        recipientName = seller.name || seller.username;
-      }
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [recipientEmail],
-          subject: `Payment Failed — Order Cancelled: ${prize.name}`,
-          params: {
-            sellerName: recipientName,
-            itemName: prize.name,
-            buyerName: buyer.name || buyer.username,
-            orderId: order.id,
-          },
-        },
-        'seller_payment_failed',
-      );
-      this.logger.log(
-        `Payment-failed notification sent to ${recipientEmail} for order ${order.id}`,
-      );
-    } catch (emailError) {
-      this.logger.error(
-        `Failed to send payment-failed email for order ${order.id}:`,
-        emailError,
-      );
-    }
+    return this.purchaseNotifications.sendSellerPaymentFailedNotification(
+      order,
+      prize,
+      buyer,
+    );
   }
 
   private async ensureRedemptionForOrder(
@@ -3904,20 +3691,39 @@ export class PrizeService implements OnModuleInit {
     }
 
     const total = await query.getCount();
-    let data = await query.orderBy('order.createdAt', 'DESC').getMany();
+    const allData = await query.orderBy('order.createdAt', 'DESC').getMany();
+
+    // Count orders per group (across the full filtered set) so the admin UI
+    // can show "Cart ×N" / "Bundle ×N".
+    const groupCounts = new Map<string, number>();
+    for (const o of allData) {
+      if (o.orderGroupId) {
+        groupCounts.set(
+          o.orderGroupId,
+          (groupCounts.get(o.orderGroupId) ?? 0) + 1,
+        );
+      }
+    }
 
     // Parse range for pagination
+    let pageData = allData;
     if (filterDto?.range) {
       try {
         const [start, end] = JSON.parse(filterDto.range);
-        data = data.slice(start, end);
+        pageData = allData.slice(start, end);
       } catch {
         // Invalid range format, return all
       }
     }
 
     return {
-      data: data.map((order) => this.mapOrderToDto(order)),
+      data: pageData.map((order) => {
+        const dto = this.mapOrderToDto(order);
+        dto.groupItemCount = order.orderGroupId
+          ? (groupCounts.get(order.orderGroupId) ?? 1)
+          : 1;
+        return dto;
+      }),
       total,
     };
   }
@@ -4519,19 +4325,37 @@ export class PrizeService implements OnModuleInit {
     }
 
     const total = await query.getCount();
-    let data = await query.orderBy('order.createdAt', 'DESC').getMany();
+    const allData = await query.orderBy('order.createdAt', 'DESC').getMany();
 
+    // Count orders per group so the seller UI can show "Bundle ×N".
+    const groupCounts = new Map<string, number>();
+    for (const o of allData) {
+      if (o.orderGroupId) {
+        groupCounts.set(
+          o.orderGroupId,
+          (groupCounts.get(o.orderGroupId) ?? 0) + 1,
+        );
+      }
+    }
+
+    let pageData = allData;
     if (filterDto?.range) {
       try {
         const [start, end] = JSON.parse(filterDto.range);
-        data = data.slice(start, end);
+        pageData = allData.slice(start, end);
       } catch {
         // Invalid range format, return all
       }
     }
 
     return {
-      data: data.map((order) => this.mapOrderToDto(order)),
+      data: pageData.map((order) => {
+        const dto = this.mapOrderToDto(order);
+        dto.groupItemCount = order.orderGroupId
+          ? (groupCounts.get(order.orderGroupId) ?? 1)
+          : 1;
+        return dto;
+      }),
       total,
     };
   }
@@ -4624,6 +4448,11 @@ export class PrizeService implements OnModuleInit {
       stripePaymentMethod: order.stripePaymentMethod ?? null,
       cryptoTxSignature: order.cryptoTxSignature ?? undefined,
       status: order.status,
+      orderType: order.orderType,
+      orderGroupId: order.orderGroupId ?? undefined,
+      trackingNumber: order.trackingNumber ?? undefined,
+      shippingCarrier: order.shippingCarrier ?? undefined,
+      shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
       offerAmount: order.offerAmount
         ? parseFloat(order.offerAmount.toString())
         : undefined,
@@ -4719,6 +4548,7 @@ export class PrizeService implements OnModuleInit {
       // buyer agreed to, with zero client trust at that point.
       stripePaymentMethod: dto.stripePaymentMethod,
       status: 'offer_made',
+      orderType: 'offer',
     });
 
     const saved = await this.prizeOrderRepository.save(order);
@@ -4781,6 +4611,12 @@ export class PrizeService implements OnModuleInit {
   ): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
 
+    // Bundle offers are negotiated as a single group: counter every order in
+    // the bundle together and email the buyer once.
+    if (order.orderType === 'bundle_offer' && order.orderGroupId) {
+      return this.counterBundleOffer(order.orderGroupId, dto);
+    }
+
     if (order.status !== 'offer_made') {
       throw new BadRequestException('Can only counter offer on pending offers');
     }
@@ -4833,6 +4669,12 @@ export class PrizeService implements OnModuleInit {
    */
   async acceptOffer(orderId: string): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
+
+    // Bundle: seller/admin accepts the whole bundle → one checkout for all
+    // items, email the buyer the link.
+    if (order.orderType === 'bundle_offer' && order.orderGroupId) {
+      return this.acceptBundleOffer(order.orderGroupId, { emailBuyer: true });
+    }
 
     // Allow accepting a pending offer. Also allow *retrying* an offer that
     // was already flipped to `offer_accepted` but never got a Stripe checkout
@@ -5022,6 +4864,10 @@ export class PrizeService implements OnModuleInit {
   async rejectOffer(orderId: string): Promise<PrizeOrderResponseDto> {
     const order = await this.getPrizeOrderById(orderId);
 
+    if (order.orderType === 'bundle_offer' && order.orderGroupId) {
+      return this.rejectBundleOffer(order.orderGroupId);
+    }
+
     if (order.status !== 'offer_made') {
       throw new BadRequestException('Can only reject pending offers');
     }
@@ -5070,6 +4916,14 @@ export class PrizeService implements OnModuleInit {
     orderId: string,
   ): Promise<{ stripeSessionUrl: string }> {
     const order = await this.getPrizeOrderById(orderId);
+
+    // Bundle: buyer accepts the countered bundle → one checkout for all items.
+    if (order.orderType === 'bundle_offer' && order.orderGroupId) {
+      const result = await this.acceptBundleOffer(order.orderGroupId, {
+        emailBuyer: false,
+      });
+      return { stripeSessionUrl: result.stripeSessionUrl ?? '' };
+    }
 
     if (order.status !== 'countered') {
       throw new BadRequestException('No counter offer to accept');
@@ -5181,6 +5035,188 @@ export class PrizeService implements OnModuleInit {
     return { stripeSessionUrl: session.url || '' };
   }
 
+  // ---------------------------------------------------------------------------
+  // Bundle offer negotiation (operates on every order sharing orderGroupId)
+  // ---------------------------------------------------------------------------
+
+  /** Load all orders in a bundle group (relations needed for emails/checkout). */
+  private async loadBundleGroup(orderGroupId: string): Promise<PrizeOrder[]> {
+    const orders = await this.prizeOrderRepository.find({
+      where: { orderGroupId },
+      relations: ['prizeConfiguration', 'user'],
+      order: { createdAt: 'ASC' },
+    });
+    if (orders.length === 0) {
+      throw new NotFoundException('Bundle offer not found');
+    }
+    return orders;
+  }
+
+  /** Seller/admin counters a whole bundle. All orders → countered; one email. */
+  private async counterBundleOffer(
+    orderGroupId: string,
+    dto: CounterOfferDto,
+  ): Promise<PrizeOrderResponseDto> {
+    const orders = await this.loadBundleGroup(orderGroupId);
+    const pending = orders.filter((o) => o.status === 'offer_made');
+    if (pending.length === 0) {
+      throw new BadRequestException('Can only counter offer on pending offers');
+    }
+    for (const o of pending) {
+      o.counterOfferAmount = dto.counterOfferAmount;
+      o.status = 'countered';
+    }
+    await this.prizeOrderRepository.save(pending);
+
+    await this.sendBundleNegotiationEmail('offer_countered', orders, {
+      counterOfferAmount: dto.counterOfferAmount,
+      notes: dto.offerNotes,
+    });
+
+    return this.mapOrderToDto(pending[0]);
+  }
+
+  /** Seller/admin rejects a whole bundle. All orders → rejected; one email. */
+  private async rejectBundleOffer(
+    orderGroupId: string,
+  ): Promise<PrizeOrderResponseDto> {
+    const orders = await this.loadBundleGroup(orderGroupId);
+    const active = orders.filter(
+      (o) => o.status === 'offer_made' || o.status === 'countered',
+    );
+    if (active.length === 0) {
+      throw new BadRequestException('Can only reject pending offers');
+    }
+    for (const o of active) o.status = 'rejected';
+    await this.prizeOrderRepository.save(active);
+
+    await this.sendBundleNegotiationEmail('offer_rejected', orders, {});
+
+    return this.mapOrderToDto(active[0]);
+  }
+
+  /**
+   * Accept a whole bundle (seller/admin or buyer-accept-counter). Creates ONE
+   * checkout session for all items via the cart machinery (so finalization +
+   * ACH settle/fail + per-order emails are all reused), flips every order to
+   * `offer_accepted`, and optionally emails the buyer the checkout link.
+   */
+  async acceptBundleOffer(
+    orderGroupId: string,
+    opts: { emailBuyer: boolean },
+  ): Promise<PrizeOrderResponseDto & { stripeSessionUrl?: string }> {
+    const orders = await this.loadBundleGroup(orderGroupId);
+    const acceptable = orders.filter(
+      (o) =>
+        o.status === 'offer_made' ||
+        o.status === 'countered' ||
+        (o.status === 'offer_accepted' && !o.stripeSessionId),
+    );
+    if (acceptable.length === 0) {
+      throw new BadRequestException('Can only accept pending offers');
+    }
+
+    const session =
+      await this.cartService.createBundleAcceptCheckout(acceptable);
+
+    if (opts.emailBuyer) {
+      await this.sendBundleNegotiationEmail('offer_accepted', orders, {
+        checkoutUrl: session.url || '',
+      });
+    }
+
+    const dto = this.mapOrderToDto(
+      acceptable[0],
+    ) as PrizeOrderResponseDto & { stripeSessionUrl?: string };
+    dto.stripeSessionUrl = session.url || '';
+    return dto;
+  }
+
+  /**
+   * Send a single negotiation email to the bundle's buyer, reusing the
+   * existing single-item offer templates with bundle-summary params.
+   */
+  private async sendBundleNegotiationEmail(
+    type: 'offer_countered' | 'offer_rejected' | 'offer_accepted',
+    orders: PrizeOrder[],
+    extra: {
+      counterOfferAmount?: number;
+      notes?: string;
+      checkoutUrl?: string;
+    },
+  ): Promise<void> {
+    try {
+      const buyer = orders[0].user;
+      if (!buyer?.email) return;
+      const frontendUrl = this.configService.get<string>(
+        'CLIENT_URL',
+        'http://localhost:3000',
+      );
+      const itemNames = orders
+        .map((o) => o.prizeConfiguration?.name)
+        .filter(Boolean)
+        .join(', ');
+      const prizeName = `your ${orders.length}-item bundle (${itemNames})`;
+      const bundleTotal = orders[0].offerAmount
+        ? Number(orders[0].offerAmount)
+        : 0;
+      const repId = orders[0].id;
+
+      if (type === 'offer_countered') {
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [buyer.email],
+            subject: `🔄 Counter Offer on your bundle`,
+            params: {
+              userName: buyer.username,
+              orderId: repId,
+              prizeName,
+              originalOffer: bundleTotal,
+              counterOffer: extra.counterOfferAmount ?? 0,
+              notes: extra.notes || '',
+              acceptUrl: `${frontendUrl}/prizes?acceptCounter=${repId}`,
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_countered',
+        );
+      } else if (type === 'offer_accepted') {
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [buyer.email],
+            subject: `✅ Your bundle offer has been accepted!`,
+            params: {
+              userName: buyer.username,
+              orderId: repId,
+              prizeName,
+              acceptedAmount: extra.counterOfferAmount ?? bundleTotal,
+              checkoutUrl: extra.checkoutUrl || '',
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_accepted',
+        );
+      } else {
+        await this.emailsService.sendEmailSMTP(
+          {
+            toAddress: [buyer.email],
+            subject: `Update on your bundle offer`,
+            params: {
+              userName: buyer.username,
+              prizeName,
+              offerAmount: bundleTotal,
+              prizesUrl: `${frontendUrl}/prizes`,
+              supportUrl: `${frontendUrl}/support`,
+            },
+          },
+          'offer_rejected',
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send bundle ${type} email: ${error}`);
+    }
+  }
+
   private async awardCadeCoinTransactionRewards(
     order: PrizeOrder,
     prize: PrizeConfiguration,
@@ -5272,6 +5308,73 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
+    return this.markOrderShipped(order, prize, dto);
+  }
+
+  /**
+   * Admin marks any paid order as shipped (CardCade-owned items, or fulfilling
+   * on a seller's behalf). Same effect as the seller flow without the
+   * ownership check.
+   */
+  async adminMarkAsShipped(
+    orderId: string,
+    dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
+    const order = await this.getPrizeOrderById(orderId);
+    const prize = await this.getPrizeTierById(order.prizeConfigurationId);
+    return this.markOrderShipped(order, prize, dto);
+  }
+
+  /**
+   * Admin action: (re)send the buyer + seller purchase notifications for an
+   * order, reconstructed from the order itself. Works even for orders that
+   * never sent emails (e.g. pre-fix cart purchases) — no email log required.
+   */
+  async resendOrderPurchaseEmails(
+    orderId: string,
+  ): Promise<{ message: string }> {
+    const order = await this.getPrizeOrderById(orderId); // loads user + prizeConfiguration
+    const prize =
+      order.prizeConfiguration ??
+      (await this.getPrizeTierById(order.prizeConfigurationId));
+    if (!order.user) {
+      throw new BadRequestException('Order has no buyer on file');
+    }
+
+    const sendableStatuses = [
+      'paid',
+      'payment_processing',
+      'shipped',
+      'delivered',
+    ];
+    if (!sendableStatuses.includes(order.status)) {
+      throw new BadRequestException(
+        `Cannot resend purchase emails for an order in '${order.status}' state`,
+      );
+    }
+
+    const isPaymentProcessing = order.status === 'payment_processing';
+    await this.purchaseNotifications.sendSellerShopPurchaseNotification(
+      order,
+      prize,
+      order.user,
+      { isPaymentProcessing },
+    );
+    await this.purchaseNotifications.sendBuyerShopPurchaseNotification(
+      order,
+      prize,
+      order.user,
+      { isPaymentProcessing },
+    );
+    return { message: 'Purchase emails resent' };
+  }
+
+  /** Shared: flip a paid order to shipped, store tracking, email the buyer. */
+  private async markOrderShipped(
+    order: PrizeOrder,
+    prize: PrizeConfiguration,
+    dto: MarkAsShippedDto,
+  ): Promise<PrizeOrderResponseDto> {
     // Verify order is paid and not already shipped
     if (order.status !== 'paid') {
       throw new BadRequestException(
@@ -5281,7 +5384,7 @@ export class PrizeService implements OnModuleInit {
 
     // @ts-expect-error any
     if (order.status === 'shipped' || order.shippedAt) {
-      this.logger.warn(`Order ${orderId} is already marked as shipped`);
+      this.logger.warn(`Order ${order.id} is already marked as shipped`);
       return this.mapOrderToDto(order);
     }
 
@@ -5296,6 +5399,19 @@ export class PrizeService implements OnModuleInit {
     }
 
     const updated = await this.prizeOrderRepository.save(order);
+
+    // Keep the linked fulfillment record (Fulfillment tab) in sync so the
+    // order and its redemption don't diverge.
+    try {
+      await this.prizeRedemptionRepository.update(
+        { prizeOrderId: order.id },
+        { shippingStatus: ShippingStatus.SHIPPED },
+      );
+    } catch (syncErr) {
+      this.logger.warn(
+        `Failed to sync redemption shipping status for order ${order.id}: ${syncErr}`,
+      );
+    }
 
     // Send notification email to buyer
     try {
@@ -5319,11 +5435,11 @@ export class PrizeService implements OnModuleInit {
         'buyer_item_shipped',
       );
       this.logger.log(
-        `Shipping notification sent to buyer ${order.userId} for order ${orderId}`,
+        `Shipping notification sent to buyer ${order.userId} for order ${order.id}`,
       );
     } catch (emailError) {
       this.logger.error(
-        `Failed to send shipping notification email for order ${orderId}:`,
+        `Failed to send shipping notification email for order ${order.id}:`,
         emailError,
       );
     }

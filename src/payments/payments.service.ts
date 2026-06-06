@@ -527,26 +527,26 @@ export class PaymentsService {
    * Handle failed payment intent — notify buyer, do NOT remove item from shop
    */
   private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
-    // Try to find the order by stripePaymentIntentId
-    let order: PrizeOrder | null = null;
+    // Find ALL orders attached to this payment intent. A single-item checkout
+    // produces 1 order; a cart checkout produces N orders sharing the intent.
+    let orders: PrizeOrder[] = [];
     try {
-      order = await this.prizeOrderRepository.findOne({
+      orders = await this.prizeOrderRepository.find({
         where: { stripePaymentIntentId: paymentIntent.id },
         relations: ['user', 'prizeConfiguration'],
       });
     } catch {
       // Payment intent ID may not be stored yet
     }
-
-    // If not found by payment intent, try finding via session metadata
-    if (!order && paymentIntent.metadata?.orderId) {
-      order = await this.prizeOrderRepository.findOne({
+    if (orders.length === 0 && paymentIntent.metadata?.orderId) {
+      const o = await this.prizeOrderRepository.findOne({
         where: { id: paymentIntent.metadata.orderId },
         relations: ['user', 'prizeConfiguration'],
       });
+      if (o) orders = [o];
     }
 
-    if (!order) {
+    if (orders.length === 0) {
       this.logger.warn(
         `Stripe webhook: no order found for failed payment intent ${paymentIntent.id}`,
       );
@@ -554,30 +554,55 @@ export class PaymentsService {
     }
 
     this.logger.warn(
-      `Stripe webhook: payment failed for order ${order.id} (payment intent ${paymentIntent.id})`,
+      `Stripe webhook: payment failed for ${orders.length} order(s) (payment intent ${paymentIntent.id})`,
     );
 
-    // If this is an ACH failure on an order that was already marked
-    // payment_processing, fully revert the order (restore stock, refund
-    // any combined CadeCoins, delete the redemption row) and notify the
-    // seller before sending the buyer email.
-    if (order.status === 'payment_processing') {
+    // ACH failures on orders already reserved (payment_processing) must be
+    // fully reverted (stock, combined coins, status) AND notify seller+buyer.
+    // The revert methods now own both emails, so we don't double-send here.
+    const pending = orders.filter((o) => o.status === 'payment_processing');
+    if (pending.length > 0) {
+      // Detect cart the same way as the settle path: shared session + cart metadata.
+      const sessionId = pending[0].stripeSessionId;
+      let isCart = false;
+      if (sessionId && pending.length > 1) {
+        isCart = true;
+      } else if (sessionId) {
+        try {
+          const session =
+            await this.stripe.checkout.sessions.retrieve(sessionId);
+          isCart = session.metadata?.type === 'cart_checkout';
+        } catch (err) {
+          this.logger.warn(
+            `handlePaymentIntentFailed: could not retrieve session ${sessionId} to detect cart: ${err}`,
+          );
+        }
+      }
+
       try {
-        await this.prizeService.handleAchPaymentFailed(order.id);
+        if (isCart && sessionId) {
+          await this.cartService.handleCartAchFailed(sessionId);
+        } else {
+          for (const order of pending) {
+            await this.prizeService.handleAchPaymentFailed(order.id);
+          }
+        }
       } catch (revertErr) {
         this.logger.error(
-          `Failed to revert ACH-failed order ${order.id}: ${revertErr}`,
+          `Failed to revert ACH-failed payment intent ${paymentIntent.id}: ${revertErr}`,
         );
       }
+      return;
     }
 
-    // Notify buyer via email — do NOT change stock or remove item
-    if (order.user?.email) {
+    // Pre-settlement failure (orders still buy_attempted/pending — no stock
+    // reserved). Just let the buyer know their payment didn't go through.
+    const failureMessage =
+      paymentIntent.last_payment_error?.message ||
+      'Your payment could not be processed.';
+    for (const order of orders) {
+      if (!order.user?.email) continue;
       const itemName = order.prizeConfiguration?.name || 'your item';
-      const failureMessage =
-        paymentIntent.last_payment_error?.message ||
-        'Your payment could not be processed.';
-
       try {
         await this.emailsService.sendEmailSMTP(
           {

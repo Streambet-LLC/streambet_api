@@ -82,6 +82,10 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/offer_rejected.ejs',
       schemaPath: './src/templates/offer_rejected.json',
     },
+    bundle_offer: {
+      templatePath: './src/templates/bundle_offer.ejs',
+      schemaPath: './src/templates/bundle_offer.json',
+    },
     application_approved: {
       templatePath: './src/templates/application_approved.ejs',
       schemaPath: './src/templates/application_approved.json',

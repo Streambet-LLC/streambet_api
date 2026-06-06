@@ -6,13 +6,20 @@ import _ from 'lodash';
 const nodemailer = require('nodemailer');
 const path = require('path');
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { EmailPayloadDto } from './dto/email.dto';
+import { EmailLog } from './entities/email-log.entity';
 
 @Injectable()
 export class EmailsService {
   private readonly logger = new Logger(EmailsService.name);
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @InjectRepository(EmailLog)
+    private readonly emailLogRepository: Repository<EmailLog>,
+  ) {
     const useMailHog = this.configService.get<boolean>('email.USE_MAILHOG');
     const nodeEnv = process.env.NODE_ENV;
 
@@ -57,16 +64,19 @@ export class EmailsService {
   }
 
   public async sendEmailSMTP(payload: EmailPayloadDto, emailtype) {
-    const schemaMapping = this.configService.get<string>('email.schemaMapping');
-    if (this.validSchema(payload, emailtype)) {
+    try {
+      const schemaMapping = this.configService.get<string>(
+        'email.schemaMapping',
+      );
+      if (!this.validSchema(payload, emailtype)) {
+        throw new HttpException(
+          'Please provide correct schema to validate and a payload validating it',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
       const templatePath = schemaMapping[emailtype]['templatePath'];
       const emailHTML = await this.getHTML(templatePath, payload.params);
-      if (emailHTML && templatePath) {
-        return await this.sendEmailFn(
-          await this.emailParams(payload),
-          emailHTML,
-        );
-      } else {
+      if (!emailHTML || !templatePath) {
         const erroMessage = JSON.stringify(
           this.setResponse(400, [
             {
@@ -81,11 +91,59 @@ export class EmailsService {
         );
         throw new HttpException(erroMessage, HttpStatus.INTERNAL_SERVER_ERROR);
       }
-    } else {
-      throw new HttpException(
-        'Please provide correct schema to validate and a payload validating it',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      const result = await this.sendEmailFn(
+        await this.emailParams(payload),
+        emailHTML,
       );
+      await this.writeEmailLog(
+        payload,
+        emailtype,
+        'sent',
+        null,
+        (result as { messageId?: string })?.messageId ?? null,
+      );
+      return result;
+    } catch (err) {
+      await this.writeEmailLog(
+        payload,
+        emailtype,
+        'failed',
+        err instanceof Error ? err.message : String(err),
+        null,
+      );
+      throw err;
+    }
+  }
+
+  /**
+   * Best-effort audit row for an email send attempt. Never throws — logging
+   * must not break the send path.
+   */
+  private async writeEmailLog(
+    payload: EmailPayloadDto,
+    emailtype: string,
+    status: 'sent' | 'failed',
+    error: string | null,
+    messageId: string | null,
+  ): Promise<void> {
+    try {
+      const params = (payload.params ?? null) as Record<string, unknown> | null;
+      const relatedOrderId =
+        params && typeof params.orderId === 'string' ? params.orderId : null;
+      await this.emailLogRepository.save(
+        this.emailLogRepository.create({
+          emailType: emailtype,
+          toAddress: (payload.toAddress || []).join(','),
+          subject: payload.subject ?? null,
+          params,
+          relatedOrderId,
+          status,
+          error,
+          messageId,
+        }),
+      );
+    } catch (e) {
+      Logger.error(`Failed to write email log (${emailtype}): ${e}`);
     }
   }
 
@@ -176,6 +234,7 @@ export class EmailsService {
         return {
           message: 'Email sent successfully',
           statusCode: HttpStatus.OK,
+          messageId: (send as { messageId?: string })?.messageId,
         };
       }
     } catch (e) {

@@ -25,6 +25,7 @@ import { EmailsModule } from '../emails/email.module';
 import { PromoCodeModule } from '../promo-code/promo-code.module';
 import { InboxModule } from '../inbox/inbox.module';
 import { AuctionsModule } from '../auctions/auctions.module';
+import { CartModule } from '../cart/cart.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AuctionsModule } from '../auctions/auctions.module';
     PromoCodeModule,
     InboxModule,
     forwardRef(() => AuctionsModule),
+    forwardRef(() => CartModule),
   ],
   controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
   providers: [PrizeService, PrizeEngagementService],

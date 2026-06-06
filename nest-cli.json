@@ -10,7 +10,7 @@
       },
       {
         "include": "integrations/solana/*.json",
-        "outDir": "dist/src"
+        "outDir": "dist"
       }
     ],
     "deleteOutDir": true

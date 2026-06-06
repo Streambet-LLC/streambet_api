@@ -8,7 +8,7 @@ import { AutoLockerService } from './auto-locker.service';
 import { SentimentRevealService } from './sentiment-reveal.service';
 import { ShippingReminderService } from './shipping-reminder.service';
 import { ReviewReminderService } from './review-reminder.service';
-import { EmailsService } from 'src/emails/email.service';
+import { EmailsModule } from 'src/emails/email.module';
 import { ReviewsModule } from 'src/reviews/reviews.module';
 import { InboxModule } from 'src/inbox/inbox.module';
 import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
@@ -36,6 +36,7 @@ import { AchReconcilerAdminController } from './ach-reconciler-admin.controller'
     PrizeModule,
     PaymentsModule,
     EbayModule,
+    EmailsModule,
     BullModule.registerQueue({
       name: EBAY_MIGRATION_QUEUE,
     }),
@@ -47,7 +48,6 @@ import { AchReconcilerAdminController } from './ach-reconciler-admin.controller'
     ReviewReminderService,
     EbaySoldMarketSyncService,
     AchSettlementReconcilerService,
-    EmailsService,
   ],
   controllers: [EbaySoldMarketAdminController, AchReconcilerAdminController],
   exports: [EbaySoldMarketSyncService],
