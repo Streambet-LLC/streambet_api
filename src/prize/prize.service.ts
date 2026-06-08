@@ -4561,7 +4561,7 @@ export class PrizeService implements OnModuleInit {
       );
       let recipientEmail =
         this.configService.get<string>('ADMIN_EMAIL') || 'contact@cardcade.fun';
-      let subject = `💰 New Prize Offer: ${prize.name}`;
+      let subject = `💰 New Offer: ${prize.name}`;
       let reviewUrl = `${frontendUrl}/admin/prizes/redemptions?orderId=${saved.id}`;
       let portalLabel = 'admin panel';
 
