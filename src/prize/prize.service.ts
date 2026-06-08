@@ -3958,6 +3958,9 @@ export class PrizeService implements OnModuleInit {
       nonCryptoOrderCount: number;
       achOrderCount: number;
       cardOrderCount: number;
+      // In-flight ACH (not yet settled) — excluded from revenue.
+      pendingAchRevenue: number;
+      pendingAchOrderCount: number;
     }>;
     totals: {
       totalRevenue: number;
@@ -3975,6 +3978,8 @@ export class PrizeService implements OnModuleInit {
       nonCryptoOrderCount: number;
       achOrderCount: number;
       cardOrderCount: number;
+      pendingAchRevenue: number;
+      pendingAchOrderCount: number;
     };
     feeAssumptions: {
       nonCryptoBuyerFeePercent: number;
@@ -4020,6 +4025,10 @@ export class PrizeService implements OnModuleInit {
       nonCryptoOrderCount: number;
       achOrderCount: number;
       cardOrderCount: number;
+      // In-flight ACH (us_bank_account, payment_processing) — NOT counted as
+      // revenue; tracked separately so ops can see money still settling.
+      pendingAchRevenue: number;
+      pendingAchOrderCount: number;
     };
 
     const emptyBucket = (monthIso: string): MonthlyBucket => ({
@@ -4039,12 +4048,15 @@ export class PrizeService implements OnModuleInit {
       nonCryptoOrderCount: 0,
       achOrderCount: 0,
       cardOrderCount: 0,
+      pendingAchRevenue: 0,
+      pendingAchOrderCount: 0,
     });
 
     const monthMap = new Map<string, MonthlyBucket>();
 
     type SummaryOrderRow = {
       created_at: Date | string;
+      status: string;
       payment_method: 'coins' | 'usd' | 'combined' | 'crypto';
       stripe_payment_method: 'card' | 'us_bank_account' | null;
       total_price: string | null;
@@ -4064,6 +4076,7 @@ export class PrizeService implements OnModuleInit {
         .leftJoin('prize.creator', 'seller')
         .leftJoin('seller.wallet', 'wallet')
         .select('o.createdAt', 'created_at')
+        .addSelect('o.status', 'status')
         .addSelect('o.payment_method', 'payment_method')
         .addSelect('o.stripe_payment_method', 'stripe_payment_method')
         .addSelect('COALESCE(o.total_price, 0)', 'total_price')
@@ -4081,10 +4094,12 @@ export class PrizeService implements OnModuleInit {
           'seller.crypto_override_fee_bps',
           'seller_crypto_override_fee_bps',
         )
-        // Include `payment_processing` so in-flight ACH (us_bank_account)
-        // orders count as good-as-paid, consistent with collector analytics
-        // and the dashboard month-to-date card. A bounced ACH reverts to
-        // `payment_failed` and drops back out automatically.
+        // Fetch settled orders (paid/shipped/delivered) PLUS in-flight ACH
+        // (`payment_processing`). Settled rows count as revenue; the
+        // `payment_processing` rows are routed below into a separate
+        // "pending ACH" bucket so they never inflate revenue/fees — they only
+        // settle into revenue once `payment_intent.succeeded` flips them to
+        // `paid`. A bounced ACH reverts to `payment_failed` and drops out.
         .where('o.status IN (:...statuses)', {
           statuses: ['paid', 'shipped', 'delivered', 'payment_processing'],
         })
@@ -4114,6 +4129,16 @@ export class PrizeService implements OnModuleInit {
 
       const totalPriceUsd = parseFloat(row.total_price ?? '0');
       if (!Number.isFinite(totalPriceUsd) || totalPriceUsd <= 0) {
+        monthMap.set(monthKey, bucket);
+        continue;
+      }
+
+      // In-flight ACH (not yet settled): track separately, never as revenue.
+      // It becomes revenue only once it flips to `paid`; if it bounces it
+      // reverts to `payment_failed` and disappears here.
+      if (row.status === 'payment_processing') {
+        bucket.pendingAchRevenue += totalPriceUsd;
+        bucket.pendingAchOrderCount += 1;
         monthMap.set(monthKey, bucket);
         continue;
       }
@@ -4237,6 +4262,7 @@ export class PrizeService implements OnModuleInit {
         nonCryptoPlatformFees: round2(bucket.nonCryptoPlatformFees),
         achPlatformFees: round2(bucket.achPlatformFees),
         cardPlatformFees: round2(bucket.cardPlatformFees),
+        pendingAchRevenue: round2(bucket.pendingAchRevenue),
       });
       // Step back one month
       cursor.setUTCMonth(cursor.getUTCMonth() - 1);
@@ -4260,6 +4286,8 @@ export class PrizeService implements OnModuleInit {
         nonCryptoOrderCount: acc.nonCryptoOrderCount + m.nonCryptoOrderCount,
         achOrderCount: acc.achOrderCount + m.achOrderCount,
         cardOrderCount: acc.cardOrderCount + m.cardOrderCount,
+        pendingAchRevenue: acc.pendingAchRevenue + m.pendingAchRevenue,
+        pendingAchOrderCount: acc.pendingAchOrderCount + m.pendingAchOrderCount,
       }),
       {
         totalRevenue: 0,
@@ -4277,6 +4305,8 @@ export class PrizeService implements OnModuleInit {
         nonCryptoOrderCount: 0,
         achOrderCount: 0,
         cardOrderCount: 0,
+        pendingAchRevenue: 0,
+        pendingAchOrderCount: 0,
       },
     );
 
@@ -4294,6 +4324,7 @@ export class PrizeService implements OnModuleInit {
         nonCryptoPlatformFees: round2(totals.nonCryptoPlatformFees),
         achPlatformFees: round2(totals.achPlatformFees),
         cardPlatformFees: round2(totals.cardPlatformFees),
+        pendingAchRevenue: round2(totals.pendingAchRevenue),
       },
       feeAssumptions: {
         nonCryptoBuyerFeePercent: NON_CRYPTO_BUYER_FEE_PCT,
