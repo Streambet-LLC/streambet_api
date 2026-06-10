@@ -64,6 +64,8 @@ import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 import { PrizeSaleType } from './enums/prize-sale-type.enum';
 import { AuctionStatus } from './enums/auction-status.enum';
+import { MixpanelService } from '../integrations/mixpanel/mixpanel.service';
+import { AnalyticsEvent } from '../integrations/mixpanel/analytics-events';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
 import { AuctionsService } from '../auctions/auctions.service';
@@ -166,6 +168,7 @@ export class PrizeService implements OnModuleInit {
     private readonly inboxService: InboxService,
     @Inject(forwardRef(() => AuctionsService))
     private readonly auctionsService: AuctionsService,
+    private readonly mixpanel: MixpanelService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY') || '',
@@ -3378,7 +3381,52 @@ export class PrizeService implements OnModuleInit {
       );
     }
 
+    // Analytics: a card payment is real revenue at this point. ACH orders sit
+    // in payment_processing and are tracked as revenue only once they settle
+    // (handleAchPaymentSettled), so Mixpanel revenue matches settled money.
+    if (!isPaymentProcessing) {
+      this.trackPurchaseCompleted(updated, prize, 'card');
+    }
+
     return this.mapOrderToDto(updated);
+  }
+
+  /**
+   * Emit settled-revenue analytics for a completed single-item order: a
+   * "Purchase Completed" event, a Mixpanel revenue charge, and a buyer
+   * profile refresh. Best-effort (MixpanelService never throws). Card orders
+   * call this at auth time; ACH orders call it once the debit settles.
+   */
+  private trackPurchaseCompleted(
+    order: PrizeOrder,
+    prize: PrizeConfiguration | null,
+    paymentMethod: 'card' | 'ach',
+  ): void {
+    const distinctId = order.userId;
+    const amountUsd = Number(order.totalPrice || 0);
+    this.mixpanel.track(AnalyticsEvent.PURCHASE_COMPLETED, distinctId, {
+      orderId: order.id,
+      itemName: prize?.name,
+      brand: prize?.brand,
+      category: prize?.category,
+      saleType: prize?.saleType,
+      amountUsd,
+      paymentMethod,
+      orderType: order.orderType || 'single',
+      sellerId: prize?.createdBy ?? null,
+    });
+    this.mixpanel.trackCharge(distinctId, amountUsd, {
+      orderId: order.id,
+      paymentMethod,
+    });
+    if (order.user) {
+      this.mixpanel.setPeople(distinctId, {
+        $email: order.user.email,
+        username: order.user.username,
+        isSeller: !!order.user.isSeller,
+        lastPurchaseAt: new Date().toISOString(),
+      });
+    }
   }
 
   /**
@@ -3419,12 +3467,21 @@ export class PrizeService implements OnModuleInit {
         prize,
         order.user,
       );
+      // Analytics: ACH funds have cleared — record settled revenue now (so
+      // Mixpanel revenue tracks settled ACH, not in-flight), plus a dedicated
+      // settlement event for the ACH funnel.
+      this.trackPurchaseCompleted(updated, prize, 'ach');
     } catch (error) {
       this.logger.error(
         `Failed to send ACH-settled seller email for order ${orderId}:`,
         error,
       );
     }
+
+    this.mixpanel.track(AnalyticsEvent.ACH_PAYMENT_SETTLED, updated.userId, {
+      orderId: updated.id,
+      amountUsd: Number(updated.totalPrice || 0),
+    });
   }
 
   /**
@@ -3530,6 +3587,12 @@ export class PrizeService implements OnModuleInit {
         error,
       );
     }
+
+    this.mixpanel.track(AnalyticsEvent.ACH_PAYMENT_FAILED, updated.userId, {
+      orderId: updated.id,
+      itemName: prize?.name,
+      amountUsd: Number(updated.totalPrice || 0),
+    });
 
     return true;
   }
@@ -4737,6 +4800,12 @@ export class PrizeService implements OnModuleInit {
       this.logger.error(`Failed to send counter offer email: ${error}`);
     }
 
+    this.mixpanel.track(AnalyticsEvent.OFFER_COUNTERED, updated.userId, {
+      orderId: updated.id,
+      offerAmountUsd: Number(updated.offerAmount || 0),
+      counterAmountUsd: Number(dto.counterOfferAmount || 0),
+    });
+
     return this.mapOrderToDto(updated);
   }
 
@@ -4931,6 +5000,16 @@ export class PrizeService implements OnModuleInit {
       this.logger.error(`Failed to send offer accepted email: ${error}`);
     }
 
+    // "Accepted" = seller approved + checkout link sent; the buyer pays later
+    // (that fires PURCHASE_COMPLETED). distinctId is the buyer.
+    this.mixpanel.track(AnalyticsEvent.OFFER_ACCEPTED, updated.userId, {
+      orderId: updated.id,
+      itemName: prize?.name,
+      negotiatedAmountUsd: amountToCharge,
+      wasCountered,
+      sellerId: prize?.createdBy ?? null,
+    });
+
     return this.mapOrderToDto(updated);
   }
 
@@ -4981,6 +5060,11 @@ export class PrizeService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Failed to send offer rejected email: ${error}`);
     }
+
+    this.mixpanel.track(AnalyticsEvent.OFFER_REJECTED, updated.userId, {
+      orderId: updated.id,
+      offerAmountUsd: Number(updated.offerAmount || 0),
+    });
 
     return this.mapOrderToDto(updated);
   }
@@ -5205,6 +5289,17 @@ export class PrizeService implements OnModuleInit {
       acceptable[0],
     ) as PrizeOrderResponseDto & { stripeSessionUrl?: string };
     dto.stripeSessionUrl = session.url || '';
+
+    this.mixpanel.track(
+      AnalyticsEvent.BUNDLE_OFFER_ACCEPTED,
+      acceptable[0].userId,
+      {
+        orderGroupId,
+        itemCount: acceptable.length,
+        bundleOfferAmountUsd: Number(acceptable[0].offerAmount || 0),
+      },
+    );
+
     return dto;
   }
 

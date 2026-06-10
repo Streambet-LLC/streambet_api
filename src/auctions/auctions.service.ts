@@ -52,6 +52,8 @@ import {
 } from '../common/utils/fee-utils';
 import { CurrencyType } from '../enums/currency.enum';
 import { TransactionType } from '../enums/transaction-type.enum';
+import { MixpanelService } from '../integrations/mixpanel/mixpanel.service';
+import { AnalyticsEvent } from '../integrations/mixpanel/analytics-events';
 
 /**
  * Anti-snipe window in seconds. A bid landing within this window of
@@ -113,6 +115,7 @@ export class AuctionsService implements OnModuleInit {
     @Inject(forwardRef(() => WalletsService))
     private readonly walletsService: WalletsService,
     @InjectQueue(AUCTION_QUEUE) private readonly auctionQueue: Queue,
+    private readonly mixpanel: MixpanelService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────
@@ -1686,6 +1689,31 @@ export class AuctionsService implements OnModuleInit {
         fulfilled: false,
       });
       await this.redemptionRepository.save(redemption);
+    }
+
+    // Analytics: a won auction whose charge has cleared is real revenue.
+    // This is the single chokepoint for both autopay-success and the
+    // winner-initiated retry-payment path, so it fires exactly once per win.
+    this.mixpanel.track(AnalyticsEvent.AUCTION_WON, winnerUserId, {
+      auctionId: auction.id,
+      orderId: savedOrder.id,
+      itemName: prize?.name,
+      brand: prize?.brand,
+      category: prize?.category,
+      winningBidUsd: fees.bidUsd,
+      totalChargedUsd: fees.totalChargedUsd,
+      sellerId: prize?.createdBy ?? null,
+    });
+    this.mixpanel.trackCharge(winnerUserId, fees.totalChargedUsd, {
+      orderId: savedOrder.id,
+      source: 'auction',
+    });
+    if (winner) {
+      this.mixpanel.setPeople(winnerUserId, {
+        $email: winner.email,
+        username: winner.username,
+        lastPurchaseAt: new Date().toISOString(),
+      });
     }
 
     return savedOrder;

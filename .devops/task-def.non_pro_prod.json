@@ -52,7 +52,12 @@
         {
           "name": "EBAY_DELETION_ENDPOINT",
           "value": "https://api.cardcade.fun/api/webhook/ebay/account-deletion"
-        }
+        },
+        {
+          "name": "MIXPANEL_TOKEN",
+          "value": "faaec7779c65ff3ae9f0c6079e49fbc3"
+        },
+        { "name": "MIXPANEL_ENV", "value": "production" }
       ],
       "secrets": [
         {

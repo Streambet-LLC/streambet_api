@@ -25,6 +25,8 @@ import { NotificationService } from 'src/notification/notification.service';
 import { UserRole } from 'src/enums/user-role.enum';
 import { PromoCodeService } from 'src/promo-code/promo-code.service';
 import { isEmpty } from 'lodash-es';
+import { MixpanelService } from 'src/integrations/mixpanel/mixpanel.service';
+import { AnalyticsEvent } from 'src/integrations/mixpanel/analytics-events';
 
 // Define Google OAuth profile interface
 interface GoogleProfile {
@@ -47,6 +49,7 @@ export class AuthService {
     private configService: ConfigService,
     private notificationService: NotificationService,
     private promoCodeService: PromoCodeService,
+    private mixpanel: MixpanelService,
   ) {}
 
   private calculateAge(birthDate: Date): number {
@@ -140,6 +143,21 @@ export class AuthService {
           promoCode,
         );
       }
+
+      // Analytics: the server owns the canonical "User Signed Up" event (the
+      // web client only calls identify() on signup success) and seeds the
+      // Mixpanel profile so it exists even if the client SDK is blocked.
+      this.mixpanel.setPeople(user.id, {
+        $email: user.email,
+        $name: user.name || user.username,
+        username: user.username,
+        signedUpAt: new Date().toISOString(),
+      });
+      this.mixpanel.track(AnalyticsEvent.USER_SIGNED_UP, user.id, {
+        username: user.username,
+        hasPromoCode: !isEmpty(promoCode),
+        referred: !!refLink,
+      });
 
       // Generate tokens
       await this.sendAccountVerificationEmail(user, redirect);
