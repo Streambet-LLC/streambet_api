@@ -44,6 +44,36 @@ import {
 
 const SHIPPING_FEE = 5;
 
+/**
+ * Tiered "bulk order" shipping for a single seller group, keyed off the total
+ * item quantity in that group:
+ *   - fewer than 5 items → sum of each item's per-item shipping
+ *     (`shippingCostUsd`, defaulting to $5 for legacy rows; 0 = Free Shipping)
+ *   - 5–9 items   → $20 flat
+ *   - 10–14 items → $30 flat
+ *   - 15–19 items → $40 flat
+ *   - 20+ items   → $50 flat
+ *
+ * Applied per seller group (each seller is reimbursed their own group's
+ * shipping in the Stripe transfer), so a buyer who buys in bulk from one
+ * seller gets the flat rate for that seller's shipment. Returns cents.
+ */
+function computeGroupShippingCents(items: CartItem[]): number {
+  const totalQty = items.reduce((sum, it) => sum + it.quantity, 0);
+  if (totalQty >= 20) return 5000;
+  if (totalQty >= 15) return 4000;
+  if (totalQty >= 10) return 3000;
+  if (totalQty >= 5) return 2000;
+  // Fewer than 5 items: itemized per-item shipping totaled up.
+  return items.reduce((sum, it) => {
+    const perItemShippingUsd =
+      it.prizeConfiguration.shippingCostUsd != null
+        ? Number(it.prizeConfiguration.shippingCostUsd)
+        : SHIPPING_FEE;
+    return sum + Math.round(perItemShippingUsd * 100) * it.quantity;
+  }, 0);
+}
+
 /** Resolve a relative image path to a full S3 URL for Stripe.
  *  Returns null for any value that cannot form a valid absolute URL
  *  so Stripe never receives a malformed images[] entry. */
@@ -267,20 +297,18 @@ export class CartService {
           item.quantity,
       );
       group.itemSubtotalCents += itemCents;
-      // In-person pickup no longer forces shipping to $0 — sellers may
-      // still charge a hand-off / delivery fee, so we honor whatever
-      // shippingCostUsd the seller saved on the prize. The isInPerson
-      // flag only affects whether we collect a shipping address.
-      const perItemShippingUsd =
-        item.prizeConfiguration.shippingCostUsd != null
-          ? Number(item.prizeConfiguration.shippingCostUsd)
-          : SHIPPING_FEE;
-      group.shippingCents += Math.round(perItemShippingUsd * 100) * item.quantity;
+      // Shipping is computed per group below via the tiered bulk formula
+      // (see computeGroupShippingCents), not accumulated per item here.
+      // In-person pickup no longer forces shipping to $0 — sellers may still
+      // charge a hand-off / delivery fee, so we honor whatever shippingCostUsd
+      // they saved; the isInPerson flag only affects address collection.
     }
 
     // Calculate fees for each group
     const sellerGroups: SellerGroup[] = [];
     for (const group of groupMap.values()) {
+      // Tiered bulk shipping for this seller's portion of the order.
+      group.shippingCents = computeGroupShippingCents(group.items);
       // CardCade items: no buyer fee
       const isCardCade = group.sellerId === null;
       group.buyerFeeCents = isCardCade
@@ -524,17 +552,10 @@ export class CartService {
           0,
         );
         const isCardCade = group.sellerId === null;
-        // Per-item shipping: sum each prize’s shippingCostUsd (default $5
-        // for legacy rows; 0 = Free Shipping). In-person items still
-        // honor the seller-configured shipping fee — only address
-        // collection is skipped on the storefront.
-        const shippingCents = buyableItems.reduce((sum, item) => {
-          const perItemShippingUsd =
-            item.prizeConfiguration.shippingCostUsd != null
-              ? Number(item.prizeConfiguration.shippingCostUsd)
-              : SHIPPING_FEE;
-          return sum + Math.round(perItemShippingUsd * 100) * item.quantity;
-        }, 0);
+        // Tiered bulk shipping for this seller's portion, over the items
+        // actually being charged (offer-only items were filtered out above).
+        // See computeGroupShippingCents for the per-group tier rules.
+        const shippingCents = computeGroupShippingCents(buyableItems);
         // Buyer fee rate depends on the chosen Stripe payment method.
         // For seller items (everything except the CardCade group) we
         // use the rate the buyer locked in for this checkout. CardCade
