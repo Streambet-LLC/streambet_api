@@ -63,6 +63,7 @@ import {
 import { PrizeCategory } from './enums/prize-category.enum';
 import { PrizePurchaseOption } from './enums/prize-purchase-option.enum';
 import { PrizeSaleType } from './enums/prize-sale-type.enum';
+import { AuctionStatus } from './enums/auction-status.enum';
 import { PrizeBrand } from './enums/prize-brand.enum';
 import { stripe } from 'src/integrations/stripe';
 import { AuctionsService } from '../auctions/auctions.service';
@@ -91,6 +92,19 @@ const EBAY_MARKET_WINDOWS: Array<{
   { key: '180d', days: 180 },
   { key: '365d', days: 365 },
 ];
+
+/**
+ * SQL predicate (true when an item belongs on shop browsing surfaces): a
+ * fixed-price item always qualifies; an auction item only qualifies while its
+ * auction is LIVE (scheduled/active and not past its end time). Mirrors the
+ * in-memory {@link PrizeService.isLiveShopItem} so raw-SQL inventory counts in
+ * getSellerShops stay consistent with the filtered shop pages. `alias` is the
+ * prize_configurations table alias in the surrounding query.
+ */
+const LIVE_SHOP_ITEM_SQL = (alias: string): string =>
+  `(${alias}.sale_type <> 'auction' OR EXISTS (` +
+  `SELECT 1 FROM auctions a WHERE a.prize_configuration_id = ${alias}.id ` +
+  `AND a.status IN ('active', 'scheduled') AND a.ends_at > NOW()))`;
 
 const EBAY_FLAG_SOCIALS_KEY_SOLD_AVG = '_ff_ebaySoldAvg';
 const EBAY_FLAG_SOCIALS_KEY_SOLD_AVG_ADMIN_ONLY = '_ff_ebaySoldAvgAdminOnly';
@@ -389,7 +403,7 @@ export class PrizeService implements OnModuleInit {
       .innerJoin(
         PrizeConfiguration,
         'p',
-        'p.created_by = u.id AND p.is_active = :isActive AND p.show_on_shop = :showOnShop AND p.stock > 0',
+        `p.created_by = u.id AND p.is_active = :isActive AND p.show_on_shop = :showOnShop AND p.stock > 0 AND ${LIVE_SHOP_ITEM_SQL('p')}`,
         {
           isActive: true,
           showOnShop: true,
@@ -438,6 +452,7 @@ export class PrizeService implements OnModuleInit {
       .andWhere('p.is_active = :isActive', { isActive: true })
       .andWhere('p.show_on_shop = :showOnShop', { showOnShop: true })
       .andWhere('p.stock > 0')
+      .andWhere(LIVE_SHOP_ITEM_SQL('p'))
       .select('COUNT(p.id)', 'itemCount')
       .addSelect('COALESCE(SUM(p.view_count), 0)', 'totalViews')
       .addSelect('COALESCE(SUM(p.watcher_count), 0)', 'totalWatchers')
@@ -478,6 +493,25 @@ export class PrizeService implements OnModuleInit {
    * Public: get all shop items across all sellers.
    * This is for the main "Shop" page in the navbar, showing all available shop items.
    */
+  /**
+   * Whether an item should appear on shop browsing surfaces. Fixed-price
+   * items always qualify (visibility is governed by isActive/showOnShop at
+   * the query level). Auction items only qualify while their auction is LIVE
+   * — scheduled or active AND not past its end time. Once an auction has
+   * concluded (ended/paid/unsold/failed/cancelled, or its end time has
+   * passed before the sweeper flips the status) the item drops off the shop
+   * so stale "Ended" auction cards stop showing.
+   */
+  private isLiveShopItem(item: PrizeConfiguration): boolean {
+    if (item.saleType !== PrizeSaleType.AUCTION) return true;
+    const a = item.auction;
+    if (!a) return false;
+    const isLiveStatus =
+      a.status === AuctionStatus.ACTIVE ||
+      a.status === AuctionStatus.SCHEDULED;
+    return isLiveStatus && a.endsAt.getTime() > Date.now();
+  }
+
   async getAllShopItems(
     requesterId?: string | null,
   ): Promise<PrizeConfigurationDto[]> {
@@ -500,29 +534,36 @@ export class PrizeService implements OnModuleInit {
       },
     });
 
-    this.logger.log(`[SHOP] Found ${sellerItems.length} active shop items`);
+    // Auction items only belong on shop surfaces while their auction is LIVE.
+    // Concluded auctions (ended/paid/unsold/failed/cancelled) are dropped so
+    // stale "Ended" auction cards don't keep showing. See isLiveShopItem.
+    const shopItems = sellerItems.filter((item) => this.isLiveShopItem(item));
+
+    this.logger.log(
+      `[SHOP] Found ${sellerItems.length} active shop items; ${shopItems.length} visible after live-auction filter`,
+    );
     this.logger.debug(
-      `[SHOP] Items breakdown: ${JSON.stringify(sellerItems.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
+      `[SHOP] Items breakdown: ${JSON.stringify(shopItems.map((i) => ({ id: i.id, name: i.name, stock: i.stock, createdBy: i.createdBy })))}`,
     );
 
     const watched = requesterId
       ? await this.engagementService.getWatchedItemIds(
           requesterId,
-          sellerItems.map((i) => i.id),
+          shopItems.map((i) => i.id),
         )
       : new Set<string>();
 
     // Pre-load the set of auctions this user has bid on so each item's
     // embedded auction summary can populate `isLeader` / `isBidder` /
     // `currentUserProxyMaxUsd`. One round-trip regardless of list size.
-    const auctionIds = sellerItems
+    const auctionIds = shopItems
       .map((i) => i.auction?.id)
       .filter((id): id is string => !!id);
     const bidderAuctionIds = requesterId
       ? await this.auctionsService.getBidderAuctionIds(requesterId, auctionIds)
       : new Set<string>();
 
-    const dtos = sellerItems.map((item) =>
+    const dtos = shopItems.map((item) =>
       this.mapToDto(item, {
         isWatching: watched.has(item.id),
         auctionViewerUserId: requesterId ?? null,
@@ -1228,7 +1269,9 @@ export class PrizeService implements OnModuleInit {
         },
       });
 
-      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(
+        items.filter((item) => this.isLiveShopItem(item)),
+      );
 
       // Load CardCade shop settings from DB (or use defaults)
       let cardcadeSettings: ShopSettings;
@@ -1330,7 +1373,9 @@ export class PrizeService implements OnModuleInit {
         },
       });
 
-      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(items);
+      const sortedSellerItems = this.sortSellerShopItemsBySellerOrder(
+        items.filter((item) => this.isLiveShopItem(item)),
+      );
 
       this.logger.log(
         `[SHOP] Found ${items.length} shop items for seller ${username}`,
