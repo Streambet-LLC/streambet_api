@@ -62,6 +62,8 @@ import { ConciergeModule } from './concierge/concierge.module';
 import { CartModule } from './cart/cart.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { AuctionsModule } from './auctions/auctions.module';
+import { MixpanelModule } from './integrations/mixpanel/mixpanel.module';
+import mixpanelConfig from './config/mixpanel.config';
 
 @Module({
   imports: [
@@ -88,6 +90,7 @@ import { AuctionsModule } from './auctions/auctions.module';
         personaConfig,
         psaConfig,
         ebayConfig,
+        mixpanelConfig,
       ] as ConfigFactory[],
       envFilePath: ['./.env'],
     }),
@@ -164,6 +167,7 @@ import { AuctionsModule } from './auctions/auctions.module';
     EbayModule,
     AuctionsModule,
     SolanaModule,
+    MixpanelModule,
   ],
   controllers: [AppController],
   providers: [

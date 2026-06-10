@@ -21,6 +21,8 @@ import {
   BundleOfferDto,
 } from './dto/cart.dto';
 import { WalletsService } from '../wallets/wallets.service';
+import { MixpanelService } from '../integrations/mixpanel/mixpanel.service';
+import { AnalyticsEvent } from '../integrations/mixpanel/analytics-events';
 import { PrizePurchaseOption } from '../prize/enums/prize-purchase-option.enum';
 import { PrizeSaleType } from '../prize/enums/prize-sale-type.enum';
 import {
@@ -114,10 +116,46 @@ export class CartService {
     private purchaseNotifications: PurchaseNotificationsService,
     private configService: ConfigService,
     private promoCodeService: PromoCodeService,
+    private mixpanel: MixpanelService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY'),
     );
+  }
+
+  /**
+   * Emit settled-revenue analytics for a completed cart checkout: one
+   * cart-level "Purchase Completed" event, a Mixpanel revenue charge, and a
+   * buyer profile refresh. Fires for card at checkout, and for ACH only once
+   * the debit settles — so Mixpanel revenue tracks settled money. Best-effort.
+   */
+  private trackCartPurchase(params: {
+    userId: string;
+    buyer: User | null;
+    itemCount: number;
+    amountCents: number;
+    paymentMethod: 'card' | 'ach';
+    stripeSessionId: string;
+  }): void {
+    const amountUsd = (params.amountCents || 0) / 100;
+    this.mixpanel.track(AnalyticsEvent.PURCHASE_COMPLETED, params.userId, {
+      orderType: 'cart',
+      itemCount: params.itemCount,
+      amountUsd,
+      paymentMethod: params.paymentMethod,
+      stripeSessionId: params.stripeSessionId,
+    });
+    this.mixpanel.trackCharge(params.userId, amountUsd, {
+      orderType: 'cart',
+      paymentMethod: params.paymentMethod,
+    });
+    if (params.buyer) {
+      this.mixpanel.setPeople(params.userId, {
+        $email: params.buyer.email,
+        username: params.buyer.username,
+        lastPurchaseAt: new Date().toISOString(),
+      });
+    }
   }
 
   /**
@@ -1142,6 +1180,19 @@ export class CartService {
         country: addr.country || null,
       });
     }
+
+    // Analytics: card carts are real revenue now. ACH carts are tracked on
+    // settle (handleCartAchSettled) so Mixpanel revenue matches settled money.
+    if (!isPaymentProcessing) {
+      this.trackCartPurchase({
+        userId,
+        buyer,
+        itemCount: orderIds.length,
+        amountCents: session.amount_total || 0,
+        paymentMethod: 'card',
+        stripeSessionId: session.id,
+      });
+    }
   }
 
   /**
@@ -1247,6 +1298,23 @@ export class CartService {
         this.logger.error(`Failed to award CadeCoins on ACH settle: ${err}`);
       }
     }
+
+    // Analytics: ACH cart funds cleared — record settled revenue + a
+    // dedicated settlement event for the ACH funnel.
+    this.trackCartPurchase({
+      userId,
+      buyer,
+      itemCount: orderIds.length,
+      amountCents: session.amount_total || 0,
+      paymentMethod: 'ach',
+      stripeSessionId: session.id,
+    });
+    this.mixpanel.track(AnalyticsEvent.ACH_PAYMENT_SETTLED, userId, {
+      orderType: 'cart',
+      itemCount: orderIds.length,
+      amountUsd: (session.amount_total || 0) / 100,
+      stripeSessionId: session.id,
+    });
   }
 
   /**
@@ -1330,6 +1398,13 @@ export class CartService {
     this.logger.log(
       `Stripe webhook: cart ACH failed reverted for session ${stripeSessionId}`,
     );
+
+    this.mixpanel.track(AnalyticsEvent.ACH_PAYMENT_FAILED, userId, {
+      orderType: 'cart',
+      itemCount: orderIds.length,
+      amountUsd: (session.amount_total || 0) / 100,
+      stripeSessionId: session.id,
+    });
   }
 
   /**
