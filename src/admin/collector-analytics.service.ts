@@ -334,6 +334,8 @@ const sanitizeAnnotations = (
   if (bio) out.bio = bio;
   const personaOverride = str(r.personaOverride);
   if (personaOverride) out.personaOverride = personaOverride;
+  const affiliation = str(r.affiliation);
+  if (affiliation) out.affiliation = affiliation;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -680,6 +682,7 @@ export class CollectorAnalyticsService {
       created_at: Date | string;
       account_creation_date: Date | string | null;
       socials: unknown;
+      analytics_profile: unknown;
       lifetime: number | string;
       last30d: number | string;
       predicted30d: number | string;
@@ -694,6 +697,7 @@ export class CollectorAnalyticsService {
               u."createdAt" AS created_at,
               u.account_creation_date AS account_creation_date,
               u.socials AS socials,
+              u.analytics_profile AS analytics_profile,
               COALESCE(bo.lifetime, 0)::float AS lifetime,
               COALESCE(bo.last30d, 0)::float AS last30d,
               COALESCE(bo.predicted30d, 0)::float AS predicted30d,
@@ -734,6 +738,8 @@ export class CollectorAnalyticsService {
         : null,
       createdAt: new Date(r.created_at),
       socials: (r.socials ?? null) as { [social: string]: string } | null,
+      // Admin annotations carry the persona + affiliation surfaced as columns.
+      annotations: sanitizeAnnotations(r.analytics_profile),
     }));
 
     const userIds = users.map((u) => u.id);
@@ -836,6 +842,8 @@ export class CollectorAnalyticsService {
           ? buy.lastPurchase.toISOString()
           : null,
         topCategories,
+        persona: u.annotations?.personaOverride ?? null,
+        affiliation: u.annotations?.affiliation ?? null,
         socials: extractSocials(u.socials),
       };
     });
@@ -1027,6 +1035,8 @@ export class CollectorAnalyticsService {
         ? new Date(buyRow.last_purchase).toISOString()
         : null,
       topCategories,
+      persona: annotations?.personaOverride ?? null,
+      affiliation: annotations?.affiliation ?? null,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1084,6 +1094,7 @@ export class CollectorAnalyticsService {
       !!dto.displayName?.trim() ||
       !!dto.bio?.trim() ||
       !!dto.personaOverride?.trim() ||
+      !!dto.affiliation?.trim() ||
       !!dto.interests?.length ||
       !!dto.preferences?.length ||
       !!(dto.customAttributes && Object.keys(dto.customAttributes).length) ||
@@ -1140,6 +1151,9 @@ export class CollectorAnalyticsService {
       ...(dto.bio?.trim() && { bio: dto.bio.trim() }),
       ...(dto.personaOverride?.trim() && {
         personaOverride: dto.personaOverride.trim(),
+      }),
+      ...(dto.affiliation?.trim() && {
+        affiliation: dto.affiliation.trim(),
       }),
       ...(dto.interests?.length && { interests: dto.interests }),
       ...(dto.preferences?.length && { preferences: dto.preferences }),
@@ -1346,6 +1360,9 @@ export class CollectorAnalyticsService {
       ...(dto.bio !== undefined && { bio: dto.bio }),
       ...(dto.personaOverride !== undefined && {
         personaOverride: dto.personaOverride,
+      }),
+      ...(dto.affiliation !== undefined && {
+        affiliation: dto.affiliation,
       }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {

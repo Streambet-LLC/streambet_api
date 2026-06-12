@@ -161,6 +161,22 @@ export class CollectorProfileSummaryDto {
   })
   topCategories: AnalyticsAssetCategory[];
 
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Admin-set persona label (analytics_profile.personaOverride). Null when no persona has been assigned.',
+  })
+  persona: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Admin-set affiliation/group (analytics_profile.affiliation). Null when the collector has no affiliation.',
+  })
+  affiliation: string | null;
+
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];
 }
@@ -403,6 +419,12 @@ export interface AnalyticsProfileAnnotations {
   bio?: string;
   /** Persona override label (e.g. "Whale Collector"). */
   personaOverride?: string;
+  /**
+   * Affiliation / group this collector belongs to (e.g. a shop, league,
+   * breaker team, Discord, or org). Optional — many collectors have none,
+   * so this is frequently absent (treated as null downstream).
+   */
+  affiliation?: string;
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -452,6 +474,15 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(120)
   personaOverride?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Affiliation / group label (e.g. a shop, league, or org). Optional.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  affiliation?: string;
 
   @ApiPropertyOptional({
     type: [String],
@@ -547,6 +578,15 @@ export class CreateCollectorProfileDto {
   @IsString()
   @MaxLength(120)
   personaOverride?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Affiliation / group label (e.g. a shop, league, or org). Optional.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  affiliation?: string;
 
   @ApiPropertyOptional({
     type: [String],
