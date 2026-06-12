@@ -27,6 +27,21 @@ export type AnalyticsAssetCategory =
   | 'other';
 
 /**
+ * Canonical collector personas. The admin "Persona override" field is a
+ * single-select over these (it replaced a free-text input). Stored verbatim
+ * on `analytics_profile.personaOverride`.
+ */
+export const COLLECTOR_PERSONAS = [
+  'Pro Dealer',
+  'Amateur Dealer',
+  'Short Holder / Flipper',
+  'Long Holder / Collector',
+  'Hybrid - Long / Short',
+] as const;
+
+export type CollectorPersona = (typeof COLLECTOR_PERSONAS)[number];
+
+/**
  * Social handles we can surface today come from `users.socials` (jsonb)
  * which the seller onboarding flow populates. Keys are normalized to the
  * Analytics UI's `SocialPlatform` vocabulary.
@@ -469,10 +484,12 @@ export class UpdateCollectorAnalyticsProfileDto
   @MaxLength(2000)
   bio?: string;
 
-  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @ApiPropertyOptional({
+    description: 'Persona (single-select). Empty string clears it.',
+    enum: COLLECTOR_PERSONAS,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
+  @IsIn([...COLLECTOR_PERSONAS, ''])
   personaOverride?: string;
 
   @ApiPropertyOptional({
@@ -573,10 +590,12 @@ export class CreateCollectorProfileDto {
   @MaxLength(2000)
   bio?: string;
 
-  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @ApiPropertyOptional({
+    description: 'Persona (single-select).',
+    enum: COLLECTOR_PERSONAS,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
+  @IsIn([...COLLECTOR_PERSONAS, ''])
   personaOverride?: string;
 
   @ApiPropertyOptional({
