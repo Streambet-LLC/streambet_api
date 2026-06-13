@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { SPORTS } from '../sports-derivation.util';
 
 /**
  * Maps the canonical PrizeBrand enum to the four "asset categories" the
@@ -207,6 +208,22 @@ export class CollectorProfileSummaryDto {
       'Centralized metropolitan area derived from the user-supplied city/state/zip (suburbs roll up to the nearest metro). Null when no usable location is on file.',
   })
   location: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Preferred sport for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+  })
+  preferredSport: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Preferred team for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+  })
+  preferredTeam: string | null;
 
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];
@@ -462,6 +479,13 @@ export interface AnalyticsProfileAnnotations {
    * the user's account, login, or shop. Only stored when true.
    */
   excludedFromAnalytics?: boolean;
+  /**
+   * Admin override for the Sports sub-category. When set, these win over the
+   * value auto-derived from the collector's sports purchases. `preferredTeam`
+   * is free text; `preferredSport` should be one of {@link SPORTS}.
+   */
+  preferredSport?: string;
+  preferredTeam?: string;
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -522,6 +546,20 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(120)
   affiliation?: string;
+
+  @ApiPropertyOptional({
+    description: 'Preferred sport override (single-select). Empty clears it.',
+    enum: SPORTS,
+  })
+  @IsOptional()
+  @IsIn([...SPORTS, ''])
+  preferredSport?: string;
+
+  @ApiPropertyOptional({ description: 'Preferred team override (free text).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  preferredTeam?: string;
 
   @ApiPropertyOptional({
     type: [String],

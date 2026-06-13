@@ -27,6 +27,7 @@ import {
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
 import { deriveMetroArea } from './metro-area.util';
+import { derivePreferredSportTeam } from './sports-derivation.util';
 
 /**
  * Statuses we treat as a "real" paid transaction for analytics. Includes
@@ -348,6 +349,10 @@ const sanitizeAnnotations = (
   const affiliation = str(r.affiliation);
   if (affiliation) out.affiliation = affiliation;
   if (r.excludedFromAnalytics === true) out.excludedFromAnalytics = true;
+  const preferredSport = str(r.preferredSport);
+  if (preferredSport) out.preferredSport = preferredSport;
+  const preferredTeam = str(r.preferredTeam);
+  if (preferredTeam) out.preferredTeam = preferredTeam;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -865,6 +870,28 @@ export class CollectorAnalyticsService {
       m.set(cat, (m.get(cat) ?? 0) + num(r.spend));
     }
 
+    // Sports sub-category: collect each user's sports-card titles so we can
+    // derive a preferred sport + team (one query for the whole page).
+    const sportsRows = await this.rawQuery<{
+      user_id: string;
+      name: string | null;
+    }>(
+      `SELECT o.user_id AS user_id, p.name AS name
+       FROM prize_orders o
+       JOIN prize_configurations p ON p.id = o.prize_configuration_id
+       WHERE o.user_id = ANY($1::uuid[])
+         AND o.status IN ${PAID_STATUSES_SQL}
+         AND p.brand = 'sports'`,
+      [userIds],
+    );
+    const sportsNamesByUser = new Map<string, string[]>();
+    for (const r of sportsRows) {
+      if (!r.name) continue;
+      const arr = sportsNamesByUser.get(r.user_id) ?? [];
+      arr.push(r.name);
+      sportsNamesByUser.set(r.user_id, arr);
+    }
+
     const data: CollectorProfileSummaryDto[] = users.map((u) => {
       const buy = buyAgg.get(u.id);
       const sell = sellAgg.get(u.id);
@@ -875,6 +902,18 @@ export class CollectorAnalyticsService {
             .slice(0, 3)
             .map(([c]) => c)
         : [];
+      // Preferred sport/team: admin override wins, else auto-derive from the
+      // user's sports purchases. Only meaningful for Sports-category buyers.
+      const isSportsBuyer = topCategories.includes('sports');
+      const derivedSportTeam = isSportsBuyer
+        ? derivePreferredSportTeam(sportsNamesByUser.get(u.id) ?? [])
+        : { sport: null, team: null };
+      const preferredSport =
+        u.annotations?.preferredSport ??
+        (isSportsBuyer ? derivedSportTeam.sport : null);
+      const preferredTeam =
+        u.annotations?.preferredTeam ??
+        (isSportsBuyer ? derivedSportTeam.team : null);
       return {
         id: u.id,
         username: u.username,
@@ -896,6 +935,8 @@ export class CollectorAnalyticsService {
         affiliation: u.annotations?.affiliation ?? null,
         excluded: u.annotations?.excludedFromAnalytics === true,
         location: u.location,
+        preferredSport,
+        preferredTeam,
         socials: extractSocials(u.socials),
       };
     });
@@ -990,6 +1031,28 @@ export class CollectorAnalyticsService {
       .filter((c) => c.spendUsd > 0)
       .slice(0, 3)
       .map((c) => c.category);
+
+    // Preferred sport/team for Sports buyers: admin override, else derived
+    // from their sports-card titles.
+    const isSportsBuyer = topCategories.includes('sports');
+    let derivedSport: string | null = null;
+    let derivedTeam: string | null = null;
+    if (isSportsBuyer) {
+      const sportsNameRows = await this.rawQuery<{ name: string | null }>(
+        `SELECT p.name AS name
+         FROM prize_orders o
+         JOIN prize_configurations p ON p.id = o.prize_configuration_id
+         WHERE o.user_id = $1
+           AND o.status IN ${PAID_STATUSES_SQL}
+           AND p.brand = 'sports'`,
+        [userId],
+      );
+      const derived = derivePreferredSportTeam(
+        sportsNameRows.map((r) => r.name ?? '').filter(Boolean),
+      );
+      derivedSport = derived.sport;
+      derivedTeam = derived.team;
+    }
 
     // Recent activity = last N purchases (buyer side) + last N sales
     // (seller side), interleaved by date.
@@ -1096,6 +1159,8 @@ export class CollectorAnalyticsService {
         zip: user.zipCode,
         country: user.country,
       }),
+      preferredSport: annotations?.preferredSport ?? derivedSport,
+      preferredTeam: annotations?.preferredTeam ?? derivedTeam,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1422,6 +1487,12 @@ export class CollectorAnalyticsService {
       }),
       ...(dto.affiliation !== undefined && {
         affiliation: dto.affiliation,
+      }),
+      ...(dto.preferredSport !== undefined && {
+        preferredSport: dto.preferredSport,
+      }),
+      ...(dto.preferredTeam !== undefined && {
+        preferredTeam: dto.preferredTeam,
       }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {
