@@ -26,6 +26,8 @@ import {
   UpdateCollectorAnalyticsProfileDto,
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
+import { deriveMetroArea } from './metro-area.util';
+import { derivePreferredSportTeam } from './sports-derivation.util';
 
 /**
  * Statuses we treat as a "real" paid transaction for analytics. Includes
@@ -44,6 +46,16 @@ const PAID_STATUSES = [
   'payment_processing',
 ] as const;
 const PAID_STATUSES_SQL = "('paid','shipped','delivered','payment_processing')";
+
+/**
+ * Correlated predicate: true when `userIdExpr` is NOT an admin-omitted user
+ * (analytics_profile.excludedFromAnalytics). Drop into a WHERE so omitted
+ * users disappear from every aggregate, not just the collector list. Uses
+ * NOT EXISTS (null-safe, unlike NOT IN).
+ */
+const NOT_OMITTED_SQL = (userIdExpr: string): string =>
+  `NOT EXISTS (SELECT 1 FROM users ux WHERE ux.id = ${userIdExpr} ` +
+  `AND COALESCE(ux.analytics_profile->>'excludedFromAnalytics', 'false') = 'true')`;
 
 /**
  * Statuses considered "visible" for event-log queries (collector detail
@@ -336,6 +348,11 @@ const sanitizeAnnotations = (
   if (personaOverride) out.personaOverride = personaOverride;
   const affiliation = str(r.affiliation);
   if (affiliation) out.affiliation = affiliation;
+  if (r.excludedFromAnalytics === true) out.excludedFromAnalytics = true;
+  const preferredSport = str(r.preferredSport);
+  if (preferredSport) out.preferredSport = preferredSport;
+  const preferredTeam = str(r.preferredTeam);
+  if (preferredTeam) out.preferredTeam = preferredTeam;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -390,15 +407,23 @@ export class CollectorAnalyticsService {
     const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // -- Totals -------------------------------------------------------------
-    const totalProfiles = await this.userRepository.count({
-      where: { isActive: true },
-    });
+    // Every aggregate excludes admin-omitted users (buy-side via the order's
+    // buyer; sellers via the item creator) so omitted records vanish from the
+    // headline stats too, not just the collector list.
+    const [totalProfilesRow] = await this.rawQuery<{ c: number | string }>(
+      `SELECT COUNT(*)::int AS c
+       FROM users u
+       WHERE u.is_active = true
+         AND ${NOT_OMITTED_SQL('u.id')}`,
+    );
+    const totalProfiles = num(totalProfilesRow?.c);
 
     const [activeBuyersRow] = await this.rawQuery<{ c: number | string }>(
       `SELECT COUNT(DISTINCT o.user_id)::int AS c
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
-         AND o."createdAt" >= $1`,
+         AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
       [cutoff30d],
     );
     const activeBuyers30d = num(activeBuyersRow?.c);
@@ -409,7 +434,8 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
-         AND p.created_by IS NOT NULL`,
+         AND p.created_by IS NOT NULL
+         AND ${NOT_OMITTED_SQL('p.created_by')}`,
       [cutoff30d],
     );
     const activeSellers30d = num(activeSellersRow?.c);
@@ -418,7 +444,8 @@ export class CollectorAnalyticsService {
       `SELECT COALESCE(SUM(o.total_price), 0)::float AS s
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
-         AND o."createdAt" >= $1`,
+         AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
       [cutoff30d],
     );
     const spend30dUsd = num(spend30dRow?.s);
@@ -426,7 +453,8 @@ export class CollectorAnalyticsService {
     const [lifetimeRow] = await this.rawQuery<{ s: number | string }>(
       `SELECT COALESCE(SUM(o.total_price), 0)::float AS s
        FROM prize_orders o
-       WHERE o.status IN ${PAID_STATUSES_SQL}`,
+       WHERE o.status IN ${PAID_STATUSES_SQL}
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
     );
     const lifetimeSpendUsd = num(lifetimeRow?.s);
 
@@ -439,6 +467,7 @@ export class CollectorAnalyticsService {
          SELECT ${PREDICTED_30D_SQL} AS predicted30d
          FROM prize_orders o
          WHERE o.status IN ${PAID_STATUSES_SQL}
+           AND ${NOT_OMITTED_SQL('o.user_id')}
          GROUP BY o.user_id
        ) per_user`,
     );
@@ -457,6 +486,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY p.brand`,
       [cutoff30d],
     );
@@ -503,6 +533,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY p.id, p.name, p.brand
        ORDER BY revenue DESC
        LIMIT 8`,
@@ -530,6 +561,7 @@ export class CollectorAnalyticsService {
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY week_start
        ORDER BY week_start ASC`,
       [cutoff12w],
@@ -587,11 +619,13 @@ export class CollectorAnalyticsService {
     onlySellers?: boolean;
     sort?: 'lifetime' | 'last30d' | 'recent' | 'predicted';
     category?: 'all' | AnalyticsAssetCategory;
+    includeOmitted?: boolean;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
     const offset = Math.max(opts.offset ?? 0, 0);
     const search = (opts.search ?? '').trim().toLowerCase();
     const onlySellers = !!opts.onlySellers;
+    const includeOmitted = !!opts.includeOmitted;
     const sort = opts.sort ?? 'lifetime';
     const category =
       opts.category && opts.category !== 'all' ? opts.category : null;
@@ -610,6 +644,12 @@ export class CollectorAnalyticsService {
     const whereParams: unknown[] = [];
     if (onlySellers) {
       whereParts.push('u.is_seller = true');
+    }
+    if (!includeOmitted) {
+      // Hide admin-omitted users (analytics_profile.excludedFromAnalytics).
+      whereParts.push(
+        "COALESCE(u.analytics_profile->>'excludedFromAnalytics', 'false') <> 'true'",
+      );
     }
     if (search) {
       whereParams.push(`%${search}%`);
@@ -683,6 +723,10 @@ export class CollectorAnalyticsService {
       account_creation_date: Date | string | null;
       socials: unknown;
       analytics_profile: unknown;
+      city: string | null;
+      state: string | null;
+      zip_code: string | null;
+      country: string | null;
       lifetime: number | string;
       last30d: number | string;
       predicted30d: number | string;
@@ -698,6 +742,10 @@ export class CollectorAnalyticsService {
               u.account_creation_date AS account_creation_date,
               u.socials AS socials,
               u.analytics_profile AS analytics_profile,
+              u.city AS city,
+              u.state AS state,
+              u.zip_code AS zip_code,
+              u.country AS country,
               COALESCE(bo.lifetime, 0)::float AS lifetime,
               COALESCE(bo.last30d, 0)::float AS last30d,
               COALESCE(bo.predicted30d, 0)::float AS predicted30d,
@@ -740,6 +788,13 @@ export class CollectorAnalyticsService {
       socials: (r.socials ?? null) as { [social: string]: string } | null,
       // Admin annotations carry the persona + affiliation surfaced as columns.
       annotations: sanitizeAnnotations(r.analytics_profile),
+      // Centralized metro derived from the raw city/state/zip/country.
+      location: deriveMetroArea({
+        city: r.city,
+        state: r.state,
+        zip: r.zip_code,
+        country: r.country,
+      }),
     }));
 
     const userIds = users.map((u) => u.id);
@@ -815,6 +870,28 @@ export class CollectorAnalyticsService {
       m.set(cat, (m.get(cat) ?? 0) + num(r.spend));
     }
 
+    // Sports sub-category: collect each user's sports-card titles so we can
+    // derive a preferred sport + team (one query for the whole page).
+    const sportsRows = await this.rawQuery<{
+      user_id: string;
+      name: string | null;
+    }>(
+      `SELECT o.user_id AS user_id, p.name AS name
+       FROM prize_orders o
+       JOIN prize_configurations p ON p.id = o.prize_configuration_id
+       WHERE o.user_id = ANY($1::uuid[])
+         AND o.status IN ${PAID_STATUSES_SQL}
+         AND p.brand = 'sports'`,
+      [userIds],
+    );
+    const sportsNamesByUser = new Map<string, string[]>();
+    for (const r of sportsRows) {
+      if (!r.name) continue;
+      const arr = sportsNamesByUser.get(r.user_id) ?? [];
+      arr.push(r.name);
+      sportsNamesByUser.set(r.user_id, arr);
+    }
+
     const data: CollectorProfileSummaryDto[] = users.map((u) => {
       const buy = buyAgg.get(u.id);
       const sell = sellAgg.get(u.id);
@@ -825,6 +902,18 @@ export class CollectorAnalyticsService {
             .slice(0, 3)
             .map(([c]) => c)
         : [];
+      // Preferred sport/team: admin override wins, else auto-derive from the
+      // user's sports purchases. Only meaningful for Sports-category buyers.
+      const isSportsBuyer = topCategories.includes('sports');
+      const derivedSportTeam = isSportsBuyer
+        ? derivePreferredSportTeam(sportsNamesByUser.get(u.id) ?? [])
+        : { sport: null, team: null };
+      const preferredSport =
+        u.annotations?.preferredSport ??
+        (isSportsBuyer ? derivedSportTeam.sport : null);
+      const preferredTeam =
+        u.annotations?.preferredTeam ??
+        (isSportsBuyer ? derivedSportTeam.team : null);
       return {
         id: u.id,
         username: u.username,
@@ -844,6 +933,10 @@ export class CollectorAnalyticsService {
         topCategories,
         persona: u.annotations?.personaOverride ?? null,
         affiliation: u.annotations?.affiliation ?? null,
+        excluded: u.annotations?.excludedFromAnalytics === true,
+        location: u.location,
+        preferredSport,
+        preferredTeam,
         socials: extractSocials(u.socials),
       };
     });
@@ -938,6 +1031,28 @@ export class CollectorAnalyticsService {
       .filter((c) => c.spendUsd > 0)
       .slice(0, 3)
       .map((c) => c.category);
+
+    // Preferred sport/team for Sports buyers: admin override, else derived
+    // from their sports-card titles.
+    const isSportsBuyer = topCategories.includes('sports');
+    let derivedSport: string | null = null;
+    let derivedTeam: string | null = null;
+    if (isSportsBuyer) {
+      const sportsNameRows = await this.rawQuery<{ name: string | null }>(
+        `SELECT p.name AS name
+         FROM prize_orders o
+         JOIN prize_configurations p ON p.id = o.prize_configuration_id
+         WHERE o.user_id = $1
+           AND o.status IN ${PAID_STATUSES_SQL}
+           AND p.brand = 'sports'`,
+        [userId],
+      );
+      const derived = derivePreferredSportTeam(
+        sportsNameRows.map((r) => r.name ?? '').filter(Boolean),
+      );
+      derivedSport = derived.sport;
+      derivedTeam = derived.team;
+    }
 
     // Recent activity = last N purchases (buyer side) + last N sales
     // (seller side), interleaved by date.
@@ -1037,6 +1152,15 @@ export class CollectorAnalyticsService {
       topCategories,
       persona: annotations?.personaOverride ?? null,
       affiliation: annotations?.affiliation ?? null,
+      excluded: annotations?.excludedFromAnalytics === true,
+      location: deriveMetroArea({
+        city: user.city,
+        state: user.state,
+        zip: user.zipCode,
+        country: user.country,
+      }),
+      preferredSport: annotations?.preferredSport ?? derivedSport,
+      preferredTeam: annotations?.preferredTeam ?? derivedTeam,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1364,6 +1488,12 @@ export class CollectorAnalyticsService {
       ...(dto.affiliation !== undefined && {
         affiliation: dto.affiliation,
       }),
+      ...(dto.preferredSport !== undefined && {
+        preferredSport: dto.preferredSport,
+      }),
+      ...(dto.preferredTeam !== undefined && {
+        preferredTeam: dto.preferredTeam,
+      }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {
         preferences: dto.preferences,
@@ -1382,6 +1512,37 @@ export class CollectorAnalyticsService {
     await this.userRepository.save(user);
 
     return { analyticsProfile: cleaned };
+  }
+
+  /**
+   * Omit (or restore) a user from the Analytics surface by toggling the
+   * `excludedFromAnalytics` annotation. Analytics-only: it never touches the
+   * user's account, login, or shop. All other annotations are preserved.
+   */
+  async setExclusion(
+    userId: string,
+    excluded: boolean,
+    editorId?: string,
+  ): Promise<{ excluded: boolean }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const next: AnalyticsProfileAnnotations = {
+      ...(sanitizeAnnotations(user.analyticsProfile) ?? {}),
+      lastEditedAt: new Date().toISOString(),
+      ...(editorId && { lastEditedBy: editorId }),
+    };
+    if (excluded) {
+      next.excludedFromAnalytics = true;
+    } else {
+      delete next.excludedFromAnalytics;
+    }
+
+    const cleaned = sanitizeAnnotations(next);
+    user.analyticsProfile = (cleaned ?? null) as Record<string, unknown> | null;
+    await this.userRepository.save(user);
+
+    return { excluded };
   }
 }
 

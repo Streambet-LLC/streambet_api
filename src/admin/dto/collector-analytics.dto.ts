@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { SPORTS } from '../sports-derivation.util';
 
 /**
  * Maps the canonical PrizeBrand enum to the four "asset categories" the
@@ -25,6 +26,23 @@ export type AnalyticsAssetCategory =
   | 'one_piece'
   | 'sports'
   | 'other';
+
+/**
+ * Canonical collector personas. The admin "Persona override" field is a
+ * single-select over these (it replaced a free-text input). Stored verbatim
+ * on `analytics_profile.personaOverride`.
+ */
+export const COLLECTOR_PERSONAS = [
+  'Pro Dealer',
+  'Amateur Dealer',
+  'Short Holder / Flipper',
+  'Long Holder / Collector',
+  'Hybrid - Long / Short',
+  'Creator / Influencer',
+  'Card Fund Manager',
+] as const;
+
+export type CollectorPersona = (typeof COLLECTOR_PERSONAS)[number];
 
 /**
  * Social handles we can surface today come from `users.socials` (jsonb)
@@ -176,6 +194,36 @@ export class CollectorProfileSummaryDto {
       'Admin-set affiliation/group (analytics_profile.affiliation). Null when the collector has no affiliation.',
   })
   affiliation: string | null;
+
+  @ApiProperty({
+    description:
+      'True when an admin has omitted this user from the Analytics surface (analytics_profile.excludedFromAnalytics). Omitted users are hidden from the list unless includeOmitted is set.',
+  })
+  excluded: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Centralized metropolitan area derived from the user-supplied city/state/zip (suburbs roll up to the nearest metro). Null when no usable location is on file.',
+  })
+  location: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Preferred sport for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+  })
+  preferredSport: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Preferred team for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+  })
+  preferredTeam: string | null;
 
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];
@@ -425,6 +473,19 @@ export interface AnalyticsProfileAnnotations {
    * so this is frequently absent (treated as null downstream).
    */
   affiliation?: string;
+  /**
+   * When true, this user is omitted from the admin Analytics surface (hidden
+   * from the collector list by default). Analytics-only — it does NOT touch
+   * the user's account, login, or shop. Only stored when true.
+   */
+  excludedFromAnalytics?: boolean;
+  /**
+   * Admin override for the Sports sub-category. When set, these win over the
+   * value auto-derived from the collector's sports purchases. `preferredTeam`
+   * is free text; `preferredSport` should be one of {@link SPORTS}.
+   */
+  preferredSport?: string;
+  preferredTeam?: string;
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -469,10 +530,12 @@ export class UpdateCollectorAnalyticsProfileDto
   @MaxLength(2000)
   bio?: string;
 
-  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @ApiPropertyOptional({
+    description: 'Persona (single-select). Empty string clears it.',
+    enum: COLLECTOR_PERSONAS,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
+  @IsIn([...COLLECTOR_PERSONAS, ''])
   personaOverride?: string;
 
   @ApiPropertyOptional({
@@ -483,6 +546,20 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(120)
   affiliation?: string;
+
+  @ApiPropertyOptional({
+    description: 'Preferred sport override (single-select). Empty clears it.',
+    enum: SPORTS,
+  })
+  @IsOptional()
+  @IsIn([...SPORTS, ''])
+  preferredSport?: string;
+
+  @ApiPropertyOptional({ description: 'Preferred team override (free text).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  preferredTeam?: string;
 
   @ApiPropertyOptional({
     type: [String],
@@ -518,6 +595,19 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(8000)
   notes?: string;
+}
+
+/**
+ * Toggle whether a user is omitted from the admin Analytics surface. This is
+ * analytics-only — it never affects the user's account, login, or shop.
+ */
+export class SetCollectorExclusionDto {
+  @ApiProperty({
+    description:
+      'True to omit (hide) the user from the Analytics list; false to restore them.',
+  })
+  @IsBoolean()
+  excluded: boolean;
 }
 
 /**
@@ -573,10 +663,12 @@ export class CreateCollectorProfileDto {
   @MaxLength(2000)
   bio?: string;
 
-  @ApiPropertyOptional({ description: 'Persona override label.' })
+  @ApiPropertyOptional({
+    description: 'Persona (single-select).',
+    enum: COLLECTOR_PERSONAS,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
+  @IsIn([...COLLECTOR_PERSONAS, ''])
   personaOverride?: string;
 
   @ApiPropertyOptional({
