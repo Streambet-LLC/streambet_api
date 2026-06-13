@@ -46,6 +46,16 @@ const PAID_STATUSES = [
 const PAID_STATUSES_SQL = "('paid','shipped','delivered','payment_processing')";
 
 /**
+ * Correlated predicate: true when `userIdExpr` is NOT an admin-omitted user
+ * (analytics_profile.excludedFromAnalytics). Drop into a WHERE so omitted
+ * users disappear from every aggregate, not just the collector list. Uses
+ * NOT EXISTS (null-safe, unlike NOT IN).
+ */
+const NOT_OMITTED_SQL = (userIdExpr: string): string =>
+  `NOT EXISTS (SELECT 1 FROM users ux WHERE ux.id = ${userIdExpr} ` +
+  `AND COALESCE(ux.analytics_profile->>'excludedFromAnalytics', 'false') = 'true')`;
+
+/**
  * Statuses considered "visible" for event-log queries (collector detail
  * page → Recent Orders). Currently identical to PAID_STATUSES_SQL now that
  * in-flight ACH debits also count toward aggregate spend / LTV.
@@ -336,6 +346,7 @@ const sanitizeAnnotations = (
   if (personaOverride) out.personaOverride = personaOverride;
   const affiliation = str(r.affiliation);
   if (affiliation) out.affiliation = affiliation;
+  if (r.excludedFromAnalytics === true) out.excludedFromAnalytics = true;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -390,15 +401,23 @@ export class CollectorAnalyticsService {
     const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // -- Totals -------------------------------------------------------------
-    const totalProfiles = await this.userRepository.count({
-      where: { isActive: true },
-    });
+    // Every aggregate excludes admin-omitted users (buy-side via the order's
+    // buyer; sellers via the item creator) so omitted records vanish from the
+    // headline stats too, not just the collector list.
+    const [totalProfilesRow] = await this.rawQuery<{ c: number | string }>(
+      `SELECT COUNT(*)::int AS c
+       FROM users u
+       WHERE u.is_active = true
+         AND ${NOT_OMITTED_SQL('u.id')}`,
+    );
+    const totalProfiles = num(totalProfilesRow?.c);
 
     const [activeBuyersRow] = await this.rawQuery<{ c: number | string }>(
       `SELECT COUNT(DISTINCT o.user_id)::int AS c
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
-         AND o."createdAt" >= $1`,
+         AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
       [cutoff30d],
     );
     const activeBuyers30d = num(activeBuyersRow?.c);
@@ -409,7 +428,8 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
-         AND p.created_by IS NOT NULL`,
+         AND p.created_by IS NOT NULL
+         AND ${NOT_OMITTED_SQL('p.created_by')}`,
       [cutoff30d],
     );
     const activeSellers30d = num(activeSellersRow?.c);
@@ -418,7 +438,8 @@ export class CollectorAnalyticsService {
       `SELECT COALESCE(SUM(o.total_price), 0)::float AS s
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
-         AND o."createdAt" >= $1`,
+         AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
       [cutoff30d],
     );
     const spend30dUsd = num(spend30dRow?.s);
@@ -426,7 +447,8 @@ export class CollectorAnalyticsService {
     const [lifetimeRow] = await this.rawQuery<{ s: number | string }>(
       `SELECT COALESCE(SUM(o.total_price), 0)::float AS s
        FROM prize_orders o
-       WHERE o.status IN ${PAID_STATUSES_SQL}`,
+       WHERE o.status IN ${PAID_STATUSES_SQL}
+         AND ${NOT_OMITTED_SQL('o.user_id')}`,
     );
     const lifetimeSpendUsd = num(lifetimeRow?.s);
 
@@ -439,6 +461,7 @@ export class CollectorAnalyticsService {
          SELECT ${PREDICTED_30D_SQL} AS predicted30d
          FROM prize_orders o
          WHERE o.status IN ${PAID_STATUSES_SQL}
+           AND ${NOT_OMITTED_SQL('o.user_id')}
          GROUP BY o.user_id
        ) per_user`,
     );
@@ -457,6 +480,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY p.brand`,
       [cutoff30d],
     );
@@ -503,6 +527,7 @@ export class CollectorAnalyticsService {
        JOIN prize_configurations p ON p.id = o.prize_configuration_id
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY p.id, p.name, p.brand
        ORDER BY revenue DESC
        LIMIT 8`,
@@ -530,6 +555,7 @@ export class CollectorAnalyticsService {
        FROM prize_orders o
        WHERE o.status IN ${PAID_STATUSES_SQL}
          AND o."createdAt" >= $1
+         AND ${NOT_OMITTED_SQL('o.user_id')}
        GROUP BY week_start
        ORDER BY week_start ASC`,
       [cutoff12w],
@@ -587,11 +613,13 @@ export class CollectorAnalyticsService {
     onlySellers?: boolean;
     sort?: 'lifetime' | 'last30d' | 'recent' | 'predicted';
     category?: 'all' | AnalyticsAssetCategory;
+    includeOmitted?: boolean;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
     const offset = Math.max(opts.offset ?? 0, 0);
     const search = (opts.search ?? '').trim().toLowerCase();
     const onlySellers = !!opts.onlySellers;
+    const includeOmitted = !!opts.includeOmitted;
     const sort = opts.sort ?? 'lifetime';
     const category =
       opts.category && opts.category !== 'all' ? opts.category : null;
@@ -610,6 +638,12 @@ export class CollectorAnalyticsService {
     const whereParams: unknown[] = [];
     if (onlySellers) {
       whereParts.push('u.is_seller = true');
+    }
+    if (!includeOmitted) {
+      // Hide admin-omitted users (analytics_profile.excludedFromAnalytics).
+      whereParts.push(
+        "COALESCE(u.analytics_profile->>'excludedFromAnalytics', 'false') <> 'true'",
+      );
     }
     if (search) {
       whereParams.push(`%${search}%`);
@@ -844,6 +878,7 @@ export class CollectorAnalyticsService {
         topCategories,
         persona: u.annotations?.personaOverride ?? null,
         affiliation: u.annotations?.affiliation ?? null,
+        excluded: u.annotations?.excludedFromAnalytics === true,
         socials: extractSocials(u.socials),
       };
     });
@@ -1037,6 +1072,7 @@ export class CollectorAnalyticsService {
       topCategories,
       persona: annotations?.personaOverride ?? null,
       affiliation: annotations?.affiliation ?? null,
+      excluded: annotations?.excludedFromAnalytics === true,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1382,6 +1418,37 @@ export class CollectorAnalyticsService {
     await this.userRepository.save(user);
 
     return { analyticsProfile: cleaned };
+  }
+
+  /**
+   * Omit (or restore) a user from the Analytics surface by toggling the
+   * `excludedFromAnalytics` annotation. Analytics-only: it never touches the
+   * user's account, login, or shop. All other annotations are preserved.
+   */
+  async setExclusion(
+    userId: string,
+    excluded: boolean,
+    editorId?: string,
+  ): Promise<{ excluded: boolean }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const next: AnalyticsProfileAnnotations = {
+      ...(sanitizeAnnotations(user.analyticsProfile) ?? {}),
+      lastEditedAt: new Date().toISOString(),
+      ...(editorId && { lastEditedBy: editorId }),
+    };
+    if (excluded) {
+      next.excludedFromAnalytics = true;
+    } else {
+      delete next.excludedFromAnalytics;
+    }
+
+    const cleaned = sanitizeAnnotations(next);
+    user.analyticsProfile = (cleaned ?? null) as Record<string, unknown> | null;
+    await this.userRepository.save(user);
+
+    return { excluded };
   }
 }
 

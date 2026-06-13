@@ -48,6 +48,7 @@ import {
   CollectorProfileDetailDto,
   CollectorProfileSummaryDto,
   CreateCollectorProfileDto,
+  SetCollectorExclusionDto,
   UpdateCollectorAnalyticsProfileDto,
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
@@ -1066,6 +1067,7 @@ export class AdminController {
     @Query('onlySellers') onlySellers?: string,
     @Query('sort') sort?: string,
     @Query('category') category?: string,
+    @Query('includeOmitted') includeOmitted?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
@@ -1104,6 +1106,7 @@ export class AdminController {
         onlySellers: onlySellers === 'true' || onlySellers === '1',
         sort: parsedSort,
         category: parsedCategory,
+        includeOmitted: includeOmitted === 'true' || includeOmitted === '1',
       });
     return {
       status: HttpStatus.OK,
@@ -1216,6 +1219,36 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Collector analytics profile updated successfully',
+      data,
+    };
+  }
+
+  /**
+   * Admin-only: omit (or restore) a user from the Analytics surface. Toggles
+   * the `excludedFromAnalytics` annotation only — it does NOT affect the
+   * user's account, login, or shop.
+   */
+  @ApiOperation({
+    summary: 'Omit/restore a user from the Analytics surface (admin-only)',
+  })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @Patch('analytics/collectors/:id/exclusion')
+  async setCollectorExclusion(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body() dto: SetCollectorExclusionDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.collectorAnalyticsService.setExclusion(
+      id,
+      dto.excluded,
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: dto.excluded
+        ? 'User omitted from analytics'
+        : 'User restored to analytics',
       data,
     };
   }

@@ -192,6 +192,12 @@ export class CollectorProfileSummaryDto {
   })
   affiliation: string | null;
 
+  @ApiProperty({
+    description:
+      'True when an admin has omitted this user from the Analytics surface (analytics_profile.excludedFromAnalytics). Omitted users are hidden from the list unless includeOmitted is set.',
+  })
+  excluded: boolean;
+
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];
 }
@@ -440,6 +446,12 @@ export interface AnalyticsProfileAnnotations {
    * so this is frequently absent (treated as null downstream).
    */
   affiliation?: string;
+  /**
+   * When true, this user is omitted from the admin Analytics surface (hidden
+   * from the collector list by default). Analytics-only — it does NOT touch
+   * the user's account, login, or shop. Only stored when true.
+   */
+  excludedFromAnalytics?: boolean;
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -535,6 +547,19 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(8000)
   notes?: string;
+}
+
+/**
+ * Toggle whether a user is omitted from the admin Analytics surface. This is
+ * analytics-only — it never affects the user's account, login, or shop.
+ */
+export class SetCollectorExclusionDto {
+  @ApiProperty({
+    description:
+      'True to omit (hide) the user from the Analytics list; false to restore them.',
+  })
+  @IsBoolean()
+  excluded: boolean;
 }
 
 /**
