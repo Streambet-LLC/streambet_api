@@ -37,6 +37,8 @@ export const COLLECTOR_PERSONAS = [
   'Short Holder / Flipper',
   'Long Holder / Collector',
   'Hybrid - Long / Short',
+  'Creator / Influencer',
+  'Card Fund Manager',
 ] as const;
 
 export type CollectorPersona = (typeof COLLECTOR_PERSONAS)[number];
@@ -197,6 +199,14 @@ export class CollectorProfileSummaryDto {
       'True when an admin has omitted this user from the Analytics surface (analytics_profile.excludedFromAnalytics). Omitted users are hidden from the list unless includeOmitted is set.',
   })
   excluded: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
+    description:
+      'Centralized metropolitan area derived from the user-supplied city/state/zip (suburbs roll up to the nearest metro). Null when no usable location is on file.',
+  })
+  location: string | null;
 
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];

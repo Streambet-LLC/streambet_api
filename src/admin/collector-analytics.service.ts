@@ -26,6 +26,7 @@ import {
   UpdateCollectorAnalyticsProfileDto,
   UpdateCollectorSocialsDto,
 } from './dto/collector-analytics.dto';
+import { deriveMetroArea } from './metro-area.util';
 
 /**
  * Statuses we treat as a "real" paid transaction for analytics. Includes
@@ -717,6 +718,10 @@ export class CollectorAnalyticsService {
       account_creation_date: Date | string | null;
       socials: unknown;
       analytics_profile: unknown;
+      city: string | null;
+      state: string | null;
+      zip_code: string | null;
+      country: string | null;
       lifetime: number | string;
       last30d: number | string;
       predicted30d: number | string;
@@ -732,6 +737,10 @@ export class CollectorAnalyticsService {
               u.account_creation_date AS account_creation_date,
               u.socials AS socials,
               u.analytics_profile AS analytics_profile,
+              u.city AS city,
+              u.state AS state,
+              u.zip_code AS zip_code,
+              u.country AS country,
               COALESCE(bo.lifetime, 0)::float AS lifetime,
               COALESCE(bo.last30d, 0)::float AS last30d,
               COALESCE(bo.predicted30d, 0)::float AS predicted30d,
@@ -774,6 +783,13 @@ export class CollectorAnalyticsService {
       socials: (r.socials ?? null) as { [social: string]: string } | null,
       // Admin annotations carry the persona + affiliation surfaced as columns.
       annotations: sanitizeAnnotations(r.analytics_profile),
+      // Centralized metro derived from the raw city/state/zip/country.
+      location: deriveMetroArea({
+        city: r.city,
+        state: r.state,
+        zip: r.zip_code,
+        country: r.country,
+      }),
     }));
 
     const userIds = users.map((u) => u.id);
@@ -879,6 +895,7 @@ export class CollectorAnalyticsService {
         persona: u.annotations?.personaOverride ?? null,
         affiliation: u.annotations?.affiliation ?? null,
         excluded: u.annotations?.excludedFromAnalytics === true,
+        location: u.location,
         socials: extractSocials(u.socials),
       };
     });
@@ -1073,6 +1090,12 @@ export class CollectorAnalyticsService {
       persona: annotations?.personaOverride ?? null,
       affiliation: annotations?.affiliation ?? null,
       excluded: annotations?.excludedFromAnalytics === true,
+      location: deriveMetroArea({
+        city: user.city,
+        state: user.state,
+        zip: user.zipCode,
+        country: user.country,
+      }),
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
