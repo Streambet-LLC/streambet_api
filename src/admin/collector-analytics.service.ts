@@ -778,9 +778,10 @@ export class CollectorAnalyticsService {
     // rest of this method (sell-side + category mix) is unchanged.
     const users = userRows.map((r) => ({
       id: r.id,
-      username: r.username,
+      // Null for admin-created shadow profiles (no account yet) → ''.
+      username: r.username ?? '',
       name: r.name,
-      email: r.email,
+      email: r.email ?? '',
       isSeller: r.is_seller,
       accountCreationDate: r.account_creation_date
         ? new Date(r.account_creation_date)
@@ -1143,9 +1144,9 @@ export class CollectorAnalyticsService {
 
     return {
       id: user.id,
-      username: user.username,
-      displayName: user.name || user.username,
-      email: user.email,
+      username: user.username ?? '',
+      displayName: user.name || user.username || '',
+      email: user.email ?? '',
       joinedAt: (user.accountCreationDate ?? user.createdAt).toISOString(),
       isSeller: !!user.isSeller,
       lifetimeSpendUsd: Math.round(num(buyRow?.lifetime) * 100) / 100,
@@ -1247,9 +1248,10 @@ export class CollectorAnalyticsService {
       );
     }
 
-    // Resolve a unique username. Prefer the supplied one; otherwise derive a
-    // slug from any available signal (display name → first social handle →
-    // generic) and de-dupe with a random suffix.
+    // Username/email are LEFT BLANK (null) when not supplied: these are
+    // prospect/shadow profiles meant to be tied to a real account later, and
+    // a fake auto-generated email would wrongly occupy the unique slot and
+    // block that person's future signup. Only validate uniqueness when given.
     const providedUsername = dto.username?.trim();
     if (providedUsername) {
       const clash = await this.userRepository
@@ -1264,14 +1266,8 @@ export class CollectorAnalyticsService {
         );
       }
     }
-    const username = providedUsername
-      ? providedUsername
-      : await this.generateUniqueUsername(
-          dto.displayName?.trim() || cleanedEntries[0]?.value || 'collector',
-        );
+    const username = providedUsername || null;
 
-    // Resolve a unique email. Prefer the supplied one; otherwise mint a
-    // non-routable placeholder so the NOT NULL / UNIQUE constraints hold.
     const providedEmail = dto.email?.trim().toLowerCase();
     if (providedEmail) {
       const clash = await this.userRepository
@@ -1282,9 +1278,7 @@ export class CollectorAnalyticsService {
         throw new ConflictException('A user with this email already exists.');
       }
     }
-    const email = providedEmail
-      ? providedEmail
-      : await this.generateUniqueEmail(username);
+    const email = providedEmail || null;
 
     // Assemble the annotations payload, flagging the profile's origin.
     const annotations: AnalyticsProfileAnnotations = {
@@ -1307,7 +1301,6 @@ export class CollectorAnalyticsService {
       customAttributes: {
         ...(dto.customAttributes ?? {}),
         source: 'admin-analytics',
-        ...(!providedEmail && { placeholderEmail: 'true' }),
       },
       ...(dto.notes?.trim() && { notes: dto.notes.trim() }),
       ...(cleanedEntries.length && { socials: cleanedEntries }),
@@ -1329,8 +1322,9 @@ export class CollectorAnalyticsService {
 
     const cleanedAnnotations = sanitizeAnnotations(annotations);
     const user = this.userRepository.create({
-      username,
-      email,
+      // undefined omits the (now nullable) column → stored as NULL.
+      username: username ?? undefined,
+      email: email ?? undefined,
       password,
       name: dto.displayName?.trim() || null,
       role: UserRole.USER,
