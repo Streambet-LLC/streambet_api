@@ -33,6 +33,7 @@ export type AnalyticsAssetCategory =
  * on `analytics_profile.personaOverride`.
  */
 export const COLLECTOR_PERSONAS = [
+  'Institution',
   'Pro Dealer',
   'Amateur Dealer',
   'Short Holder / Flipper',
