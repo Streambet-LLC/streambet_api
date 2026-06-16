@@ -1066,24 +1066,29 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('onlySellers') onlySellers?: string,
     @Query('sort') sort?: string,
+    @Query('dir') dir?: string,
     @Query('category') category?: string,
     @Query('includeOmitted') includeOmitted?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
     const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
-    const parsedSort:
-      | 'lifetime'
-      | 'last30d'
-      | 'recent'
-      | 'predicted'
-      | undefined =
-      sort === 'lifetime' ||
-      sort === 'last30d' ||
-      sort === 'recent' ||
-      sort === 'predicted'
-        ? sort
-        : undefined;
+    const SORT_KEYS = [
+      'lifetime',
+      'last30d',
+      'recent',
+      'predicted',
+      'name',
+      'persona',
+      'affiliation',
+      'location',
+      'volume',
+    ] as const;
+    const parsedSort = (SORT_KEYS as readonly string[]).includes(sort ?? '')
+      ? (sort as (typeof SORT_KEYS)[number])
+      : undefined;
+    const parsedDir: 'asc' | 'desc' | undefined =
+      dir === 'asc' || dir === 'desc' ? dir : undefined;
     const parsedCategory:
       | 'all'
       | 'pokemon'
@@ -1105,6 +1110,7 @@ export class AdminController {
         search,
         onlySellers: onlySellers === 'true' || onlySellers === '1',
         sort: parsedSort,
+        dir: parsedDir,
         category: parsedCategory,
         includeOmitted: includeOmitted === 'true' || includeOmitted === '1',
       });

@@ -618,7 +618,17 @@ export class CollectorAnalyticsService {
     offset?: number;
     search?: string;
     onlySellers?: boolean;
-    sort?: 'lifetime' | 'last30d' | 'recent' | 'predicted';
+    sort?:
+      | 'lifetime'
+      | 'last30d'
+      | 'recent'
+      | 'predicted'
+      | 'name'
+      | 'persona'
+      | 'affiliation'
+      | 'location'
+      | 'volume';
+    dir?: 'asc' | 'desc';
     category?: 'all' | AnalyticsAssetCategory;
     includeOmitted?: boolean;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
@@ -628,6 +638,7 @@ export class CollectorAnalyticsService {
     const onlySellers = !!opts.onlySellers;
     const includeOmitted = !!opts.includeOmitted;
     const sort = opts.sort ?? 'lifetime';
+    const dir = opts.dir === 'asc' ? 'ASC' : 'DESC';
     const category =
       opts.category && opts.category !== 'all' ? opts.category : null;
     const now = new Date();
@@ -695,14 +706,40 @@ export class CollectorAnalyticsService {
       return { total, data: [] };
     }
 
-    const orderExpr =
-      sort === 'last30d'
-        ? 'COALESCE(bo.last30d, 0)'
-        : sort === 'predicted'
-          ? 'COALESCE(bo.predicted30d, 0)'
-          : sort === 'recent'
-            ? 'u."createdAt"'
-            : 'COALESCE(bo.lifetime, 0)';
+    // Sort expression per requested key. Text columns use NULLIF(...,'') so
+    // blanks sort last (with NULLS LAST) regardless of direction. `volume`
+    // ranks off lifetime spend (its tiers derive from it); `location` sorts by
+    // the underlying city (an approximation of the derived metro label).
+    let orderExpr: string;
+    switch (sort) {
+      case 'last30d':
+        orderExpr = 'COALESCE(bo.last30d, 0)';
+        break;
+      case 'predicted':
+        orderExpr = 'COALESCE(bo.predicted30d, 0)';
+        break;
+      case 'recent':
+        orderExpr = 'u."createdAt"';
+        break;
+      case 'name':
+        orderExpr = "NULLIF(LOWER(COALESCE(u.name, u.username, '')), '')";
+        break;
+      case 'persona':
+        orderExpr =
+          "NULLIF(LOWER(COALESCE(u.analytics_profile->>'personaOverride', '')), '')";
+        break;
+      case 'affiliation':
+        orderExpr =
+          "NULLIF(LOWER(COALESCE(u.analytics_profile->>'affiliation', '')), '')";
+        break;
+      case 'location':
+        orderExpr = "NULLIF(LOWER(COALESCE(u.city, '')), '')";
+        break;
+      case 'volume':
+      case 'lifetime':
+      default:
+        orderExpr = 'COALESCE(bo.lifetime, 0)';
+    }
 
     // Continue param numbering after the WHERE params: cutoff (for the
     // 30-day sum), then limit + offset.
@@ -765,7 +802,7 @@ export class CollectorAnalyticsService {
          GROUP BY o.user_id
        ) bo ON bo.user_id = u.id
        WHERE ${whereSql}
-       ORDER BY ${orderExpr} DESC NULLS LAST, u."createdAt" DESC
+       ORDER BY ${orderExpr} ${dir} NULLS LAST, u."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       pageParams,
     );
