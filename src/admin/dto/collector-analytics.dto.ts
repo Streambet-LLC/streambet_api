@@ -203,6 +203,12 @@ export class CollectorProfileSummaryDto {
   excluded: boolean;
 
   @ApiProperty({
+    description:
+      'True when this profile was manually added by an admin via the Analytics surface (vs an organic signup/buyer). Derived from analytics_profile.customAttributes.source.',
+  })
+  manuallyAdded: boolean;
+
+  @ApiProperty({
     nullable: true,
     required: false,
     description:

@@ -939,6 +939,8 @@ export class CollectorAnalyticsService {
         persona: u.annotations?.personaOverride ?? null,
         affiliation: u.annotations?.affiliation ?? null,
         excluded: u.annotations?.excludedFromAnalytics === true,
+        manuallyAdded:
+          u.annotations?.customAttributes?.source === 'admin-analytics',
         location: u.location,
         volume: deriveBuyerVolume(Math.round((buy?.lifetime ?? 0) * 100) / 100),
         preferredSports,
@@ -1159,6 +1161,8 @@ export class CollectorAnalyticsService {
       persona: annotations?.personaOverride ?? null,
       affiliation: annotations?.affiliation ?? null,
       excluded: annotations?.excludedFromAnalytics === true,
+      manuallyAdded:
+        annotations?.customAttributes?.source === 'admin-analytics',
       location: deriveMetroArea({
         city: user.city,
         state: user.state,
