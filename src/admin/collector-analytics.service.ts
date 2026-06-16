@@ -28,6 +28,7 @@ import {
 } from './dto/collector-analytics.dto';
 import { deriveMetroArea } from './metro-area.util';
 import { derivePreferredSportTeam } from './sports-derivation.util';
+import { deriveBuyerVolume } from './buyer-volume.util';
 
 /**
  * Statuses we treat as a "real" paid transaction for analytics. Includes
@@ -349,10 +350,10 @@ const sanitizeAnnotations = (
   const affiliation = str(r.affiliation);
   if (affiliation) out.affiliation = affiliation;
   if (r.excludedFromAnalytics === true) out.excludedFromAnalytics = true;
-  const preferredSport = str(r.preferredSport);
-  if (preferredSport) out.preferredSport = preferredSport;
-  const preferredTeam = str(r.preferredTeam);
-  if (preferredTeam) out.preferredTeam = preferredTeam;
+  const preferredSports = strArr(r.preferredSports);
+  if (preferredSports) out.preferredSports = preferredSports;
+  const preferredTeams = strArr(r.preferredTeams);
+  if (preferredTeams) out.preferredTeams = preferredTeams;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -617,7 +618,17 @@ export class CollectorAnalyticsService {
     offset?: number;
     search?: string;
     onlySellers?: boolean;
-    sort?: 'lifetime' | 'last30d' | 'recent' | 'predicted';
+    sort?:
+      | 'lifetime'
+      | 'last30d'
+      | 'recent'
+      | 'predicted'
+      | 'name'
+      | 'persona'
+      | 'affiliation'
+      | 'location'
+      | 'volume';
+    dir?: 'asc' | 'desc';
     category?: 'all' | AnalyticsAssetCategory;
     includeOmitted?: boolean;
   }): Promise<{ total: number; data: CollectorProfileSummaryDto[] }> {
@@ -627,6 +638,7 @@ export class CollectorAnalyticsService {
     const onlySellers = !!opts.onlySellers;
     const includeOmitted = !!opts.includeOmitted;
     const sort = opts.sort ?? 'lifetime';
+    const dir = opts.dir === 'asc' ? 'ASC' : 'DESC';
     const category =
       opts.category && opts.category !== 'all' ? opts.category : null;
     const now = new Date();
@@ -694,14 +706,40 @@ export class CollectorAnalyticsService {
       return { total, data: [] };
     }
 
-    const orderExpr =
-      sort === 'last30d'
-        ? 'COALESCE(bo.last30d, 0)'
-        : sort === 'predicted'
-          ? 'COALESCE(bo.predicted30d, 0)'
-          : sort === 'recent'
-            ? 'u."createdAt"'
-            : 'COALESCE(bo.lifetime, 0)';
+    // Sort expression per requested key. Text columns use NULLIF(...,'') so
+    // blanks sort last (with NULLS LAST) regardless of direction. `volume`
+    // ranks off lifetime spend (its tiers derive from it); `location` sorts by
+    // the underlying city (an approximation of the derived metro label).
+    let orderExpr: string;
+    switch (sort) {
+      case 'last30d':
+        orderExpr = 'COALESCE(bo.last30d, 0)';
+        break;
+      case 'predicted':
+        orderExpr = 'COALESCE(bo.predicted30d, 0)';
+        break;
+      case 'recent':
+        orderExpr = 'u."createdAt"';
+        break;
+      case 'name':
+        orderExpr = "NULLIF(LOWER(COALESCE(u.name, u.username, '')), '')";
+        break;
+      case 'persona':
+        orderExpr =
+          "NULLIF(LOWER(COALESCE(u.analytics_profile->>'personaOverride', '')), '')";
+        break;
+      case 'affiliation':
+        orderExpr =
+          "NULLIF(LOWER(COALESCE(u.analytics_profile->>'affiliation', '')), '')";
+        break;
+      case 'location':
+        orderExpr = "NULLIF(LOWER(COALESCE(u.city, '')), '')";
+        break;
+      case 'volume':
+      case 'lifetime':
+      default:
+        orderExpr = 'COALESCE(bo.lifetime, 0)';
+    }
 
     // Continue param numbering after the WHERE params: cutoff (for the
     // 30-day sum), then limit + offset.
@@ -764,7 +802,7 @@ export class CollectorAnalyticsService {
          GROUP BY o.user_id
        ) bo ON bo.user_id = u.id
        WHERE ${whereSql}
-       ORDER BY ${orderExpr} DESC NULLS LAST, u."createdAt" DESC
+       ORDER BY ${orderExpr} ${dir} NULLS LAST, u."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       pageParams,
     );
@@ -777,9 +815,10 @@ export class CollectorAnalyticsService {
     // rest of this method (sell-side + category mix) is unchanged.
     const users = userRows.map((r) => ({
       id: r.id,
-      username: r.username,
+      // Null for admin-created shadow profiles (no account yet) → ''.
+      username: r.username ?? '',
       name: r.name,
-      email: r.email,
+      email: r.email ?? '',
       isSeller: r.is_seller,
       accountCreationDate: r.account_creation_date
         ? new Date(r.account_creation_date)
@@ -907,13 +946,17 @@ export class CollectorAnalyticsService {
       const isSportsBuyer = topCategories.includes('sports');
       const derivedSportTeam = isSportsBuyer
         ? derivePreferredSportTeam(sportsNamesByUser.get(u.id) ?? [])
-        : { sport: null, team: null };
-      const preferredSport =
-        u.annotations?.preferredSport ??
-        (isSportsBuyer ? derivedSportTeam.sport : null);
-      const preferredTeam =
-        u.annotations?.preferredTeam ??
-        (isSportsBuyer ? derivedSportTeam.team : null);
+        : { sports: [] as string[], teams: [] as string[] };
+      const preferredSports = u.annotations?.preferredSports?.length
+        ? u.annotations.preferredSports
+        : isSportsBuyer
+          ? derivedSportTeam.sports
+          : [];
+      const preferredTeams = u.annotations?.preferredTeams?.length
+        ? u.annotations.preferredTeams
+        : isSportsBuyer
+          ? derivedSportTeam.teams
+          : [];
       return {
         id: u.id,
         username: u.username,
@@ -934,9 +977,12 @@ export class CollectorAnalyticsService {
         persona: u.annotations?.personaOverride ?? null,
         affiliation: u.annotations?.affiliation ?? null,
         excluded: u.annotations?.excludedFromAnalytics === true,
+        manuallyAdded:
+          u.annotations?.customAttributes?.source === 'admin-analytics',
         location: u.location,
-        preferredSport,
-        preferredTeam,
+        volume: deriveBuyerVolume(Math.round((buy?.lifetime ?? 0) * 100) / 100),
+        preferredSports,
+        preferredTeams,
         socials: extractSocials(u.socials),
       };
     });
@@ -1035,8 +1081,8 @@ export class CollectorAnalyticsService {
     // Preferred sport/team for Sports buyers: admin override, else derived
     // from their sports-card titles.
     const isSportsBuyer = topCategories.includes('sports');
-    let derivedSport: string | null = null;
-    let derivedTeam: string | null = null;
+    let derivedSports: string[] = [];
+    let derivedTeams: string[] = [];
     if (isSportsBuyer) {
       const sportsNameRows = await this.rawQuery<{ name: string | null }>(
         `SELECT p.name AS name
@@ -1050,8 +1096,8 @@ export class CollectorAnalyticsService {
       const derived = derivePreferredSportTeam(
         sportsNameRows.map((r) => r.name ?? '').filter(Boolean),
       );
-      derivedSport = derived.sport;
-      derivedTeam = derived.team;
+      derivedSports = derived.sports;
+      derivedTeams = derived.teams;
     }
 
     // Recent activity = last N purchases (buyer side) + last N sales
@@ -1135,9 +1181,9 @@ export class CollectorAnalyticsService {
 
     return {
       id: user.id,
-      username: user.username,
-      displayName: user.name || user.username,
-      email: user.email,
+      username: user.username ?? '',
+      displayName: user.name || user.username || '',
+      email: user.email ?? '',
       joinedAt: (user.accountCreationDate ?? user.createdAt).toISOString(),
       isSeller: !!user.isSeller,
       lifetimeSpendUsd: Math.round(num(buyRow?.lifetime) * 100) / 100,
@@ -1153,14 +1199,21 @@ export class CollectorAnalyticsService {
       persona: annotations?.personaOverride ?? null,
       affiliation: annotations?.affiliation ?? null,
       excluded: annotations?.excludedFromAnalytics === true,
+      manuallyAdded:
+        annotations?.customAttributes?.source === 'admin-analytics',
       location: deriveMetroArea({
         city: user.city,
         state: user.state,
         zip: user.zipCode,
         country: user.country,
       }),
-      preferredSport: annotations?.preferredSport ?? derivedSport,
-      preferredTeam: annotations?.preferredTeam ?? derivedTeam,
+      volume: deriveBuyerVolume(Math.round(num(buyRow?.lifetime) * 100) / 100),
+      preferredSports: annotations?.preferredSports?.length
+        ? annotations.preferredSports
+        : derivedSports,
+      preferredTeams: annotations?.preferredTeams?.length
+        ? annotations.preferredTeams
+        : derivedTeams,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1219,6 +1272,8 @@ export class CollectorAnalyticsService {
       !!dto.bio?.trim() ||
       !!dto.personaOverride?.trim() ||
       !!dto.affiliation?.trim() ||
+      !!dto.preferredSports?.length ||
+      !!dto.preferredTeams?.length ||
       !!dto.interests?.length ||
       !!dto.preferences?.length ||
       !!(dto.customAttributes && Object.keys(dto.customAttributes).length) ||
@@ -1230,9 +1285,10 @@ export class CollectorAnalyticsService {
       );
     }
 
-    // Resolve a unique username. Prefer the supplied one; otherwise derive a
-    // slug from any available signal (display name → first social handle →
-    // generic) and de-dupe with a random suffix.
+    // Username/email are LEFT BLANK (null) when not supplied: these are
+    // prospect/shadow profiles meant to be tied to a real account later, and
+    // a fake auto-generated email would wrongly occupy the unique slot and
+    // block that person's future signup. Only validate uniqueness when given.
     const providedUsername = dto.username?.trim();
     if (providedUsername) {
       const clash = await this.userRepository
@@ -1247,14 +1303,8 @@ export class CollectorAnalyticsService {
         );
       }
     }
-    const username = providedUsername
-      ? providedUsername
-      : await this.generateUniqueUsername(
-          dto.displayName?.trim() || cleanedEntries[0]?.value || 'collector',
-        );
+    const username = providedUsername || null;
 
-    // Resolve a unique email. Prefer the supplied one; otherwise mint a
-    // non-routable placeholder so the NOT NULL / UNIQUE constraints hold.
     const providedEmail = dto.email?.trim().toLowerCase();
     if (providedEmail) {
       const clash = await this.userRepository
@@ -1265,9 +1315,7 @@ export class CollectorAnalyticsService {
         throw new ConflictException('A user with this email already exists.');
       }
     }
-    const email = providedEmail
-      ? providedEmail
-      : await this.generateUniqueEmail(username);
+    const email = providedEmail || null;
 
     // Assemble the annotations payload, flagging the profile's origin.
     const annotations: AnalyticsProfileAnnotations = {
@@ -1279,12 +1327,17 @@ export class CollectorAnalyticsService {
       ...(dto.affiliation?.trim() && {
         affiliation: dto.affiliation.trim(),
       }),
+      ...(dto.preferredSports?.length && {
+        preferredSports: dto.preferredSports,
+      }),
+      ...(dto.preferredTeams?.length && {
+        preferredTeams: dto.preferredTeams,
+      }),
       ...(dto.interests?.length && { interests: dto.interests }),
       ...(dto.preferences?.length && { preferences: dto.preferences }),
       customAttributes: {
         ...(dto.customAttributes ?? {}),
         source: 'admin-analytics',
-        ...(!providedEmail && { placeholderEmail: 'true' }),
       },
       ...(dto.notes?.trim() && { notes: dto.notes.trim() }),
       ...(cleanedEntries.length && { socials: cleanedEntries }),
@@ -1306,8 +1359,9 @@ export class CollectorAnalyticsService {
 
     const cleanedAnnotations = sanitizeAnnotations(annotations);
     const user = this.userRepository.create({
-      username,
-      email,
+      // undefined omits the (now nullable) column → stored as NULL.
+      username: username ?? undefined,
+      email: email ?? undefined,
       password,
       name: dto.displayName?.trim() || null,
       role: UserRole.USER,
@@ -1488,11 +1542,11 @@ export class CollectorAnalyticsService {
       ...(dto.affiliation !== undefined && {
         affiliation: dto.affiliation,
       }),
-      ...(dto.preferredSport !== undefined && {
-        preferredSport: dto.preferredSport,
+      ...(dto.preferredSports !== undefined && {
+        preferredSports: dto.preferredSports,
       }),
-      ...(dto.preferredTeam !== undefined && {
-        preferredTeam: dto.preferredTeam,
+      ...(dto.preferredTeams !== undefined && {
+        preferredTeams: dto.preferredTeams,
       }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {

@@ -20,10 +20,13 @@ export class User extends BaseEntity {
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'last_name' })
   lastName: string;
 
-  @Column({ unique: true, length: 255, type: 'varchar' })
+  // Nullable so admin-created "shadow"/prospect collector profiles (Analytics)
+  // can be left without credentials and tied to a real signup later. Real
+  // accounts always have these; only shadow profiles are null.
+  @Column({ unique: true, length: 255, type: 'varchar', nullable: true })
   username: string;
 
-  @Column({ unique: true, length: 255, type: 'varchar' })
+  @Column({ unique: true, length: 255, type: 'varchar', nullable: true })
   email: string;
 
   @Column({ length: 255, type: 'varchar' })
