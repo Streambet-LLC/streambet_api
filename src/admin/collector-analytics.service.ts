@@ -350,10 +350,10 @@ const sanitizeAnnotations = (
   const affiliation = str(r.affiliation);
   if (affiliation) out.affiliation = affiliation;
   if (r.excludedFromAnalytics === true) out.excludedFromAnalytics = true;
-  const preferredSport = str(r.preferredSport);
-  if (preferredSport) out.preferredSport = preferredSport;
-  const preferredTeam = str(r.preferredTeam);
-  if (preferredTeam) out.preferredTeam = preferredTeam;
+  const preferredSports = strArr(r.preferredSports);
+  if (preferredSports) out.preferredSports = preferredSports;
+  const preferredTeams = strArr(r.preferredTeams);
+  if (preferredTeams) out.preferredTeams = preferredTeams;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -908,13 +908,17 @@ export class CollectorAnalyticsService {
       const isSportsBuyer = topCategories.includes('sports');
       const derivedSportTeam = isSportsBuyer
         ? derivePreferredSportTeam(sportsNamesByUser.get(u.id) ?? [])
-        : { sport: null, team: null };
-      const preferredSport =
-        u.annotations?.preferredSport ??
-        (isSportsBuyer ? derivedSportTeam.sport : null);
-      const preferredTeam =
-        u.annotations?.preferredTeam ??
-        (isSportsBuyer ? derivedSportTeam.team : null);
+        : { sports: [] as string[], teams: [] as string[] };
+      const preferredSports = u.annotations?.preferredSports?.length
+        ? u.annotations.preferredSports
+        : isSportsBuyer
+          ? derivedSportTeam.sports
+          : [];
+      const preferredTeams = u.annotations?.preferredTeams?.length
+        ? u.annotations.preferredTeams
+        : isSportsBuyer
+          ? derivedSportTeam.teams
+          : [];
       return {
         id: u.id,
         username: u.username,
@@ -937,8 +941,8 @@ export class CollectorAnalyticsService {
         excluded: u.annotations?.excludedFromAnalytics === true,
         location: u.location,
         volume: deriveBuyerVolume(Math.round((buy?.lifetime ?? 0) * 100) / 100),
-        preferredSport,
-        preferredTeam,
+        preferredSports,
+        preferredTeams,
         socials: extractSocials(u.socials),
       };
     });
@@ -1037,8 +1041,8 @@ export class CollectorAnalyticsService {
     // Preferred sport/team for Sports buyers: admin override, else derived
     // from their sports-card titles.
     const isSportsBuyer = topCategories.includes('sports');
-    let derivedSport: string | null = null;
-    let derivedTeam: string | null = null;
+    let derivedSports: string[] = [];
+    let derivedTeams: string[] = [];
     if (isSportsBuyer) {
       const sportsNameRows = await this.rawQuery<{ name: string | null }>(
         `SELECT p.name AS name
@@ -1052,8 +1056,8 @@ export class CollectorAnalyticsService {
       const derived = derivePreferredSportTeam(
         sportsNameRows.map((r) => r.name ?? '').filter(Boolean),
       );
-      derivedSport = derived.sport;
-      derivedTeam = derived.team;
+      derivedSports = derived.sports;
+      derivedTeams = derived.teams;
     }
 
     // Recent activity = last N purchases (buyer side) + last N sales
@@ -1162,8 +1166,12 @@ export class CollectorAnalyticsService {
         country: user.country,
       }),
       volume: deriveBuyerVolume(Math.round(num(buyRow?.lifetime) * 100) / 100),
-      preferredSport: annotations?.preferredSport ?? derivedSport,
-      preferredTeam: annotations?.preferredTeam ?? derivedTeam,
+      preferredSports: annotations?.preferredSports?.length
+        ? annotations.preferredSports
+        : derivedSports,
+      preferredTeams: annotations?.preferredTeams?.length
+        ? annotations.preferredTeams
+        : derivedTeams,
       socials: mergeSocialsForDetail(
         extractSocials(user.socials),
         extractAnalyticsSocials(annotations?.socials),
@@ -1222,6 +1230,8 @@ export class CollectorAnalyticsService {
       !!dto.bio?.trim() ||
       !!dto.personaOverride?.trim() ||
       !!dto.affiliation?.trim() ||
+      !!dto.preferredSports?.length ||
+      !!dto.preferredTeams?.length ||
       !!dto.interests?.length ||
       !!dto.preferences?.length ||
       !!(dto.customAttributes && Object.keys(dto.customAttributes).length) ||
@@ -1281,6 +1291,12 @@ export class CollectorAnalyticsService {
       }),
       ...(dto.affiliation?.trim() && {
         affiliation: dto.affiliation.trim(),
+      }),
+      ...(dto.preferredSports?.length && {
+        preferredSports: dto.preferredSports,
+      }),
+      ...(dto.preferredTeams?.length && {
+        preferredTeams: dto.preferredTeams,
       }),
       ...(dto.interests?.length && { interests: dto.interests }),
       ...(dto.preferences?.length && { preferences: dto.preferences }),
@@ -1491,11 +1507,11 @@ export class CollectorAnalyticsService {
       ...(dto.affiliation !== undefined && {
         affiliation: dto.affiliation,
       }),
-      ...(dto.preferredSport !== undefined && {
-        preferredSport: dto.preferredSport,
+      ...(dto.preferredSports !== undefined && {
+        preferredSports: dto.preferredSports,
       }),
-      ...(dto.preferredTeam !== undefined && {
-        preferredTeam: dto.preferredTeam,
+      ...(dto.preferredTeams !== undefined && {
+        preferredTeams: dto.preferredTeams,
       }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {

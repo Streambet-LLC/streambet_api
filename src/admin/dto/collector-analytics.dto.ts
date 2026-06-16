@@ -220,20 +220,18 @@ export class CollectorProfileSummaryDto {
   volume: string | null;
 
   @ApiProperty({
-    nullable: true,
-    required: false,
+    type: [String],
     description:
-      'Preferred sport for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+      'Preferred sports for Sports-category collectors (admin tags, else all auto-derived from purchases, most-bought first). Empty otherwise.',
   })
-  preferredSport: string | null;
+  preferredSports: string[];
 
   @ApiProperty({
-    nullable: true,
-    required: false,
+    type: [String],
     description:
-      'Preferred team for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
+      'Preferred teams for Sports-category collectors (admin tags, else auto-derived from purchases, most-bought first). Empty otherwise.',
   })
-  preferredTeam: string | null;
+  preferredTeams: string[];
 
   @ApiProperty({ type: [CollectorSocialDto] })
   socials: CollectorSocialDto[];
@@ -491,11 +489,11 @@ export interface AnalyticsProfileAnnotations {
   excludedFromAnalytics?: boolean;
   /**
    * Admin override for the Sports sub-category. When set, these win over the
-   * value auto-derived from the collector's sports purchases. `preferredTeam`
-   * is free text; `preferredSport` should be one of {@link SPORTS}.
+   * value auto-derived from the collector's sports purchases. `preferredTeams`
+   * is free text; `preferredSports` is a list, each one of {@link SPORTS}.
    */
-  preferredSport?: string;
-  preferredTeam?: string;
+  preferredSports?: string[];
+  preferredTeams?: string[];
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -558,18 +556,27 @@ export class UpdateCollectorAnalyticsProfileDto
   affiliation?: string;
 
   @ApiPropertyOptional({
-    description: 'Preferred sport override (single-select). Empty clears it.',
+    type: [String],
     enum: SPORTS,
+    description:
+      'Preferred sports override (multi-select). Empty array reverts to auto-derived.',
   })
   @IsOptional()
-  @IsIn([...SPORTS, ''])
-  preferredSport?: string;
+  @IsArray()
+  @ArrayMaxSize(SPORTS.length)
+  @IsIn([...SPORTS], { each: true })
+  preferredSports?: string[];
 
-  @ApiPropertyOptional({ description: 'Preferred team override (free text).' })
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'Preferred teams override (free text, multiple). Empty array reverts to auto-derived.',
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  preferredTeam?: string;
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  preferredTeams?: string[];
 
   @ApiPropertyOptional({
     type: [String],
@@ -689,6 +696,27 @@ export class CreateCollectorProfileDto {
   @IsString()
   @MaxLength(120)
   affiliation?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    enum: SPORTS,
+    description: 'Preferred sports (multi-select). Optional.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(SPORTS.length)
+  @IsIn([...SPORTS], { each: true })
+  preferredSports?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Preferred teams (free text, multiple). Optional.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsString({ each: true })
+  preferredTeams?: string[];
 
   @ApiPropertyOptional({
     type: [String],

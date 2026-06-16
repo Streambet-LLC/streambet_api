@@ -197,14 +197,17 @@ export function detectSportTeam(itemName: string): {
   return { sport: null, team: null };
 }
 
+/** Cap on auto-derived teams so a wide collector doesn't get a huge list. */
+const MAX_DERIVED_TEAMS = 6;
+
 /**
- * Aggregate a collector's sports-card titles into a preferred sport + team
- * (the most frequently detected of each). Ties broken by first-seen. Returns
- * nulls when nothing is detectable.
+ * Aggregate a collector's sports-card titles into their preferred sports and
+ * teams (ALL detected, ordered most-bought first; teams capped). Empty arrays
+ * when nothing is detectable.
  */
 export function derivePreferredSportTeam(itemNames: string[]): {
-  sport: Sport | null;
-  team: string | null;
+  sports: Sport[];
+  teams: string[];
 } {
   const sportCounts = new Map<Sport, number>();
   const teamCounts = new Map<string, number>();
@@ -214,16 +217,12 @@ export function derivePreferredSportTeam(itemNames: string[]): {
     if (sport) sportCounts.set(sport, (sportCounts.get(sport) ?? 0) + 1);
     if (team) teamCounts.set(team, (teamCounts.get(team) ?? 0) + 1);
   }
-  const top = <T>(m: Map<T, number>): T | null => {
-    let best: T | null = null;
-    let bestCount = 0;
-    for (const [k, c] of m) {
-      if (c > bestCount) {
-        best = k;
-        bestCount = c;
-      }
-    }
-    return best;
-  };
-  return { sport: top(sportCounts), team: top(teamCounts) };
+  const sports = [...sportCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([s]) => s);
+  const teams = [...teamCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([t]) => t)
+    .slice(0, MAX_DERIVED_TEAMS);
+  return { sports, teams };
 }
