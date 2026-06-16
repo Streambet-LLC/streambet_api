@@ -28,6 +28,7 @@ import {
 } from './dto/collector-analytics.dto';
 import { deriveMetroArea } from './metro-area.util';
 import { derivePreferredSportTeam } from './sports-derivation.util';
+import { deriveBuyerVolume } from './buyer-volume.util';
 
 /**
  * Statuses we treat as a "real" paid transaction for analytics. Includes
@@ -935,6 +936,7 @@ export class CollectorAnalyticsService {
         affiliation: u.annotations?.affiliation ?? null,
         excluded: u.annotations?.excludedFromAnalytics === true,
         location: u.location,
+        volume: deriveBuyerVolume(Math.round((buy?.lifetime ?? 0) * 100) / 100),
         preferredSport,
         preferredTeam,
         socials: extractSocials(u.socials),
@@ -1159,6 +1161,7 @@ export class CollectorAnalyticsService {
         zip: user.zipCode,
         country: user.country,
       }),
+      volume: deriveBuyerVolume(Math.round(num(buyRow?.lifetime) * 100) / 100),
       preferredSport: annotations?.preferredSport ?? derivedSport,
       preferredTeam: annotations?.preferredTeam ?? derivedTeam,
       socials: mergeSocialsForDetail(

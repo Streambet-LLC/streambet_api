@@ -213,6 +213,15 @@ export class CollectorProfileSummaryDto {
   @ApiProperty({
     nullable: true,
     required: false,
+    enum: ['High', 'Medium', 'Low'],
+    description:
+      'Rough buyer-volume guesstimate from lifetime spend (High/Medium/Low). Null for non-buyers.',
+  })
+  volume: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    required: false,
     description:
       'Preferred sport for Sports-category collectors (admin tag, else auto-derived from purchases). Null otherwise.',
   })
