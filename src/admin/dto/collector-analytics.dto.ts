@@ -45,6 +45,17 @@ export const COLLECTOR_PERSONAS = [
 
 export type CollectorPersona = (typeof COLLECTOR_PERSONAS)[number];
 
+/** Outreach pipeline stages. Empty string is treated as "Not contacted". */
+export const OUTREACH_STATUSES = [
+  'Not contacted',
+  'Contacted',
+  'Replied',
+  'Won',
+  'Passed',
+] as const;
+
+export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
+
 /**
  * Social handles we can surface today come from `users.socials` (jsonb)
  * which the seller onboarding flow populates. Keys are normalized to the
@@ -511,6 +522,13 @@ export interface AnalyticsProfileAnnotations {
   /** Internal notes only visible to admins. */
   notes?: string;
   /**
+   * Outreach pipeline stage ("Contacted", "Replied", "Won", "Passed").
+   * Absent/empty is treated as "Not contacted".
+   */
+  outreachStatus?: string;
+  /** ISO timestamp of the last time an admin marked this collector contacted. */
+  lastContactedAt?: string;
+  /**
    * Admin-curated socials. Allows multiple per platform (e.g. a personal
    * IG + a shop IG) and is independent from `users.socials` so analytics
    * edits don't leak to the public profile by default.
@@ -630,6 +648,22 @@ export class UpdateCollectorAnalyticsProfileDto
   @IsString()
   @MaxLength(8000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Outreach pipeline stage.',
+    enum: OUTREACH_STATUSES,
+  })
+  @IsOptional()
+  @IsIn([...OUTREACH_STATUSES, ''])
+  outreachStatus?: string;
+
+  @ApiPropertyOptional({
+    description: 'ISO timestamp of the last time the collector was contacted.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  lastContactedAt?: string;
 }
 
 /**

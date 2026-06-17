@@ -363,6 +363,10 @@ const sanitizeAnnotations = (
   if (customAttributes) out.customAttributes = customAttributes;
   const notes = str(r.notes);
   if (notes) out.notes = notes;
+  const outreachStatus = str(r.outreachStatus);
+  if (outreachStatus) out.outreachStatus = outreachStatus;
+  const lastContactedAt = str(r.lastContactedAt);
+  if (lastContactedAt) out.lastContactedAt = lastContactedAt;
   const socials = sanitizeSocialEntries(r.socials);
   if (socials.length > 0) out.socials = socials;
   const lastEditedAt = str(r.lastEditedAt);
@@ -1542,6 +1546,12 @@ export class CollectorAnalyticsService {
         customAttributes: dto.customAttributes,
       }),
       ...(dto.notes !== undefined && { notes: dto.notes }),
+      ...(dto.outreachStatus !== undefined && {
+        outreachStatus: dto.outreachStatus,
+      }),
+      ...(dto.lastContactedAt !== undefined && {
+        lastContactedAt: dto.lastContactedAt,
+      }),
       lastEditedAt: new Date().toISOString(),
       ...(editorId && { lastEditedBy: editorId }),
     };
