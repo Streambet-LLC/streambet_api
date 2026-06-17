@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -354,6 +353,8 @@ const sanitizeAnnotations = (
   if (preferredSports) out.preferredSports = preferredSports;
   const preferredTeams = strArr(r.preferredTeams);
   if (preferredTeams) out.preferredTeams = preferredTeams;
+  const tcgGames = strArr(r.tcgGames);
+  if (tcgGames) out.tcgGames = tcgGames;
   const interests = strArr(r.interests);
   if (interests) out.interests = interests;
   const preferences = strArr(r.preferences);
@@ -362,6 +363,10 @@ const sanitizeAnnotations = (
   if (customAttributes) out.customAttributes = customAttributes;
   const notes = str(r.notes);
   if (notes) out.notes = notes;
+  const outreachStatus = str(r.outreachStatus);
+  if (outreachStatus) out.outreachStatus = outreachStatus;
+  const lastContactedAt = str(r.lastContactedAt);
+  if (lastContactedAt) out.lastContactedAt = lastContactedAt;
   const socials = sanitizeSocialEntries(r.socials);
   if (socials.length > 0) out.socials = socials;
   const lastEditedAt = str(r.lastEditedAt);
@@ -1264,26 +1269,9 @@ export class CollectorAnalyticsService {
       if (cleanedEntries.length >= 64) break;
     }
 
-    // Require at least ONE meaningful field so we don't create empty rows.
-    const hasAnyData =
-      !!dto.username?.trim() ||
-      !!dto.email?.trim() ||
-      !!dto.displayName?.trim() ||
-      !!dto.bio?.trim() ||
-      !!dto.personaOverride?.trim() ||
-      !!dto.affiliation?.trim() ||
-      !!dto.preferredSports?.length ||
-      !!dto.preferredTeams?.length ||
-      !!dto.interests?.length ||
-      !!dto.preferences?.length ||
-      !!(dto.customAttributes && Object.keys(dto.customAttributes).length) ||
-      !!dto.notes?.trim() ||
-      cleanedEntries.length > 0;
-    if (!hasAnyData) {
-      throw new BadRequestException(
-        'Provide at least one field to create a collector profile.',
-      );
-    }
+    // Nothing is required — admins can create a bare prospect placeholder and
+    // annotate it later (the "Add profile" wizard promises nothing is
+    // mandatory). The record is still tagged admin-created below.
 
     // Username/email are LEFT BLANK (null) when not supplied: these are
     // prospect/shadow profiles meant to be tied to a real account later, and
@@ -1333,6 +1321,7 @@ export class CollectorAnalyticsService {
       ...(dto.preferredTeams?.length && {
         preferredTeams: dto.preferredTeams,
       }),
+      ...(dto.tcgGames?.length && { tcgGames: dto.tcgGames }),
       ...(dto.interests?.length && { interests: dto.interests }),
       ...(dto.preferences?.length && { preferences: dto.preferences }),
       customAttributes: {
@@ -1548,6 +1537,7 @@ export class CollectorAnalyticsService {
       ...(dto.preferredTeams !== undefined && {
         preferredTeams: dto.preferredTeams,
       }),
+      ...(dto.tcgGames !== undefined && { tcgGames: dto.tcgGames }),
       ...(dto.interests !== undefined && { interests: dto.interests }),
       ...(dto.preferences !== undefined && {
         preferences: dto.preferences,
@@ -1556,6 +1546,12 @@ export class CollectorAnalyticsService {
         customAttributes: dto.customAttributes,
       }),
       ...(dto.notes !== undefined && { notes: dto.notes }),
+      ...(dto.outreachStatus !== undefined && {
+        outreachStatus: dto.outreachStatus,
+      }),
+      ...(dto.lastContactedAt !== undefined && {
+        lastContactedAt: dto.lastContactedAt,
+      }),
       lastEditedAt: new Date().toISOString(),
       ...(editorId && { lastEditedBy: editorId }),
     };
