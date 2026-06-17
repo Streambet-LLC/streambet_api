@@ -500,6 +500,8 @@ export interface AnalyticsProfileAnnotations {
    */
   preferredSports?: string[];
   preferredTeams?: string[];
+  /** TCG games this collector focuses on (e.g. "Pokémon", "One Piece"). */
+  tcgGames?: string[];
   /** Free-form interest tags ("vintage", "graded", "1st-edition"). */
   interests?: string[];
   /** Buyer preferences / brands ("PSA10", "japanese", "sealed"). */
@@ -583,6 +585,16 @@ export class UpdateCollectorAnalyticsProfileDto
   @ArrayMaxSize(40)
   @IsString({ each: true })
   preferredTeams?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'TCG games this collector focuses on (e.g. Pokémon, One Piece).',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  tcgGames?: string[];
 
   @ApiPropertyOptional({
     type: [String],
@@ -723,6 +735,16 @@ export class CreateCollectorProfileDto {
   @ArrayMaxSize(40)
   @IsString({ each: true })
   preferredTeams?: string[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'TCG games (e.g. Pokémon, One Piece). Optional.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  tcgGames?: string[];
 
   @ApiPropertyOptional({
     type: [String],
