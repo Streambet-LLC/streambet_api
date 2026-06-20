@@ -43,6 +43,9 @@ import {
 } from 'src/users/dto/user.requests.dto';
 import { AdminService } from './admin.service';
 import { CollectorAnalyticsService } from './collector-analytics.service';
+import { SellerInventoryService } from './seller-inventory.service';
+import { GoogleSheetsService } from './google-sheets.service';
+import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
 import {
   CollectorAnalyticsOverviewDto,
   CollectorProfileDetailDto,
@@ -102,6 +105,8 @@ export class AdminController {
     private readonly walletsService: WalletsService,
     private readonly adminService: AdminService,
     private readonly collectorAnalyticsService: CollectorAnalyticsService,
+    private readonly sellerInventoryService: SellerInventoryService,
+    private readonly googleSheetsService: GoogleSheetsService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
@@ -1255,6 +1260,124 @@ export class AdminController {
       message: dto.excluded
         ? 'User omitted from analytics'
         : 'User restored to analytics',
+      data,
+    };
+  }
+
+  // ----------------------------------------------------------------------
+  // Seller document ingest — upload inventory (CSV / Excel / Google Sheets)
+  // and match products against CardCade buyers.
+  // ----------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'Ingest a seller inventory upload and match buyers' })
+  @Post('analytics/sellers/inventory')
+  async ingestSellerInventory(
+    @Request() req: RequestWithUser,
+    @Body() dto: IngestSellerInventoryDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.sellerInventoryService.ingest(dto, req.user.id);
+    return {
+      status: HttpStatus.CREATED,
+      message: 'Inventory ingested and matched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'List seller inventory uploads' })
+  @Get('analytics/sellers/inventory')
+  async listSellerInventory(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.sellerInventoryService.listUploads();
+    return {
+      status: HttpStatus.OK,
+      message: 'Inventory uploads fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Get a seller inventory upload with matched buyers' })
+  @ApiParam({ name: 'id', description: 'Upload ID' })
+  @Get('analytics/sellers/inventory/:id')
+  async getSellerInventory(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.sellerInventoryService.getUploadDetail(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Inventory upload fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Delete a seller inventory upload' })
+  @ApiParam({ name: 'id', description: 'Upload ID' })
+  @Delete('analytics/sellers/inventory/:id')
+  async deleteSellerInventory(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    await this.sellerInventoryService.deleteUpload(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Inventory upload deleted successfully',
+      data: { id },
+    };
+  }
+
+  // ----------------------------------------------------------------------
+  // Google Sheets ingest (OAuth). Requires GOOGLE_CLIENT_ID /
+  // GOOGLE_CLIENT_SECRET / GOOGLE_OAUTH_REDIRECT_URI to be configured.
+  // ----------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'Get Google OAuth consent URL for Sheets import' })
+  @Get('analytics/sellers/google/auth-url')
+  async googleAuthUrl(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = this.googleSheetsService.getAuthUrl(req.user.id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Google auth URL generated',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Exchange a Google OAuth code for tokens' })
+  @Post('analytics/sellers/google/exchange')
+  async googleExchange(
+    @Request() req: RequestWithUser,
+    @Body() body: { code: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.googleSheetsService.exchangeCode(
+      req.user.id,
+      body.code,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Google account connected',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Read rows from a Google Sheet for ingest' })
+  @Post('analytics/sellers/google/read')
+  async googleReadSheet(
+    @Request() req: RequestWithUser,
+    @Body() body: { spreadsheetId?: string; url?: string; range?: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.googleSheetsService.readSheet(req.user.id, body);
+    return {
+      status: HttpStatus.OK,
+      message: 'Sheet rows fetched successfully',
       data,
     };
   }

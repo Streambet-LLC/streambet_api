@@ -2,6 +2,10 @@ import { forwardRef, Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { CollectorAnalyticsService } from './collector-analytics.service';
+import { SellerInventoryService } from './seller-inventory.service';
+import { GoogleSheetsService } from './google-sheets.service';
+import { SellerInventoryUpload } from './entities/seller-inventory-upload.entity';
+import { SellerInventoryItem } from './entities/seller-inventory-item.entity';
 import { UsersModule } from '../users/users.module';
 import { BettingModule } from '../betting/betting.module';
 import { WalletsModule } from '../wallets/wallets.module';
@@ -24,6 +28,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       PrizeOrder,
       PrizeConfiguration,
       ConciergeRequest,
+      SellerInventoryUpload,
+      SellerInventoryItem,
     ]),
     BettingModule,
     WalletsModule,
@@ -34,6 +40,11 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     QueueModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService, CollectorAnalyticsService],
+  providers: [
+    AdminService,
+    CollectorAnalyticsService,
+    SellerInventoryService,
+    GoogleSheetsService,
+  ],
 })
 export class AdminModule {}
