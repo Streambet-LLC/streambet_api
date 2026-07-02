@@ -298,7 +298,35 @@
         {
           "name": "CARDCADE_USDC_MINT",
           "valueFrom": "/cardcade/non_pro_prod/CARDCADE_USDC_MINT"
-        }
+        },
+        {
+          "name": "YOUTUBE_API_KEY",
+          "valueFrom": "/cardcade/non_pro_prod/YOUTUBE_API_KEY"
+        },
+        {
+          "name": "GOOGLE_CSE_API_KEY",
+          "valueFrom": "/cardcade/non_pro_prod/GOOGLE_CSE_API_KEY"
+        },
+        {
+          "name": "GOOGLE_CSE_CX",
+          "valueFrom": "/cardcade/non_pro_prod/GOOGLE_CSE_CX"
+        },
+        {
+          "name": "TWITCH_CLIENT_ID",
+          "valueFrom": "/cardcade/non_pro_prod/TWITCH_CLIENT_ID"
+        },
+        {
+          "name": "TWITCH_CLIENT_SECRET",
+          "valueFrom": "/cardcade/non_pro_prod/TWITCH_CLIENT_SECRET"
+        },
+        {
+          "name": "BLUESKY_APP_PASSWORD",
+          "valueFrom": "/cardcade/non_pro_prod/BLUESKY_APP_PASSWORD"
+        },
+        {
+          "name": "BLUESKY_IDENTIFIER",
+          "valueFrom": "/cardcade/non_pro_prod/BLUESKY_IDENTIFIER"
+        },
       ],
       "mountPoints": [],
       "volumesFrom": [],
