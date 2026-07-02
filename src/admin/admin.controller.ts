@@ -45,6 +45,7 @@ import { AdminService } from './admin.service';
 import { CollectorAnalyticsService } from './collector-analytics.service';
 import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
+import { AcquisitionService } from './acquisition/acquisition.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
 import {
   CollectorAnalyticsOverviewDto,
@@ -107,6 +108,7 @@ export class AdminController {
     private readonly collectorAnalyticsService: CollectorAnalyticsService,
     private readonly sellerInventoryService: SellerInventoryService,
     private readonly googleSheetsService: GoogleSheetsService,
+    private readonly acquisitionService: AcquisitionService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
@@ -1378,6 +1380,164 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Sheet rows fetched successfully',
+      data,
+    };
+  }
+
+  // ----------------------------------------------------------------------
+  // Acquisition — gather compliant external signals (consented handles, etc.)
+  // for a collector. Substrate for reconciliation + list building.
+  // ----------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'Collect external signals for a collector' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @Post('analytics/acquisition/:id/collect')
+  async collectSignals(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.collectForUser(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Signals collected successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'List stored external signals for a collector' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @Get('analytics/acquisition/:id/signals')
+  async listSignals(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.listSignals(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Signals fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({
+    summary: 'Discover prospect leads via a compliant search source',
+  })
+  @Get('analytics/acquisition/discover')
+  async discover(
+    @Request() req: RequestWithUser,
+    @Query('source') source?: string,
+    @Query('q') q?: string,
+    @Query('subreddit') subreddit?: string,
+    @Query('sort') sort?: string,
+    @Query('time') time?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const TIMES = ['hour', 'day', 'week', 'month', 'year', 'all'] as const;
+    const SOURCES = [
+      'reddit',
+      'bluesky',
+      'youtube',
+      'google',
+      'twitch',
+    ] as const;
+    const data = await this.acquisitionService.discover({
+      source: (SOURCES as readonly string[]).includes(source ?? '')
+        ? (source as (typeof SOURCES)[number])
+        : 'reddit',
+      query: (q ?? '').trim(),
+      subreddit: subreddit?.trim() || undefined,
+      sort: sort?.trim() || undefined,
+      time: (TIMES as readonly string[]).includes(time ?? '')
+        ? (time as (typeof TIMES)[number])
+        : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+    });
+    return {
+      status: HttpStatus.OK,
+      message: 'Discovery results fetched successfully',
+      data,
+    };
+  }
+
+  // ----------------------------------------------------------------------
+  // Leads pool — persisted discovery results across all sources.
+  // ----------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'List the persisted discovery leads pool' })
+  @Get('analytics/acquisition/leads')
+  async listLeads(
+    @Request() req: RequestWithUser,
+    @Query('source') source?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.listLeads({
+      source,
+      status,
+      search,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      offset: offset ? Number.parseInt(offset, 10) : undefined,
+    });
+    return {
+      status: HttpStatus.OK,
+      message: 'Leads fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Leads pool counts by source + status' })
+  @Get('analytics/acquisition/leads/stats')
+  async leadStats(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.leadStats();
+    return {
+      status: HttpStatus.OK,
+      message: 'Lead stats fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Convert a lead into a prospect profile' })
+  @Post('analytics/acquisition/leads/convert')
+  async convertLead(
+    @Request() req: RequestWithUser,
+    @Body() body: { source: string; externalId: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.convertLead(
+      body.source,
+      body.externalId,
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Lead converted to prospect successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Dismiss or restore a lead' })
+  @Post('analytics/acquisition/leads/status')
+  async setLeadStatus(
+    @Request() req: RequestWithUser,
+    @Body() body: { source: string; externalId: string; status: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const status = body.status === 'dismissed' ? 'dismissed' : 'new';
+    const data = await this.acquisitionService.setLeadStatus(
+      body.source,
+      body.externalId,
+      status,
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Lead status updated successfully',
       data,
     };
   }

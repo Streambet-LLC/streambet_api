@@ -111,4 +111,24 @@ async function bootstrap() {
   logger.log(`Application is running on: ${await app.getUrl()}`);
   logger.log(`API Documentation available at: ${await app.getUrl()}/api/docs`);
 }
-void bootstrap();
+
+// Safety net: log stray async errors (e.g. a Redis/BullMQ reconnect blip)
+// instead of letting them terminate the process. Prevents the crash-loop where
+// a transient infra error killed the whole API.
+const processLogger = new Logger('Process');
+process.on('unhandledRejection', (reason) => {
+  processLogger.error(
+    `Unhandled promise rejection: ${
+      reason instanceof Error ? reason.stack || reason.message : String(reason)
+    }`,
+  );
+});
+
+bootstrap().catch((err) => {
+  processLogger.error(
+    `Fatal error during bootstrap: ${
+      err instanceof Error ? err.stack || err.message : String(err)
+    }`,
+  );
+  process.exit(1);
+});

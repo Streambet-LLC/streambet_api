@@ -63,6 +63,7 @@ import { CartModule } from './cart/cart.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { AuctionsModule } from './auctions/auctions.module';
 import { MixpanelModule } from './integrations/mixpanel/mixpanel.module';
+import { AiModule } from './integrations/ai/ai.module';
 import mixpanelConfig from './config/mixpanel.config';
 
 @Module({
@@ -168,6 +169,7 @@ import mixpanelConfig from './config/mixpanel.config';
     AuctionsModule,
     SolanaModule,
     MixpanelModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [

@@ -6,6 +6,15 @@ import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
 import { SellerInventoryUpload } from './entities/seller-inventory-upload.entity';
 import { SellerInventoryItem } from './entities/seller-inventory-item.entity';
+import { ExternalSignal } from './entities/external-signal.entity';
+import { DiscoveredLead } from './entities/discovered-lead.entity';
+import { AcquisitionService } from './acquisition/acquisition.service';
+import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
+import { RedditModule } from '../integrations/reddit/reddit.module';
+import { BlueskyModule } from '../integrations/bluesky/bluesky.module';
+import { YoutubeModule } from '../integrations/youtube/youtube.module';
+import { GoogleSearchModule } from '../integrations/google-search/google-search.module';
+import { TwitchModule } from '../integrations/twitch/twitch.module';
 import { UsersModule } from '../users/users.module';
 import { BettingModule } from '../betting/betting.module';
 import { WalletsModule } from '../wallets/wallets.module';
@@ -30,6 +39,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       ConciergeRequest,
       SellerInventoryUpload,
       SellerInventoryItem,
+      ExternalSignal,
+      DiscoveredLead,
     ]),
     BettingModule,
     WalletsModule,
@@ -38,6 +49,11 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     SubscriptionModule,
     PromoCodeModule,
     QueueModule,
+    RedditModule,
+    BlueskyModule,
+    YoutubeModule,
+    GoogleSearchModule,
+    TwitchModule,
   ],
   controllers: [AdminController],
   providers: [
@@ -45,6 +61,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     CollectorAnalyticsService,
     SellerInventoryService,
     GoogleSheetsService,
+    AcquisitionService,
+    ConsentedHandlesConnector,
   ],
 })
 export class AdminModule {}
