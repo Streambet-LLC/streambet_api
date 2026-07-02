@@ -16,17 +16,19 @@ export class RedisService implements OnModuleDestroy, OnModuleInit {
     this.initRedisClient();
   }
 
-  async onModuleInit(): Promise<void> {
-    try {
-      await this.client.connect();
-      this.logger.log('Redis connected');
-    } catch (err: any) {
-      this.logger.error(
-        `Failed to connect to Redis: ${err.message}`,
-        err.stack,
+  onModuleInit(): void {
+    // Kick off the connection but DON'T block or crash boot on failure. The
+    // client has a retryStrategy + an 'error' listener, so it reconnects in
+    // the background when Redis comes back. Rethrowing here previously took
+    // the whole API down (unhandled rejection) on any Redis hiccup.
+    this.client
+      .connect()
+      .then(() => this.logger.log('Redis connected'))
+      .catch((err: any) =>
+        this.logger.error(
+          `Initial Redis connect failed: ${err?.message} — retrying in background.`,
+        ),
       );
-      throw err;
-    }
   }
 
   /**
