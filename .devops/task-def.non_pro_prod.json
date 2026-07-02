@@ -326,7 +326,7 @@
         {
           "name": "BLUESKY_IDENTIFIER",
           "valueFrom": "/cardcade/non_pro_prod/BLUESKY_IDENTIFIER"
-        },
+        }
       ],
       "mountPoints": [],
       "volumesFrom": [],
