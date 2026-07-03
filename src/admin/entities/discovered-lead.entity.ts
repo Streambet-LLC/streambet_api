@@ -64,4 +64,26 @@ export class DiscoveredLead extends BaseEntity {
   /** Last time a search re-surfaced this lead. */
   @Column({ type: 'timestamp', nullable: true })
   lastSeenAt: Date | null;
+
+  // --- Claude qualification (buy-likelihood) ---
+
+  /** 0–100 likelihood this person is a genuine card buyer. Null = unqualified. */
+  @Index()
+  @Column({ type: 'int', nullable: true })
+  buyerScore: number | null;
+
+  /** 'buying' | 'selling' | 'showcase' | 'discussion' | 'off_topic'. */
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  intent: string | null;
+
+  /** Specific cards/players/sets/categories the lead expressed interest in. */
+  @Column({ type: 'jsonb', nullable: true })
+  interests: string[] | null;
+
+  /** One-line rationale for the score. */
+  @Column({ type: 'text', nullable: true })
+  qualifyReasoning: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  qualifiedAt: Date | null;
 }

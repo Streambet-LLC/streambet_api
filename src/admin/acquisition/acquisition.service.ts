@@ -14,6 +14,7 @@ import {
   CreateCollectorProfileDto,
 } from '../dto/collector-analytics.dto';
 import { CollectorAnalyticsService } from '../collector-analytics.service';
+import { AiService } from '../../integrations/ai/ai.service';
 import {
   ConnectorUserContext,
   NormalizedSignal,
@@ -102,6 +103,7 @@ export class AcquisitionService {
     private readonly googleSearch: GoogleSearchService,
     private readonly twitch: TwitchService,
     private readonly collectorAnalytics: CollectorAnalyticsService,
+    private readonly ai: AiService,
   ) {
     // Registry — append eBay / vendor connectors here as they land.
     this.connectors = [consentedHandles];
@@ -255,14 +257,16 @@ export class AcquisitionService {
     }
   }
 
-  /** Paginated leads pool with source / status / text filters. */
+  /** Paginated leads pool with source / status / intent / text filters. */
   async listLeads(opts: {
     source?: string;
     status?: string;
+    intent?: string;
     search?: string;
+    sort?: 'recent' | 'score';
     limit?: number;
     offset?: number;
-  }): Promise<{ total: number; data: DiscoveredLead[] }> {
+  }): Promise<{ total: number; data: DiscoveredLead[]; unqualified: number }> {
     const qb = this.leadRepo.createQueryBuilder('l');
     if (opts.source && opts.source !== 'all') {
       qb.andWhere('l.source = :s', { s: opts.source });
@@ -270,19 +274,185 @@ export class AcquisitionService {
     if (opts.status && opts.status !== 'all') {
       qb.andWhere('l.status = :st', { st: opts.status });
     }
+    if (opts.intent && opts.intent !== 'all') {
+      qb.andWhere('l.intent = :it', { it: opts.intent });
+    }
     if (opts.search?.trim()) {
       qb.andWhere(
         '(l.author ILIKE :q OR l.text ILIKE :q OR l.title ILIKE :q OR l.query ILIKE :q OR l.community ILIKE :q)',
         { q: `%${opts.search.trim()}%` },
       );
     }
-    qb.orderBy('l.createdAt', 'DESC');
+    if (opts.sort === 'score') {
+      qb.orderBy('l.buyerScore', 'DESC', 'NULLS LAST').addOrderBy(
+        'l.createdAt',
+        'DESC',
+      );
+    } else {
+      qb.orderBy('l.createdAt', 'DESC');
+    }
     const total = await qb.getCount();
     const data = await qb
       .limit(Math.min(opts.limit ?? 50, 200))
       .offset(opts.offset ?? 0)
       .getMany();
-    return { total, data };
+    // How many leads still need qualifying (drives the "Qualify (N)" button).
+    const unqualified = await this.leadRepo
+      .createQueryBuilder('l')
+      .where('l.qualifiedAt IS NULL')
+      .andWhere("l.status <> 'dismissed'")
+      .getCount();
+    return { total, data, unqualified };
+  }
+
+  /**
+   * Qualify unscored leads with Claude — a 0–100 buyer-likelihood score,
+   * intent, and extracted interests. Batched for cost efficiency.
+   */
+  async qualifyLeads(limit = 40): Promise<{ qualified: number }> {
+    if (!this.ai.isConfigured()) {
+      throw new BadRequestException(
+        'AI is not configured (missing ANTHROPIC_API_KEY).',
+      );
+    }
+    const leads = await this.leadRepo
+      .createQueryBuilder('l')
+      .where('l.qualifiedAt IS NULL')
+      .andWhere("l.status <> 'dismissed'")
+      .orderBy('l.createdAt', 'DESC')
+      .limit(Math.min(limit, 120))
+      .getMany();
+    if (leads.length === 0) return { qualified: 0 };
+
+    const INTENTS = [
+      'buying',
+      'selling',
+      'showcase',
+      'discussion',
+      'off_topic',
+    ];
+    const now = new Date();
+    let qualified = 0;
+
+    // Batch ~12 per Claude call.
+    for (let i = 0; i < leads.length; i += 12) {
+      const batch = leads.slice(i, i + 12);
+      const items = batch.map((l) => ({
+        id: l.id,
+        source: l.source,
+        community: l.community,
+        title: l.title,
+        text: (l.text ?? '').slice(0, 500),
+      }));
+      let out: {
+        results?: {
+          id: string;
+          buyerScore: number;
+          intent: string;
+          interests: string[];
+          reasoning: string;
+        }[];
+      };
+      try {
+        out = await this.ai.generateJson({
+          system:
+            'You qualify trading-card / collectibles marketplace leads. For each social post, judge whether the AUTHOR is a likely BUYER of cards/collectibles and score their buying likelihood 0-100 (higher = clearer buying intent, e.g. "ISO", "WTB", "looking for"). Classify intent and extract the specific cards, players, sets, or categories they want.',
+          prompt: `Leads (JSON):\n${JSON.stringify(
+            items,
+          )}\n\nReturn JSON {"results":[{"id","buyerScore","intent","interests","reasoning"}]} with one entry per lead id.`,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              results: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    id: { type: 'string' },
+                    buyerScore: { type: 'integer' },
+                    intent: { type: 'string', enum: INTENTS },
+                    interests: { type: 'array', items: { type: 'string' } },
+                    reasoning: { type: 'string' },
+                  },
+                  required: [
+                    'id',
+                    'buyerScore',
+                    'intent',
+                    'interests',
+                    'reasoning',
+                  ],
+                },
+              },
+            },
+            required: ['results'],
+          },
+          maxTokens: 4000,
+        });
+      } catch (e) {
+        this.logger.warn(
+          `qualify batch failed: ${e instanceof Error ? e.message : e}`,
+        );
+        continue;
+      }
+
+      const byId = new Map(
+        (out.results ?? []).map((r) => [r.id, r]),
+      );
+      for (const lead of batch) {
+        const r = byId.get(lead.id);
+        if (!r) continue;
+        lead.buyerScore = Math.max(0, Math.min(100, Math.round(r.buyerScore)));
+        lead.intent = INTENTS.includes(r.intent) ? r.intent : 'discussion';
+        lead.interests = Array.isArray(r.interests)
+          ? r.interests.filter((x) => typeof x === 'string').slice(0, 8)
+          : [];
+        lead.qualifyReasoning = (r.reasoning ?? '').slice(0, 500);
+        lead.qualifiedAt = now;
+        await this.leadRepo.save(lead);
+        qualified++;
+      }
+    }
+    return { qualified };
+  }
+
+  /**
+   * Claude expands a topic into higher-signal search inputs for a source —
+   * buying-intent phrasings, specific set/player terms, and relevant subreddits.
+   */
+  async suggestQueries(
+    topic: string,
+    source: string,
+  ): Promise<{ terms: string[]; subreddits: string[]; rationale: string }> {
+    if (!this.ai.isConfigured()) {
+      throw new BadRequestException(
+        'AI is not configured (missing ANTHROPIC_API_KEY).',
+      );
+    }
+    if (!topic.trim()) {
+      return { terms: [], subreddits: [], rationale: '' };
+    }
+    return this.ai.generateJson<{
+      terms: string[];
+      subreddits: string[];
+      rationale: string;
+    }>({
+      system:
+        'You optimize search queries for finding trading-card BUYERS (not sellers) on social platforms and forums. Favor buying-intent phrasing like "ISO", "WTB", "LF", "looking for", "want to buy", plus specific set/player/card names.',
+      prompt: `Goal: find likely buyers for "${topic}" on ${source}.\nReturn JSON {"terms":[5-8 high-signal search phrases],"subreddits":[up to 6 relevant subreddit names WITHOUT the "r/"],"rationale":"one sentence"}.`,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          terms: { type: 'array', items: { type: 'string' } },
+          subreddits: { type: 'array', items: { type: 'string' } },
+          rationale: { type: 'string' },
+        },
+        required: ['terms', 'subreddits', 'rationale'],
+      },
+      maxTokens: 700,
+    });
   }
 
   /** Counts by source and status for the dashboard header. */

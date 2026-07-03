@@ -46,6 +46,7 @@ import { CollectorAnalyticsService } from './collector-analytics.service';
 import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
+import { MarketService } from './market.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
 import {
   CollectorAnalyticsOverviewDto,
@@ -109,6 +110,7 @@ export class AdminController {
     private readonly sellerInventoryService: SellerInventoryService,
     private readonly googleSheetsService: GoogleSheetsService,
     private readonly acquisitionService: AcquisitionService,
+    private readonly marketService: MarketService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
     private readonly subscriptionService: SubscriptionService,
@@ -1472,7 +1474,9 @@ export class AdminController {
     @Request() req: RequestWithUser,
     @Query('source') source?: string,
     @Query('status') status?: string,
+    @Query('intent') intent?: string,
     @Query('search') search?: string,
+    @Query('sort') sort?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<ApiResponse> {
@@ -1480,13 +1484,48 @@ export class AdminController {
     const data = await this.acquisitionService.listLeads({
       source,
       status,
+      intent,
       search,
+      sort: sort === 'score' ? 'score' : 'recent',
       limit: limit ? Number.parseInt(limit, 10) : undefined,
       offset: offset ? Number.parseInt(offset, 10) : undefined,
     });
     return {
       status: HttpStatus.OK,
       message: 'Leads fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Qualify unscored leads with Claude (buyer score)' })
+  @Post('analytics/acquisition/leads/qualify')
+  async qualifyLeads(
+    @Request() req: RequestWithUser,
+    @Body() body: { limit?: number },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.qualifyLeads(body?.limit ?? 40);
+    return {
+      status: HttpStatus.OK,
+      message: 'Leads qualified successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'Claude query suggestions for a discovery topic' })
+  @Post('analytics/acquisition/suggest-queries')
+  async suggestQueries(
+    @Request() req: RequestWithUser,
+    @Body() body: { topic: string; source: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.acquisitionService.suggestQueries(
+      body?.topic ?? '',
+      body?.source ?? 'reddit',
+    );
+    return {
+      status: HttpStatus.OK,
+      message: 'Query suggestions generated',
       data,
     };
   }
@@ -1538,6 +1577,56 @@ export class AdminController {
     return {
       status: HttpStatus.OK,
       message: 'Lead status updated successfully',
+      data,
+    };
+  }
+
+  // ----------------------------------------------------------------------
+  // Market / Dealer suite — per-card demand + pricing intelligence.
+  // ----------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'Per-card market intelligence table' })
+  @Get('analytics/market/cards')
+  async listMarketCards(
+    @Request() req: RequestWithUser,
+    @Query('search') search?: string,
+    @Query('brand') brand?: string,
+    @Query('category') category?: string,
+    @Query('sort') sort?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const SORTS = ['sales', 'revenue', 'gap', 'concentration', 'recent'] as const;
+    const data = await this.marketService.listCards({
+      search,
+      brand,
+      category,
+      sort: (SORTS as readonly string[]).includes(sort ?? '')
+        ? (sort as (typeof SORTS)[number])
+        : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      offset: offset ? Number.parseInt(offset, 10) : undefined,
+    });
+    return {
+      status: HttpStatus.OK,
+      message: 'Market cards fetched successfully',
+      data,
+    };
+  }
+
+  @ApiOperation({ summary: 'One card market detail (+ AI hold/sell)' })
+  @ApiParam({ name: 'id', description: 'Prize configuration ID' })
+  @Get('analytics/market/cards/:id')
+  async getMarketCard(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.getCardDetail(id);
+    return {
+      status: HttpStatus.OK,
+      message: 'Market card fetched successfully',
       data,
     };
   }

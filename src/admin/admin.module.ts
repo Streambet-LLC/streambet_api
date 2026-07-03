@@ -10,6 +10,7 @@ import { ExternalSignal } from './entities/external-signal.entity';
 import { DiscoveredLead } from './entities/discovered-lead.entity';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
+import { MarketService } from './market.service';
 import { RedditModule } from '../integrations/reddit/reddit.module';
 import { BlueskyModule } from '../integrations/bluesky/bluesky.module';
 import { YoutubeModule } from '../integrations/youtube/youtube.module';
@@ -63,6 +64,7 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     GoogleSheetsService,
     AcquisitionService,
     ConsentedHandlesConnector,
+    MarketService,
   ],
 })
 export class AdminModule {}
