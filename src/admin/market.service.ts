@@ -110,7 +110,9 @@ export class MarketService {
           percentile_cont(0.5)  WITHIN GROUP (ORDER BY sale_price)::float AS median,
           percentile_cont(0.75) WITHIN GROUP (ORDER BY sale_price)::float AS p75,
           MIN(sale_price)::float AS min_price, MAX(sale_price)::float AS max_price
-        FROM prize_item_ebay_sold_listing GROUP BY item_id
+        FROM prize_item_ebay_sold_listings
+        WHERE is_inaccurate IS NOT TRUE
+        GROUP BY item_id
       ),
       lifetime AS (
         SELECT user_id, SUM(total_price) AS lt FROM paid GROUP BY user_id
@@ -263,26 +265,24 @@ export class MarketService {
     return { total, data: rows.map((r) => this.mapRow(r)) };
   }
 
-  /** One card with full breakdown: top buyers, comps, time-to-sale, AI rec. */
-  async getCardDetail(id: string): Promise<
-    MarketCardRow & {
-      topBuyers: {
-        userId: string;
-        name: string | null;
-        username: string;
-        units: number;
-        sharePct: number;
-      }[];
-      recentComps: {
-        title: string;
-        price: number | null;
-        soldAt: string | null;
-        url: string | null;
-      }[];
-      timeToSaleDays: number | null;
-      recommendation: { verdict: string; reasoning: string } | null;
-    }
-  > {
+  /** Card row + top buyers + comps + time-to-sale (no AI). Reused by forecast. */
+  async getCardSignals(id: string): Promise<{
+    card: MarketCardRow;
+    topBuyers: {
+      userId: string;
+      name: string | null;
+      username: string;
+      units: number;
+      sharePct: number;
+    }[];
+    recentComps: {
+      title: string;
+      price: number | null;
+      soldAt: string | null;
+      url: string | null;
+    }[];
+    timeToSaleDays: number | null;
+  }> {
     const rows = await this.rawQuery<RawRow>(
       `${this.cardRowsSql('c.id = $1')}`,
       [id],
@@ -319,7 +319,8 @@ export class MarketService {
       listing_url: string | null;
     }>(
       `SELECT sold_title, sale_price, date_sold, listing_url
-       FROM prize_item_ebay_sold_listing WHERE item_id = $1
+       FROM prize_item_ebay_sold_listings
+       WHERE item_id = $1 AND is_inaccurate IS NOT TRUE
        ORDER BY date_sold DESC NULLS LAST LIMIT 15`,
       [id],
     );
@@ -342,13 +343,36 @@ export class MarketService {
     const timeToSaleDays =
       num(ttsRows[0]?.days) != null ? Math.round(num(ttsRows[0]!.days)!) : null;
 
-    const recommendation = await this.holdVsSell(card, timeToSaleDays);
+    return { card, topBuyers, recentComps, timeToSaleDays };
+  }
 
+  /** One card with full breakdown + AI hold/sell recommendation. */
+  async getCardDetail(id: string): Promise<
+    MarketCardRow & {
+      topBuyers: {
+        userId: string;
+        name: string | null;
+        username: string;
+        units: number;
+        sharePct: number;
+      }[];
+      recentComps: {
+        title: string;
+        price: number | null;
+        soldAt: string | null;
+        url: string | null;
+      }[];
+      timeToSaleDays: number | null;
+      recommendation: { verdict: string; reasoning: string } | null;
+    }
+  > {
+    const s = await this.getCardSignals(id);
+    const recommendation = await this.holdVsSell(s.card, s.timeToSaleDays);
     return {
-      ...card,
-      topBuyers,
-      recentComps,
-      timeToSaleDays,
+      ...s.card,
+      topBuyers: s.topBuyers,
+      recentComps: s.recentComps,
+      timeToSaleDays: s.timeToSaleDays,
       recommendation,
     };
   }

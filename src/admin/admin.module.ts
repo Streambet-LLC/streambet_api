@@ -8,6 +8,15 @@ import { SellerInventoryUpload } from './entities/seller-inventory-upload.entity
 import { SellerInventoryItem } from './entities/seller-inventory-item.entity';
 import { ExternalSignal } from './entities/external-signal.entity';
 import { DiscoveredLead } from './entities/discovered-lead.entity';
+import { CardForecast } from './entities/card-forecast.entity';
+import { CardMarketSnapshot } from './entities/card-market-snapshot.entity';
+import { DeepResearchJob } from './entities/deep-research-job.entity';
+import { ForecastService } from './forecast.service';
+import { InsightsService } from './insights.service';
+import { DeepResearchService } from './deep-research.service';
+import { CardProfileService } from './card-profile.service';
+import { EbayMarketSource } from './card-market/ebay-market.source';
+import { WebResearchMarketSource } from './card-market/web-research-market.source';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
 import { MarketService } from './market.service';
@@ -42,6 +51,9 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       SellerInventoryItem,
       ExternalSignal,
       DiscoveredLead,
+      CardForecast,
+      CardMarketSnapshot,
+      DeepResearchJob,
     ]),
     BettingModule,
     WalletsModule,
@@ -65,6 +77,12 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     AcquisitionService,
     ConsentedHandlesConnector,
     MarketService,
+    ForecastService,
+    InsightsService,
+    DeepResearchService,
+    CardProfileService,
+    EbayMarketSource,
+    WebResearchMarketSource,
   ],
 })
 export class AdminModule {}

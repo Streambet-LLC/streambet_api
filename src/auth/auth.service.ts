@@ -19,6 +19,7 @@ import { ConfigService } from '@nestjs/config';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JsonWebTokenError } from 'jsonwebtoken';
+import ms from 'ms';
 import type { StringValue } from 'ms';
 import { userVerificationDto } from './dto/verify-password.dto';
 import { NotificationService } from 'src/notification/notification.service';
@@ -253,9 +254,11 @@ export class AuthService {
       if (remember_me === true) {
         accessToken = this.generateToken(user, '30d' as StringValue);
       } else {
-        const defaultExpiry =
-          this.configService.get<string>('auth.jwtExpiresIn');
-        accessToken = this.generateToken(user, defaultExpiry as StringValue);
+        const defaultExpiry = this.resolveExpiry(
+          this.configService.get<string>('auth.jwtExpiresIn'),
+          '1d' as StringValue,
+        );
+        accessToken = this.generateToken(user, defaultExpiry);
       }
       const refreshToken = await this.generateRefreshToken(user);
 
@@ -337,6 +340,37 @@ export class AuthService {
     }
   }
 
+  /**
+   * Turn a configured token-expiry value into something jsonwebtoken accepts.
+   * Env vars can arrive blank, quoted (`'1d'`), or whitespace-padded — dotenv
+   * won't override a bad value already set in the shell — and any of those makes
+   * jsonwebtoken throw "expiresIn should be a number of seconds or string
+   * representing a timespan", blocking every login. Sanitize, validate against
+   * `ms`, and fall back to a sane default instead of 500-ing the request.
+   */
+  private resolveExpiry(
+    raw: string | undefined,
+    fallback: StringValue,
+  ): StringValue {
+    const cleaned = (raw ?? '')
+      .trim()
+      .replace(/^['"]+|['"]+$/g, '')
+      .trim();
+    if (!cleaned) return fallback;
+    if (/^\d+$/.test(cleaned)) return cleaned as StringValue; // seconds
+    try {
+      if (typeof ms(cleaned as StringValue) === 'number') {
+        return cleaned as StringValue;
+      }
+    } catch {
+      // ms() throws on unparseable strings — treat as invalid
+    }
+    this.logger.warn(
+      `Invalid token expiry "${raw}"; falling back to "${fallback}".`,
+    );
+    return fallback;
+  }
+
   generateToken(user: User, expiresIn?: StringValue): string {
     const payload: JwtPayload = {
       sub: user.id,
@@ -362,14 +396,15 @@ export class AuthService {
     const refreshTokenSecret = this.configService.get<string>(
       'auth.refreshTokenSecret',
     );
-    const refreshTokenExpiresIn = this.configService.get<string>(
-      'auth.refreshTokenExpiresIn',
+    const refreshTokenExpiresIn = this.resolveExpiry(
+      this.configService.get<string>('auth.refreshTokenExpiresIn'),
+      '30d' as StringValue,
     );
 
     // Generate JWT refresh token
     const refreshToken = this.jwtService.sign(payload, {
       secret: refreshTokenSecret,
-      expiresIn: refreshTokenExpiresIn as StringValue,
+      expiresIn: refreshTokenExpiresIn,
     });
 
     // Calculate expiration date for database storage
