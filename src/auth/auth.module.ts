@@ -20,14 +20,20 @@ import { PromoCodeModule } from 'src/promo-code/promo-code.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('auth.jwtSecret'),
-        signOptions: {
-          expiresIn:
-            (configService.get<string>('auth.jwtExpiresIn') as StringValue) ??
-            undefined,
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        // Sanitize: a blank/quoted/whitespace value would make jsonwebtoken
+        // throw "expiresIn should be a number of seconds..." on every sign.
+        const raw = (configService.get<string>('auth.jwtExpiresIn') ?? '')
+          .trim()
+          .replace(/^['"]+|['"]+$/g, '')
+          .trim();
+        return {
+          secret: configService.get<string>('auth.jwtSecret'),
+          signOptions: {
+            expiresIn: (raw || '1d') as StringValue,
+          },
+        };
+      },
     }),
     UsersModule,
     WalletsModule,
