@@ -326,6 +326,10 @@
         {
           "name": "BLUESKY_IDENTIFIER",
           "valueFrom": "/cardcade/non_pro_prod/BLUESKY_IDENTIFIER"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "/cardcade/non_pro_prod/ANTHROPIC_API_KEY"
         }
       ],
       "mountPoints": [],
