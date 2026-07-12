@@ -52,6 +52,7 @@ import { MarketService } from './market.service';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
+import { InsightsHistoryService } from './insights-history.service';
 import { CardProfileService } from './card-profile.service';
 import type { AiChatMessage } from '../integrations/ai/ai.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
@@ -121,6 +122,7 @@ export class AdminController {
     private readonly forecastService: ForecastService,
     private readonly insightsService: InsightsService,
     private readonly deepResearchService: DeepResearchService,
+    private readonly insightsHistoryService: InsightsHistoryService,
     private readonly cardProfileService: CardProfileService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
@@ -1713,12 +1715,13 @@ export class AdminController {
   @Post('analytics/insights/chat')
   async insightsChat(
     @Request() req: RequestWithUser,
-    @Body() body: { messages?: AiChatMessage[] },
+    @Body() body: { messages?: AiChatMessage[]; conversationId?: string },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.insightsService.chat(
       body?.messages ?? [],
       req.user.id,
+      body?.conversationId,
     );
     return {
       status: HttpStatus.OK,
@@ -1731,7 +1734,7 @@ export class AdminController {
   @Post('analytics/insights/chat/stream')
   async insightsChatStream(
     @Request() req: RequestWithUser,
-    @Body() body: { messages?: AiChatMessage[] },
+    @Body() body: { messages?: AiChatMessage[]; conversationId?: string },
     @Res() res: Response,
   ): Promise<void> {
     if (req.user.role !== UserRole.ADMIN) {
@@ -1743,7 +1746,15 @@ export class AdminController {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
-    const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    // Swallow write errors so a client disconnect doesn't abort the server-side
+    // loop (it still finishes + persists the exchange to history).
+    const send = (obj: unknown) => {
+      try {
+        res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      } catch {
+        /* client gone */
+      }
+    };
     // Keepalive comments during quiet gaps (e.g. while web_search runs) so a
     // proxy/load-balancer idle timeout doesn't cut the stream mid-answer.
     const heartbeat = setInterval(() => {
@@ -1761,6 +1772,7 @@ export class AdminController {
           onText: (text) => send({ type: 'text', text }),
           onTool: (name) => send({ type: 'tool', name }),
         },
+        body?.conversationId,
       );
       send({ type: 'done', toolCalls });
     } catch (e) {
@@ -1775,10 +1787,42 @@ export class AdminController {
   @Get('analytics/insights/deep-research')
   async listDeepResearch(
     @Request() req: RequestWithUser,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const data = await this.deepResearchService.list();
+    const data = await this.deepResearchService.list(
+      limit ? parseInt(limit, 10) : 20,
+      offset ? parseInt(offset, 10) : 0,
+    );
     return { status: HttpStatus.OK, message: 'Deep dives', data };
+  }
+
+  @ApiOperation({ summary: 'Insights chat history — past conversations' })
+  @Get('analytics/insights/history')
+  async listInsightsHistory(
+    @Request() req: RequestWithUser,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.insightsHistoryService.listConversations(
+      limit ? parseInt(limit, 10) : 20,
+      offset ? parseInt(offset, 10) : 0,
+    );
+    return { status: HttpStatus.OK, message: 'Insights history', data };
+  }
+
+  @ApiOperation({ summary: 'One insights conversation (exchanges)' })
+  @Get('analytics/insights/history/:conversationId')
+  async getInsightsConversation(
+    @Request() req: RequestWithUser,
+    @Param('conversationId') conversationId: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data =
+      await this.insightsHistoryService.getConversation(conversationId);
+    return { status: HttpStatus.OK, message: 'Conversation', data };
   }
 
   @ApiOperation({ summary: 'One deep-dive research job by id' })
