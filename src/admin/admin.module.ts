@@ -11,9 +11,11 @@ import { DiscoveredLead } from './entities/discovered-lead.entity';
 import { CardForecast } from './entities/card-forecast.entity';
 import { CardMarketSnapshot } from './entities/card-market-snapshot.entity';
 import { DeepResearchJob } from './entities/deep-research-job.entity';
+import { InsightsExchange } from './entities/insights-exchange.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
+import { InsightsHistoryService } from './insights-history.service';
 import { CardProfileService } from './card-profile.service';
 import { EbayMarketSource } from './card-market/ebay-market.source';
 import { WebResearchMarketSource } from './card-market/web-research-market.source';
@@ -54,6 +56,7 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       CardForecast,
       CardMarketSnapshot,
       DeepResearchJob,
+      InsightsExchange,
     ]),
     BettingModule,
     WalletsModule,
@@ -80,6 +83,7 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     ForecastService,
     InsightsService,
     DeepResearchService,
+    InsightsHistoryService,
     CardProfileService,
     EbayMarketSource,
     WebResearchMarketSource,

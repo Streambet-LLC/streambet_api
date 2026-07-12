@@ -105,16 +105,20 @@ export class DeepResearchService implements OnModuleInit {
     }
   }
 
-  async list(limit = 30): Promise<DeepResearchJobDto[]> {
+  async list(
+    limit = 20,
+    offset = 0,
+  ): Promise<{ total: number; data: DeepResearchJobDto[] }> {
     try {
-      const rows = await this.repo.find({
+      const [rows, total] = await this.repo.findAndCount({
         order: { createdAt: 'DESC' },
-        take: Math.min(Math.max(limit, 1), 100),
+        take: Math.min(Math.max(limit, 1), 50),
+        skip: Math.max(offset, 0),
       });
-      return rows.map((r) => this.toDto(r));
+      return { total, data: rows.map((r) => this.toDto(r)) };
     } catch (e) {
       this.logger.warn(`deep-research list failed: ${(e as Error).message}`);
-      return [];
+      return { total: 0, data: [] };
     }
   }
 

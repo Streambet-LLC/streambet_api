@@ -9,6 +9,7 @@ import { MarketService } from './market.service';
 import { ForecastService } from './forecast.service';
 import { CardProfileService } from './card-profile.service';
 import { DeepResearchService } from './deep-research.service';
+import { InsightsHistoryService } from './insights-history.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { CollectorAnalyticsService } from './collector-analytics.service';
 
@@ -29,6 +30,7 @@ export class InsightsService {
     private readonly forecast: ForecastService,
     private readonly profiles: CardProfileService,
     private readonly deepResearch: DeepResearchService,
+    private readonly history: InsightsHistoryService,
     private readonly acquisition: AcquisitionService,
     private readonly collectors: CollectorAnalyticsService,
   ) {}
@@ -61,7 +63,8 @@ RULES (follow strictly):
 - BE BRIEF. This is a dashboard panel, not an essay. Lead with the direct answer in the first sentence. Default to 1-3 sentences or a short bullet list (max ~6 bullets). Only expand when explicitly asked.
 - No preamble, no filler, no restating the question, no "Here's what I found", no sign-off, no "let me know if…". Just the answer.
 - Don't over-explain or pile on caveats. If a tool errors, say so in one sentence.
-- Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.`;
+- Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.
+- INCLUDE LINKS. When you answer about a specific card, add 1-3 relevant clickable markdown links so the admin can verify or dig in — e.g. the sources you used, and a "check current listings" link. Prefer real result URLs from your web search; a live eBay SOLD search link is a good default, e.g. [eBay sold — <card>](https://www.ebay.com/sch/i.html?_nkw=<url-encoded card>&_sacat=0&LH_Sold=1&LH_Complete=1). Put links inline or as a short "Links:" line at the end. Never invent a URL you didn't see or can't construct reliably.`;
 
   private readonly TOOLS: AiToolSpec[] = [
     {
@@ -424,6 +427,7 @@ RULES (follow strictly):
   async chat(
     messages: AiChatMessage[],
     adminId?: string,
+    conversationId?: string,
   ): Promise<{ reply: string; toolCalls: AiToolInvocation[] }> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
@@ -459,12 +463,31 @@ RULES (follow strictly):
       maxTokens: 1500,
       webSearch: true,
     });
-    return {
-      reply:
-        text ||
-        "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.",
-      toolCalls,
-    };
+    const reply =
+      text ||
+      "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.";
+    void this.saveExchange(clean, reply, toolCalls, adminId, conversationId);
+    return { reply, toolCalls };
+  }
+
+  /** Persist a completed exchange for history (best-effort, fire-and-forget). */
+  private async saveExchange(
+    clean: AiChatMessage[],
+    answer: string,
+    toolCalls: AiToolInvocation[],
+    adminId?: string,
+    conversationId?: string,
+  ): Promise<void> {
+    if (!conversationId) return;
+    const question = clean[clean.length - 1]?.content ?? '';
+    const tools = Array.from(new Set((toolCalls ?? []).map((t) => t.name)));
+    await this.history.save({
+      conversationId,
+      question,
+      answer,
+      tools,
+      adminId,
+    });
   }
 
   /** Validate + trim chat history to a safe, bounded window. */
@@ -499,22 +522,24 @@ RULES (follow strictly):
     messages: AiChatMessage[],
     adminId: string | undefined,
     handlers: { onText: (t: string) => void; onTool?: (name: string) => void },
+    conversationId?: string,
   ): Promise<{ toolCalls: AiToolInvocation[] }> {
     const clean = this.prepare(messages);
 
     if (!(await this.inScope(clean))) {
       handlers.onText(this.OUT_OF_SCOPE);
+      void this.saveExchange(clean, this.OUT_OF_SCOPE, [], adminId, conversationId);
       return { toolCalls: [] };
     }
 
-    let emitted = false;
+    let acc = '';
     const { toolCalls } = await this.ai.streamToolConversation({
       system: this.SYSTEM,
       messages: clean,
       tools: this.TOOLS,
       dispatch: (n, i) => this.dispatch(n, i, adminId),
       onText: (t) => {
-        if (t.trim()) emitted = true;
+        acc += t;
         handlers.onText(t);
       },
       onTool: handlers.onTool,
@@ -522,11 +547,13 @@ RULES (follow strictly):
       maxTokens: 1500,
       webSearch: true,
     });
-    if (!emitted) {
-      handlers.onText(
-        "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.",
-      );
+    if (!acc.trim()) {
+      const fallback =
+        "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.";
+      handlers.onText(fallback);
+      acc = fallback;
     }
+    void this.saveExchange(clean, acc, toolCalls, adminId, conversationId);
     return { toolCalls };
   }
 }
