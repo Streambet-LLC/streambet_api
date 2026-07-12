@@ -1744,6 +1744,15 @@ export class AdminController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
     const send = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    // Keepalive comments during quiet gaps (e.g. while web_search runs) so a
+    // proxy/load-balancer idle timeout doesn't cut the stream mid-answer.
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        /* connection gone */
+      }
+    }, 15000);
     try {
       const { toolCalls } = await this.insightsService.chatStream(
         body?.messages ?? [],
@@ -1757,6 +1766,7 @@ export class AdminController {
     } catch (e) {
       send({ type: 'error', message: (e as Error).message });
     } finally {
+      clearInterval(heartbeat);
       res.end();
     }
   }
