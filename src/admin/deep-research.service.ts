@@ -95,16 +95,27 @@ export class DeepResearchService implements OnModuleInit {
   }
 
   async get(id: string): Promise<DeepResearchJobDto | null> {
-    const job = await this.repo.findOne({ where: { id } });
-    return job ? this.toDto(job) : null;
+    try {
+      const job = await this.repo.findOne({ where: { id } });
+      return job ? this.toDto(job) : null;
+    } catch (e) {
+      // Degrade gracefully if the table isn't migrated yet (avoids a 500).
+      this.logger.warn(`deep-research get failed: ${(e as Error).message}`);
+      return null;
+    }
   }
 
   async list(limit = 30): Promise<DeepResearchJobDto[]> {
-    const rows = await this.repo.find({
-      order: { createdAt: 'DESC' },
-      take: Math.min(Math.max(limit, 1), 100),
-    });
-    return rows.map((r) => this.toDto(r));
+    try {
+      const rows = await this.repo.find({
+        order: { createdAt: 'DESC' },
+        take: Math.min(Math.max(limit, 1), 100),
+      });
+      return rows.map((r) => this.toDto(r));
+    } catch (e) {
+      this.logger.warn(`deep-research list failed: ${(e as Error).message}`);
+      return [];
+    }
   }
 
   private toDto(j: DeepResearchJob): DeepResearchJobDto {
