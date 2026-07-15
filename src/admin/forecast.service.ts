@@ -11,6 +11,28 @@ export interface CardForecastData {
   confidence: number;
   horizon: string;
   thesis: string;
+  /** Overall CardCade rating — the single-number take. */
+  rating?: {
+    score: number; // 0-100
+    label: string; // e.g. Strong Buy | Buy | Hold | Watch | Avoid
+    rationale: string;
+  };
+  /** How easily/quickly it sells. */
+  liquidity?: {
+    score: number; // 0-100
+    level: 'High' | 'Medium' | 'Low' | string;
+    note: string;
+  };
+  /** Where the price is heading. */
+  priceTrajectory?: {
+    direction: 'Rising' | 'Stable' | 'Falling' | string;
+    note: string;
+  };
+  /** Who is most likely to buy this. */
+  likelyBuyers?: {
+    profile: string;
+    archetypes: string[];
+  };
   socialBuzz: { level: string; summary: string };
   catalysts: {
     event: string;
@@ -36,7 +58,7 @@ export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
   private readonly ANALYST_SYSTEM =
-    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. Use web search to gather: recent news + social sentiment about the player/character/set; upcoming catalysts (games, playoffs, tournaments, set releases, anniversaries); PSA/BGS grading population trends and policy changes; print-run / reprint / supply news; and historical PRECEDENTS — how comparable cards performed through similar events. If platform signals are provided, fuse them in. Estimate each catalyst’s probability and directional price impact. Separate signal from hype; be honest about uncertainty. Output ONLY a JSON object.';
+    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. Use web search to gather: recent news + social sentiment about the player/character/set; upcoming catalysts (games, playoffs, tournaments, set releases, anniversaries); PSA/BGS grading population trends and policy changes; print-run / reprint / supply news; and historical PRECEDENTS — how comparable cards performed through similar events. If platform signals are provided, fuse them in. Estimate each catalyst’s probability and directional price impact. Also assess: an overall CardCade RATING (0-100 + a label), a LIQUIDITY score (0-100 — how easily/quickly it sells), the PRICE TRAJECTORY (rising/stable/falling), and the LIKELY BUYERS (who collects this and why). Separate signal from hype; be honest about uncertainty. Output ONLY a JSON object.';
 
   private readonly FORECAST_JSON = `Return ONLY this JSON (no prose, no code fences):
 {
@@ -44,6 +66,10 @@ export class ForecastService {
   "confidence": <0-100 integer>,
   "horizon": "<e.g. 3-6 months>",
   "thesis": "<2-3 sentence summary of the call>",
+  "rating": { "score": <0-100 integer>, "label": "Strong Buy"|"Buy"|"Hold"|"Watch"|"Avoid", "rationale": "<one sentence>" },
+  "liquidity": { "score": <0-100 integer>, "level": "High"|"Medium"|"Low", "note": "<why — supply, sales velocity, demand depth>" },
+  "priceTrajectory": { "direction": "Rising"|"Stable"|"Falling", "note": "<near-term price direction and why>" },
+  "likelyBuyers": { "profile": "<1-2 sentences on who is most likely to buy this>", "archetypes": ["<short buyer type>", "..."] },
   "socialBuzz": { "level": "High"|"Medium"|"Low", "summary": "<recent mention/sentiment summary>" },
   "catalysts": [ { "event": "<upcoming event/scenario>", "probabilityPct": <0-100>, "direction": "up"|"down", "magnitude": "small"|"moderate"|"large", "note": "<why>" } ],
   "precedents": [ { "comparable": "<comparable card + event>", "outcome": "<what happened to its price>" } ],

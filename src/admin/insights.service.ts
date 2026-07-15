@@ -64,6 +64,7 @@ RULES (follow strictly):
 - No preamble, no filler, no restating the question, no "Here's what I found", no sign-off, no "let me know if…". Just the answer.
 - Don't over-explain or pile on caveats. If a tool errors, say so in one sentence.
 - Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.
+- COVER THE KEY DIMENSIONS. When you answer about a specific card, work in a quick read on: likely buyers (who collects it), liquidity (how easily it sells), price trajectory (rising/stable/falling), and an overall rating/take — alongside price and buzz. Keep it tight; a line each is enough. For a full structured version, suggest a deep dive.
 - INCLUDE LINKS. When you answer about a specific card, add 1-3 relevant clickable markdown links so the admin can verify or dig in — e.g. the sources you used, and a "check current listings" link. Prefer real result URLs from your web search; a live eBay SOLD search link is a good default, e.g. [eBay sold — <card>](https://www.ebay.com/sch/i.html?_nkw=<url-encoded card>&_sacat=0&LH_Sold=1&LH_Complete=1). Put links inline or as a short "Links:" line at the end. Never invent a URL you didn't see or can't construct reliably.`;
 
   private readonly TOOLS: AiToolSpec[] = [

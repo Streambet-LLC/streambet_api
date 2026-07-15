@@ -7,6 +7,7 @@ import {
   UseGuards,
   Request,
   Patch,
+  Put,
   ForbiddenException,
   HttpStatus,
   Query,
@@ -53,6 +54,12 @@ import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
+import {
+  MarketPulseService,
+  MARKET_SEGMENTS,
+  MARKET_METRICS,
+} from './market-pulse.service';
+import { DashboardConfigService } from './dashboard-config.service';
 import { CardProfileService } from './card-profile.service';
 import type { AiChatMessage } from '../integrations/ai/ai.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
@@ -123,6 +130,8 @@ export class AdminController {
     private readonly insightsService: InsightsService,
     private readonly deepResearchService: DeepResearchService,
     private readonly insightsHistoryService: InsightsHistoryService,
+    private readonly marketPulseService: MarketPulseService,
+    private readonly dashboardConfigService: DashboardConfigService,
     private readonly cardProfileService: CardProfileService,
     private readonly streamService: StreamService,
     private readonly creatorService: CreatorService,
@@ -1709,6 +1718,75 @@ export class AdminController {
       message: 'Card market profile refreshed',
       data,
     };
+  }
+
+  @ApiOperation({ summary: 'Market dashboard catalog (segments + metrics)' })
+  @Get('analytics/market-pulse/catalog')
+  async marketCatalog(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    return {
+      status: HttpStatus.OK,
+      message: 'Catalog',
+      data: { segments: MARKET_SEGMENTS, metrics: MARKET_METRICS },
+    };
+  }
+
+  @ApiOperation({ summary: 'Latest market snapshot per segment' })
+  @Get('analytics/market-pulse/latest')
+  async marketLatest(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketPulseService.latestAll();
+    return { status: HttpStatus.OK, message: 'Market pulse', data };
+  }
+
+  @ApiOperation({ summary: 'Historical market series for a segment' })
+  @Get('analytics/market-pulse/:segment/series')
+  async marketSeries(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+    @Query('days') days?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketPulseService.series(
+      segment,
+      days ? parseInt(days, 10) : undefined,
+    );
+    return { status: HttpStatus.OK, message: 'Market series', data };
+  }
+
+  @ApiOperation({ summary: 'Refresh (research) a market segment snapshot' })
+  @Post('analytics/market-pulse/:segment/refresh')
+  async marketRefresh(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketPulseService.refresh(segment);
+    return { status: HttpStatus.OK, message: 'Market refreshed', data };
+  }
+
+  @ApiOperation({ summary: "This admin's saved market dashboard" })
+  @Get('analytics/market-dashboard')
+  async getMarketDashboard(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.dashboardConfigService.get(req.user.id);
+    return { status: HttpStatus.OK, message: 'Dashboard', data };
+  }
+
+  @ApiOperation({ summary: 'Save this admin market dashboard' })
+  @Put('analytics/market-dashboard')
+  async saveMarketDashboard(
+    @Request() req: RequestWithUser,
+    @Body() body: { config?: Record<string, unknown> },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.dashboardConfigService.save(
+      req.user.id,
+      body?.config ?? {},
+    );
+    return { status: HttpStatus.OK, message: 'Dashboard saved', data };
   }
 
   @ApiOperation({ summary: 'Conversational analytics assistant (Insights)' })
