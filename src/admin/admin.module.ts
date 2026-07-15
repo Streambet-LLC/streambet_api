@@ -12,10 +12,14 @@ import { CardForecast } from './entities/card-forecast.entity';
 import { CardMarketSnapshot } from './entities/card-market-snapshot.entity';
 import { DeepResearchJob } from './entities/deep-research-job.entity';
 import { InsightsExchange } from './entities/insights-exchange.entity';
+import { MarketSnapshot } from './entities/market-snapshot.entity';
+import { AnalyticsDashboard } from './entities/analytics-dashboard.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
+import { MarketPulseService } from './market-pulse.service';
+import { DashboardConfigService } from './dashboard-config.service';
 import { CardProfileService } from './card-profile.service';
 import { EbayMarketSource } from './card-market/ebay-market.source';
 import { WebResearchMarketSource } from './card-market/web-research-market.source';
@@ -57,6 +61,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       CardMarketSnapshot,
       DeepResearchJob,
       InsightsExchange,
+      MarketSnapshot,
+      AnalyticsDashboard,
     ]),
     BettingModule,
     WalletsModule,
@@ -84,6 +90,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
     InsightsService,
     DeepResearchService,
     InsightsHistoryService,
+    MarketPulseService,
+    DashboardConfigService,
     CardProfileService,
     EbayMarketSource,
     WebResearchMarketSource,
