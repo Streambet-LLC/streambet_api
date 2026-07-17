@@ -305,16 +305,26 @@ export class AcquisitionService {
     return { total, data, unqualified };
   }
 
+  /** Prevents a second Qualify click from double-submitting the same leads. */
+  private qualifying = false;
+
   /**
    * Qualify unscored leads with Claude — a 0–100 buyer-likelihood score,
-   * intent, and extracted interests. Batched for cost efficiency.
+   * intent, and extracted interests.
+   *
+   * Runs as a background job on the 50%-off Message Batches API (bulk scoring
+   * isn't latency-sensitive). Returns immediately with how many leads were
+   * QUEUED; scores land in the list as the batch completes (usually a minute or
+   * two, up to the batch SLA). Same Haiku model/prompt as before — the only
+   * change is async + half price.
    */
-  async qualifyLeads(limit = 40): Promise<{ qualified: number }> {
+  async qualifyLeads(limit = 40): Promise<{ queued: number }> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
+    if (this.qualifying) return { queued: 0 };
     const leads = await this.leadRepo
       .createQueryBuilder('l')
       .where('l.qualifiedAt IS NULL')
@@ -322,29 +332,73 @@ export class AcquisitionService {
       .orderBy('l.createdAt', 'DESC')
       .limit(Math.min(limit, 120))
       .getMany();
-    if (leads.length === 0) return { qualified: 0 };
+    if (leads.length === 0) return { queued: 0 };
 
-    const INTENTS = [
-      'buying',
-      'selling',
-      'showcase',
-      'discussion',
-      'off_topic',
-    ];
-    const now = new Date();
-    let qualified = 0;
+    this.qualifying = true;
+    // Fire-and-forget — submit the batch and apply scores when it finishes.
+    void this.runQualifyBatch(leads).finally(() => {
+      this.qualifying = false;
+    });
+    return { queued: leads.length };
+  }
 
-    // Batch ~12 per Claude call.
+  /** Score a set of leads via one batch job, then persist the results. */
+  private async runQualifyBatch(leads: DiscoveredLead[]): Promise<void> {
+    const INTENTS = ['buying', 'selling', 'showcase', 'discussion', 'off_topic'];
+    const system =
+      'You qualify trading-card / collectibles marketplace leads. For each social post, judge whether the AUTHOR is a likely BUYER of cards/collectibles and score their buying likelihood 0-100 (higher = clearer buying intent, e.g. "ISO", "WTB", "looking for"). Classify intent and extract the specific cards, players, sets, or categories they want.';
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string' },
+              buyerScore: { type: 'integer' },
+              intent: { type: 'string', enum: INTENTS },
+              interests: { type: 'array', items: { type: 'string' } },
+              reasoning: { type: 'string' },
+            },
+            required: ['id', 'buyerScore', 'intent', 'interests', 'reasoning'],
+          },
+        },
+      },
+      required: ['results'],
+    };
+
+    // One batch request per ~12 leads.
+    const requests: {
+      customId: string;
+      system: string;
+      prompt: string;
+      schema: Record<string, unknown>;
+      maxTokens: number;
+    }[] = [];
     for (let i = 0; i < leads.length; i += 12) {
-      const batch = leads.slice(i, i + 12);
-      const items = batch.map((l) => ({
+      const items = leads.slice(i, i + 12).map((l) => ({
         id: l.id,
         source: l.source,
         community: l.community,
         title: l.title,
         text: (l.text ?? '').slice(0, 500),
       }));
-      let out: {
+      requests.push({
+        customId: `q${i}`,
+        system,
+        prompt: `Leads (JSON):\n${JSON.stringify(
+          items,
+        )}\n\nReturn JSON {"results":[{"id","buyerScore","intent","interests","reasoning"}]} with one entry per lead id.`,
+        schema,
+        maxTokens: 4000,
+      });
+    }
+
+    try {
+      const results = await this.ai.runJsonBatch<{
         results?: {
           id: string;
           buyerScore: number;
@@ -352,69 +406,35 @@ export class AcquisitionService {
           interests: string[];
           reasoning: string;
         }[];
-      };
-      try {
-        out = await this.ai.generateJson({
-          system:
-            'You qualify trading-card / collectibles marketplace leads. For each social post, judge whether the AUTHOR is a likely BUYER of cards/collectibles and score their buying likelihood 0-100 (higher = clearer buying intent, e.g. "ISO", "WTB", "looking for"). Classify intent and extract the specific cards, players, sets, or categories they want.',
-          prompt: `Leads (JSON):\n${JSON.stringify(
-            items,
-          )}\n\nReturn JSON {"results":[{"id","buyerScore","intent","interests","reasoning"}]} with one entry per lead id.`,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              results: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  additionalProperties: false,
-                  properties: {
-                    id: { type: 'string' },
-                    buyerScore: { type: 'integer' },
-                    intent: { type: 'string', enum: INTENTS },
-                    interests: { type: 'array', items: { type: 'string' } },
-                    reasoning: { type: 'string' },
-                  },
-                  required: [
-                    'id',
-                    'buyerScore',
-                    'intent',
-                    'interests',
-                    'reasoning',
-                  ],
-                },
-              },
-            },
-            required: ['results'],
-          },
-          maxTokens: 4000,
-        });
-      } catch (e) {
-        this.logger.warn(
-          `qualify batch failed: ${e instanceof Error ? e.message : e}`,
-        );
-        continue;
-      }
+      }>({
+        // Bulk lead scoring is a narrow classification task — Haiku 4.5 is
+        // near-Opus here at ~1/5 the cost; the Batch API halves it again.
+        model: 'claude-haiku-4-5',
+        requests,
+      });
 
-      const byId = new Map(
-        (out.results ?? []).map((r) => [r.id, r]),
-      );
-      for (const lead of batch) {
-        const r = byId.get(lead.id);
-        if (!r) continue;
-        lead.buyerScore = Math.max(0, Math.min(100, Math.round(r.buyerScore)));
-        lead.intent = INTENTS.includes(r.intent) ? r.intent : 'discussion';
-        lead.interests = Array.isArray(r.interests)
-          ? r.interests.filter((x) => typeof x === 'string').slice(0, 8)
-          : [];
-        lead.qualifyReasoning = (r.reasoning ?? '').slice(0, 500);
-        lead.qualifiedAt = now;
-        await this.leadRepo.save(lead);
-        qualified++;
+      const byId = new Map(leads.map((l) => [l.id, l]));
+      const now = new Date();
+      let scored = 0;
+      for (const out of results.values()) {
+        for (const r of out.results ?? []) {
+          const lead = byId.get(r.id);
+          if (!lead) continue;
+          lead.buyerScore = Math.max(0, Math.min(100, Math.round(r.buyerScore)));
+          lead.intent = INTENTS.includes(r.intent) ? r.intent : 'discussion';
+          lead.interests = Array.isArray(r.interests)
+            ? r.interests.filter((x) => typeof x === 'string').slice(0, 8)
+            : [];
+          lead.qualifyReasoning = (r.reasoning ?? '').slice(0, 500);
+          lead.qualifiedAt = now;
+          await this.leadRepo.save(lead);
+          scored++;
+        }
       }
+      this.logger.log(`Qualify batch scored ${scored}/${leads.length} lead(s).`);
+    } catch (e) {
+      this.logger.warn(`qualify batch failed: ${(e as Error).message}`);
     }
-    return { qualified };
   }
 
   /**

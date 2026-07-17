@@ -460,6 +460,7 @@ RULES (follow strictly):
       messages: clean,
       tools: this.TOOLS,
       dispatch: (n, i) => this.dispatch(n, i, adminId),
+      model: this.ai.chatModel,
       maxTurns: 8,
       maxTokens: 1500,
       webSearch: true,
@@ -544,6 +545,7 @@ RULES (follow strictly):
         handlers.onText(t);
       },
       onTool: handlers.onTool,
+      model: this.ai.chatModel,
       maxTurns: 8,
       maxTokens: 1500,
       webSearch: true,

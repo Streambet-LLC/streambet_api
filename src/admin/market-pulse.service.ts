@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { AiService } from '../integrations/ai/ai.service';
+import { DashboardConfigService } from './dashboard-config.service';
 
 /** Market segments the dashboard can chart. */
 export const MARKET_SEGMENTS = [
@@ -60,6 +61,7 @@ export class MarketPulseService {
     @InjectRepository(MarketSnapshot)
     private readonly repo: Repository<MarketSnapshot>,
     private readonly ai: AiService,
+    private readonly dashboards: DashboardConfigService,
   ) {}
 
   private label(segment: string): string {
@@ -95,7 +97,11 @@ ${metricLines}
   "highlights": ["<notable mover / hot card / news>", "..."],
   "sources": [ { "title": "<source>", "url": "<url>" } ]
 }`,
-      maxTokens: 6000,
+      // A market index read is a quick pulse, not a deep report — keep it
+      // cheap: fewer searches, less thinking, tighter output cap.
+      maxTokens: 3500,
+      maxSearches: 4,
+      effort: 'low',
     });
 
     const metrics: Record<string, number> = {};
@@ -121,21 +127,28 @@ ${metricLines}
   }
 
   /**
-   * Auto-refresh every segment once a day so trend lines fill in without a
-   * manual pull. Runs sequentially so we don't fire six web-research calls at
-   * once; each segment is isolated so one failure doesn't stop the rest.
+   * Auto-refresh once a day so trend lines fill in without a manual pull. To
+   * avoid burning credits on markets nobody looks at, we refresh ONLY the
+   * segments referenced in a saved dashboard (falling back to a small default
+   * set when none exist yet). Runs sequentially so we don't fire many
+   * web-research calls at once; each segment is isolated so one failure doesn't
+   * stop the rest.
    */
   @Cron('0 6 * * *', { timeZone: 'America/Los_Angeles' })
   async dailyRefresh(): Promise<void> {
     if (!this.ai.isConfigured()) return;
-    this.logger.log('Daily market refresh starting…');
-    for (const s of MARKET_SEGMENTS) {
+    const used = await this.dashboards.usedSegments();
+    const targets = (used.length ? used : ['pokemon', 'sports', 'all']).filter(
+      (s) => SEGMENT_KEYS.has(s as never),
+    );
+    this.logger.log(
+      `Daily market refresh starting… (${targets.length} segment(s): ${targets.join(', ')})`,
+    );
+    for (const key of targets) {
       try {
-        await this.refresh(s.key);
+        await this.refresh(key);
       } catch (e) {
-        this.logger.warn(
-          `Daily refresh ${s.key} failed: ${(e as Error).message}`,
-        );
+        this.logger.warn(`Daily refresh ${key} failed: ${(e as Error).message}`);
       }
     }
     this.logger.log('Daily market refresh done.');

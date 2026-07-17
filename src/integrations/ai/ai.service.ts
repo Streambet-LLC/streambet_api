@@ -39,6 +39,8 @@ export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly client: Anthropic | null;
   private readonly defaultModel = 'claude-opus-4-8';
+  /** Cheaper model for the high-volume, interactive chat path. */
+  readonly chatModel = 'claude-sonnet-5';
 
   constructor(private readonly config: ConfigService) {
     const apiKey =
@@ -141,11 +143,19 @@ export class AiService {
     prompt: string;
     model?: string;
     maxTokens?: number;
+    /** Cap live web searches. Lower = cheaper (fewer result tokens). */
+    maxSearches?: number;
+    /** Thinking depth. 'low'/'medium' trade some rigor for big token savings. */
+    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   }): Promise<T> {
     const client = this.ensure();
     // web_search server tool (GA on Opus 4.8). Cast avoids SDK-version type drift.
     const tools = [
-      { type: 'web_search_20260209', name: 'web_search', max_uses: 8 },
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        max_uses: opts.maxSearches ?? 8,
+      },
     ] as unknown as Anthropic.Messages.ToolUnion[];
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: opts.prompt },
@@ -158,6 +168,7 @@ export class AiService {
         model: opts.model ?? this.defaultModel,
         max_tokens: opts.maxTokens ?? 8000,
         thinking: { type: 'adaptive' as const },
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
         ...(opts.system ? { system: opts.system } : {}),
         tools,
         messages,
@@ -216,7 +227,7 @@ export class AiService {
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
       ...(opts.webSearch
         ? ([
-            { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+            { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
@@ -231,9 +242,9 @@ export class AiService {
       const res = await client.messages.create({
         model: opts.model ?? this.defaultModel,
         max_tokens: opts.maxTokens ?? 4096,
-        system: opts.system,
+        system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
-        messages,
+        messages: this.withPrefixCache(messages),
       });
 
       finalText = res.content
@@ -329,7 +340,7 @@ export class AiService {
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
       ...(opts.webSearch
         ? ([
-            { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+            { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
@@ -344,9 +355,9 @@ export class AiService {
       const stream = client.messages.stream({
         model: opts.model ?? this.defaultModel,
         max_tokens: opts.maxTokens ?? 4096,
-        system: opts.system,
+        system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
-        messages,
+        messages: this.withPrefixCache(messages),
       });
       stream.on('text', (delta: string) => {
         turnHadText = true;
@@ -413,6 +424,119 @@ export class AiService {
     }
 
     return { toolCalls };
+  }
+
+  /**
+   * Wrap the (large, stable) system prompt as a cacheable block so the
+   * tools+system prefix is written once and read at ~0.1x on every subsequent
+   * turn of the tool loop and every follow-up message. Big win on the chat
+   * path, which re-sends the same ~2.4k-token prefix on every API call.
+   */
+  private cacheableSystem(system: string): Anthropic.TextBlockParam[] {
+    return [
+      {
+        type: 'text',
+        text: system,
+        // 1h TTL so the stable tools+system prefix survives think-time gaps
+        // across a whole chat session, not just the seconds within one answer.
+        cache_control: { type: 'ephemeral', ttl: '1h' },
+      },
+    ];
+  }
+
+  /**
+   * Return a copy of `messages` with a cache breakpoint on the last block, so
+   * the growing conversation prefix (including bulky web-search results) is
+   * read from cache on the next turn instead of re-billed at full price. Does
+   * NOT mutate the persistent array, so markers don't accumulate across turns.
+   */
+  private withPrefixCache(
+    messages: Anthropic.MessageParam[],
+  ): Anthropic.MessageParam[] {
+    if (messages.length === 0) return messages;
+    const i = messages.length - 1;
+    const out = messages.slice();
+    const last = out[i];
+    const cc = { cache_control: { type: 'ephemeral' as const } };
+    if (typeof last.content === 'string') {
+      out[i] = {
+        ...last,
+        content: [{ type: 'text', text: last.content, ...cc }],
+      } as Anthropic.MessageParam;
+    } else if (Array.isArray(last.content) && last.content.length > 0) {
+      const blocks = last.content.slice() as unknown as Record<
+        string,
+        unknown
+      >[];
+      blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], ...cc };
+      out[i] = { ...last, content: blocks } as unknown as Anthropic.MessageParam;
+    }
+    return out;
+  }
+
+  /**
+   * Bulk structured extraction via the Message Batches API — 50% cheaper than
+   * live requests, for background work where latency doesn't matter (e.g. lead
+   * qualification). Submits all `requests`, polls to completion, and returns a
+   * map of customId → parsed JSON (failed/invalid entries are omitted). Same
+   * model and prompts as `generateJson`, so no quality change — just async and
+   * half price. Poll it from a fire-and-forget context; it can take minutes.
+   */
+  async runJsonBatch<T = unknown>(opts: {
+    requests: {
+      customId: string;
+      system?: string;
+      prompt: string;
+      schema: Record<string, unknown>;
+      maxTokens?: number;
+    }[];
+    model?: string;
+    pollMs?: number;
+    timeoutMs?: number;
+  }): Promise<Map<string, T>> {
+    const client = this.ensure();
+    const model = opts.model ?? this.defaultModel;
+    const out = new Map<string, T>();
+    if (opts.requests.length === 0) return out;
+
+    const batch = await client.messages.batches.create({
+      requests: opts.requests.map((r) => ({
+        custom_id: r.customId,
+        params: {
+          model,
+          max_tokens: r.maxTokens ?? 4096,
+          ...(r.system ? { system: r.system } : {}),
+          output_config: {
+            format: { type: 'json_schema' as const, schema: r.schema },
+          },
+          messages: [{ role: 'user' as const, content: r.prompt }],
+        },
+      })) as never,
+    });
+
+    const pollMs = opts.pollMs ?? 15000;
+    const deadline = Date.now() + (opts.timeoutMs ?? 60 * 60 * 1000);
+    let status = batch.processing_status;
+    while (status !== 'ended') {
+      if (Date.now() > deadline) {
+        throw new Error('Batch did not finish within the time limit.');
+      }
+      await new Promise((res) => setTimeout(res, pollMs));
+      const b = await client.messages.batches.retrieve(batch.id);
+      status = b.processing_status;
+    }
+
+    for await (const result of await client.messages.batches.results(batch.id)) {
+      if (result.result.type !== 'succeeded') continue;
+      const text = result.result.message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+        .trim();
+      const parsed = this.extractJson(text);
+      if (parsed !== null) out.set(result.custom_id, parsed as T);
+    }
+    return out;
   }
 
   /** Pull the first balanced JSON object out of a (possibly fenced) string. */

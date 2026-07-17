@@ -61,6 +61,11 @@ export class DeepResearchService implements OnModuleInit {
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
+    // Reuse a recent completed report for the same subject rather than re-run a
+    // full (expensive) web-research job — the market rarely moves enough in a
+    // day to justify a fresh dive, and the admin gets the result instantly.
+    const reuse = await this.recentDone(clean);
+    if (reuse) return this.toDto(reuse);
     const job = await this.repo.save(
       this.repo.create({
         subject: clean,
@@ -71,6 +76,23 @@ export class DeepResearchService implements OnModuleInit {
     // Fire-and-forget — the response returns immediately.
     void this.run(job.id);
     return this.toDto(job);
+  }
+
+  /** Most recent completed dive for this subject within the freshness window. */
+  private async recentDone(subject: string): Promise<DeepResearchJob | null> {
+    try {
+      const cutoff = new Date(Date.now() - 24 * 3600 * 1000);
+      return await this.repo
+        .createQueryBuilder('j')
+        .where('LOWER(j.subject) = LOWER(:subject)', { subject })
+        .andWhere('j.status = :s', { s: 'done' })
+        .andWhere('j.completedAt >= :cutoff', { cutoff })
+        .orderBy('j.completedAt', 'DESC')
+        .getOne();
+    } catch (e) {
+      this.logger.warn(`deep-research reuse check failed: ${(e as Error).message}`);
+      return null;
+    }
   }
 
   private async run(id: string): Promise<void> {
