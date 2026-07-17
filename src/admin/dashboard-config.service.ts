@@ -26,6 +26,37 @@ export class DashboardConfigService {
     }
   }
 
+  /**
+   * Union of market segments referenced across all saved dashboards (top-level
+   * selection + every widget). Lets the daily cron refresh only markets someone
+   * actually charts instead of all of them. Empty if nothing is saved.
+   */
+  async usedSegments(): Promise<string[]> {
+    try {
+      const rows = await this.repo.find();
+      const set = new Set<string>();
+      for (const r of rows) {
+        const cfg = (r.config ?? {}) as {
+          segments?: unknown;
+          widgets?: { segments?: unknown }[];
+        };
+        const add = (arr: unknown) => {
+          if (Array.isArray(arr)) {
+            for (const s of arr) if (typeof s === 'string') set.add(s);
+          }
+        };
+        add(cfg.segments);
+        if (Array.isArray(cfg.widgets)) {
+          for (const w of cfg.widgets) add(w?.segments);
+        }
+      }
+      return [...set];
+    } catch (e) {
+      this.logger.warn(`usedSegments failed: ${(e as Error).message}`);
+      return [];
+    }
+  }
+
   async save(
     adminId: string,
     config: Record<string, unknown>,
