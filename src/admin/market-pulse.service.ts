@@ -31,6 +31,29 @@ export const MARKET_METRICS = [
 const SEGMENT_KEYS = new Set(MARKET_SEGMENTS.map((s) => s.key));
 const METRIC_KEYS = MARKET_METRICS.map((m) => m.key);
 
+export interface MarketMover {
+  card: string;
+  direction: string;
+  changePct: number | null;
+  note: string | null;
+  url: string | null;
+}
+export interface MarketCatalyst {
+  title: string;
+  timeframe: string | null;
+  type: string | null;
+  impact: string | null;
+  note: string | null;
+}
+export interface MarketSale {
+  card: string;
+  priceUsd: number | null;
+  grade: string | null;
+  venue: string | null;
+  soldAt: string | null;
+  url: string | null;
+}
+
 export interface MarketSnapshotDto {
   id: string;
   segment: string;
@@ -39,6 +62,9 @@ export interface MarketSnapshotDto {
   summary: string | null;
   highlights: string[] | null;
   sources: { title: string; url: string }[] | null;
+  movers: MarketMover[] | null;
+  catalysts: MarketCatalyst[] | null;
+  sales: MarketSale[] | null;
 }
 
 interface PulseResult {
@@ -46,6 +72,9 @@ interface PulseResult {
   summary: string;
   highlights: string[];
   sources: { title: string; url: string }[];
+  movers: MarketMover[];
+  catalysts: MarketCatalyst[];
+  sales: MarketSale[];
 }
 
 /**
@@ -85,7 +114,7 @@ export class MarketPulseService {
 
     const res = await this.ai.research<PulseResult>({
       system:
-        'You are a senior trading-card market analyst. Assess the CURRENT state of a collectibles market segment using live web search — recent sold prices and indices, social sentiment, upcoming set/product releases, PSA/BGS grading trends, reprint/supply news, and sealed demand. Return calibrated 0-100 index estimates (higher = stronger/more), a short summary, and notable movers. Be honest about uncertainty. Output ONLY a JSON object.',
+        'You are a senior trading-card market analyst. Assess the CURRENT state of a collectibles market segment using live web search — recent sold prices and indices, social sentiment, upcoming set/product releases, PSA/BGS grading trends, reprint/supply news, and sealed demand. Return calibrated 0-100 index estimates (higher = stronger/more), a short summary, the specific cards moving right now (up AND down), upcoming catalysts, and notable headline sales. Prefer concrete, verifiable specifics over vague statements; include real source URLs where you can. Be honest about uncertainty. Output ONLY a JSON object.',
       prompt: `Market segment: ${label} trading cards.
 
 Return ONLY this JSON (no prose, no code fences):
@@ -95,11 +124,22 @@ ${metricLines}
   },
   "summary": "<2-3 sentence state-of-the-market>",
   "highlights": ["<notable mover / hot card / news>", "..."],
-  "sources": [ { "title": "<source>", "url": "<url>" } ]
-}`,
-      // A market index read is a quick pulse, not a deep report — keep it
-      // cheap: fewer searches, less thinking, tighter output cap.
-      maxTokens: 3500,
+  "movers": [
+    { "card": "<specific card/product name>", "direction": "up|down", "changePct": <approx % move as a number, or null>, "note": "<short why>", "url": "<verify link or null>" }
+  ],
+  "catalysts": [
+    { "title": "<upcoming event/set drop/restock/tournament/media tie-in>", "timeframe": "<e.g. 'May 2026' or 'next 2 weeks'>", "type": "set_release|restock|tournament|media|other", "impact": "up|down|mixed", "note": "<short expected effect>" }
+  ],
+  "sales": [
+    { "card": "<card/product>", "priceUsd": <number>, "grade": "<e.g. PSA 10, or null>", "venue": "<eBay|Goldin|Fanatics|PWCC|... or null>", "soldAt": "<date or null>", "url": "<link or null>" }
+  ]
+}
+
+Aim for 4-8 movers (mix of gainers and faders), 3-6 catalysts (soonest first), and 3-6 recent headline sales (highest/most notable). Omit any list you genuinely can't source rather than inventing entries.`,
+      // A market pulse is a quick read, not a deep report — keep it cheap:
+      // fewer searches, less thinking. Output cap has headroom for the
+      // structured movers/catalysts/sales lists.
+      maxTokens: 5000,
       maxSearches: 4,
       effort: 'low',
     });
@@ -121,9 +161,83 @@ ${metricLines}
           ? res.highlights.slice(0, 8)
           : null,
         sources: Array.isArray(res.sources) ? res.sources.slice(0, 8) : null,
+        movers: this.cleanMovers(res.movers),
+        catalysts: this.cleanCatalysts(res.catalysts),
+        sales: this.cleanSales(res.sales),
       }),
     );
     return this.toDto(saved);
+  }
+
+  private num(v: unknown): number | null {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  private txt(v: unknown, max = 160): string | null {
+    const s = typeof v === 'string' ? v.trim() : '';
+    return s ? s.slice(0, max) : null;
+  }
+
+  private cleanMovers(raw: unknown): MarketMover[] | null {
+    if (!Array.isArray(raw)) return null;
+    const out = raw
+      .map((m) => {
+        const card = this.txt((m as MarketMover)?.card, 120);
+        if (!card) return null;
+        const dir =
+          String((m as MarketMover)?.direction).toLowerCase() === 'down'
+            ? 'down'
+            : 'up';
+        return {
+          card,
+          direction: dir,
+          changePct: this.num((m as MarketMover)?.changePct),
+          note: this.txt((m as MarketMover)?.note, 160),
+          url: this.txt((m as MarketMover)?.url, 400),
+        };
+      })
+      .filter((m): m is MarketMover => m !== null)
+      .slice(0, 12);
+    return out.length ? out : null;
+  }
+
+  private cleanCatalysts(raw: unknown): MarketCatalyst[] | null {
+    if (!Array.isArray(raw)) return null;
+    const out = raw
+      .map((c) => {
+        const title = this.txt((c as MarketCatalyst)?.title, 160);
+        if (!title) return null;
+        return {
+          title,
+          timeframe: this.txt((c as MarketCatalyst)?.timeframe, 60),
+          type: this.txt((c as MarketCatalyst)?.type, 40),
+          impact: this.txt((c as MarketCatalyst)?.impact, 20),
+          note: this.txt((c as MarketCatalyst)?.note, 200),
+        };
+      })
+      .filter((c): c is MarketCatalyst => c !== null)
+      .slice(0, 10);
+    return out.length ? out : null;
+  }
+
+  private cleanSales(raw: unknown): MarketSale[] | null {
+    if (!Array.isArray(raw)) return null;
+    const out = raw
+      .map((s) => {
+        const card = this.txt((s as MarketSale)?.card, 120);
+        if (!card) return null;
+        return {
+          card,
+          priceUsd: this.num((s as MarketSale)?.priceUsd),
+          grade: this.txt((s as MarketSale)?.grade, 24),
+          venue: this.txt((s as MarketSale)?.venue, 40),
+          soldAt: this.txt((s as MarketSale)?.soldAt, 40),
+          url: this.txt((s as MarketSale)?.url, 400),
+        };
+      })
+      .filter((s): s is MarketSale => s !== null)
+      .slice(0, 10);
+    return out.length ? out : null;
   }
 
   /**
@@ -201,6 +315,9 @@ ${metricLines}
       summary: s.summary ?? null,
       highlights: s.highlights ?? null,
       sources: s.sources ?? null,
+      movers: s.movers ?? null,
+      catalysts: s.catalysts ?? null,
+      sales: s.sales ?? null,
     };
   }
 }

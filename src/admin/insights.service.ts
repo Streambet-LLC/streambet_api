@@ -47,6 +47,13 @@ You ALSO have access to THIS marketplace's own data — its card catalog, its bu
 
 Answer by calling the tools and synthesizing the results.
 
+PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). When an image is present:
+- FIRST identify the card as precisely as you can from what's visible: game/brand (Pokémon, One Piece, sports, etc.), player/character, set/series, card number, variant/parallel (e.g. holo, alt art, prizm), year, and — if it's a graded slab — the grader and grade (e.g. PSA 10, BGS 9.5). State your read of the card in one short line.
+- If you can't be sure, say what you can tell and note the uncertainty (e.g. "looks like an Umbreon VMAX Alt Art — confirm the set/number"); never invent a specific card you can't see.
+- Then treat the identified card as the subject: for a normal ask, look up pricing/buzz via web search and answer as usual (leading with your identification so the admin can correct it).
+- CONFIRM BEFORE A DEEP DIVE: if the admin asks for a "deep dive"/"tear sheet"/"full report" from a photo, do NOT call start_deep_dive immediately. First state the card you identified and ask them to confirm (e.g. "I read this as <card> — deep dive that? Reply 'yes' or tell me the correct card."). Only call start_deep_dive once they've confirmed the card (a "yes"/"go ahead", or after they correct it). If they already named the exact card in their message, you can treat that as confirmation.
+- If the image is not a trading card, say so briefly and stop.
+
 TOOL ROUTING:
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where. The card does NOT need to be in this marketplace.
 - Keep web use tight for a chat: 1-3 searches, then answer. Don't exhaustively research — give a fast, useful read.
@@ -210,9 +217,17 @@ RULES (follow strictly):
    * legitimate use.
    */
   private async inScope(messages: AiChatMessage[]): Promise<boolean> {
+    // A photo of a card is inherently in scope (identify & analyze it) — skip
+    // the text classifier when the latest turn carries an image.
+    const last = messages[messages.length - 1];
+    if (last?.images && last.images.length > 0) return true;
     const transcript = messages
       .slice(-4)
-      .map((m) => `${m.role === 'user' ? 'ADMIN' : 'ASSISTANT'}: ${m.content}`)
+      .map((m) => {
+        const role = m.role === 'user' ? 'ADMIN' : 'ASSISTANT';
+        const text = m.content || (m.images?.length ? '[photo of a card]' : '');
+        return `${role}: ${text}`;
+      })
       .join('\n');
     try {
       const res = await this.ai.generateJson<{ inScope: boolean }>({
@@ -435,16 +450,7 @@ RULES (follow strictly):
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
-    const clean = (messages ?? [])
-      .filter(
-        (m) =>
-          m &&
-          (m.role === 'user' || m.role === 'assistant') &&
-          typeof m.content === 'string' &&
-          m.content.trim().length > 0,
-      )
-      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
-      .slice(-20); // keep the last ~10 exchanges
+    const clean = this.cleanMessages(messages);
     if (clean.length === 0 || clean[clean.length - 1].role !== 'user') {
       throw new BadRequestException('Expected a trailing user message.');
     }
@@ -481,7 +487,11 @@ RULES (follow strictly):
     conversationId?: string,
   ): Promise<void> {
     if (!conversationId) return;
-    const question = clean[clean.length - 1]?.content ?? '';
+    const lastTurn = clean[clean.length - 1];
+    const hasPhoto = !!(lastTurn?.images && lastTurn.images.length > 0);
+    const question =
+      (lastTurn?.content ?? '') ||
+      (hasPhoto ? '📷 Photo of a card' : '');
     const tools = Array.from(new Set((toolCalls ?? []).map((t) => t.name)));
     await this.history.save({
       conversationId,
@@ -499,20 +509,35 @@ RULES (follow strictly):
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
-    const clean = (messages ?? [])
-      .filter(
-        (m) =>
-          m &&
-          (m.role === 'user' || m.role === 'assistant') &&
-          typeof m.content === 'string' &&
-          m.content.trim().length > 0,
-      )
-      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
-      .slice(-20);
+    const clean = this.cleanMessages(messages);
     if (clean.length === 0 || clean[clean.length - 1].role !== 'user') {
       throw new BadRequestException('Expected a trailing user message.');
     }
     return clean;
+  }
+
+  /**
+   * Validate + trim the raw chat history into a safe, bounded window. Keeps
+   * turns that have text OR an image (a photo-only turn is valid — "identify &
+   * analyze this card"), caps text length, and limits images per turn.
+   */
+  private cleanMessages(messages: AiChatMessage[]): AiChatMessage[] {
+    return (messages ?? [])
+      .filter(
+        (m) =>
+          m &&
+          (m.role === 'user' || m.role === 'assistant') &&
+          ((typeof m.content === 'string' && m.content.trim().length > 0) ||
+            (Array.isArray(m.images) && m.images.length > 0)),
+      )
+      .map((m) => ({
+        role: m.role,
+        content: (m.content ?? '').slice(0, 4000),
+        ...(Array.isArray(m.images) && m.images.length > 0
+          ? { images: m.images.slice(0, 4) }
+          : {}),
+      }))
+      .slice(-20); // keep the last ~10 exchanges
   }
 
   /**

@@ -9,10 +9,20 @@ export interface AiToolSpec {
   input_schema: Record<string, unknown>;
 }
 
+/** A base64-encoded image attached to a user turn (for vision). */
+export interface AiImage {
+  /** Raw base64 (no `data:` prefix). */
+  data: string;
+  /** e.g. 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'. */
+  mediaType: string;
+}
+
 /** One chat turn as exchanged with the conversational endpoint. */
 export interface AiChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** Optional images (base64) for a vision-capable user turn. */
+  images?: AiImage[];
 }
 
 /** A tool Claude invoked during a conversation (for UI transparency). */
@@ -67,6 +77,38 @@ export class AiService {
     return this.client;
   }
 
+  /** Anthropic image block from our base64 image shape. */
+  private imageBlock(img: AiImage): Anthropic.ImageBlockParam {
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: img.mediaType as Anthropic.Base64ImageSource['media_type'],
+        data: img.data,
+      },
+    };
+  }
+
+  /**
+   * Map our lightweight chat messages to Anthropic message params. A turn with
+   * images becomes a content-block array (images first, then any text); a
+   * text-only turn stays a plain string so the prefix-cache path is unchanged.
+   */
+  private toMessageParams(
+    messages: AiChatMessage[],
+  ): Anthropic.MessageParam[] {
+    return messages.map((m) => {
+      if (m.images && m.images.length > 0) {
+        const blocks: Anthropic.ContentBlockParam[] = [
+          ...m.images.map((img) => this.imageBlock(img)),
+          ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+        ];
+        return { role: m.role, content: blocks };
+      }
+      return { role: m.role, content: m.content };
+    });
+  }
+
   /**
    * Open-ended reasoning → plain text. Adaptive thinking on by default for
    * anything non-trivial (e.g. synthesizing a segment description).
@@ -109,8 +151,16 @@ export class AiService {
     schema: Record<string, unknown>;
     model?: string;
     maxTokens?: number;
+    /** Optional images (base64) for vision-grounded extraction. */
+    images?: AiImage[];
   }): Promise<T> {
     const client = this.ensure();
+    const content: Anthropic.MessageParam['content'] = opts.images?.length
+      ? [
+          ...opts.images.map((img) => this.imageBlock(img)),
+          { type: 'text' as const, text: opts.prompt },
+        ]
+      : opts.prompt;
     const res = await client.messages.create({
       model: opts.model ?? this.defaultModel,
       max_tokens: opts.maxTokens ?? 4096,
@@ -118,7 +168,7 @@ export class AiService {
       output_config: {
         format: { type: 'json_schema' as const, schema: opts.schema },
       },
-      messages: [{ role: 'user', content: opts.prompt }],
+      messages: [{ role: 'user', content }],
     });
     const text = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -231,10 +281,9 @@ export class AiService {
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
-    const messages: Anthropic.MessageParam[] = opts.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const messages: Anthropic.MessageParam[] = this.toMessageParams(
+      opts.messages,
+    );
     const toolCalls: AiToolInvocation[] = [];
     let finalText = '';
 
@@ -344,10 +393,9 @@ export class AiService {
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
-    const messages: Anthropic.MessageParam[] = opts.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const messages: Anthropic.MessageParam[] = this.toMessageParams(
+      opts.messages,
+    );
     const toolCalls: AiToolInvocation[] = [];
 
     for (let turn = 0; turn < maxTurns; turn++) {
