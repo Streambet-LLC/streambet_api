@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { DeepResearchJob } from './entities/deep-research-job.entity';
 import { ForecastService } from './forecast.service';
-import { AiService } from '../integrations/ai/ai.service';
+import { AiService, AiImage } from '../integrations/ai/ai.service';
 
 export interface DeepResearchJobDto {
   id: string;
@@ -76,6 +76,86 @@ export class DeepResearchService implements OnModuleInit {
     // Fire-and-forget — the response returns immediately.
     void this.run(job.id);
     return this.toDto(job);
+  }
+
+  /**
+   * Start a deep dive from a PHOTO of a card. Runs a quick vision pass to
+   * identify the card (game, player/character, set, number, variant, and any
+   * grade), then hands the derived subject to the normal `start()` flow — so
+   * reuse/freshness caching and the background runner all apply unchanged.
+   * `note` is optional admin context to disambiguate (e.g. "the PSA 10").
+   */
+  async startFromImage(
+    images: AiImage[],
+    note?: string,
+    adminId?: string,
+  ): Promise<DeepResearchJobDto> {
+    const { isCard, subject } = await this.identifyImage(images, note);
+    if (!isCard || !subject) {
+      throw new BadRequestException(
+        "Couldn't identify a card in that photo. Try a clearer, well-lit shot of the front, or add a note naming the card.",
+      );
+    }
+    return this.start(subject, adminId);
+  }
+
+  /**
+   * Vision-identify the card in a photo WITHOUT starting a job — powers the
+   * "is this the right card?" confirmation step. Returns the best-guess subject
+   * (empty when it isn't a recognizable trading card) so the UI can show it for
+   * the admin to confirm or edit before committing to a (heavy) research run.
+   */
+  async identifyImage(
+    images: AiImage[],
+    note?: string,
+  ): Promise<{ isCard: boolean; subject: string }> {
+    if (!images || images.length === 0) {
+      throw new BadRequestException('A photo is required.');
+    }
+    if (!this.ai.isConfigured()) {
+      throw new BadRequestException(
+        'AI is not configured (missing ANTHROPIC_API_KEY).',
+      );
+    }
+    try {
+      const res = await this.ai.generateJson<{
+        isCard: boolean;
+        subject: string;
+      }>({
+        model: this.ai.chatModel,
+        maxTokens: 300,
+        images: images.slice(0, 2),
+        system:
+          'You identify trading cards (Pokémon, One Piece, sports, and other ' +
+          'collectibles) from photos for a card-market research tool. Read the ' +
+          'card as precisely as the image allows.',
+        prompt:
+          'Identify the card in the photo(s) and return JSON. `subject` must be ' +
+          'a single concise search string a market analyst would use — include ' +
+          'game/brand, player or character, set/series, card number, variant/' +
+          'parallel (holo, alt art, prizm, etc.), year, and — if it is a graded ' +
+          'slab — the grader and grade (e.g. "PSA 10"). Example: "Pokémon Crown ' +
+          'Zenith Charizard VSTAR UPC #GG69 PSA 10". If the image is not a ' +
+          'trading card, set isCard=false and subject="".' +
+          (note ? `\n\nAdmin note (use to disambiguate): ${note}` : ''),
+        schema: {
+          type: 'object',
+          properties: {
+            isCard: { type: 'boolean' },
+            subject: { type: 'string' },
+          },
+          required: ['isCard', 'subject'],
+          additionalProperties: false,
+        },
+      });
+      const subject = (res.subject ?? '').trim().slice(0, 300);
+      return { isCard: !!res.isCard && !!subject, subject };
+    } catch (e) {
+      this.logger.warn(`card identify failed: ${(e as Error).message}`);
+      throw new BadRequestException(
+        'Could not analyze that photo. Please try again.',
+      );
+    }
   }
 
   /** Most recent completed dive for this subject within the freshness window. */

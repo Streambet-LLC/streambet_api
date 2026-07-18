@@ -61,7 +61,7 @@ import {
 } from './market-pulse.service';
 import { DashboardConfigService } from './dashboard-config.service';
 import { CardProfileService } from './card-profile.service';
-import type { AiChatMessage } from '../integrations/ai/ai.service';
+import type { AiChatMessage, AiImage } from '../integrations/ai/ai.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
 import {
   CollectorAnalyticsOverviewDto,
@@ -1923,6 +1923,44 @@ export class AdminController {
     this.ensureAdmin(req.user);
     const data = await this.deepResearchService.start(
       body?.subject ?? '',
+      req.user.id,
+    );
+    return { status: HttpStatus.OK, message: 'Deep dive started', data };
+  }
+
+  @ApiOperation({
+    summary: 'Identify the card in a photo (no job) — for the confirm step',
+  })
+  @Post('analytics/insights/deep-research/identify-image')
+  async identifyDeepResearchImage(
+    @Request() req: RequestWithUser,
+    @Body() body: { image?: AiImage; images?: AiImage[]; note?: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const images = body?.images ?? (body?.image ? [body.image] : []);
+    const data = await this.deepResearchService.identifyImage(
+      images,
+      body?.note,
+    );
+    return { status: HttpStatus.OK, message: 'Card identified', data };
+  }
+
+  @ApiOperation({ summary: 'Start a deep-dive research job from a card photo' })
+  @Post('analytics/insights/deep-research/from-image')
+  async startDeepResearchFromImage(
+    @Request() req: RequestWithUser,
+    @Body()
+    body: {
+      image?: AiImage;
+      images?: AiImage[];
+      note?: string;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const images = body?.images ?? (body?.image ? [body.image] : []);
+    const data = await this.deepResearchService.startFromImage(
+      images,
+      body?.note,
       req.user.id,
     );
     return { status: HttpStatus.OK, message: 'Deep dive started', data };

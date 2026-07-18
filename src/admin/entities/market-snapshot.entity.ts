@@ -30,4 +30,41 @@ export class MarketSnapshot extends BaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   sources: { title: string; url: string }[] | null;
+
+  /** Specific cards spiking/dropping right now. */
+  @Column({ type: 'jsonb', nullable: true })
+  movers:
+    | {
+        card: string;
+        direction: string;
+        changePct: number | null;
+        note: string | null;
+        url: string | null;
+      }[]
+    | null;
+
+  /** Upcoming catalysts — set drops, restocks, tournaments, media tie-ins. */
+  @Column({ type: 'jsonb', nullable: true })
+  catalysts:
+    | {
+        title: string;
+        timeframe: string | null;
+        type: string | null;
+        impact: string | null;
+        note: string | null;
+      }[]
+    | null;
+
+  /** Notable recent headline sales (social proof of a hot market). */
+  @Column({ type: 'jsonb', nullable: true })
+  sales:
+    | {
+        card: string;
+        priceUsd: number | null;
+        grade: string | null;
+        venue: string | null;
+        soldAt: string | null;
+        url: string | null;
+      }[]
+    | null;
 }
