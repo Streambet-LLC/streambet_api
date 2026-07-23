@@ -29,7 +29,7 @@ export class EmailLog extends BaseEntity {
   @Column({ type: 'uuid', nullable: true, name: 'related_order_id' })
   relatedOrderId: string | null;
 
-  /** 'sent' | 'failed'. */
+  /** 'sent' | 'failed' | 'suppressed' (waitlist mode — intentionally not sent). */
   @Column({ type: 'varchar', length: 16 })
   status: string;
 

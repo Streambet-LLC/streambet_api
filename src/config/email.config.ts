@@ -182,5 +182,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/new_seller_signup.ejs',
       schemaPath: './src/templates/new_seller_signup.json',
     },
+    waitlist_welcome: {
+      templatePath: './src/templates/waitlist_welcome.ejs',
+      schemaPath: './src/templates/waitlist_welcome.json',
+    },
   },
 }));

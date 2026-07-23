@@ -1,0 +1,22 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "params": {
+      "type": "object",
+      "required": ["siteLink"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Optional name the user gave when joining the waitlist"
+        },
+        "siteLink": {
+          "type": "string",
+          "description": "Link to the CardCade landing page"
+        }
+      }
+    }
+  },
+  "required": ["params"]
+}
