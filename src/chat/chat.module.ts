@@ -4,7 +4,6 @@ import { Chat } from './entities/chat.entity';
 import { User } from '../users/entities/user.entity';
 import { Stream } from '../stream/entities/stream.entity';
 import { ChatService } from './chat.service';
-import { ChatController } from './chat.controller';
 import { ChatGateway } from './chat.gateway';
 import { WsModule } from 'src/ws/ws.module';
 import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
@@ -16,7 +15,7 @@ import { GeoFencingModule } from 'src/geo-fencing/geo-fencing.module';
     GeoFencingModule,
   ],
   providers: [ChatService, ChatGateway],
-  controllers: [ChatController],
+  controllers: [],
   exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

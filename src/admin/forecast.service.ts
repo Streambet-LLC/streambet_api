@@ -116,39 +116,15 @@ export class ForecastService {
       if (cached) return cached;
     }
 
-    const { card, recentComps } = await this.market.getCardSignals(cardId);
-    const signals = {
-      name: card.name,
-      brand: card.brand,
-      category: card.category,
-      grade: card.grade,
-      ourPriceUsd: card.price,
-      marketMedianUsd: card.comps?.median ?? null,
-      marketRangeUsd:
-        card.comps?.min != null && card.comps?.max != null
-          ? [card.comps.min, card.comps.max]
-          : null,
-      priceGapPct: card.priceGapPct,
-      vsMarketPct: card.vsMarketPct,
-      lifetimeSales: card.sales,
-      distinctBuyers: card.buyers,
-      buyerConcentrationPct: card.concentrationPct,
-      liquidity: card.liquidity,
-      stockOnHand: card.stock,
-      whaleBoughtRecently: card.whaleRecent,
-      recentSoldComps: recentComps
-        .slice(0, 6)
-        .map((c) => ({ priceUsd: c.price, soldAt: c.soldAt })),
-    };
+    // Tracked-card lookup — display fields only. All pricing/demand evidence
+    // comes from live web research (the marketplace signal feed was retired).
+    const card = await this.market.getCardRef(cardId);
 
     const forecast = await this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Card: ${card.name} (${card.brand ?? '?'} / ${card.category ?? '?'}${
         card.grade ? `, grade ${card.grade}` : ''
       }).
-
-Platform signals (our marketplace demand + eBay sold comps):
-${JSON.stringify(signals, null, 2)}
 
 ${this.FORECAST_JSON}`,
       maxTokens: 8000,

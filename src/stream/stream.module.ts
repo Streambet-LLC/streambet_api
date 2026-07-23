@@ -1,7 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Stream } from './entities/stream.entity';
-import { StreamController } from './stream.controller';
 import { StreamService } from './stream.service';
 import { WalletsModule } from 'src/wallets/wallets.module';
 import { BettingModule } from 'src/betting/betting.module';
@@ -27,7 +26,7 @@ import { LiveFeedUpdateModule } from 'src/live-feed-update/live-feed-update.modu
     NotificationModule,
     LiveFeedUpdateModule,
   ],
-  controllers: [StreamController],
+  controllers: [],
   providers: [StreamService, StreamGateway],
   exports: [StreamService, StreamGateway],
 })

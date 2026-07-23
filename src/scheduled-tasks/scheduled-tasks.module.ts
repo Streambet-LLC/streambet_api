@@ -17,10 +17,8 @@ import { PrizeItemEbaySyncState } from 'src/prize/entities/prize-item-ebay-sync-
 import { PrizeModule } from 'src/prize/prize.module';
 import { EbayModule } from 'src/integrations/ebay/ebay.module';
 import { EbaySoldMarketSyncService } from './ebay-sold-market-sync.service';
-import { EbaySoldMarketAdminController } from './ebay-sold-market-admin.controller';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { AchSettlementReconcilerService } from './ach-settlement-reconciler.service';
-import { AchReconcilerAdminController } from './ach-reconciler-admin.controller';
 
 @Module({
   imports: [
@@ -49,7 +47,7 @@ import { AchReconcilerAdminController } from './ach-reconciler-admin.controller'
     EbaySoldMarketSyncService,
     AchSettlementReconcilerService,
   ],
-  controllers: [EbaySoldMarketAdminController, AchReconcilerAdminController],
+  controllers: [],
   exports: [EbaySoldMarketSyncService],
 })
 export class ScheduledTaskModule {}

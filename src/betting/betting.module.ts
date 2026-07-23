@@ -7,7 +7,6 @@ import { BetEditHistory } from './entities/bet-edit-history.entity';
 import { SentimentPickVote } from './entities/sentiment-pick-vote.entity';
 import { BettingService } from './betting.service';
 import { SentimentPickVoteService } from './services/sentiment-pick-vote.service';
-import { BettingController } from './betting.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { UsersModule } from '../users/users.module';
 import { Stream } from 'src/stream/entities/stream.entity';
@@ -42,7 +41,7 @@ import { User } from 'src/users/entities/user.entity';
     BetRoundHistoryModule,
     LiveFeedUpdateModule,
   ],
-  controllers: [BettingController],
+  controllers: [],
   providers: [BettingService, BettingGateway, SentimentPickVoteService],
   exports: [BettingService, BettingGateway, SentimentPickVoteService],
 })

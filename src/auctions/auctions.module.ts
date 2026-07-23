@@ -14,11 +14,6 @@ import { AuctionsPaymentsService } from './auctions-payments.service';
 import { AuctionsGateway } from './auctions.gateway';
 import { AuctionsNotificationsService } from './auctions-notifications.service';
 import { AuctionJobsProcessor } from './processor/auction-jobs.processor';
-import {
-  AuctionsController,
-  AdminAuctionsController,
-  SellerAuctionsController,
-} from './auctions.controller';
 import { AuthModule } from '../auth/auth.module';
 import { InboxModule } from '../inbox/inbox.module';
 import { RedisModule } from '../redis/redis.module';
@@ -72,11 +67,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     EmailsModule,
     forwardRef(() => WalletsModule),
   ],
-  controllers: [
-    AuctionsController,
-    AdminAuctionsController,
-    SellerAuctionsController,
-  ],
+  controllers: [],
   providers: [
     AuctionsService,
     AuctionsPaymentsService,

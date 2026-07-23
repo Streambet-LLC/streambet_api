@@ -10,6 +10,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmailPayloadDto } from './dto/email.dto';
 import { EmailLog } from './entities/email-log.entity';
+import { EmailType } from 'src/enums/email-type.enum';
+
+/**
+ * Waitlist mode: only these email types are actually delivered. Every other
+ * transactional email (bets, purchases, auctions, reminders, admin notices…)
+ * is suppressed at this single choke point — logged with status 'suppressed'
+ * but never handed to SMTP. Add a type back here to re-enable it.
+ */
+const ENABLED_EMAIL_TYPES: ReadonlySet<string> = new Set([
+  EmailType.WaitlistWelcome,
+  EmailType.AccountVerification,
+  EmailType.PasswordReset,
+]);
 
 @Injectable()
 export class EmailsService {
@@ -64,6 +77,13 @@ export class EmailsService {
   }
 
   public async sendEmailSMTP(payload: EmailPayloadDto, emailtype) {
+    if (!ENABLED_EMAIL_TYPES.has(emailtype)) {
+      this.logger.log(
+        `Email type "${emailtype}" suppressed (waitlist mode) — not sending to ${(payload.toAddress || []).join(',')}`,
+      );
+      await this.writeEmailLog(payload, emailtype, 'suppressed', null, null);
+      return { message: 'Email suppressed (waitlist mode)', statusCode: HttpStatus.OK };
+    }
     try {
       const schemaMapping = this.configService.get<string>(
         'email.schemaMapping',
@@ -122,7 +142,7 @@ export class EmailsService {
   private async writeEmailLog(
     payload: EmailPayloadDto,
     emailtype: string,
-    status: 'sent' | 'failed',
+    status: 'sent' | 'failed' | 'suppressed',
     error: string | null,
     messageId: string | null,
   ): Promise<void> {

@@ -6,7 +6,6 @@ import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity
 import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
-import { CartController } from './cart.controller';
 import { CartService } from './cart.service';
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
@@ -26,7 +25,7 @@ import { PromoCodeModule } from '../promo-code/promo-code.module';
     EmailsModule,
     PromoCodeModule,
   ],
-  controllers: [CartController],
+  controllers: [],
   providers: [CartService],
   exports: [CartService],
 })

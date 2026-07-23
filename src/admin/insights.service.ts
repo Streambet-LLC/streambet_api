@@ -5,19 +5,15 @@ import {
   AiToolInvocation,
   AiToolSpec,
 } from '../integrations/ai/ai.service';
-import { MarketService } from './market.service';
-import { ForecastService } from './forecast.service';
-import { CardProfileService } from './card-profile.service';
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
-import { CollectorAnalyticsService } from './collector-analytics.service';
 
 /**
- * Insights — a guarded, conversational analyst over CardCade's collector data.
+ * Insights — a guarded, conversational card-market analyst.
  *
- * Claude answers admin questions in plain English by calling a small set of
- * READ-ONLY tools that query our marketplace, buyer, market, and lead data.
+ * Claude answers admin questions in plain English using live web search plus a
+ * small set of READ-ONLY tools (outreach leads, background deep dives).
  * Everything is scoped by a strict system prompt: on-topic collectibles
  * analytics only, no fabricated numbers, no financial advice, no mutations.
  * Admin-only enforcement lives at the controller (`ensureAdmin`).
@@ -26,25 +22,21 @@ import { CollectorAnalyticsService } from './collector-analytics.service';
 export class InsightsService {
   constructor(
     private readonly ai: AiService,
-    private readonly market: MarketService,
-    private readonly forecast: ForecastService,
-    private readonly profiles: CardProfileService,
     private readonly deepResearch: DeepResearchService,
     private readonly history: InsightsHistoryService,
     private readonly acquisition: AcquisitionService,
-    private readonly collectors: CollectorAnalyticsService,
   ) {}
 
   private readonly SYSTEM = `You are the CardCade Insights analyst — a trading-card market & intelligence assistant (Pokémon, One Piece, sports cards, and other collectibles).
 
-SCOPE — you help with trading cards / collectibles and their market. This is GENERIC: it works for ANY card, player, or set in the world — it does NOT have to be one this marketplace stocks. You can answer:
+SCOPE — you help with trading cards / collectibles and their market. This is GENERIC: it works for ANY card, player, or set in the world. You can answer:
 1. Current pricing and recent sales for a card.
 2. Social buzz / hype and sentiment around a card, player, or set.
 3. Predictive outlook — upcoming events/scenarios with odds and price impact (e.g. odds of an MVP or championship run and how it moves a card).
 4. Historical precedents — how comparable cards moved through similar past events.
 5. Macro factors — supply cuts, reprints, and PSA/BGS grading & population shifts and their pricing/supply impact.
 6. Deal / sell-side guidance for a specific card — what to list or accept for it, pricing or countering a buyer's offer, negotiating against comps, and whether now looks like a good time to sell vs hold. Ground these in recent SOLD comps + the card's outlook, give a concrete number or range, and keep the brief "market estimate, not financial advice" caveat. This IS in scope — it's a market read on a collectible, not stock/tax/investment advice.
-You ALSO have access to THIS marketplace's own data — its card catalog, its buyers/collectors, and its outreach leads — for questions specifically about the business. Use those tools ONLY when the question is about this marketplace's own inventory or customers.
+You ALSO have access to the business's outreach LEADS (prospective collectors discovered on social platforms) via the search_leads tool — use it ONLY when the question is explicitly about leads/prospects.
 
 Answer by calling the tools and synthesizing the results.
 
@@ -56,10 +48,10 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 - If the image is not a trading card, say so briefly and stop.
 
 TOOL ROUTING:
-- For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where. The card does NOT need to be in this marketplace.
+- For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where.
 - Keep web use tight for a chat: 1-3 searches, then answer. Don't exhaustively research — give a fast, useful read.
 - If the user EXPLICITLY asks for a "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them it's running and will appear in the Deep Dives panel — do NOT try to produce the full report inline. For normal questions, just answer with web search.
-- Only use search_cards / get_card (this marketplace's catalog), search_buyers (its collectors), or search_leads (its outreach prospects) when the question is explicitly about this marketplace's own inventory or customers.
+- Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
 
 RULES (follow strictly):
 - ONLY use data returned by the tools. NEVER invent prices, numbers, buyers, cards, or events. If a tool returns nothing, say so plainly — don't fill gaps from general knowledge.
@@ -76,81 +68,10 @@ RULES (follow strictly):
 - INCLUDE LINKS. When you answer about a specific card, add 1-3 relevant clickable markdown links so the admin can verify or dig in — e.g. the sources you used, and a "check current listings" link. Prefer real result URLs from your web search; a live eBay SOLD search link is a good default, e.g. [eBay sold — <card>](https://www.ebay.com/sch/i.html?_nkw=<url-encoded card>&_sacat=0&LH_Sold=1&LH_Complete=1). Put links inline or as a short "Links:" line at the end. Never invent a URL you didn't see or can't construct reliably.`;
 
   private readonly TOOLS: AiToolSpec[] = [
-    {
-      name: 'search_cards',
-      description:
-        'Search the marketplace card catalog with per-card market metrics ' +
-        '(supply/stock, lifetime sales, distinct buyers, revenue, buyer ' +
-        'concentration, liquidity, eBay sold-comp median/range, our price vs ' +
-        'market, price gap, recent whale activity). Use to find cards or rank ' +
-        'them by a dimension.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Card name search (partial ok).' },
-          brand: {
-            type: 'string',
-            enum: ['pokemon', 'one_piece', 'sports', 'other'],
-          },
-          category: {
-            type: 'string',
-            enum: ['raw', 'slab', 'sealed', 'other'],
-          },
-          sort: {
-            type: 'string',
-            enum: ['sales', 'revenue', 'gap', 'concentration', 'recent'],
-            description: 'Ranking: most sales, top revenue, widest price gap, most buyer-concentrated, most recently sold.',
-          },
-          limit: { type: 'integer', description: 'Max cards (default 15, cap 25).' },
-        },
-      },
-    },
-    {
-      name: 'get_card',
-      description:
-        'Full detail for ONE card by id: market metrics, its top buyers ' +
-        '(who is actually buying it), recent eBay sold comps, median days to ' +
-        'sale, any cached predictive forecast (outlook, catalysts, precedents, ' +
-        'risks), and its market price profile — latest price per source ' +
-        '(eBay, multi-site web research), a consensus median, and recent ' +
-        'historical price points. Get a cardId from search_cards first.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          cardId: { type: 'string', description: 'Card id from search_cards.' },
-        },
-        required: ['cardId'],
-      },
-    },
-    {
-      name: 'search_buyers',
-      description:
-        'Search/rank collector profiles (buyers). Returns lifetime spend, ' +
-        'trailing-30d spend, predicted next-30d spend, purchase count, last ' +
-        'purchase date, and top collected categories. Use for whales, lapsed ' +
-        'buyers, top spenders, category collectors, or looking someone up.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search by name, username, or email (partial ok).',
-          },
-          sort: {
-            type: 'string',
-            enum: ['lifetime', 'last30d', 'predicted', 'recent', 'volume'],
-            description: 'Rank by lifetime spend, last-30d spend, predicted spend, most recent purchase, or volume.',
-          },
-          category: {
-            type: 'string',
-            enum: ['pokemon', 'one_piece', 'sports', 'other'],
-            description: 'Restrict to buyers whose top category matches.',
-          },
-          onlySellers: { type: 'boolean' },
-          limit: { type: 'integer', description: 'Max buyers (default 15, cap 25).' },
-        },
-      },
-    },
+    // NOTE: the former marketplace tools (search_cards / get_card /
+    // search_buyers) were removed with the marketplace itself — card questions
+    // are now answered via live web search, and per-card tracking will return
+    // with the tracked-cards feature.
     {
       name: 'search_leads',
       description:
@@ -206,7 +127,7 @@ RULES (follow strictly):
 
   /** Canned reply when a question falls outside the analytics scope. */
   private readonly OUT_OF_SCOPE =
-    "I can only help with trading cards & collectibles — pricing, social buzz, forecasts, and market questions for any card, plus this marketplace's own catalog, buyers, and leads. Try “what's the outlook on the Crown Zenith Charizard?” or “which cards have the widest price gap?”";
+    "I can only help with trading cards & collectibles — pricing, social buzz, forecasts, and market questions for any card, plus our outreach leads. Try “what's the outlook on the Crown Zenith Charizard?” or “should I sell my PSA 10 Lugia now or hold?”";
 
   /**
    * Fast, cheap gate (Haiku) that classifies whether the latest user message is
@@ -238,9 +159,8 @@ RULES (follow strictly):
           'You are a scope classifier for a trading-card market & intelligence assistant. ' +
           'IN SCOPE: any question about trading cards / collectibles (Pokémon, sports, One Piece, etc.) and their ' +
           'market — pricing and recent sales, social buzz/hype, upcoming events and scenario odds, historical ' +
-          'precedents, and supply/reprint/PSA-grading impacts, for ANY card, player, or set (it need not be in any ' +
-          'particular marketplace); plus questions about this marketplace’s own catalog, buyers/collectors, and ' +
-          'outreach leads; plus greetings and questions about what the assistant can do. ALSO IN SCOPE — deal/sell-side ' +
+          'precedents, and supply/reprint/PSA-grading impacts, for ANY card, player, or set; plus questions about the ' +
+          'business’s outreach leads/prospects; plus greetings and questions about what the assistant can do. ALSO IN SCOPE — deal/sell-side ' +
           'questions about a specific card or collectible: what to list or accept for it, pricing or countering an ' +
           'offer, negotiating against comps, and whether now is a good time to sell vs hold it. These are market reads ' +
           'about a collectible and ARE in scope (not "financial advice"). OUT OF SCOPE: unrelated ' +
@@ -292,125 +212,6 @@ RULES (follow strictly):
           started: true,
           id: job.id,
           message: `Deep dive on "${subject}" started — it will appear in the Deep Dives panel when ready.`,
-        };
-      }
-      case 'search_cards': {
-        const { total, data } = await this.market.listCards({
-          search: this.str(input.query),
-          brand: this.str(input.brand),
-          category: this.str(input.category),
-          sort: this.str(input.sort) as
-            | 'sales'
-            | 'revenue'
-            | 'gap'
-            | 'concentration'
-            | 'recent'
-            | undefined,
-          limit: this.clampLimit(input.limit),
-        });
-        return {
-          total,
-          cards: data.map((c) => ({
-            id: c.id,
-            name: c.name,
-            brand: c.brand,
-            category: c.category,
-            grade: c.grade,
-            ourPriceUsd: c.price,
-            stock: c.stock,
-            sales: c.sales,
-            buyers: c.buyers,
-            revenueUsd: c.revenueUsd,
-            topBuyerSharePct: c.concentrationPct,
-            liquidity: c.liquidity,
-            marketMedianUsd: c.comps?.median ?? null,
-            priceGapPct: c.priceGapPct,
-            vsMarketPct: c.vsMarketPct,
-            whaleBoughtRecently: c.whaleRecent,
-            lastSaleAt: c.lastSaleAt,
-          })),
-        };
-      }
-      case 'get_card': {
-        const id = this.str(input.cardId);
-        if (!id) return { error: 'cardId is required.' };
-        const signals = await this.market.getCardSignals(id);
-        const cached = await this.forecast.getForecast(id).catch(() => null);
-        const profile = await this.profiles.getProfile(id).catch(() => null);
-        return {
-          card: {
-            id: signals.card.id,
-            name: signals.card.name,
-            brand: signals.card.brand,
-            category: signals.card.category,
-            grade: signals.card.grade,
-            ourPriceUsd: signals.card.price,
-            stock: signals.card.stock,
-            sales: signals.card.sales,
-            buyers: signals.card.buyers,
-            revenueUsd: signals.card.revenueUsd,
-            topBuyerSharePct: signals.card.concentrationPct,
-            liquidity: signals.card.liquidity,
-            marketMedianUsd: signals.card.comps?.median ?? null,
-            marketRangeUsd:
-              signals.card.comps?.min != null && signals.card.comps?.max != null
-                ? [signals.card.comps.min, signals.card.comps.max]
-                : null,
-            priceGapPct: signals.card.priceGapPct,
-            vsMarketPct: signals.card.vsMarketPct,
-          },
-          medianDaysToSale: signals.timeToSaleDays,
-          topBuyers: signals.topBuyers,
-          recentComps: signals.recentComps,
-          forecast: cached
-            ? { ...cached.forecast, generatedAt: cached.generatedAt }
-            : null,
-          marketProfile: profile
-            ? {
-                consensusMedianUsd: profile.consensusMedianUsd,
-                updatedAt: profile.updatedAt,
-                latestBySource: profile.latest.map((l) => ({
-                  source: l.source,
-                  medianUsd: l.medianUsd,
-                  lowUsd: l.lowUsd,
-                  highUsd: l.highUsd,
-                  sampleCount: l.sampleCount,
-                  capturedAt: l.capturedAt,
-                })),
-                recentHistory: profile.history.slice(-12),
-              }
-            : null,
-        };
-      }
-      case 'search_buyers': {
-        const { total, data } = await this.collectors.listProfiles({
-          search: this.str(input.query),
-          sort: this.str(input.sort) as
-            | 'lifetime'
-            | 'last30d'
-            | 'predicted'
-            | 'recent'
-            | 'volume'
-            | undefined,
-          category: this.str(input.category) as never,
-          onlySellers: input.onlySellers === true,
-          limit: this.clampLimit(input.limit),
-        });
-        return {
-          total,
-          buyers: data.map((b) => ({
-            id: b.id,
-            username: b.username,
-            name: b.displayName,
-            email: b.email,
-            lifetimeSpendUsd: b.lifetimeSpendUsd,
-            last30dSpendUsd: b.last30dSpendUsd,
-            predicted30dSpendUsd: b.predicted30dSpendUsd,
-            purchaseCount: b.purchaseCount,
-            lastPurchaseAt: b.lastPurchaseAt,
-            topCategories: b.topCategories,
-            isSeller: b.isSeller,
-          })),
         };
       }
       case 'search_leads': {

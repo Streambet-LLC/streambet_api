@@ -15,11 +15,6 @@ import { AuctionBid } from './entities/auction-bid.entity';
 import { User } from '../users/entities/user.entity';
 import { PrizeService } from './prize.service';
 import { PrizeEngagementService } from './prize-engagement.service';
-import {
-  PrizeController,
-  AdminPrizeController,
-  SellerPrizeController,
-} from './prize.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailsModule } from '../emails/email.module';
 import { PromoCodeModule } from '../promo-code/promo-code.module';
@@ -51,7 +46,7 @@ import { CartModule } from '../cart/cart.module';
     forwardRef(() => AuctionsModule),
     forwardRef(() => CartModule),
   ],
-  controllers: [PrizeController, AdminPrizeController, SellerPrizeController],
+  controllers: [],
   providers: [PrizeService, PrizeEngagementService],
   exports: [PrizeService, PrizeEngagementService],
 })

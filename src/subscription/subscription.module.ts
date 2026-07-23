@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { SubscriptionController } from './subscription.controller';
 import { SubscriptionService } from './subscription.service';
 import { Subscription } from './entities/subscription.entity';
 import { User } from '../users/entities/user.entity';
@@ -11,7 +10,7 @@ import { NotificationModule } from '../notification/notification.module';
     TypeOrmModule.forFeature([Subscription, User]),
     forwardRef(() => NotificationModule),
   ],
-  controllers: [SubscriptionController],
+  controllers: [],
   providers: [SubscriptionService],
   exports: [SubscriptionService],
 })

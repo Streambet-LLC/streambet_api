@@ -1,6 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { PaymentsController } from './payments.controller';
 import { WalletsModule } from '../wallets/wallets.module';
 import { CoinPackageModule } from '../coin-package/coin-package.module';
 import { UsersModule } from '../users/users.module';
@@ -29,7 +28,7 @@ import { AuctionsModule } from 'src/auctions/auctions.module';
     forwardRef(() => AuctionsModule),
     TypeOrmModule.forFeature([Transaction, PrizeOrder, User, Webhook]),
   ],
-  controllers: [PaymentsController],
+  controllers: [],
   providers: [PaymentsService],
   exports: [PaymentsService],
 })

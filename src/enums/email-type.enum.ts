@@ -21,4 +21,5 @@ export enum EmailType {
   AuctionsEnabled = 'auctions_enabled',
   CryptoEnabled = 'crypto_enabled',
   NewSellerSignup = 'new_seller_signup',
+  WaitlistWelcome = 'waitlist_welcome',
 }

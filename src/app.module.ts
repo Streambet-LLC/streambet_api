@@ -65,6 +65,7 @@ import { AuctionsModule } from './auctions/auctions.module';
 import { MixpanelModule } from './integrations/mixpanel/mixpanel.module';
 import { AiModule } from './integrations/ai/ai.module';
 import mixpanelConfig from './config/mixpanel.config';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -170,6 +171,7 @@ import mixpanelConfig from './config/mixpanel.config';
     SolanaModule,
     MixpanelModule,
     AiModule,
+    WaitlistModule,
   ],
   controllers: [AppController],
   providers: [
