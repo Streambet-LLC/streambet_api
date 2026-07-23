@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConciergeController } from './concierge.controller';
 import { ConciergeService } from './concierge.service';
 import { ConciergeRequest } from './entities/concierge-request.entity';
 import { User } from '../users/entities/user.entity';
@@ -11,7 +10,7 @@ import { NotificationModule } from '../notification/notification.module';
     TypeOrmModule.forFeature([ConciergeRequest, User]),
     forwardRef(() => NotificationModule),
   ],
-  controllers: [ConciergeController],
+  controllers: [],
   providers: [ConciergeService],
   exports: [ConciergeService],
 })

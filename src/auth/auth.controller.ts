@@ -64,44 +64,49 @@ export class AuthController {
    * @returns The created user details along with an access token.
    */
 
-  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  @ApiResponse({
-    status: 409,
-    description: 'Conflict - Email or username already exists',
-  })
-  @ApiOperation({
-    summary: 'Register a new user',
-    description:
-      'This endpoint allows users to register by providing their email, password, profileImageUrl(optional), isOlder, tosAccepted, username, lastKnownIP(optional). It returns the created user details along with an access token.',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'User created successfully.',
-    type: UserRegistrationResponseDto,
-  })
-  @ApiBody({ type: RegisterDto })
-  // @UseGuards(GeoFencingGuard)
-  @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
-    const data = await this.authService.register(registerDto);
-    return {
-      data,
-      message: 'User registered successfully',
-      statusCode: HttpStatus.CREATED,
-    };
-  }
+  // ---------------------------------------------------------------------------
+  // TODO(reactivate-signup): Public registration is DISABLED while the app is in
+  // private beta (waitlist-only). The app is currently admin-login-only; public
+  // visitors join the waitlist (`POST /waitlist`) instead of creating accounts.
+  // To turn sign-ups back on:
+  //   1. Uncomment the `register` and `usernameExists` endpoints below.
+  //   2. Re-enable Google-account auto-creation in
+  //      `auth.service.ts` → `validateOAuthUser` (see matching TODO there).
+  //   3. Restore a signup page/link in the frontend (Login page + router).
+  // ---------------------------------------------------------------------------
+  // @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  // @ApiResponse({
+  //   status: 409,
+  //   description: 'Conflict - Email or username already exists',
+  // })
+  // @ApiOperation({
+  //   summary: 'Register a new user',
+  //   description:
+  //     'This endpoint allows users to register by providing their email, password, profileImageUrl(optional), isOlder, tosAccepted, username, lastKnownIP(optional). It returns the created user details along with an access token.',
+  // })
+  // @ApiResponse({
+  //   status: 201,
+  //   description: 'User created successfully.',
+  //   type: UserRegistrationResponseDto,
+  // })
+  // @ApiBody({ type: RegisterDto })
+  // @Post('register')
+  // async register(@Body() registerDto: RegisterDto) {
+  //   const data = await this.authService.register(registerDto);
+  //   return {
+  //     data,
+  //     message: 'User registered successfully',
+  //     statusCode: HttpStatus.CREATED,
+  //   };
+  // }
 
-  /**
-   * Logs in a user with the provided email and password.
-   * @param loginDto - The login details including email and password.
-   * @returns The user details along with an access token.
-   */
-  @Get('username')
-  async usernameExists(@Query() usernameDto: UserNameDto) {
-    const username = usernameDto.username;
-    const data = await this.authService.usernameExists(username);
-    return data;
-  }
+  // Signup helper (username availability) — disabled together with `register`.
+  // @Get('username')
+  // async usernameExists(@Query() usernameDto: UserNameDto) {
+  //   const username = usernameDto.username;
+  //   const data = await this.authService.usernameExists(username);
+  //   return data;
+  // }
 
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({

@@ -9,11 +9,7 @@ import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { ExternalSignal } from '../entities/external-signal.entity';
 import { DiscoveredLead } from '../entities/discovered-lead.entity';
-import {
-  AnalyticsProfileSocialEntry,
-  CreateCollectorProfileDto,
-} from '../dto/collector-analytics.dto';
-import { CollectorAnalyticsService } from '../collector-analytics.service';
+import { AnalyticsProfileSocialEntry } from '../dto/collector-analytics.dto';
 import { AiService } from '../../integrations/ai/ai.service';
 import {
   ConnectorUserContext,
@@ -102,7 +98,6 @@ export class AcquisitionService {
     private readonly youtube: YoutubeService,
     private readonly googleSearch: GoogleSearchService,
     private readonly twitch: TwitchService,
-    private readonly collectorAnalytics: CollectorAnalyticsService,
     private readonly ai: AiService,
   ) {
     // Registry — append eBay / vendor connectors here as they land.
@@ -499,50 +494,6 @@ export class AcquisitionService {
       byStatus[r.status] = (byStatus[r.status] ?? 0) + c;
     }
     return { total, bySource, byStatus };
-  }
-
-  /** Convert a pooled lead into a prospect profile and mark it added. */
-  async convertLead(
-    source: string,
-    externalId: string,
-    adminId?: string,
-  ): Promise<{ profileId: string; alreadyAdded?: boolean }> {
-    const lead = await this.leadRepo.findOne({ where: { source, externalId } });
-    if (!lead) throw new NotFoundException('Lead not found');
-    if (lead.source === 'google') {
-      throw new BadRequestException(
-        'Web results are pages, not people — open the link to find the buyer.',
-      );
-    }
-    if (lead.status === 'added' && lead.convertedUserId) {
-      return { profileId: lead.convertedUserId, alreadyAdded: true };
-    }
-    const meta = SOURCE_META[lead.source] ?? {
-      label: lead.source,
-      prefix: '',
-      key: 'handle',
-    };
-    const communityStr = lead.community
-      ? lead.source === 'reddit'
-        ? ` (r/${lead.community})`
-        : ` (${lead.community})`
-      : '';
-    const dto: CreateCollectorProfileDto = {
-      displayName: lead.authorDisplay || lead.author,
-      notes: `${meta.label} lead — ${meta.prefix}${lead.author}${communityStr}${
-        lead.title ? ` — "${lead.title}"` : ''
-      } ${lead.url ?? ''}`.trim(),
-      customAttributes: {
-        [meta.key]: lead.author,
-        ...(lead.community ? { community: lead.community } : {}),
-        source: lead.source,
-      },
-    };
-    const profile = await this.collectorAnalytics.createProfile(dto, adminId);
-    lead.status = 'added';
-    lead.convertedUserId = profile.id;
-    await this.leadRepo.save(lead);
-    return { profileId: profile.id };
   }
 
   /** Dismiss / restore a lead. */

@@ -1,5 +1,4 @@
 import { QueueModule } from 'src/queue/queue.module';
-import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { forwardRef, Module } from '@nestjs/common';
 import { PaymentsModule } from 'src/payments/payments.module';
@@ -15,7 +14,7 @@ import { N8nIntegrationModule } from 'src/integrations/n8n/n8n-integration.modul
     forwardRef(() => PaymentsModule),
     N8nIntegrationModule,
   ],
-  controllers: [WebhookController],
+  controllers: [],
   providers: [WebhookService],
   exports: [WebhookService],
 })

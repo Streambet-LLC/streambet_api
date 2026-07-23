@@ -7,8 +7,6 @@ import { MessageAttachment } from './entities/message-attachment.entity';
 import { UserBlock } from './entities/user-block.entity';
 import { User } from '../users/entities/user.entity';
 import { InboxService } from './inbox.service';
-import { InboxController } from './inbox.controller';
-import { AdminInboxController } from './admin-inbox.controller';
 import { QueueModule } from '../queue/queue.module';
 import { SharedAwsmethodsModule } from '../awsmethods/awsmethos.module';
 
@@ -25,7 +23,7 @@ import { SharedAwsmethodsModule } from '../awsmethods/awsmethos.module';
     forwardRef(() => QueueModule),
     SharedAwsmethodsModule,
   ],
-  controllers: [InboxController, AdminInboxController],
+  controllers: [],
   providers: [InboxService],
   exports: [InboxService],
 })

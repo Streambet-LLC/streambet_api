@@ -1,7 +1,5 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
-import { AdminService } from './admin.service';
-import { CollectorAnalyticsService } from './collector-analytics.service';
 import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
 import { SellerInventoryUpload } from './entities/seller-inventory-upload.entity';
@@ -14,6 +12,7 @@ import { DeepResearchJob } from './entities/deep-research-job.entity';
 import { InsightsExchange } from './entities/insights-exchange.entity';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { AnalyticsDashboard } from './entities/analytics-dashboard.entity';
+import { TrackedCard } from './entities/tracked-card.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
@@ -31,28 +30,20 @@ import { BlueskyModule } from '../integrations/bluesky/bluesky.module';
 import { YoutubeModule } from '../integrations/youtube/youtube.module';
 import { GoogleSearchModule } from '../integrations/google-search/google-search.module';
 import { TwitchModule } from '../integrations/twitch/twitch.module';
-import { UsersModule } from '../users/users.module';
-import { BettingModule } from '../betting/betting.module';
-import { WalletsModule } from '../wallets/wallets.module';
-import { StreamModule } from 'src/stream/stream.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
-import { CreatorModule } from 'src/creator/creator.module';
-import { SubscriptionModule } from 'src/subscription/subscription.module';
-import { PromoCodeModule } from 'src/promo-code/promo-code.module';
-import { QueueModule } from 'src/queue/queue.module';
-import { PrizeOrder } from 'src/prize/entities/prize-order.entity';
-import { PrizeConfiguration } from 'src/prize/entities/prize-configuration.entity';
-import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entity';
 
+/**
+ * Analytics-only admin module. The marketplace data-integration (collector
+ * spend, buyer, and revenue analytics over our own orders/wallets) was removed
+ * along with the marketplace itself — everything here now runs on external
+ * market data (eBay/web research, social discovery) plus the app's own
+ * analytics tables.
+ */
 @Module({
   imports: [
-    forwardRef(() => UsersModule),
     TypeOrmModule.forFeature([
       User,
-      PrizeOrder,
-      PrizeConfiguration,
-      ConciergeRequest,
       SellerInventoryUpload,
       SellerInventoryItem,
       ExternalSignal,
@@ -63,14 +54,8 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
       InsightsExchange,
       MarketSnapshot,
       AnalyticsDashboard,
+      TrackedCard,
     ]),
-    BettingModule,
-    WalletsModule,
-    StreamModule,
-    CreatorModule,
-    SubscriptionModule,
-    PromoCodeModule,
-    QueueModule,
     RedditModule,
     BlueskyModule,
     YoutubeModule,
@@ -79,8 +64,6 @@ import { ConciergeRequest } from 'src/concierge/entities/concierge-request.entit
   ],
   controllers: [AdminController],
   providers: [
-    AdminService,
-    CollectorAnalyticsService,
     SellerInventoryService,
     GoogleSheetsService,
     AcquisitionService,

@@ -98,9 +98,10 @@ export class CardProfileService {
   }
 
   private async loadCard(cardId: string): Promise<CardRef> {
+    // Tracked cards are the card source now (the marketplace catalog is retired).
     const rows = (await this.dataSource.query(
       `SELECT id, name, brand, category, grade
-       FROM prize_configurations WHERE id = $1 LIMIT 1`,
+       FROM tracked_cards WHERE id = $1 LIMIT 1`,
       [cardId],
     )) as CardRef[];
     if (!rows[0]) throw new NotFoundException('Card not found.');
