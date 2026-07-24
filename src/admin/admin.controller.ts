@@ -678,10 +678,12 @@ export class AdminController {
   async getAiUsage(
     @Request() req: RequestWithUser,
     @Query('days') days?: string,
+    @Query('userId') userId?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.claudeUsageService.summary(
       days ? parseInt(days, 10) : 0,
+      userId && userId !== 'all' ? userId : undefined,
     );
     return { status: HttpStatus.OK, message: 'AI usage', data };
   }
