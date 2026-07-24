@@ -296,6 +296,10 @@ export class AiService {
     model?: string;
     /** Give Claude the live web_search server tool for this conversation. */
     webSearch?: boolean;
+    /** Cap live web searches (data intensity). Default 4. */
+    maxSearches?: number;
+    /** Thinking depth. */
+    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     meta?: AiUsageMeta;
   }): Promise<{ text: string; toolCalls: AiToolInvocation[] }> {
     const client = this.ensure();
@@ -306,7 +310,11 @@ export class AiService {
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
       ...(opts.webSearch
         ? ([
-            { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
+            {
+              type: 'web_search_20260209',
+              name: 'web_search',
+              max_uses: opts.maxSearches ?? 4,
+            },
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
@@ -328,6 +336,7 @@ export class AiService {
         system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
         messages: this.withPrefixCache(messages),
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
         ...(containerId ? { container: containerId } : {}),
       });
       containerId = res.container?.id ?? containerId;
@@ -420,6 +429,10 @@ export class AiService {
     maxTokens?: number;
     model?: string;
     webSearch?: boolean;
+    /** Cap live web searches (data intensity). Default 4. */
+    maxSearches?: number;
+    /** Thinking depth. */
+    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     meta?: AiUsageMeta;
   }): Promise<{ toolCalls: AiToolInvocation[] }> {
     const client = this.ensure();
@@ -430,7 +443,11 @@ export class AiService {
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
       ...(opts.webSearch
         ? ([
-            { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
+            {
+              type: 'web_search_20260209',
+              name: 'web_search',
+              max_uses: opts.maxSearches ?? 4,
+            },
           ] as unknown as Anthropic.Messages.ToolUnion[])
         : []),
     ];
@@ -450,6 +467,7 @@ export class AiService {
         system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
         messages: this.withPrefixCache(messages),
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
         ...(containerId ? { container: containerId } : {}),
       });
       stream.on('text', (delta: string) => {

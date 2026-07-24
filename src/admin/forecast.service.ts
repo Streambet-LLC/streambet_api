@@ -4,6 +4,11 @@ import { Repository } from 'typeorm';
 import { CardForecast } from './entities/card-forecast.entity';
 import { MarketService } from './market.service';
 import { AiService } from '../integrations/ai/ai.service';
+import {
+  AnswerDepth,
+  DEEP_DIVE_DEPTH,
+  normalizeDepth,
+} from '../integrations/ai/answer-depth';
 
 /** The structured forecast Claude returns (stored verbatim). */
 export interface CardForecastData {
@@ -58,7 +63,7 @@ export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
   private readonly ANALYST_SYSTEM =
-    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. Use web search to gather: recent news + social sentiment about the player/character/set; upcoming catalysts (games, playoffs, tournaments, set releases, anniversaries); PSA/BGS grading population trends and policy changes; print-run / reprint / supply news; and historical PRECEDENTS — how comparable cards performed through similar events. If platform signals are provided, fuse them in. Estimate each catalyst’s probability and directional price impact. Also assess: an overall CardCade RATING (0-100 + a label), a LIQUIDITY score (0-100 — how easily/quickly it sells), the PRICE TRAJECTORY (rising/stable/falling), and the LIKELY BUYERS (who collects this and why). Separate signal from hype; be honest about uncertainty. Output ONLY a JSON object.';
+    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. Use web search to gather: recent news + social sentiment about the player/character/set; upcoming catalysts (games, playoffs, tournaments, set releases, anniversaries); PSA/BGS grading population trends and policy changes; print-run / reprint / supply news; and historical PRECEDENTS — how comparable cards performed through similar events. If platform signals are provided, fuse them in. Estimate each catalyst’s probability and directional price impact. Also assess: an overall CardCade RATING (0-100 + a label), a LIQUIDITY score (0-100 — how easily/quickly it sells), the PRICE TRAJECTORY (rising/stable/falling), and the LIKELY BUYERS (who collects this and why). Separate signal from hype; be honest about uncertainty. THIN OR NO DATA: if the subject is ultra-rare, brand-new, or has few/no direct sold comps, NEVER answer that there is "not enough data". Instead TRIANGULATE from the closest comparables — the same card in adjacent grades and the raw↔graded multiplier, sibling cards in the same set/product, the same character/player in comparable prints/years, and print-run / PSA-BGS population scarcity — and give a clearly-labeled ESTIMATE range with an explicit LOW confidence and a one-line basis for how you derived it (fold this into the thesis and priceTrajectory note, and reflect the thin data in the confidence field). Always prefer a well-reasoned, caveated estimate over a refusal. Output ONLY a JSON object.';
 
   private readonly FORECAST_JSON = `Return ONLY this JSON (no prose, no code fences):
 {
@@ -161,18 +166,23 @@ ${this.FORECAST_JSON}`,
   async researchSubject(
     subject: string,
     adminId?: string,
+    rawDepth?: unknown,
   ): Promise<CardForecastData> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
+    const depth: AnswerDepth = normalizeDepth(rawDepth);
+    const preset = DEEP_DIVE_DEPTH[depth];
     return this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Subject: ${subject}.
 
 ${this.FORECAST_JSON}`,
-      maxTokens: 16000,
+      maxTokens: preset.maxTokens,
+      maxSearches: preset.maxSearches,
+      effort: preset.effort,
       meta: { feature: 'deep_dive', adminId },
     });
   }

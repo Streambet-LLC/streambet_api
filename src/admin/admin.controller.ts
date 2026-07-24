@@ -557,13 +557,15 @@ export class AdminController {
   @Post('analytics/insights/chat')
   async insightsChat(
     @Request() req: RequestWithUser,
-    @Body() body: { messages?: AiChatMessage[]; conversationId?: string },
+    @Body()
+    body: { messages?: AiChatMessage[]; conversationId?: string; depth?: string },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.insightsService.chat(
       body?.messages ?? [],
       req.user.id,
       body?.conversationId,
+      body?.depth,
     );
     return {
       status: HttpStatus.OK,
@@ -576,7 +578,8 @@ export class AdminController {
   @Post('analytics/insights/chat/stream')
   async insightsChatStream(
     @Request() req: RequestWithUser,
-    @Body() body: { messages?: AiChatMessage[]; conversationId?: string },
+    @Body()
+    body: { messages?: AiChatMessage[]; conversationId?: string; depth?: string },
     @Res() res: Response,
   ): Promise<void> {
     if (req.user.role !== UserRole.ADMIN) {
@@ -615,6 +618,7 @@ export class AdminController {
           onTool: (name) => send({ type: 'tool', name }),
         },
         body?.conversationId,
+        body?.depth,
       );
       send({ type: 'done', toolCalls });
     } catch (e) {
@@ -697,12 +701,13 @@ export class AdminController {
   @Post('analytics/insights/deep-research')
   async startDeepResearch(
     @Request() req: RequestWithUser,
-    @Body() body: { subject?: string },
+    @Body() body: { subject?: string; depth?: string },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.deepResearchService.start(
       body?.subject ?? '',
       req.user.id,
+      body?.depth,
     );
     return { status: HttpStatus.OK, message: 'Deep dive started', data };
   }
@@ -734,6 +739,7 @@ export class AdminController {
       image?: AiImage;
       images?: AiImage[];
       note?: string;
+      depth?: string;
     },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
@@ -742,6 +748,7 @@ export class AdminController {
       images,
       body?.note,
       req.user.id,
+      body?.depth,
     );
     return { status: HttpStatus.OK, message: 'Deep dive started', data };
   }
