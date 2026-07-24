@@ -4,6 +4,11 @@ import { Repository } from 'typeorm';
 import { CardForecast } from './entities/card-forecast.entity';
 import { MarketService } from './market.service';
 import { AiService } from '../integrations/ai/ai.service';
+import {
+  AnswerDepth,
+  DEEP_DIVE_DEPTH,
+  normalizeDepth,
+} from '../integrations/ai/answer-depth';
 
 /** The structured forecast Claude returns (stored verbatim). */
 export interface CardForecastData {
@@ -161,18 +166,23 @@ ${this.FORECAST_JSON}`,
   async researchSubject(
     subject: string,
     adminId?: string,
+    rawDepth?: unknown,
   ): Promise<CardForecastData> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
+    const depth: AnswerDepth = normalizeDepth(rawDepth);
+    const preset = DEEP_DIVE_DEPTH[depth];
     return this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Subject: ${subject}.
 
 ${this.FORECAST_JSON}`,
-      maxTokens: 16000,
+      maxTokens: preset.maxTokens,
+      maxSearches: preset.maxSearches,
+      effort: preset.effort,
       meta: { feature: 'deep_dive', adminId },
     });
   }

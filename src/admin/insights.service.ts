@@ -8,6 +8,11 @@ import {
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
+import {
+  AnswerDepth,
+  CHAT_DEPTH,
+  normalizeDepth,
+} from '../integrations/ai/answer-depth';
 
 /**
  * Insights — a guarded, conversational card-market analyst.
@@ -50,7 +55,7 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 TOOL ROUTING:
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where.
 - Keep web use tight for a chat: 1-3 searches, then answer. Don't exhaustively research — give a fast, useful read.
-- If the user EXPLICITLY asks for a "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them it's running and will appear in the Deep Dives panel — do NOT try to produce the full report inline. For normal questions, just answer with web search.
+- If the user EXPLICITLY asks for a "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them — in one short line — that it's running in the Deep Dives panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
 - Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
 
 RULES (follow strictly):
@@ -206,16 +211,18 @@ RULES (follow strictly):
     name: string,
     input: Record<string, unknown>,
     adminId?: string,
+    depth: AnswerDepth = 'balanced',
   ): Promise<unknown> {
     switch (name) {
       case 'start_deep_dive': {
         const subject = this.str(input.subject);
         if (!subject) return { error: 'subject is required.' };
-        const job = await this.deepResearch.start(subject, adminId);
+        // A deep dive kicked off from chat inherits the chat's depth setting.
+        const job = await this.deepResearch.start(subject, adminId, depth);
         return {
           started: true,
           id: job.id,
-          message: `Deep dive on "${subject}" started — it will appear in the Deep Dives panel when ready.`,
+          message: `Deep dive on "${subject}" started — I've queued it in the Deep Dives panel above (it fills in there as it runs, ~1 min).`,
         };
       }
       case 'search_leads': {
@@ -255,6 +262,7 @@ RULES (follow strictly):
     messages: AiChatMessage[],
     adminId?: string,
     conversationId?: string,
+    rawDepth?: unknown,
   ): Promise<{ reply: string; toolCalls: AiToolInvocation[] }> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
@@ -272,14 +280,18 @@ RULES (follow strictly):
       return { reply: this.OUT_OF_SCOPE, toolCalls: [] };
     }
 
+    const depth = normalizeDepth(rawDepth);
+    const preset = CHAT_DEPTH[depth];
     const { text, toolCalls } = await this.ai.runToolConversation({
-      system: this.SYSTEM,
+      system: `${this.SYSTEM}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
-      dispatch: (n, i) => this.dispatch(n, i, adminId),
+      dispatch: (n, i) => this.dispatch(n, i, adminId, depth),
       model: this.ai.chatModel,
-      maxTurns: 8,
-      maxTokens: 8000,
+      maxTurns: preset.maxTurns,
+      maxTokens: preset.maxTokens,
+      maxSearches: preset.maxSearches,
+      effort: preset.effort,
       webSearch: true,
       meta: { feature: 'chat', adminId },
     });
@@ -362,6 +374,7 @@ RULES (follow strictly):
     adminId: string | undefined,
     handlers: { onText: (t: string) => void; onTool?: (name: string) => void },
     conversationId?: string,
+    rawDepth?: unknown,
   ): Promise<{ toolCalls: AiToolInvocation[] }> {
     const clean = this.prepare(messages);
 
@@ -371,20 +384,24 @@ RULES (follow strictly):
       return { toolCalls: [] };
     }
 
+    const depth = normalizeDepth(rawDepth);
+    const preset = CHAT_DEPTH[depth];
     let acc = '';
     const { toolCalls } = await this.ai.streamToolConversation({
-      system: this.SYSTEM,
+      system: `${this.SYSTEM}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
-      dispatch: (n, i) => this.dispatch(n, i, adminId),
+      dispatch: (n, i) => this.dispatch(n, i, adminId, depth),
       onText: (t) => {
         acc += t;
         handlers.onText(t);
       },
       onTool: handlers.onTool,
       model: this.ai.chatModel,
-      maxTurns: 8,
-      maxTokens: 8000,
+      maxTurns: preset.maxTurns,
+      maxTokens: preset.maxTokens,
+      maxSearches: preset.maxSearches,
+      effort: preset.effort,
       webSearch: true,
       meta: { feature: 'chat', adminId },
     });

@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import { DeepResearchJob } from './entities/deep-research-job.entity';
 import { ForecastService } from './forecast.service';
 import { AiService, AiImage } from '../integrations/ai/ai.service';
+import { AnswerDepth, normalizeDepth } from '../integrations/ai/answer-depth';
 
 export interface DeepResearchJobDto {
   id: string;
@@ -53,7 +54,11 @@ export class DeepResearchService implements OnModuleInit {
     }
   }
 
-  async start(subject: string, adminId?: string): Promise<DeepResearchJobDto> {
+  async start(
+    subject: string,
+    adminId?: string,
+    rawDepth?: unknown,
+  ): Promise<DeepResearchJobDto> {
     const clean = (subject ?? '').trim().slice(0, 300);
     if (!clean) throw new BadRequestException('A subject is required.');
     if (!this.ai.isConfigured()) {
@@ -73,8 +78,9 @@ export class DeepResearchService implements OnModuleInit {
         requestedByAdminId: adminId ?? null,
       }),
     );
-    // Fire-and-forget — the response returns immediately.
-    void this.run(job.id);
+    // Fire-and-forget — the response returns immediately. Depth is carried
+    // in-memory into the background run (not persisted — dives are one-shot).
+    void this.run(job.id, normalizeDepth(rawDepth));
     return this.toDto(job);
   }
 
@@ -89,6 +95,7 @@ export class DeepResearchService implements OnModuleInit {
     images: AiImage[],
     note?: string,
     adminId?: string,
+    rawDepth?: unknown,
   ): Promise<DeepResearchJobDto> {
     const { isCard, subject } = await this.identifyImage(images, note, adminId);
     if (!isCard || !subject) {
@@ -96,7 +103,7 @@ export class DeepResearchService implements OnModuleInit {
         "Couldn't identify a card in that photo. Try a clearer, well-lit shot of the front, or add a note naming the card.",
       );
     }
-    return this.start(subject, adminId);
+    return this.start(subject, adminId, rawDepth);
   }
 
   /**
@@ -177,7 +184,7 @@ export class DeepResearchService implements OnModuleInit {
     }
   }
 
-  private async run(id: string): Promise<void> {
+  private async run(id: string, depth: AnswerDepth = 'balanced'): Promise<void> {
     try {
       await this.repo.update(id, { status: 'running', startedAt: new Date() });
       const job = await this.repo.findOne({ where: { id } });
@@ -185,6 +192,7 @@ export class DeepResearchService implements OnModuleInit {
       const result = await this.forecast.researchSubject(
         job.subject,
         job.requestedByAdminId ?? undefined,
+        depth,
       );
       await this.repo.update(id, {
         status: 'done',
