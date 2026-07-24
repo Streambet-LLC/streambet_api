@@ -22,10 +22,14 @@ export interface DeepDiveDepthPreset {
 }
 
 /** Chat presets (interactive — latency matters, so kept tighter than dives). */
+// NOTE: maxTokens is the WHOLE output budget (extended-thinking/effort tokens +
+// the visible answer). Effort is on now, so these are generous to avoid the
+// answer being truncated mid-sentence — the STYLE text keeps the *visible*
+// reply appropriately short at lower depths.
 export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
   quick: {
     effort: 'low',
-    maxTokens: 900,
+    maxTokens: 2500,
     maxSearches: 2,
     maxTurns: 6,
     style:
@@ -33,7 +37,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
   },
   balanced: {
     effort: 'medium',
-    maxTokens: 1600,
+    maxTokens: 5000,
     maxSearches: 4,
     maxTurns: 8,
     style:
@@ -41,7 +45,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
   },
   deep: {
     effort: 'high',
-    maxTokens: 3500,
+    maxTokens: 9000,
     maxSearches: 8,
     maxTurns: 10,
     style:
