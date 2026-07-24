@@ -2,6 +2,21 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AiService } from '../../integrations/ai/ai.service';
 import { CardMarketReading, CardMarketSource, CardRef } from './card-market.types';
 
+/** One weighted input to the consensus price (for provenance display). */
+interface PriceComponent {
+  /** e.g. 'eBay sold', 'TCGplayer', '130point', 'PSA 9 comps (analog)'. */
+  source: string;
+  priceUsd: number | null;
+  /** Comps behind this component. */
+  sampleSize: number | null;
+  /** 0-100 — how much this component drove the consensus. */
+  weightPct: number | null;
+  /** 'sold' (real exact comps), 'listing', 'guide', or 'analog' (triangulated). */
+  kind: 'sold' | 'listing' | 'guide' | 'analog' | string;
+  url: string | null;
+  note: string | null;
+}
+
 interface WebPriceResult {
   medianUsd: number | null;
   lowUsd: number | null;
@@ -12,6 +27,8 @@ interface WebPriceResult {
   estimated: boolean;
   /** One line on how the number was derived (comps used or analogs triangulated). */
   basis: string | null;
+  /** Per-source weighted inputs that produced the consensus. */
+  components: PriceComponent[];
   asOf: string | null;
   note: string | null;
   sources: { title: string; url: string }[];
@@ -43,21 +60,24 @@ export class WebResearchMarketSource implements CardMarketSource {
     try {
       const res = await this.ai.research<WebPriceResult>({
         system:
-          'You are a trading-card pricing researcher. Find the CURRENT market value of ONE specific card and ALWAYS return a numeric estimate — never null, never "insufficient data". ' +
-          'STEP 1 — DIRECT COMPS: Search for recent actual SOLD prices for the EXACT card + grade across as many sources as you can (eBay sold/completed, TCGplayer, PriceCharting, 130point, reputable guides). Weight recent SOLD prices most heavily. If you find solid exact-match comps, use them: set estimated=false and confidence high/medium. ' +
-          'STEP 2 — TRIANGULATE (when the exact card has FEW or NO sold comps — ultra-rare, brand-new, or illiquid): do NOT give up. Build a best-estimate range from the closest available signals, in rough priority: (a) the SAME card in adjacent grades (e.g. a PSA 10 from PSA 9/9.5 sales via the typical grade multiplier); (b) the raw↔graded multiplier for this card; (c) sibling cards in the SAME set/product (other alt-arts, parallels, chase cards of similar tier); (d) the SAME character/player in comparable prints/years; (e) print-run or PSA/BGS population scarcity as a scaling factor; (f) current ASKING prices / Buy-It-Now / active listings when no sale exists. Set estimated=true and confidence="low". ' +
-          'Always state in `basis` exactly what you used (which comps or which analogs and the adjustment). Never claim a specific sale happened that you did not find. Output ONLY JSON.',
+          'You are a trading-card pricing researcher. Determine the CURRENT market value of ONE specific card as a WEIGHTED CONSENSUS across the best available sources, and ALWAYS return a number — never null, never "insufficient data". ' +
+          'GATHER from as many sources as you can: eBay recent SOLD/completed listings, TCGplayer, PriceCharting, 130point, reputable price guides, and active listings/Buy-It-Now. ' +
+          'WEIGHT BY DATA STRENGTH — cascade downward: (1) recent eBay SOLD comps for the EXACT card+grade with MANY samples get the HIGHEST weight; (2) then other real sold data (130point) and market prices (TCGplayer/PriceCharting); (3) then reputable guides and current asking/BIN listings; (4) then — ONLY if the exact card is thin/absent — TRIANGULATED analogs (same card adjacent grades via the grade multiplier, raw↔graded multiplier, sibling cards in the same set/product, same character/player comparable prints, print-run / PSA-BGS population scarcity). More real recent SOLD comps ⇒ heavier weight and higher confidence; leaning on analogs ⇒ lighter weight and LOW confidence. ' +
+          'Compute medianUsd as the WEIGHTED AVERAGE of the components you actually used. Return each component you weighted (its price, sample size, kind, and the % weight you gave it — weights should sum to ~100). Set estimated=false when real exact-match SOLD comps carry most of the weight; estimated=true when analogs do. State the weighting logic in `basis`. Never claim a specific sale you did not find. Output ONLY JSON.',
         prompt: `Card: ${label}.
 
-Return the current value for THIS exact card (match grade if specified). ALWAYS provide a numeric range — if exact comps are thin/absent, TRIANGULATE from comparable cards and mark it estimated. Return ONLY this JSON (USD, no prose, no code fences):
+Return a WEIGHTED-CONSENSUS current value for THIS exact card (match grade if specified). Weight stronger data (many recent eBay sold comps) heaviest and cascade down to analogs only when needed. Return ONLY this JSON (USD, no prose, no code fences):
 {
-  "medianUsd": <best single current value, number — required, never null>,
-  "lowUsd": <low end, number or null>,
-  "highUsd": <high end, number or null>,
-  "sampleSize": <rough count of exact-match comps you saw (0 if none), integer>,
+  "medianUsd": <weighted-average current value, number — required, never null>,
+  "lowUsd": <low end of the range, number or null>,
+  "highUsd": <high end of the range, number or null>,
+  "sampleSize": <total exact-match SOLD comps you saw (0 if none), integer>,
   "confidence": "high" | "medium" | "low",
-  "estimated": <true if triangulated from comparable cards, false if from real exact-match sold comps>,
-  "basis": "<one short line: which comps or analogs and any adjustment, e.g. 'no PSA 10 sold; est. from 2 PSA 9 sales x ~1.8 10/9 multiplier'>",
+  "estimated": <true if analogs carry most of the weight, false if real exact-match comps do>,
+  "basis": "<one short line on the weighting, e.g. 'weighted avg: 8 eBay PSA 10 solds (70%) + TCGplayer market (20%) + 2 listings (10%)'>",
+  "components": [
+    { "source": "<e.g. eBay sold / TCGplayer / 130point / PSA 9 comps (analog)>", "priceUsd": <number>, "sampleSize": <int or null>, "weightPct": <0-100>, "kind": "sold"|"listing"|"guide"|"analog", "url": "<url or null>", "note": "<optional short note>" }
+  ],
   "asOf": "<YYYY-MM-DD of the freshest data you used, or null>",
   "note": "<one short sentence on the read, or null>",
   "sources": [ { "title": "<site/source>", "url": "<url>" } ]
@@ -68,10 +88,12 @@ Return the current value for THIS exact card (match grade if specified). ALWAYS 
 
       const low = this.num(res.lowUsd);
       const high = this.num(res.highUsd);
-      // Never drop a read for lack of data — fall back to the low/high midpoint
-      // so a triangulated estimate still surfaces a number.
+      const components = this.cleanComponents(res.components);
+      // Prefer the model's weighted median; else recompute it from component
+      // weights; else fall back to the range midpoint. Never drop the read.
       const median =
         this.num(res.medianUsd) ??
+        this.weightedAvg(components) ??
         (low != null && high != null ? (low + high) / 2 : (low ?? high));
       if (median == null && low == null && high == null) return null;
       const estimated = res.estimated === true;
@@ -86,6 +108,7 @@ Return the current value for THIS exact card (match grade if specified). ALWAYS 
           confidence: res.confidence ?? (estimated ? 'low' : null),
           estimated,
           basis: res.basis ?? null,
+          components,
           asOf: res.asOf ?? null,
           note: res.note ?? null,
           sources: Array.isArray(res.sources) ? res.sources.slice(0, 8) : [],
@@ -104,5 +127,41 @@ Return the current value for THIS exact card (match grade if specified). ALWAYS 
   private int(v: unknown): number | null {
     const n = this.num(v);
     return n == null ? null : Math.round(n);
+  }
+
+  /** Sanitize + cap the model's weighted components for storage/display. */
+  private cleanComponents(raw: unknown): PriceComponent[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .slice(0, 10)
+      .map((c) => {
+        const o = (c ?? {}) as Record<string, unknown>;
+        const source = typeof o.source === 'string' ? o.source.slice(0, 80) : '';
+        const price = this.num(o.priceUsd);
+        if (!source || price == null) return null;
+        return {
+          source,
+          priceUsd: price,
+          sampleSize: this.int(o.sampleSize),
+          weightPct: this.num(o.weightPct),
+          kind: typeof o.kind === 'string' ? o.kind : 'sold',
+          url: typeof o.url === 'string' ? o.url : null,
+          note: typeof o.note === 'string' ? o.note.slice(0, 160) : null,
+        } as PriceComponent;
+      })
+      .filter((c): c is PriceComponent => c !== null);
+  }
+
+  /** Weighted average of components (by weightPct); null if none usable. */
+  private weightedAvg(components: PriceComponent[]): number | null {
+    let wsum = 0;
+    let acc = 0;
+    for (const c of components) {
+      if (c.priceUsd == null) continue;
+      const w = c.weightPct != null && c.weightPct > 0 ? c.weightPct : 1;
+      acc += c.priceUsd * w;
+      wsum += w;
+    }
+    return wsum > 0 ? acc / wsum : null;
   }
 }
