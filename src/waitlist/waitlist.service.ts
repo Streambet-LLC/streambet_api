@@ -94,7 +94,7 @@ export class WaitlistService {
       await this.queueService.addEmailJob(
         {
           toAddress: [email],
-          subject: "You're on the CardCade waitlist! 🎉",
+          subject: "You're on the collectIQ waitlist! 🎉",
           params: { name: name ?? '', siteLink },
         } as EmailPayloadDto,
         EmailType.WaitlistWelcome,
