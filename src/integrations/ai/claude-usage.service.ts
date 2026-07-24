@@ -54,11 +54,13 @@ export interface UsageRow {
 }
 
 export interface UsageSummary {
+  /** Distinct users who have any usage in range — powers the user filter. */
+  users: { adminId: string | null; email: string | null }[];
   /** Rows grouped by (user × prompt type) — the main table. */
   byUserAndType: UsageRow[];
-  /** Rows grouped by prompt type across all users. */
+  /** Rows grouped by prompt type across all users (or the filtered user). */
   byType: Omit<UsageRow, 'adminId' | 'email'>[];
-  /** Overall totals. */
+  /** Overall totals (respecting the active filter). */
   totals: {
     prompts: number;
     totalTokens: number;
@@ -154,15 +156,41 @@ export class ClaudeUsageService {
    * Aggregate the usage log for the admin Usage tab. `days` optionally scopes
    * to the last N days (0/undefined = all time).
    */
-  async summary(days = 0): Promise<UsageSummary> {
+  async summary(days = 0, userId?: string): Promise<UsageSummary> {
     // Raw SQL — avoids TypeORM query-builder ambiguity around joining the
     // unrelated `users` table. Parameterized; `where` is empty for all-time.
     const params: unknown[] = [];
-    let where = '';
+    const conds: string[] = [];
     if (days > 0) {
       params.push(new Date(Date.now() - days * 86400000));
-      where = 'WHERE l."createdAt" >= $1';
+      conds.push(`l."createdAt" >= $${params.length}`);
     }
+    if (userId) {
+      params.push(userId);
+      conds.push(`l."adminId" = $${params.length}`);
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+    // Distinct users with usage in range (NOT filtered by userId, so the
+    // dropdown always lists everyone). Null adminId = system/background work.
+    const usersParams: unknown[] = [];
+    let usersWhere = '';
+    if (days > 0) {
+      usersParams.push(new Date(Date.now() - days * 86400000));
+      usersWhere = 'WHERE l."createdAt" >= $1';
+    }
+    const rawUsers = (await this.repo.query(
+      `SELECT DISTINCT l."adminId" AS "adminId", u.email AS "email"
+       FROM claude_usage_logs l
+       LEFT JOIN users u ON u.id = l."adminId"
+       ${usersWhere}
+       ORDER BY "email" NULLS LAST`,
+      usersParams,
+    )) as Record<string, unknown>[];
+    const users = rawUsers.map((r) => ({
+      adminId: (r.adminId as string | null) ?? null,
+      email: (r.email as string | null) ?? null,
+    }));
 
     // By user × prompt type — the main table. Left-join users for the email.
     const rawRows = (await this.repo.query(
@@ -212,7 +240,7 @@ export class ClaudeUsageService {
       { prompts: 0, totalTokens: 0, costUsd: 0 },
     );
 
-    return { byUserAndType, byType, totals };
+    return { users, byUserAndType, byType, totals };
   }
 
   /** Shape a raw aggregate row into a typed UsageRow with derived averages. */

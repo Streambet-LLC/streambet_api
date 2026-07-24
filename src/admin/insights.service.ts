@@ -49,13 +49,13 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 - FIRST identify the card as precisely as you can from what's visible: game/brand (Pokémon, One Piece, sports, etc.), player/character, set/series, card number, variant/parallel (e.g. holo, alt art, prizm), year, and — if it's a graded slab — the grader and grade (e.g. PSA 10, BGS 9.5). State your read of the card in one short line.
 - If you can't be sure, say what you can tell and note the uncertainty (e.g. "looks like an Umbreon VMAX Alt Art — confirm the set/number"); never invent a specific card you can't see.
 - Then treat the identified card as the subject: for a normal ask, look up pricing/buzz via web search and answer as usual (leading with your identification so the admin can correct it).
-- CONFIRM BEFORE A DEEP DIVE: if the admin asks for a "deep dive"/"tear sheet"/"full report" from a photo, do NOT call start_deep_dive immediately. First state the card you identified and ask them to confirm (e.g. "I read this as <card> — deep dive that? Reply 'yes' or tell me the correct card."). Only call start_deep_dive once they've confirmed the card (a "yes"/"go ahead", or after they correct it). If they already named the exact card in their message, you can treat that as confirmation.
+- CONFIRM BEFORE AN AI MARKET REPORT: if the admin asks for a "market report"/"deep dive"/"tear sheet"/"full report" from a photo, do NOT call start_deep_dive immediately. First state the card you identified and ask them to confirm (e.g. "I read this as <card> — run a full market report on that? Reply 'yes' or tell me the correct card."). Only call start_deep_dive once they've confirmed the card (a "yes"/"go ahead", or after they correct it). If they already named the exact card in their message, you can treat that as confirmation.
 - If the image is not a trading card, say so briefly and stop.
 
 TOOL ROUTING:
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where.
 - Keep web use tight for a chat: 1-3 searches, then answer. Don't exhaustively research — give a fast, useful read.
-- If the user EXPLICITLY asks for a "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them — in one short line — that it's running in the Deep Dives panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
+- If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
 - Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
 
 RULES (follow strictly):
@@ -69,7 +69,7 @@ RULES (follow strictly):
 - No preamble, no filler, no restating the question, no "Here's what I found", no sign-off, no "let me know if…". Just the answer.
 - Don't over-explain or pile on caveats. If a tool errors, say so in one sentence.
 - Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.
-- COVER THE KEY DIMENSIONS. When you answer about a specific card, work in a quick read on: likely buyers (who collects it), liquidity (how easily it sells), price trajectory (rising/stable/falling), and an overall rating/take — alongside price and buzz. Keep it tight; a line each is enough. For a full structured version, suggest a deep dive.
+- COVER THE KEY DIMENSIONS. When you answer about a specific card, work in a quick read on: likely buyers (who collects it), liquidity (how easily it sells), price trajectory (rising/stable/falling), and an overall rating/take — alongside price and buzz. Keep it tight; a line each is enough. For a full structured version, suggest an AI Market Report.
 - LINK YOUR PRICES INLINE. Whenever you cite a specific price, hyperlink the NUMBER itself to the source you got it from, as inline markdown — e.g. "a PSA 10 [sold for $520](https://www.ebay.com/…)" or "[~$160,000 JPY](https://tcgplayer-url)". This lets the admin click any price to verify it. Prefer real result URLs from your web search; a live eBay SOLD search link is a good default when you don't have a direct one: [check comps](https://www.ebay.com/sch/i.html?_nkw=<url-encoded card>&_sacat=0&LH_Sold=1&LH_Complete=1). Put the links inline on the prices — do NOT dump a big trailing "Links:" list. Never invent a URL you didn't see or can't construct reliably; if you have no source for a number, present it as an estimate (per the thin-data rule) without a fake link.`;
 
   private readonly TOOLS: AiToolSpec[] = [
@@ -108,14 +108,15 @@ RULES (follow strictly):
     {
       name: 'start_deep_dive',
       description:
-        'Kick off a BACKGROUND deep-dive research report on a card/player/set ' +
+        'Kick off a BACKGROUND AI Market Report on a card/player/set ' +
         '(multi-source forecast: outlook, social buzz, catalysts with odds, ' +
         'precedents, macro/supply/PSA factors, risks). Use this ONLY when the ' +
-        'user explicitly asks for a "deep dive", "deep research", "full ' +
-        'report", or thorough analysis — NOT for normal questions (answer ' +
-        'those directly with web search). Returns immediately; the report ' +
-        'appears in the Deep Dives panel when ready (~1 min). After calling ' +
-        'it, tell the user it is running and will show up in Deep Dives.',
+        'user explicitly asks for a "market report", "deep dive", "deep ' +
+        'research", "full report", or thorough analysis — NOT for normal ' +
+        'questions (answer those directly with web search). Returns ' +
+        'immediately; the report appears in the AI Market Reports panel when ' +
+        'ready (~1 min). After calling it, tell the user the report is running ' +
+        'and will show up in the AI Market Reports panel.',
       input_schema: {
         type: 'object',
         properties: {
@@ -222,7 +223,7 @@ RULES (follow strictly):
         return {
           started: true,
           id: job.id,
-          message: `Deep dive on "${subject}" started — I've queued it in the Deep Dives panel above (it fills in there as it runs, ~1 min).`,
+          message: `AI Market Report on "${subject}" started — I've queued it in the AI Market Reports panel above (it fills in there as it runs, ~1 min).`,
         };
       }
       case 'search_leads': {
