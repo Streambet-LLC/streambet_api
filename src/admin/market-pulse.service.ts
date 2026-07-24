@@ -98,7 +98,7 @@ export class MarketPulseService {
   }
 
   /** Research + store a fresh snapshot for one segment. */
-  async refresh(segment: string): Promise<MarketSnapshotDto> {
+  async refresh(segment: string, adminId?: string): Promise<MarketSnapshotDto> {
     if (!SEGMENT_KEYS.has(segment as never)) {
       throw new BadRequestException('Unknown market segment.');
     }
@@ -139,9 +139,10 @@ Aim for 4-8 movers (mix of gainers and faders), 3-6 catalysts (soonest first), a
       // A market pulse is a quick read, not a deep report — keep it cheap:
       // fewer searches, less thinking. Output cap has headroom for the
       // structured movers/catalysts/sales lists.
-      maxTokens: 5000,
+      maxTokens: 8000,
       maxSearches: 4,
       effort: 'low',
+      meta: { feature: 'market_refresh', adminId },
     });
 
     const metrics: Record<string, number> = {};

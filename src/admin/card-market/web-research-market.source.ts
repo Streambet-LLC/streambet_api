@@ -53,7 +53,8 @@ Find the current going price for THIS exact card (match grade if specified). Ret
   "note": "<one short sentence on the read, or null>",
   "sources": [ { "title": "<site/source>", "url": "<url>" } ]
 }`,
-        maxTokens: 6000,
+        maxTokens: 8000,
+        meta: { feature: 'card_profile' },
       });
 
       const median = this.num(res.medianUsd);

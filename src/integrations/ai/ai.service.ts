@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
+import { ClaudeUsageService, AiUsageMeta } from './claude-usage.service';
+
+export type { AiUsageMeta } from './claude-usage.service';
 
 /** A read-only tool Claude can call during a conversation. */
 export interface AiToolSpec {
@@ -52,7 +55,10 @@ export class AiService {
   /** Cheaper model for the high-volume, interactive chat path. */
   readonly chatModel = 'claude-sonnet-5';
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly usage: ClaudeUsageService,
+  ) {
     const apiKey =
       this.config.get<string>('ANTHROPIC_API_KEY') ??
       process.env.ANTHROPIC_API_KEY;
@@ -121,10 +127,12 @@ export class AiService {
     /** 'low' | 'medium' | 'high' | 'xhigh' | 'max' */
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     thinking?: boolean;
+    meta?: AiUsageMeta;
   }): Promise<string> {
     const client = this.ensure();
+    const model = opts.model ?? this.defaultModel;
     const res = await client.messages.create({
-      model: opts.model ?? this.defaultModel,
+      model,
       max_tokens: opts.maxTokens ?? 16000,
       ...(opts.system ? { system: opts.system } : {}),
       ...(opts.thinking === false
@@ -133,6 +141,9 @@ export class AiService {
       ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
       messages: [{ role: 'user', content: opts.prompt }],
     });
+    const totals = ClaudeUsageService.newTotals();
+    ClaudeUsageService.add(totals, res.usage);
+    void this.usage.record(opts.meta, model, totals);
     return res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
@@ -153,6 +164,7 @@ export class AiService {
     maxTokens?: number;
     /** Optional images (base64) for vision-grounded extraction. */
     images?: AiImage[];
+    meta?: AiUsageMeta;
   }): Promise<T> {
     const client = this.ensure();
     const content: Anthropic.MessageParam['content'] = opts.images?.length
@@ -161,8 +173,9 @@ export class AiService {
           { type: 'text' as const, text: opts.prompt },
         ]
       : opts.prompt;
+    const model = opts.model ?? this.defaultModel;
     const res = await client.messages.create({
-      model: opts.model ?? this.defaultModel,
+      model,
       max_tokens: opts.maxTokens ?? 4096,
       ...(opts.system ? { system: opts.system } : {}),
       output_config: {
@@ -170,6 +183,9 @@ export class AiService {
       },
       messages: [{ role: 'user', content }],
     });
+    const totals = ClaudeUsageService.newTotals();
+    ClaudeUsageService.add(totals, res.usage);
+    void this.usage.record(opts.meta, model, totals);
     const text = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
@@ -197,8 +213,10 @@ export class AiService {
     maxSearches?: number;
     /** Thinking depth. 'low'/'medium' trade some rigor for big token savings. */
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    meta?: AiUsageMeta;
   }): Promise<T> {
     const client = this.ensure();
+    const model = opts.model ?? this.defaultModel;
     // web_search server tool (GA on Opus 4.8). Cast avoids SDK-version type drift.
     const tools = [
       {
@@ -212,13 +230,14 @@ export class AiService {
     ];
 
     let text = '';
+    const totals = ClaudeUsageService.newTotals();
     // web_search runs in a code-execution container; reuse it across pause_turn
     // rounds via `container`, or the API rejects the continuation request.
     let containerId: string | undefined;
     // Server-tool loops may pause_turn; continue a few rounds.
     for (let round = 0; round < 5; round++) {
       const res = await client.messages.create({
-        model: opts.model ?? this.defaultModel,
+        model,
         max_tokens: opts.maxTokens ?? 8000,
         thinking: { type: 'adaptive' as const },
         ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
@@ -228,6 +247,7 @@ export class AiService {
         ...(containerId ? { container: containerId } : {}),
       });
       containerId = res.container?.id ?? containerId;
+      ClaudeUsageService.add(totals, res.usage);
       text += res.content
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map((b) => b.text)
@@ -241,6 +261,7 @@ export class AiService {
       }
       break;
     }
+    void this.usage.record(opts.meta, model, totals);
 
     const parsed = this.extractJson(text);
     if (parsed === null) {
@@ -275,8 +296,11 @@ export class AiService {
     model?: string;
     /** Give Claude the live web_search server tool for this conversation. */
     webSearch?: boolean;
+    meta?: AiUsageMeta;
   }): Promise<{ text: string; toolCalls: AiToolInvocation[] }> {
     const client = this.ensure();
+    const model = opts.model ?? this.defaultModel;
+    const totals = ClaudeUsageService.newTotals();
     const maxTurns = opts.maxTurns ?? 8;
     const anthropicTools = [
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
@@ -299,7 +323,7 @@ export class AiService {
 
     for (let turn = 0; turn < maxTurns; turn++) {
       const res = await client.messages.create({
-        model: opts.model ?? this.defaultModel,
+        model,
         max_tokens: opts.maxTokens ?? 4096,
         system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
@@ -307,6 +331,7 @@ export class AiService {
         ...(containerId ? { container: containerId } : {}),
       });
       containerId = res.container?.id ?? containerId;
+      ClaudeUsageService.add(totals, res.usage);
 
       finalText = res.content
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -371,6 +396,7 @@ export class AiService {
       messages.push({ role: 'user', content: results });
     }
 
+    void this.usage.record(opts.meta, model, totals);
     return { text: finalText, toolCalls };
   }
 
@@ -394,8 +420,11 @@ export class AiService {
     maxTokens?: number;
     model?: string;
     webSearch?: boolean;
+    meta?: AiUsageMeta;
   }): Promise<{ toolCalls: AiToolInvocation[] }> {
     const client = this.ensure();
+    const model = opts.model ?? this.defaultModel;
+    const totals = ClaudeUsageService.newTotals();
     const maxTurns = opts.maxTurns ?? 8;
     const anthropicTools = [
       ...(opts.tools as unknown as Anthropic.Messages.ToolUnion[]),
@@ -416,7 +445,7 @@ export class AiService {
     for (let turn = 0; turn < maxTurns; turn++) {
       let turnHadText = false;
       const stream = client.messages.stream({
-        model: opts.model ?? this.defaultModel,
+        model,
         max_tokens: opts.maxTokens ?? 4096,
         system: this.cacheableSystem(opts.system),
         tools: anthropicTools,
@@ -429,6 +458,7 @@ export class AiService {
       });
       const res = await stream.finalMessage();
       containerId = res.container?.id ?? containerId;
+      ClaudeUsageService.add(totals, res.usage);
 
       // Announce any tools this turn used (server + custom).
       for (const b of res.content) {
@@ -488,6 +518,7 @@ export class AiService {
       messages.push({ role: 'user', content: results });
     }
 
+    void this.usage.record(opts.meta, model, totals);
     return { toolCalls };
   }
 
@@ -558,9 +589,11 @@ export class AiService {
     model?: string;
     pollMs?: number;
     timeoutMs?: number;
+    meta?: AiUsageMeta;
   }): Promise<Map<string, T>> {
     const client = this.ensure();
     const model = opts.model ?? this.defaultModel;
+    const totals = ClaudeUsageService.newTotals();
     const out = new Map<string, T>();
     if (opts.requests.length === 0) return out;
 
@@ -593,6 +626,7 @@ export class AiService {
 
     for await (const result of await client.messages.batches.results(batch.id)) {
       if (result.result.type !== 'succeeded') continue;
+      ClaudeUsageService.add(totals, result.result.message.usage);
       const text = result.result.message.content
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map((b) => b.text)
@@ -601,6 +635,7 @@ export class AiService {
       const parsed = this.extractJson(text);
       if (parsed !== null) out.set(result.custom_id, parsed as T);
     }
+    void this.usage.record(opts.meta, model, totals);
     return out;
   }
 

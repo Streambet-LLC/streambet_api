@@ -90,7 +90,7 @@ export class DeepResearchService implements OnModuleInit {
     note?: string,
     adminId?: string,
   ): Promise<DeepResearchJobDto> {
-    const { isCard, subject } = await this.identifyImage(images, note);
+    const { isCard, subject } = await this.identifyImage(images, note, adminId);
     if (!isCard || !subject) {
       throw new BadRequestException(
         "Couldn't identify a card in that photo. Try a clearer, well-lit shot of the front, or add a note naming the card.",
@@ -108,6 +108,7 @@ export class DeepResearchService implements OnModuleInit {
   async identifyImage(
     images: AiImage[],
     note?: string,
+    adminId?: string,
   ): Promise<{ isCard: boolean; subject: string }> {
     if (!images || images.length === 0) {
       throw new BadRequestException('A photo is required.');
@@ -147,6 +148,7 @@ export class DeepResearchService implements OnModuleInit {
           required: ['isCard', 'subject'],
           additionalProperties: false,
         },
+        meta: { feature: 'deep_dive_identify', adminId },
       });
       const subject = (res.subject ?? '').trim().slice(0, 300);
       return { isCard: !!res.isCard && !!subject, subject };
@@ -180,7 +182,10 @@ export class DeepResearchService implements OnModuleInit {
       await this.repo.update(id, { status: 'running', startedAt: new Date() });
       const job = await this.repo.findOne({ where: { id } });
       if (!job) return;
-      const result = await this.forecast.researchSubject(job.subject);
+      const result = await this.forecast.researchSubject(
+        job.subject,
+        job.requestedByAdminId ?? undefined,
+      );
       await this.repo.update(id, {
         status: 'done',
         result: result as unknown as Record<string, unknown>,
