@@ -13,7 +13,7 @@
         },
         "siteLink": {
           "type": "string",
-          "description": "Link to the CardCade landing page"
+          "description": "Link to the collectIQ landing page"
         }
       }
     }

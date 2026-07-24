@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>You're on the CardCade waitlist!</title>
+    <title>You're on the collectIQ waitlist!</title>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     </style>
@@ -40,13 +40,22 @@
               style="margin-bottom: 60px"
             >
               <tr>
+                <!--
+                  Text wordmark until the collectIQ logo is hosted on S3. Once
+                  it is, swap this cell back to an <img> pointing at the hosted
+                  PNG (email clients can't use local /public assets).
+                -->
                 <td align="center">
-                  <img
-                    src="https://cardcades3prod.s3.us-east-1.amazonaws.com/cardcade-machine-wordmark.png"
-                    alt="CardCade Logo"
-                    width="280"
-                    style="display: block; width: 280px; height: auto"
-                  />
+                  <span
+                    style="
+                      font-family: 'Inter', Arial, sans-serif;
+                      font-size: 38px;
+                      font-weight: 700;
+                      letter-spacing: -0.5px;
+                      color: #ffffff;
+                    "
+                    >collect<span style="color: #b4ff39">IQ</span></span
+                  >
                 </td>
               </tr>
             </table>
@@ -92,8 +101,8 @@
                     color: #ffffff;
                   "
                 >
-                  Thanks for joining the CardCade waitlist — the friendliest,
-                  lowest-fee card marketplace on the web.
+                  Thanks for joining the collectIQ waitlist — AI-powered market
+                  intelligence for trading cards, built for collectors.
                 </p>
                 <p
                   style="
@@ -129,7 +138,7 @@
                     text-align: center;
                     font-family: 'Inter', sans-serif;
                   "
-                  >Visit CardCade</a
+                  >Visit collectIQ</a
                 >
 
                 <p
@@ -144,7 +153,7 @@
                   "
                 >
                   See you soon,<br /><b style="font-size: 20px"
-                    >The CardCade Team</b
+                    >The collectIQ Team</b
                   >
                 </p>
               </div>
@@ -161,7 +170,7 @@
                 font-family: 'Inter', sans-serif;
               "
             >
-              © CardCade 2026
+              © collectIQ 2026
             </div>
           </div>
         </td>

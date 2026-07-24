@@ -406,6 +406,7 @@ export class AcquisitionService {
         // near-Opus here at ~1/5 the cost; the Batch API halves it again.
         model: 'claude-haiku-4-5',
         requests,
+        meta: { feature: 'lead_qualify' },
       });
 
       const byId = new Map(leads.map((l) => [l.id, l]));
@@ -467,6 +468,7 @@ export class AcquisitionService {
         required: ['terms', 'subreddits', 'rationale'],
       },
       maxTokens: 700,
+      meta: { feature: 'suggest_queries' },
     });
   }
 

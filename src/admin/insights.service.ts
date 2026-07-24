@@ -138,7 +138,10 @@ RULES (follow strictly):
    * tool loop, which is itself scope-guarded — so a transient blip can't block
    * legitimate use.
    */
-  private async inScope(messages: AiChatMessage[]): Promise<boolean> {
+  private async inScope(
+    messages: AiChatMessage[],
+    adminId?: string,
+  ): Promise<boolean> {
     // A photo of a card is inherently in scope (identify & analyze it) — skip
     // the text classifier when the latest turn carries an image.
     const last = messages[messages.length - 1];
@@ -177,6 +180,7 @@ RULES (follow strictly):
           required: ['inScope'],
           additionalProperties: false,
         },
+        meta: { feature: 'chat_scope', adminId },
       });
       return res.inScope === true;
     } catch {
@@ -264,7 +268,7 @@ RULES (follow strictly):
 
     // Cheap up-front scope gate: reject off-topic questions before the
     // expensive, data-touching tool loop ever runs.
-    if (!(await this.inScope(clean))) {
+    if (!(await this.inScope(clean, adminId))) {
       return { reply: this.OUT_OF_SCOPE, toolCalls: [] };
     }
 
@@ -275,8 +279,9 @@ RULES (follow strictly):
       dispatch: (n, i) => this.dispatch(n, i, adminId),
       model: this.ai.chatModel,
       maxTurns: 8,
-      maxTokens: 1500,
+      maxTokens: 8000,
       webSearch: true,
+      meta: { feature: 'chat', adminId },
     });
     const reply =
       text ||
@@ -360,7 +365,7 @@ RULES (follow strictly):
   ): Promise<{ toolCalls: AiToolInvocation[] }> {
     const clean = this.prepare(messages);
 
-    if (!(await this.inScope(clean))) {
+    if (!(await this.inScope(clean, adminId))) {
       handlers.onText(this.OUT_OF_SCOPE);
       void this.saveExchange(clean, this.OUT_OF_SCOPE, [], adminId, conversationId);
       return { toolCalls: [] };
@@ -379,8 +384,9 @@ RULES (follow strictly):
       onTool: handlers.onTool,
       model: this.ai.chatModel,
       maxTurns: 8,
-      maxTokens: 1500,
+      maxTokens: 8000,
       webSearch: true,
+      meta: { feature: 'chat', adminId },
     });
     if (!acc.trim()) {
       const fallback =

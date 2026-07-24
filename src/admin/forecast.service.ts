@@ -127,7 +127,8 @@ export class ForecastService {
       }).
 
 ${this.FORECAST_JSON}`,
-      maxTokens: 8000,
+      maxTokens: 16000,
+      meta: { feature: 'card_forecast', adminId },
     });
 
     const now = new Date();
@@ -157,7 +158,10 @@ ${this.FORECAST_JSON}`,
    * no marketplace catalog or internal signals required. Pure live web
    * research. Powers the generic Insights assistant.
    */
-  async researchSubject(subject: string): Promise<CardForecastData> {
+  async researchSubject(
+    subject: string,
+    adminId?: string,
+  ): Promise<CardForecastData> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
         'AI is not configured (missing ANTHROPIC_API_KEY).',
@@ -168,7 +172,8 @@ ${this.FORECAST_JSON}`,
       prompt: `Subject: ${subject}.
 
 ${this.FORECAST_JSON}`,
-      maxTokens: 8000,
+      maxTokens: 16000,
+      meta: { feature: 'deep_dive', adminId },
     });
   }
 }

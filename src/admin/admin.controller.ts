@@ -36,6 +36,7 @@ import { MarketService } from './market.service';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
+import { ClaudeUsageService } from '../integrations/ai/claude-usage.service';
 import { InsightsHistoryService } from './insights-history.service';
 import {
   MarketPulseService,
@@ -70,6 +71,7 @@ export class AdminController {
     private readonly marketPulseService: MarketPulseService,
     private readonly dashboardConfigService: DashboardConfigService,
     private readonly cardProfileService: CardProfileService,
+    private readonly claudeUsageService: ClaudeUsageService,
   ) {}
 
   // Helper method to check if user is admin
@@ -523,7 +525,7 @@ export class AdminController {
     @Param('segment') segment: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const data = await this.marketPulseService.refresh(segment);
+    const data = await this.marketPulseService.refresh(segment, req.user.id);
     return { status: HttpStatus.OK, message: 'Market refreshed', data };
   }
 
@@ -665,6 +667,21 @@ export class AdminController {
     return { status: HttpStatus.OK, message: 'Conversation', data };
   }
 
+  @ApiOperation({
+    summary: 'AI usage & estimated cost, by user and prompt type',
+  })
+  @Get('analytics/usage')
+  async getAiUsage(
+    @Request() req: RequestWithUser,
+    @Query('days') days?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.claudeUsageService.summary(
+      days ? parseInt(days, 10) : 0,
+    );
+    return { status: HttpStatus.OK, message: 'AI usage', data };
+  }
+
   @ApiOperation({ summary: 'One deep-dive research job by id' })
   @Get('analytics/insights/deep-research/:id')
   async getDeepResearch(
@@ -703,6 +720,7 @@ export class AdminController {
     const data = await this.deepResearchService.identifyImage(
       images,
       body?.note,
+      req.user.id,
     );
     return { status: HttpStatus.OK, message: 'Card identified', data };
   }
