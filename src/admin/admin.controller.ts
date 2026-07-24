@@ -641,7 +641,7 @@ export class AdminController {
       limit ? parseInt(limit, 10) : 20,
       offset ? parseInt(offset, 10) : 0,
     );
-    return { status: HttpStatus.OK, message: 'Deep dives', data };
+    return { status: HttpStatus.OK, message: 'AI Market Reports', data };
   }
 
   @ApiOperation({ summary: 'Insights chat history — past conversations' })
@@ -694,7 +694,7 @@ export class AdminController {
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.deepResearchService.get(id);
-    return { status: HttpStatus.OK, message: 'Deep dive', data };
+    return { status: HttpStatus.OK, message: 'AI Market Report', data };
   }
 
   @ApiOperation({ summary: 'Start a background deep-dive research job' })
@@ -709,7 +709,7 @@ export class AdminController {
       req.user.id,
       body?.depth,
     );
-    return { status: HttpStatus.OK, message: 'Deep dive started', data };
+    return { status: HttpStatus.OK, message: 'AI Market Report started', data };
   }
 
   @ApiOperation({
@@ -750,6 +750,6 @@ export class AdminController {
       req.user.id,
       body?.depth,
     );
-    return { status: HttpStatus.OK, message: 'Deep dive started', data };
+    return { status: HttpStatus.OK, message: 'AI Market Report started', data };
   }
 }
