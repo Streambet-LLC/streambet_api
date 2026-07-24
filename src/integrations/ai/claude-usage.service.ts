@@ -155,44 +155,45 @@ export class ClaudeUsageService {
    * to the last N days (0/undefined = all time).
    */
   async summary(days = 0): Promise<UsageSummary> {
-    const qb = this.repo.createQueryBuilder('log');
+    // Raw SQL — avoids TypeORM query-builder ambiguity around joining the
+    // unrelated `users` table. Parameterized; `where` is empty for all-time.
+    const params: unknown[] = [];
+    let where = '';
     if (days > 0) {
-      const cutoff = new Date(Date.now() - days * 86400000);
-      qb.where('log."createdAt" >= :cutoff', { cutoff });
+      params.push(new Date(Date.now() - days * 86400000));
+      where = 'WHERE l."createdAt" >= $1';
     }
 
     // By user × prompt type — the main table. Left-join users for the email.
-    const rawRows = await qb
-      .clone()
-      .leftJoin('users', 'u', 'u.id = log."adminId"')
-      .select('log."adminId"', 'adminId')
-      .addSelect('u.email', 'email')
-      .addSelect('log.feature', 'feature')
-      .addSelect('COUNT(*)', 'prompts')
-      .addSelect('COALESCE(SUM(log."inputTokens"),0)', 'inputTokens')
-      .addSelect('COALESCE(SUM(log."outputTokens"),0)', 'outputTokens')
-      .addSelect('COALESCE(SUM(log."costUsd"),0)', 'costUsd')
-      .groupBy('log."adminId"')
-      .addGroupBy('u.email')
-      .addGroupBy('log.feature')
-      .orderBy('"costUsd"', 'DESC')
-      .getRawMany();
+    const rawRows = (await this.repo.query(
+      `SELECT l."adminId" AS "adminId", u.email AS "email", l.feature AS "feature",
+         COUNT(*) AS "prompts",
+         COALESCE(SUM(l."inputTokens"), 0) AS "inputTokens",
+         COALESCE(SUM(l."outputTokens"), 0) AS "outputTokens",
+         COALESCE(SUM(l."costUsd"), 0) AS "costUsd"
+       FROM claude_usage_logs l
+       LEFT JOIN users u ON u.id = l."adminId"
+       ${where}
+       GROUP BY l."adminId", u.email, l.feature
+       ORDER BY "costUsd" DESC`,
+      params,
+    )) as Record<string, unknown>[];
 
-    const byUserAndType: UsageRow[] = rawRows.map((r) =>
-      this.toRow(r, true),
-    ) as UsageRow[];
+    const byUserAndType: UsageRow[] = rawRows.map((r) => this.toRow(r, true));
 
     // By prompt type across all users.
-    const rawByType = await qb
-      .clone()
-      .select('log.feature', 'feature')
-      .addSelect('COUNT(*)', 'prompts')
-      .addSelect('COALESCE(SUM(log."inputTokens"),0)', 'inputTokens')
-      .addSelect('COALESCE(SUM(log."outputTokens"),0)', 'outputTokens')
-      .addSelect('COALESCE(SUM(log."costUsd"),0)', 'costUsd')
-      .groupBy('log.feature')
-      .orderBy('"costUsd"', 'DESC')
-      .getRawMany();
+    const rawByType = (await this.repo.query(
+      `SELECT l.feature AS "feature",
+         COUNT(*) AS "prompts",
+         COALESCE(SUM(l."inputTokens"), 0) AS "inputTokens",
+         COALESCE(SUM(l."outputTokens"), 0) AS "outputTokens",
+         COALESCE(SUM(l."costUsd"), 0) AS "costUsd"
+       FROM claude_usage_logs l
+       ${where}
+       GROUP BY l.feature
+       ORDER BY "costUsd" DESC`,
+      params,
+    )) as Record<string, unknown>[];
 
     const byType = rawByType.map((r) => {
       const row = this.toRow(r, false);
