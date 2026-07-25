@@ -213,6 +213,10 @@ export class AiService {
     maxSearches?: number;
     /** Thinking depth. 'low'/'medium' trade some rigor for big token savings. */
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+    /** Cap the pause_turn continuation rounds (default 5). Lower = snappier. */
+    maxRounds?: number;
+    /** Abort the request (e.g. a caller-side timeout). */
+    signal?: AbortSignal;
     meta?: AiUsageMeta;
   }): Promise<T> {
     const client = this.ensure();
@@ -235,17 +239,21 @@ export class AiService {
     // rounds via `container`, or the API rejects the continuation request.
     let containerId: string | undefined;
     // Server-tool loops may pause_turn; continue a few rounds.
-    for (let round = 0; round < 5; round++) {
-      const res = await client.messages.create({
-        model,
-        max_tokens: opts.maxTokens ?? 8000,
-        thinking: { type: 'adaptive' as const },
-        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
-        ...(opts.system ? { system: opts.system } : {}),
-        tools,
-        messages,
-        ...(containerId ? { container: containerId } : {}),
-      });
+    const maxRounds = opts.maxRounds ?? 5;
+    for (let round = 0; round < maxRounds; round++) {
+      const res = await client.messages.create(
+        {
+          model,
+          max_tokens: opts.maxTokens ?? 8000,
+          thinking: { type: 'adaptive' as const },
+          ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+          ...(opts.system ? { system: opts.system } : {}),
+          tools,
+          messages,
+          ...(containerId ? { container: containerId } : {}),
+        },
+        opts.signal ? { signal: opts.signal } : undefined,
+      );
       containerId = res.container?.id ?? containerId;
       ClaudeUsageService.add(totals, res.usage);
       text += res.content

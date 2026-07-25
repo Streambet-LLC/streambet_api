@@ -703,13 +703,14 @@ export class AdminController {
   @Post('analytics/insights/deep-research')
   async startDeepResearch(
     @Request() req: RequestWithUser,
-    @Body() body: { subject?: string; depth?: string },
+    @Body() body: { subject?: string; depth?: string; imageUrl?: string },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.deepResearchService.start(
       body?.subject ?? '',
       req.user.id,
       body?.depth,
+      body?.imageUrl,
     );
     return { status: HttpStatus.OK, message: 'AI Market Report started', data };
   }
@@ -730,6 +731,50 @@ export class AdminController {
       req.user.id,
     );
     return { status: HttpStatus.OK, message: 'Card identified', data };
+  }
+
+  @ApiOperation({
+    summary:
+      'Identify a card from a text subject + find a reference image — for the verify step',
+  })
+  @Post('analytics/insights/identify-card')
+  async identifyCard(
+    @Request() req: RequestWithUser,
+    @Body() body: { subject?: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.deepResearchService.identifyCard(
+      body?.subject ?? '',
+      req.user.id,
+    );
+    return { status: HttpStatus.OK, message: 'Card identified', data };
+  }
+
+  @ApiOperation({
+    summary: 'Find a reference image for a card subject (bounded web search)',
+  })
+  @Post('analytics/insights/card-image')
+  async findCardImage(
+    @Request() req: RequestWithUser,
+    @Body()
+    body: {
+      subject?: string;
+      name?: string;
+      brand?: string;
+      number?: string;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.deepResearchService.findCardImage(
+      {
+        subject: body?.subject ?? '',
+        name: body?.name,
+        brand: body?.brand,
+        number: body?.number,
+      },
+      req.user.id,
+    );
+    return { status: HttpStatus.OK, message: 'Card image', data };
   }
 
   @ApiOperation({ summary: 'Start a deep-dive research job from a card photo' })
