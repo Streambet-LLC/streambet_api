@@ -16,6 +16,18 @@ export interface CardForecastData {
   confidence: number;
   horizon: string;
   thesis: string;
+  /** The card's estimated value + range (as of asOf date). */
+  valueEstimate?: { pointUsd: number; lowUsd: number; highUsd: number; asOf: string };
+  /** Which valuation route produced valueEstimate. */
+  method?: 'anchor-and-adjust' | 'recent-median' | 'triangulation' | string;
+  /** The most-recent confirmed sale we anchored on. */
+  anchorComp?: { priceUsd: number; date: string; sourceType: string; url: string };
+  /** The comps actually used in the valuation. */
+  compsUsed?: { priceUsd: number; date: string; grade: string; sourceType: string; url: string }[];
+  /** Index move applied for the anchor-and-adjust route. */
+  indexAdjustment?: { index: string; movePct: number; window: string } | null;
+  /** Evidence-tied confidence in the valuation (distinct from outlook confidence). */
+  valuationConfidence?: { pct: number; basis: string };
   /** Overall CardCade rating — the single-number take. */
   rating?: {
     score: number; // 0-100
@@ -50,7 +62,7 @@ export interface CardForecastData {
   macroFactors: { factor: string; note: string }[];
   risks: { risk: string; note: string }[];
   suggestedAction: string;
-  sources: { title: string; url: string }[];
+  sources: { title: string; type?: string; url: string }[];
 }
 
 /**
@@ -63,7 +75,7 @@ export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
   private readonly ANALYST_SYSTEM =
-    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. Use web search to gather: recent news + social sentiment about the player/character/set; upcoming catalysts (games, playoffs, tournaments, set releases, anniversaries); PSA/BGS grading population trends and policy changes; print-run / reprint / supply news; and historical PRECEDENTS — how comparable cards performed through similar events. If platform signals are provided, fuse them in. Estimate each catalyst’s probability and directional price impact. Also assess: an overall CardCade RATING (0-100 + a label), a LIQUIDITY score (0-100 — how easily/quickly it sells), the PRICE TRAJECTORY (rising/stable/falling), and the LIKELY BUYERS (who collects this and why). Separate signal from hype; be honest about uncertainty. THIN OR NO DATA: if the subject is ultra-rare, brand-new, or has few/no direct sold comps, NEVER answer that there is "not enough data". Instead TRIANGULATE from the closest comparables — the same card in adjacent grades and the raw↔graded multiplier, sibling cards in the same set/product, the same character/player in comparable prints/years, and print-run / PSA-BGS population scarcity — and give a clearly-labeled ESTIMATE range with an explicit LOW confidence and a one-line basis for how you derived it (fold this into the thesis and priceTrajectory note, and reflect the thin data in the confidence field). Always prefer a well-reasoned, caveated estimate over a refusal. Output ONLY a JSON object.';
+    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. GROUNDING CONTRACT (non-negotiable): never state a sale or market price you did not retrieve from a web_search result this run; every price you cite must carry a real URL and a date; if you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and cite the individual comps in it before using it — a bare search link is not a valuation; confirm each comp is the SAME card (player/character, set, parallel, number, year, grade); and TYPE every source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask, not a sale), price-guide, or index (never call a marketplace like Fanatics Collect a price guide). FIRST CLASSIFY THE CARD, then pick the valuation route: (a) LOW-POP / HIGH-VALUE with few-but-recent comps (it will not be on eBay) -> use the PSA spec + sales-history page and a player/segment index (e.g. Card Ladder); ANCHOR on the single MOST RECENT confirmed sale, then ADJUST by the index move since that sale date (anchor x (1 +/- index move) = estimate) and give a tight range for scarcity; (b) LIQUID with many recent solds -> trimmed median of the most recent eBay SOLD comps (drop outliers), and USE the comps in your own search link; (c) ULTRA-TRADED low-value -> recent median, high confidence; (d) BRAND-NEW / NO comps or (e) UNTRADED 1-of-1 -> only THEN triangulate from analogs (adjacent grades x grade multiplier, raw<->graded, sibling parallels, same player comparable prints, pop scarcity) as a clearly-labeled LOW-confidence estimate. Do NOT triangulate when direct recent comps exist, and never anchor on a stale or mid-pack sale when a newer one exists. Gather in parallel: recent news + social sentiment; upcoming catalysts; PSA/BGS population and policy trends; print-run / reprint / supply news; and historical PRECEDENTS. Assess an overall CardCade RATING (0-100 + label), a LIQUIDITY score, the PRICE TRAJECTORY, and the LIKELY BUYERS. Make CONFIDENCE a function of (# recent comps, recency of the newest, price dispersion): many tight recent comps -> high; one/old/index-adjusted comp -> ~60-72; analogs only -> low. For sell-timing give DATA-CENTRIC probabilistic scenarios (days-to-catalyst; P(up)/P(base)/P(down) summing to 100 with % moves and an expected value), not "could go up or down". If you hit the search budget, answer from the comps already retrieved — never degrade to "not enough data". Output ONLY a JSON object.';
 
   private readonly FORECAST_JSON = `Return ONLY this JSON (no prose, no code fences):
 {
@@ -71,6 +83,12 @@ export class ForecastService {
   "confidence": <0-100 integer>,
   "horizon": "<e.g. 3-6 months>",
   "thesis": "<2-3 sentence summary of the call>",
+  "valueEstimate": { "pointUsd": <number>, "lowUsd": <number>, "highUsd": <number>, "asOf": "<YYYY-MM-DD>" },
+  "method": "anchor-and-adjust" | "recent-median" | "triangulation",
+  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" },
+  "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
+  "indexAdjustment": { "index": "<e.g. Card Ladder Patrick Mahomes>", "movePct": <number>, "window": "<since anchor date>" },
+  "valuationConfidence": { "pct": <0-100 integer>, "basis": "<n recent comps, recency, dispersion>" },
   "rating": { "score": <0-100 integer>, "label": "Strong Buy"|"Buy"|"Hold"|"Watch"|"Avoid", "rationale": "<one sentence>" },
   "liquidity": { "score": <0-100 integer>, "level": "High"|"Medium"|"Low", "note": "<why — supply, sales velocity, demand depth>" },
   "priceTrajectory": { "direction": "Rising"|"Stable"|"Falling", "note": "<near-term price direction and why>" },
@@ -81,7 +99,7 @@ export class ForecastService {
   "macroFactors": [ { "factor": "<grading/supply/reprint/market factor>", "note": "<impact>" } ],
   "risks": [ { "risk": "<downside risk>", "note": "<why>" } ],
   "suggestedAction": "<concise action for a dealer/holder>",
-  "sources": [ { "title": "<source>", "url": "<url>" } ]
+  "sources": [ { "title": "<source>", "type": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index"|"news", "url": "<retrieved url>" } ]
 }`;
 
   constructor(
@@ -110,6 +128,7 @@ export class ForecastService {
     cardId: string,
     adminId?: string,
     refresh = false,
+    rawDepth?: unknown,
   ): Promise<{ forecast: CardForecastData; generatedAt: string }> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
@@ -125,6 +144,7 @@ export class ForecastService {
     // comes from live web research (the marketplace signal feed was retired).
     const card = await this.market.getCardRef(cardId);
 
+    const preset = DEEP_DIVE_DEPTH[normalizeDepth(rawDepth)];
     const forecast = await this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Card: ${card.name} (${card.brand ?? '?'} / ${card.category ?? '?'}${
@@ -132,7 +152,9 @@ export class ForecastService {
       }).
 
 ${this.FORECAST_JSON}`,
-      maxTokens: 16000,
+      maxTokens: preset.maxTokens,
+      maxSearches: preset.maxSearches,
+      effort: preset.effort,
       meta: { feature: 'card_forecast', adminId },
     });
 

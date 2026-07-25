@@ -11,8 +11,10 @@ interface PriceComponent {
   sampleSize: number | null;
   /** 0-100 — how much this component drove the consensus. */
   weightPct: number | null;
-  /** 'sold' (real exact comps), 'listing', 'guide', or 'analog' (triangulated). */
-  kind: 'sold' | 'listing' | 'guide' | 'analog' | string;
+  /** Observation date (YYYY-MM-DD) of this component, when known. */
+  date: string | null;
+  /** 'sold'/'auction' (real exact comps), 'listing' (ask), 'guide', 'index', or 'analog'. */
+  kind: 'sold' | 'auction' | 'listing' | 'guide' | 'index' | 'analog';
   url: string | null;
   note: string | null;
 }
@@ -60,23 +62,25 @@ export class WebResearchMarketSource implements CardMarketSource {
     try {
       const res = await this.ai.research<WebPriceResult>({
         system:
-          'You are a trading-card pricing researcher. Determine the CURRENT market value of ONE specific card as a WEIGHTED CONSENSUS across the best available sources, and ALWAYS return a number — never null, never "insufficient data". ' +
-          'GATHER from as many sources as you can: eBay recent SOLD/completed listings, TCGplayer, PriceCharting, 130point, reputable price guides, and active listings/Buy-It-Now. ' +
-          'WEIGHT BY DATA STRENGTH — cascade downward: (1) recent eBay SOLD comps for the EXACT card+grade with MANY samples get the HIGHEST weight; (2) then other real sold data (130point) and market prices (TCGplayer/PriceCharting); (3) then reputable guides and current asking/BIN listings; (4) then — ONLY if the exact card is thin/absent — TRIANGULATED analogs (same card adjacent grades via the grade multiplier, raw↔graded multiplier, sibling cards in the same set/product, same character/player comparable prints, print-run / PSA-BGS population scarcity). More real recent SOLD comps ⇒ heavier weight and higher confidence; leaning on analogs ⇒ lighter weight and LOW confidence. ' +
-          'Compute medianUsd as the WEIGHTED AVERAGE of the components you actually used. Return each component you weighted (its price, sample size, kind, and the % weight you gave it — weights should sum to ~100). Set estimated=false when real exact-match SOLD comps carry most of the weight; estimated=true when analogs do. State the weighting logic in `basis`. Never claim a specific sale you did not find. Output ONLY JSON.',
+          'You are a trading-card pricing researcher. Determine the CURRENT market value of ONE specific card and return it as JSON. GROUNDING CONTRACT: never state a sale/price you did not retrieve from a web_search result this run; every priced component MUST carry a real retrieved url and a date; confirm each comp is the SAME card+grade; and TYPE each component correctly (sold/auction-sale, listing = an active ask NOT a sale, guide, index, or analog) — never mislabel a marketplace listing or a sale as a price guide. ' +
+          'FIRST decide the route from the data you find: (1) LIQUID (many recent SOLD comps for the exact card+grade) -> medianUsd = TRIMMED MEDIAN of the most RECENT solds (drop outliers), estimated=false, high confidence; (2) THIN / HIGH-VALUE (few but real recent sales, likely on PSA sales-history not eBay) -> ANCHOR on the single MOST RECENT confirmed sale, then adjust by the relevant player/segment index move since that sale date, and report the anchor + index move; (3) NO direct comps -> ONLY THEN triangulate from analogs (adjacent grades via grade multiplier, raw<->graded, sibling parallels, same player comparable prints, pop scarcity), estimated=true, LOW confidence. ' +
+          'Do NOT triangulate when real recent comps exist, and NEVER anchor on a stale or mid-pack sale when a newer dated sale exists. Every component needs a date; more recent + more comps + tighter dispersion => higher confidence. Never claim a sale you did not find, and never emit a priced sold component without its retrieved url. Output ONLY JSON.',
         prompt: `Card: ${label}.
 
 Return a WEIGHTED-CONSENSUS current value for THIS exact card (match grade if specified). Weight stronger data (many recent eBay sold comps) heaviest and cascade down to analogs only when needed. Return ONLY this JSON (USD, no prose, no code fences):
 {
-  "medianUsd": <weighted-average current value, number — required, never null>,
+  "medianUsd": <current value from the chosen route — trimmed median / anchor-adjusted / triangulated estimate; number>,
   "lowUsd": <low end of the range, number or null>,
   "highUsd": <high end of the range, number or null>,
   "sampleSize": <total exact-match SOLD comps you saw (0 if none), integer>,
   "confidence": "high" | "medium" | "low",
-  "estimated": <true if analogs carry most of the weight, false if real exact-match comps do>,
-  "basis": "<one short line on the weighting, e.g. 'weighted avg: 8 eBay PSA 10 solds (70%) + TCGplayer market (20%) + 2 listings (10%)'>",
+  "estimated": <true if analogs carry the value, false if real exact-match comps do>,
+  "method": "recent-median" | "anchor-and-adjust" | "triangulation",
+  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "kind": "sold"|"listing"|"guide"|"analog"|"index", "url": "<retrieved url>" } | null,
+  "indexMovePct": <number or null>,
+  "basis": "<one short line, e.g. 'trimmed median of 6 recent eBay PSA 10 solds' or 'anchor $17,100 (Feb 26) x -6.3% Mahomes index'>",
   "components": [
-    { "source": "<e.g. eBay sold / TCGplayer / 130point / PSA 9 comps (analog)>", "priceUsd": <number>, "sampleSize": <int or null>, "weightPct": <0-100>, "kind": "sold"|"listing"|"guide"|"analog", "url": "<url or null>", "note": "<optional short note>" }
+    { "source": "<e.g. eBay sold / PSA sales history / 130point / TCGplayer / PSA 9 comps (analog)>", "priceUsd": <number>, "date": "<YYYY-MM-DD or null>", "sampleSize": <int or null>, "weightPct": <0-100>, "kind": "sold"|"listing"|"guide"|"analog"|"index", "url": "<retrieved url — required for any 'sold'>", "note": "<optional short note>" }
   ],
   "asOf": "<YYYY-MM-DD of the freshest data you used, or null>",
   "note": "<one short sentence on the read, or null>",
@@ -139,13 +143,21 @@ Return a WEIGHTED-CONSENSUS current value for THIS exact card (match grade if sp
         const source = typeof o.source === 'string' ? o.source.slice(0, 80) : '';
         const price = this.num(o.priceUsd);
         if (!source || price == null) return null;
+        const kinds = ['sold', 'auction', 'listing', 'guide', 'index', 'analog'];
+        const kind = (
+          typeof o.kind === 'string' && kinds.includes(o.kind) ? o.kind : 'listing'
+        ) as PriceComponent['kind'];
+        const url = typeof o.url === 'string' ? o.url : null;
+        // Anti-phantom: a real SOLD comp must carry a retrieved URL.
+        if ((kind === 'sold' || kind === 'auction') && !url) return null;
         return {
           source,
           priceUsd: price,
           sampleSize: this.int(o.sampleSize),
           weightPct: this.num(o.weightPct),
-          kind: typeof o.kind === 'string' ? o.kind : 'sold',
-          url: typeof o.url === 'string' ? o.url : null,
+          date: typeof o.date === 'string' ? o.date.slice(0, 10) : null,
+          kind,
+          url,
           note: typeof o.note === 'string' ? o.note.slice(0, 160) : null,
         } as PriceComponent;
       })
