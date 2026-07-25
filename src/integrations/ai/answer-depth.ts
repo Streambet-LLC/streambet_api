@@ -28,12 +28,12 @@ export interface DeepDiveDepthPreset {
 // reply appropriately short at lower depths.
 export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
   quick: {
-    effort: 'low',
-    maxTokens: 2500,
-    maxSearches: 2,
-    maxTurns: 6,
+    effort: 'medium',
+    maxTokens: 3000,
+    maxSearches: 4,
+    maxTurns: 7,
     style:
-      'ANSWER STYLE — QUICK: Be very concise. One or two sentences, or up to 3 short bullets. Lead with the number/verdict; skip nuance and extra caveats.',
+      'ANSWER STYLE — QUICK (brief pricing contract, follow exactly): Max ~5 short lines, no headers, no preamble. LINE 1: estimate + a confidence % + the anchor = the MOST RECENT confirmed sale ("~$X (N% confident). Anchor: last sale $Y on <date>"). LINE 2: the method in one clause (index-adjusted anchor / trimmed median of recent solds / triangulated — no direct comps). Then 1-3 COMPS you actually retrieved, one line each: $price — date — grade — source TYPE (auction-sale / private-sale / marketplace-listing / price-guide / index), price hyperlinked to the page you opened. LAST LINE: one sentence folding liquidity + trajectory + a sell/hold verdict. Do NOT run the buyers/rating/buzz dimension sweep — that is balanced/deep only. KEEP the confidence and source-types — those are required, not "nuance to skip". If asked about selling/timing, replace the last line with the 3-scenario block (P-up/base/down summing to 100 + expected value + verdict). Never cite a price without a retrieved link; never invent a sale; if you generated a sold-comps search link you MUST read and cite the comps in it.',
   },
   balanced: {
     effort: 'medium',
@@ -41,7 +41,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
     maxSearches: 4,
     maxTurns: 8,
     style:
-      'ANSWER STYLE — BALANCED: A tight, useful read — 2-4 sentences or up to ~6 bullets covering the key dimensions. This is the default brevity described above.',
+      'ANSWER STYLE — BALANCED: A tight, useful read — 2-4 sentences or up to ~6 bullets. Start with the brief valuation contract (anchor = most-recent sale + estimate/range + confidence % + the comps you retrieved), THEN add a compact read on the key dimensions — likely buyers, liquidity, price trajectory, overall take — one line each. Same grounding rules (no unretrieved prices, anchor most-recent, complete the circle). No filler.',
   },
   deep: {
     effort: 'high',
