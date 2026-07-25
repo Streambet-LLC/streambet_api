@@ -17,8 +17,32 @@ export interface DeepResearchJobDto {
   status: string;
   result: Record<string, unknown> | null;
   error: string | null;
+  /** Reference image of the confirmed card, if we have one. */
+  imageUrl: string | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+/**
+ * A card the system thinks the user means, with a reference image so they can
+ * VISUALLY confirm it's the right card before we analyze it. Powers the
+ * "verify the card" step in both chat and the AI Market Reports panel.
+ */
+export interface CardCandidate {
+  /** Whether this resolves to a real, identifiable trading card. */
+  isCard: boolean;
+  /** Refined canonical search string for market research. */
+  subject: string;
+  /** Clean display name of the card. */
+  name: string;
+  /** Direct, hotlinkable reference image URL (card front), or null. */
+  imageUrl: string | null;
+  brand: string | null;
+  set: string | null;
+  number: string | null;
+  grade: string | null;
+  /** How sure we are about the match. */
+  confidence: 'high' | 'medium' | 'low';
 }
 
 /**
@@ -58,6 +82,7 @@ export class DeepResearchService implements OnModuleInit {
     subject: string,
     adminId?: string,
     rawDepth?: unknown,
+    imageUrl?: string | null,
   ): Promise<DeepResearchJobDto> {
     const clean = (subject ?? '').trim().slice(0, 300);
     if (!clean) throw new BadRequestException('A subject is required.');
@@ -76,6 +101,7 @@ export class DeepResearchService implements OnModuleInit {
         subject: clean,
         status: 'pending',
         requestedByAdminId: adminId ?? null,
+        imageUrl: this.cleanImageUrl(imageUrl),
       }),
     );
     // Fire-and-forget — the response returns immediately. Depth is carried
@@ -167,6 +193,232 @@ export class DeepResearchService implements OnModuleInit {
     }
   }
 
+  /**
+   * Identify + normalize a card from a TEXT subject — FAST, no web search — so
+   * the admin sees a clean card name to confirm almost instantly. The reference
+   * image is fetched separately (findCardImage) so a slow image lookup never
+   * blocks the name. Degrades to a name-only candidate on any error.
+   */
+  async identifyCard(
+    subject: string,
+    adminId?: string,
+  ): Promise<CardCandidate> {
+    const clean = (subject ?? '').trim().slice(0, 300);
+    if (!clean) throw new BadRequestException('A card is required.');
+    if (!this.ai.isConfigured()) {
+      throw new BadRequestException(
+        'AI is not configured (missing ANTHROPIC_API_KEY).',
+      );
+    }
+    // Assume it's a card (the admin asked about it) so any blip still lets them
+    // confirm by name.
+    const fallback: CardCandidate = {
+      isCard: true,
+      subject: clean,
+      name: clean,
+      imageUrl: null,
+      brand: null,
+      set: null,
+      number: null,
+      grade: null,
+      confidence: 'low',
+    };
+    try {
+      const res = await this.ai.generateJson<Partial<CardCandidate>>({
+        model: this.ai.chatModel,
+        maxTokens: 500,
+        system:
+          'You identify and normalize trading-card names (Pokémon, One Piece, ' +
+          'sports, and other collectibles) precisely from a short description.',
+        prompt:
+          'Normalize the card the user described into a clean, canonical ' +
+          'trading-card identity so they can confirm it before we analyze it.' +
+          `\n\nUser's description: "${clean}"\n\n` +
+          'Return JSON with: isCard (is this a real, identifiable trading ' +
+          'card?), name (clean display name, e.g. "Charizard VSTAR — Crown ' +
+          'Zenith UPC #GG69"), subject (a canonical search string a market ' +
+          'analyst would use), brand, set, number, grade (best-known identity ' +
+          'fields, or null), and confidence ("high" | "medium" | "low"). Do ' +
+          'NOT include an image. If it is not a card, set isCard=false.',
+        schema: {
+          type: 'object',
+          properties: {
+            isCard: { type: 'boolean' },
+            name: { type: 'string' },
+            subject: { type: 'string' },
+            brand: { type: ['string', 'null'] },
+            set: { type: ['string', 'null'] },
+            number: { type: ['string', 'null'] },
+            grade: { type: ['string', 'null'] },
+            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          },
+          required: ['isCard', 'name', 'subject'],
+          additionalProperties: false,
+        },
+        meta: { feature: 'card_identify', adminId },
+      });
+      const confidence =
+        res.confidence === 'high' ||
+        res.confidence === 'medium' ||
+        res.confidence === 'low'
+          ? res.confidence
+          : 'low';
+      return {
+        isCard: res.isCard !== false,
+        subject: (this.strOrNull(res.subject) ?? clean).slice(0, 300),
+        name: (this.strOrNull(res.name) ?? clean).slice(0, 200),
+        imageUrl: null,
+        brand: this.strOrNull(res.brand),
+        set: this.strOrNull(res.set),
+        number: this.strOrNull(res.number),
+        grade: this.strOrNull(res.grade),
+        confidence,
+      };
+    } catch (e) {
+      this.logger.warn(`card identify (text) failed: ${(e as Error).message}`);
+      return fallback;
+    }
+  }
+
+  /**
+   * Find a reference image for a card. For Pokémon we hit the free Pokémon TCG
+   * API (pokemontcg.io) — fast, exact, hotlinkable images. For everything else
+   * (or if that misses) we fall back to a hard-bounded web search that can
+   * NEVER hang the UI: few searches and an abort at ~14s. Returns
+   * { imageUrl: null } when nothing reliable is found (the confirm step then
+   * shows name-only). Called separately from identifyCard so a slow image never
+   * delays the card name.
+   */
+  async findCardImage(
+    hint: {
+      subject: string;
+      name?: string | null;
+      brand?: string | null;
+      number?: string | null;
+    },
+    adminId?: string,
+  ): Promise<{ imageUrl: string | null }> {
+    const subject = (hint.subject ?? '').trim().slice(0, 300);
+    if (!subject) return { imageUrl: null };
+
+    // 1) Pokémon → the Pokémon TCG API (fast, exact, allows hotlinking).
+    const haystack =
+      `${hint.brand ?? ''} ${hint.name ?? ''} ${subject}`.toLowerCase();
+    if (/pok[eé]mon|pokemon/.test(haystack)) {
+      const url = await this.pokemonTcgImage(
+        hint.name || subject,
+        hint.number,
+      );
+      if (url) return { imageUrl: url };
+    }
+
+    // 2) Fallback → bounded web search (any game), never blocking for long.
+    if (!this.ai.isConfigured()) return { imageUrl: null };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 14000);
+    try {
+      const res = await this.ai.research<{ imageUrl?: string | null }>({
+        model: this.ai.chatModel,
+        maxTokens: 700,
+        maxSearches: 2,
+        maxRounds: 3,
+        effort: 'low',
+        signal: ctrl.signal,
+        prompt:
+          'Find a DIRECT, hotlinkable image URL of the FRONT of this trading ' +
+          `card: "${subject}".\n\n` +
+          'Strongly prefer stable CDNs that allow hotlinking: eBay ' +
+          '(i.ebayimg.com), TCGplayer (tcgplayer-cdn.tcgplayer.com), ' +
+          'PriceCharting, or Cardmarket. The URL must point directly at an ' +
+          'image file (.jpg/.jpeg/.png/.webp) or a direct image endpoint — not ' +
+          'a web page. Do ONE quick search, then answer.\n\n' +
+          'Return JSON: { "imageUrl": "<direct image URL>" } — or ' +
+          '{ "imageUrl": null } if you cannot find a reliable one. NEVER invent ' +
+          'or guess a URL.',
+        meta: { feature: 'card_image', adminId },
+      });
+      return { imageUrl: this.cleanImageUrl(res.imageUrl) };
+    } catch (e) {
+      this.logger.warn(`card image lookup failed: ${(e as Error).message}`);
+      return { imageUrl: null };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Look up a card image from the free Pokémon TCG API. Queries by the core
+   * card name (+ number when we have one), preferring an exact number match and
+   * the most recent printing. Returns the hi-res image URL, or null. A
+   * POKEMONTCG_API_KEY env var (optional) raises the rate limit.
+   */
+  private async pokemonTcgImage(
+    name: string,
+    number?: string | null,
+  ): Promise<string | null> {
+    // The core card name — drop any "— <set/PSA>" or "(...)" suffix we appended.
+    const core = (name || '')
+      .split(/[—(]/)[0]
+      .replace(/["\\]/g, '')
+      .trim();
+    if (!core) return null;
+    const num = (number ?? '').replace(/[^0-9A-Za-z]/g, '').trim();
+    const key = process.env.POKEMONTCG_API_KEY;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (key) headers['X-Api-Key'] = key;
+
+    const tryQuery = async (q: string): Promise<string | null> => {
+      const url =
+        'https://api.pokemontcg.io/v2/cards?pageSize=8&orderBy=-set.releaseDate' +
+        `&q=${encodeURIComponent(q)}`;
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      try {
+        const r = await fetch(url, { headers, signal: ctrl.signal });
+        if (!r.ok) return null;
+        const j = (await r.json()) as {
+          data?: Array<{
+            number?: string;
+            images?: { large?: string; small?: string };
+          }>;
+        };
+        const cards = j.data ?? [];
+        if (cards.length === 0) return null;
+        // Prefer an exact card-number match when we have one.
+        const pick =
+          (num &&
+            cards.find(
+              c => (c.number ?? '').toLowerCase() === num.toLowerCase(),
+            )) ||
+          cards[0];
+        return pick.images?.large ?? pick.images?.small ?? null;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(t);
+      }
+    };
+
+    // Name + number first (most specific), then name-only.
+    if (num) {
+      const withNum = await tryQuery(`name:"${core}" number:"${num}"`);
+      if (withNum) return withNum;
+    }
+    return tryQuery(`name:"${core}"`);
+  }
+
+  private strOrNull(v: unknown): string | null {
+    const s = typeof v === 'string' ? v.trim() : '';
+    return s ? s.slice(0, 200) : null;
+  }
+
+  /** Only accept a plausible absolute http(s) image URL; otherwise null. */
+  private cleanImageUrl(v: unknown): string | null {
+    const s = typeof v === 'string' ? v.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(s)) return null;
+    return s.slice(0, 1000);
+  }
+
   /** Most recent completed dive for this subject within the freshness window. */
   private async recentDone(subject: string): Promise<DeepResearchJob | null> {
     try {
@@ -189,6 +441,19 @@ export class DeepResearchService implements OnModuleInit {
       await this.repo.update(id, { status: 'running', startedAt: new Date() });
       const job = await this.repo.findOne({ where: { id } });
       if (!job) return;
+      // Backfill a reference image for dives started without one (e.g. from the
+      // chat's start_deep_dive tool) — best-effort, doesn't fail the job.
+      if (!job.imageUrl) {
+        try {
+          const { imageUrl } = await this.findCardImage(
+            { subject: job.subject },
+            job.requestedByAdminId ?? undefined,
+          );
+          if (imageUrl) await this.repo.update(id, { imageUrl });
+        } catch {
+          /* image is optional — never block the report on it */
+        }
+      }
       const result = await this.forecast.researchSubject(
         job.subject,
         job.requestedByAdminId ?? undefined,
@@ -244,6 +509,7 @@ export class DeepResearchService implements OnModuleInit {
       status: j.status,
       result: j.result ?? null,
       error: j.error ?? null,
+      imageUrl: j.imageUrl ?? null,
       createdAt: j.createdAt.toISOString(),
       completedAt: j.completedAt ? j.completedAt.toISOString() : null,
     };

@@ -21,6 +21,10 @@ export class DeepResearchJob extends BaseEntity {
   @Column({ type: 'jsonb', nullable: true })
   result: Record<string, unknown> | null;
 
+  /** A reference image of the confirmed card, shown atop the report. */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  imageUrl: string | null;
+
   @Column({ type: 'text', nullable: true })
   error: string | null;
 

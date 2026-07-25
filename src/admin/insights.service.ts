@@ -45,17 +45,19 @@ You ALSO have access to the business's outreach LEADS (prospective collectors di
 
 Answer by calling the tools and synthesizing the results.
 
+VERIFY THE CARD FIRST (critical): Whenever the conversation is about a SPECIFIC card/slab — a pricing question, a sell/hold question, buzz, a forecast, or a market-report request — you MUST call verify_card FIRST, before answering or calling start_deep_dive. It shows the admin the exact card plus a reference image so they can confirm we're looking at the right one. After calling verify_card, STOP: end your turn with ONE short line asking them to confirm the card shown (or correct it) — do not answer yet. Only once they confirm (a "yes"/"that's it", or after they correct the card) do you answer or call start_deep_dive, using the confirmed card as the subject. Do NOT re-verify a card already confirmed earlier in this same conversation, and SKIP verify_card for general/non-specific questions (e.g. "which players are trending right now?", "how do rookie cards move after an MVP season?"). If a photo is attached, still call verify_card with your best read of the card so the admin can confirm.
+
 PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). When an image is present:
 - FIRST identify the card as precisely as you can from what's visible: game/brand (Pokémon, One Piece, sports, etc.), player/character, set/series, card number, variant/parallel (e.g. holo, alt art, prizm), year, and — if it's a graded slab — the grader and grade (e.g. PSA 10, BGS 9.5). State your read of the card in one short line.
 - If you can't be sure, say what you can tell and note the uncertainty (e.g. "looks like an Umbreon VMAX Alt Art — confirm the set/number"); never invent a specific card you can't see.
-- Then treat the identified card as the subject: for a normal ask, look up pricing/buzz via web search and answer as usual (leading with your identification so the admin can correct it).
-- CONFIRM BEFORE AN AI MARKET REPORT: if the admin asks for a "market report"/"deep dive"/"tear sheet"/"full report" from a photo, do NOT call start_deep_dive immediately. First state the card you identified and ask them to confirm (e.g. "I read this as <card> — run a full market report on that? Reply 'yes' or tell me the correct card."). Only call start_deep_dive once they've confirmed the card (a "yes"/"go ahead", or after they correct it). If they already named the exact card in their message, you can treat that as confirmation.
+- Then call verify_card with your read of the card (see VERIFY THE CARD FIRST) so the admin can confirm it visually before you look up pricing/buzz or run a report. Once they confirm, treat the confirmed card as the subject and answer as usual.
 - If the image is not a trading card, say so briefly and stop.
 
 TOOL ROUTING:
+- For a SPECIFIC card, call verify_card FIRST and wait for confirmation (see VERIFY THE CARD FIRST) before any of the below.
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Search for recent SOLD prices (eBay, TCGplayer, PriceCharting, 130point) and recent news/social, then answer concisely with what you found and cite where.
 - Keep web use tight for a chat: 1-3 searches, then answer. Don't exhaustively research — give a fast, useful read.
-- If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
+- If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, first verify_card (unless already confirmed), then call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
 - Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
 
 RULES (follow strictly):
@@ -103,6 +105,32 @@ RULES (follow strictly):
           },
           limit: { type: 'integer', description: 'Max leads (default 15, cap 25).' },
         },
+      },
+    },
+    {
+      name: 'verify_card',
+      description:
+        'Show the admin the specific card you are about to analyze — with a ' +
+        'reference image — and PAUSE for them to confirm it is the right ' +
+        'card. Call this FIRST, before giving any pricing/analysis on a ' +
+        'specific card or calling start_deep_dive, whenever the conversation ' +
+        'focuses on a particular card/slab. After calling it, STOP and ask ' +
+        'the admin to confirm; do not analyze until they confirm in their ' +
+        'next message. Skip it only for general/non-card questions or a card ' +
+        'already confirmed earlier in this conversation.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          subject: {
+            type: 'string',
+            description:
+              'The exact card to confirm, as a search string — game/brand, ' +
+              'player/character, set, number, variant, year, and grade if a ' +
+              'slab. E.g. "Pokémon Crown Zenith Charizard VSTAR UPC #GG69 ' +
+              'PSA 10".',
+          },
+        },
+        required: ['subject'],
       },
     },
     {
@@ -215,6 +243,23 @@ RULES (follow strictly):
     depth: AnswerDepth = 'balanced',
   ): Promise<unknown> {
     switch (name) {
+      case 'verify_card': {
+        const subject = this.str(input.subject);
+        if (!subject) return { error: 'subject is required.' };
+        // The UI intercepts this tool call (see the frontend) and shows the
+        // admin the card + a reference image to confirm. We don't analyze
+        // anything here — we tell the model to stop and wait.
+        return {
+          awaiting_confirmation: true,
+          subject,
+          message:
+            `The card "${subject}" and a reference image have been shown to ` +
+            `the admin to confirm. STOP here: reply with ONE short line ` +
+            `asking them to confirm the card shown above (or correct it). Do ` +
+            `NOT provide pricing, analysis, or start a report until they ` +
+            `confirm in their next message.`,
+        };
+      }
       case 'start_deep_dive': {
         const subject = this.str(input.subject);
         if (!subject) return { error: 'subject is required.' };
