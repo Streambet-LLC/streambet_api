@@ -22,6 +22,8 @@ import { DashboardConfigService } from './dashboard-config.service';
 import { CardProfileService } from './card-profile.service';
 import { EbayMarketSource } from './card-market/ebay-market.source';
 import { WebResearchMarketSource } from './card-market/web-research-market.source';
+import { ValuationService } from './card-market/valuation.service';
+import { PokemonPriceSource } from './card-market/pokemon-price.source';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
 import { MarketService } from './market.service';
@@ -78,6 +80,8 @@ import { User } from 'src/users/entities/user.entity';
     CardProfileService,
     EbayMarketSource,
     WebResearchMarketSource,
+    ValuationService,
+    PokemonPriceSource,
   ],
 })
 export class AdminModule {}

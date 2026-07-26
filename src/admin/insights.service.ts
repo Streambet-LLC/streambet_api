@@ -8,6 +8,7 @@ import {
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
+import { ValuationService } from './card-market/valuation.service';
 import {
   AnswerDepth,
   CHAT_DEPTH,
@@ -30,6 +31,7 @@ export class InsightsService {
     private readonly deepResearch: DeepResearchService,
     private readonly history: InsightsHistoryService,
     private readonly acquisition: AcquisitionService,
+    private readonly valuation: ValuationService,
   ) {}
 
   private readonly SYSTEM = `You are the CardCade Insights analyst — a trading-card market & intelligence assistant (Pokémon, One Piece, sports cards, and other collectibles).
@@ -55,6 +57,8 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 
 TOOL ROUTING:
 - For a SPECIFIC card, call verify_card FIRST and wait for confirmation (see VERIFY THE CARD FIRST) before any of the below.
+- For a specific card's PRICE / "what is it worth" / sell-vs-hold question (once confirmed): call value_card. It runs the comp research and computes the price + confidence in CODE. NARRATE its result — use its pointUsd, low/high, confidencePct, method, and comps VERBATIM; hyperlink each comp's price to its url; do NOT recompute, round away, second-guess, or invent any number, and do NOT run your own separate pricing web search when value_card already returned comps. Fold liquidity/trajectory/take into your one-line take.
+- HONESTY GATE — respect value_card's "reliability": if it is "grounded", state the number with confidence; if "thin", lead with the hedge ("thin data — rough estimate, ~$X, low confidence") and keep the range wide; if "unverified" (or isCard=false / no comps), DO NOT present a confident number — say plainly we couldn't find solid comps, give the labeled estimate if any, and offer an AI Market Report. Never dress a thin/unverified read up as a firm price.
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Pull recent SOLD prices + news, then ANCHOR on the MOST RECENT confirmed sale (see VALUATION below) and cite where. Pick sources by card type: for a LOW-POP / HIGH-VALUE / thin-comp card (it will NOT be on eBay) use the PSA spec + sales-history page (psacard.com) and a player/segment index (e.g. Card Ladder); for a LIQUID card pull the eBay SOLD comps (ebay.com …&LH_Sold=1&LH_Complete=1) and TCGplayer / PriceCharting / 130point. TYPE every source you cite as exactly one of: auction-sale, private-sale, marketplace-listing (an active ask, NOT a sale), price-guide, or index — never call a listing or a marketplace (e.g. Fanatics Collect) a "price guide", and confirm each comp is the SAME card (player, set, parallel, number, year, grade) before using it.
 - Keep web use efficient but spend enough to land the right comps: for a thin low-pop card that means the PSA sales-history page + an index read; for a liquid card the eBay SOLD page (and READ the comps on it). If you hit the search limit mid-answer, ANSWER FROM THE COMPS YOU ALREADY RETRIEVED — never degrade to "no direct comp found" or to other-player triangulation when you already surfaced direct comps. Note the limit in one clause and still give the anchor, estimate, and confidence.
 - If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, first verify_card (unless already confirmed), then call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
@@ -75,6 +79,7 @@ RULES (follow strictly):
 - NOT FINANCIAL ADVICE. Prices and forecasts are AI/market estimates; say so once, briefly — never guaranteed returns.
 - BE BRIEF. This is a dashboard panel, not an essay. Lead with the direct answer in the first sentence. Default to 1-3 sentences or a short bullet list (max ~6 bullets). Only expand when explicitly asked.
 - No preamble, no filler, no restating the question, no "Here's what I found", no sign-off, no "let me know if…". Just the answer.
+- WORK SILENTLY. Do NOT narrate your process or emit interim text before or between tool calls (no "let me look this up", no "searching…", no "one moment"). Call the tools, then write ONLY the final answer, once.
 - Don't over-explain or pile on caveats. If a tool errors, say so in one sentence.
 - Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.
 - LEAD WITH THE VALUATION; ADD DIMENSIONS ONLY WHEN THE DEPTH STYLE SAYS TO. Default answer shape for a specific card is TIGHT: anchor (most-recent sale) + estimate/range + one-line confidence + one-line take. Do NOT auto-append buyers/liquidity/trajectory/rating on a brief answer — only work those in when the depth style expands or the admin asks. For the full structured version, suggest an AI Market Report.
@@ -134,6 +139,34 @@ RULES (follow strictly):
               'player/character, set, number, variant, year, and grade if a ' +
               'slab. E.g. "Pokémon Crown Zenith Charizard VSTAR UPC #GG69 ' +
               'PSA 10".',
+          },
+        },
+        required: ['subject'],
+      },
+    },
+    {
+      name: 'value_card',
+      description:
+        'Get a GROUNDED, code-computed valuation for ONE specific confirmed ' +
+        'card. The app runs live comp research and computes the price + ' +
+        'confidence DETERMINISTICALLY in code — you do NOT compute or invent ' +
+        'the number. Call this for any pricing / "what is it worth" / ' +
+        'sell-vs-hold question about a specific card, AFTER it is confirmed. ' +
+        'Returns pointUsd, lowUsd, highUsd, confidencePct + basis, method, a ' +
+        'reliability label (grounded | thin | unverified), the anchor sale, the ' +
+        'comps used (with urls, dates, source types), any index adjustment, and ' +
+        'a liquidity/trajectory/take read. NARRATE these numbers exactly — never ' +
+        'change the price or confidence, hyperlink each comp price to its url, ' +
+        'and respect the reliability label (see HONESTY GATE). Prefer this over ' +
+        'your own pricing web searches for a specific card.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          subject: {
+            type: 'string',
+            description:
+              'The confirmed card, e.g. "2019 Prizm Color Blast Patrick ' +
+              'Mahomes PSA 10".',
           },
         },
         required: ['subject'],
@@ -265,6 +298,13 @@ RULES (follow strictly):
             `NOT provide pricing, analysis, or start a report until they ` +
             `confirm in their next message.`,
         };
+      }
+      case 'value_card': {
+        const subject = this.str(input.subject);
+        if (!subject) return { error: 'subject is required.' };
+        // The app does the comp research + computes price/confidence in code;
+        // the model narrates these numbers (never recomputes/invents them).
+        return this.valuation.valueCard(subject, adminId);
       }
       case 'start_deep_dive': {
         const subject = this.str(input.subject);
