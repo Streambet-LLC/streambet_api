@@ -8,7 +8,10 @@ import {
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
-import { ValuationService } from './card-market/valuation.service';
+import {
+  ValuationService,
+  CardValuation,
+} from './card-market/valuation.service';
 import {
   AnswerDepth,
   CHAT_DEPTH,
@@ -57,7 +60,7 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 
 TOOL ROUTING:
 - For a SPECIFIC card, call verify_card FIRST and wait for confirmation (see VERIFY THE CARD FIRST) before any of the below.
-- For a specific card's PRICE / "what is it worth" / sell-vs-hold question (once confirmed): call value_card. It runs the comp research and computes the price + confidence in CODE. NARRATE its result — use its pointUsd, low/high, confidencePct, method, and comps VERBATIM; hyperlink each comp's price to its url; do NOT recompute, round away, second-guess, or invent any number, and do NOT run your own separate pricing web search when value_card already returned comps. Fold liquidity/trajectory/take into your one-line take.
+- For a specific card's PRICE / "what is it worth" / sell-vs-hold question (once confirmed): call value_card ONCE. It runs the comp research and computes the price + confidence in CODE. As soon as it returns, immediately NARRATE its result and END — do NOT call value_card again, and do not keep searching. NARRATE its result — use its pointUsd, low/high, confidencePct, method, and comps VERBATIM; hyperlink each comp's price to its url; do NOT recompute, round away, second-guess, or invent any number, and do NOT run your own separate pricing web search when value_card already returned comps. Fold liquidity/trajectory/take into your one-line take.
 - HONESTY GATE — respect value_card's "reliability": if it is "grounded", state the number with confidence; if "thin", lead with the hedge ("thin data — rough estimate, ~$X, low confidence") and keep the range wide; if "unverified" (or isCard=false / no comps), DO NOT present a confident number — say plainly we couldn't find solid comps, give the labeled estimate if any, and offer an AI Market Report. Never dress a thin/unverified read up as a firm price.
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Pull recent SOLD prices + news, then ANCHOR on the MOST RECENT confirmed sale (see VALUATION below) and cite where. Pick sources by card type: for a LOW-POP / HIGH-VALUE / thin-comp card (it will NOT be on eBay) use the PSA spec + sales-history page (psacard.com) and a player/segment index (e.g. Card Ladder); for a LIQUID card pull the eBay SOLD comps (ebay.com …&LH_Sold=1&LH_Complete=1) and TCGplayer / PriceCharting / 130point. TYPE every source you cite as exactly one of: auction-sale, private-sale, marketplace-listing (an active ask, NOT a sale), price-guide, or index — never call a listing or a marketplace (e.g. Fanatics Collect) a "price guide", and confirm each comp is the SAME card (player, set, parallel, number, year, grade) before using it.
 - Keep web use efficient but spend enough to land the right comps: for a thin low-pop card that means the PSA sales-history page + an index read; for a liquid card the eBay SOLD page (and READ the comps on it). If you hit the search limit mid-answer, ANSWER FROM THE COMPS YOU ALREADY RETRIEVED — never degrade to "no direct comp found" or to other-player triangulation when you already surfaced direct comps. Note the limit in one clause and still give the anchor, estimate, and confidence.
@@ -374,11 +377,12 @@ RULES (follow strictly):
 
     const depth = normalizeDepth(rawDepth);
     const preset = CHAT_DEPTH[depth];
+    const cap = this.captureValuation(adminId, depth);
     const { text, toolCalls } = await this.ai.runToolConversation({
       system: `${this.SYSTEM}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
-      dispatch: (n, i) => this.dispatch(n, i, adminId, depth),
+      dispatch: cap.dispatch,
       model: this.ai.chatModel,
       maxTurns: preset.maxTurns,
       maxTokens: preset.maxTokens,
@@ -387,11 +391,100 @@ RULES (follow strictly):
       webSearch: true,
       meta: { feature: 'chat', adminId },
     });
+    // If the model called value_card but didn't narrate, present the
+    // code-computed valuation ourselves so the user always gets an answer.
     const reply =
       text ||
-      "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.";
+      (cap.last() ? this.formatValuation(cap.last()!) : this.EMPTY_REPLY);
     void this.saveExchange(clean, reply, toolCalls, adminId, conversationId);
     return { reply, toolCalls };
+  }
+
+  private readonly EMPTY_REPLY =
+    "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.";
+
+  /**
+   * Wrap dispatch so we remember the last value_card result — a safety net to
+   * render the valuation server-side if the model ends its turn without
+   * narrating it.
+   */
+  private captureValuation(adminId: string | undefined, depth: AnswerDepth) {
+    let last: CardValuation | null = null;
+    const dispatch = async (n: string, i: Record<string, unknown>) => {
+      const r = await this.dispatch(n, i, adminId, depth);
+      if (
+        n === 'value_card' &&
+        r &&
+        typeof r === 'object' &&
+        'confidencePct' in r
+      ) {
+        last = r as CardValuation;
+      }
+      return r;
+    };
+    return { dispatch, last: () => last };
+  }
+
+  /** Deterministic brief-contract narration of a code-computed valuation. */
+  private formatValuation(v: CardValuation): string {
+    const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    if (!v.isCard || v.pointUsd == null) {
+      return `I couldn't find solid comps to value **${v.subject}** confidently${
+        v.note ? ` (${v.note})` : ''
+      }. Want me to run a full AI Market Report on it?`;
+    }
+    const methodLabel: Record<string, string> = {
+      'anchor-and-adjust': 'anchor + index adjustment',
+      'recent-median': 'median of recent comps',
+      triangulation: 'triangulated (no direct comps)',
+    };
+    const range =
+      v.lowUsd != null && v.highUsd != null
+        ? ` (${money(v.lowUsd)}–${money(v.highUsd)})`
+        : '';
+    const hedge =
+      v.reliability === 'grounded'
+        ? ''
+        : v.reliability === 'thin'
+          ? ' — thin data, treat as a rough estimate'
+          : ' — low confidence, no solid comps';
+    const lines: string[] = [];
+    lines.push(
+      `**~${money(v.pointUsd)}**${range} · **${v.confidencePct}% confidence**${hedge}.`,
+    );
+    if (v.anchorComp) {
+      lines.push(
+        `Anchor: last sale [${money(v.anchorComp.priceUsd)}](${
+          v.anchorComp.url || '#'
+        }) on ${v.anchorComp.date ?? 'n/a'} (${v.anchorComp.sourceType}). Method: ${
+          methodLabel[v.method] ?? v.method
+        }.`,
+      );
+    } else {
+      lines.push(`Method: ${methodLabel[v.method] ?? v.method}.`);
+    }
+    if (v.indexAdjustment) {
+      lines.push(
+        `${v.indexAdjustment.index}: ${v.indexAdjustment.movePct >= 0 ? '+' : ''}${
+          v.indexAdjustment.movePct
+        }% (${v.indexAdjustment.window}).`,
+      );
+    }
+    for (const c of v.compsUsed.filter(c => c.url).slice(0, 4)) {
+      lines.push(
+        `- [${money(c.priceUsd)}](${c.url}) — ${c.date ?? 'n/a'} — ${
+          c.grade ?? ''
+        } — ${c.sourceType}`,
+      );
+    }
+    const take =
+      v.take ||
+      [v.liquidity && `${v.liquidity} liquidity`, v.trajectory && `${v.trajectory} trend`]
+        .filter(Boolean)
+        .join(', ');
+    if (take) lines.push(take);
+    lines.push('_Market estimate, not financial advice._');
+    return lines.join('\n');
   }
 
   /** Persist a completed exchange for history (best-effort, fire-and-forget). */
@@ -478,12 +571,13 @@ RULES (follow strictly):
 
     const depth = normalizeDepth(rawDepth);
     const preset = CHAT_DEPTH[depth];
+    const cap = this.captureValuation(adminId, depth);
     let acc = '';
     const { toolCalls } = await this.ai.streamToolConversation({
       system: `${this.SYSTEM}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
-      dispatch: (n, i) => this.dispatch(n, i, adminId, depth),
+      dispatch: cap.dispatch,
       onText: (t) => {
         acc += t;
         handlers.onText(t);
@@ -498,8 +592,10 @@ RULES (follow strictly):
       meta: { feature: 'chat', adminId },
     });
     if (!acc.trim()) {
-      const fallback =
-        "I couldn't find anything for that. Try rephrasing, or ask about a specific card, buyer, or lead.";
+      // The model called value_card but didn't narrate → render it ourselves.
+      const fallback = cap.last()
+        ? this.formatValuation(cap.last()!)
+        : this.EMPTY_REPLY;
       handlers.onText(fallback);
       acc = fallback;
     }
