@@ -9,6 +9,11 @@ import {
   DEEP_DIVE_DEPTH,
   normalizeDepth,
 } from '../integrations/ai/answer-depth';
+import {
+  ValComp,
+  ValMethod,
+  computeValuation,
+} from './card-market/valuation.util';
 
 /** The structured forecast Claude returns (stored verbatim). */
 export interface CardForecastData {
@@ -109,6 +114,66 @@ export class ForecastService {
     private readonly ai: AiService,
   ) {}
 
+  /**
+   * Recompute the forecast's price + confidence from the comps/anchor/index the
+   * model retrieved, in CODE — so the number is deterministic and not an LLM
+   * arithmetic slip. Leaves the qualitative brief (thesis, catalysts, etc.)
+   * exactly as the analyst wrote it. No-op for older forecasts that predate the
+   * structured valuation fields.
+   */
+  private applyDeterministicValuation(f: CardForecastData): CardForecastData {
+    const methods: ValMethod[] = [
+      'anchor-and-adjust',
+      'recent-median',
+      'triangulation',
+    ];
+    if (!f.method || !methods.includes(f.method as ValMethod)) return f;
+    const today = new Date().toISOString().slice(0, 10);
+    const toComp = (c?: {
+      priceUsd: number;
+      date: string;
+      grade?: string;
+      sourceType: string;
+      url: string;
+    }): ValComp | null =>
+      c && typeof c.priceUsd === 'number'
+        ? {
+            priceUsd: c.priceUsd,
+            date: c.date ?? null,
+            grade: c.grade ?? null,
+            sourceType: (c.sourceType ?? '').toLowerCase(),
+            url: c.url ?? null,
+          }
+        : null;
+
+    const out = computeValuation({
+      method: f.method as ValMethod,
+      anchorComp: toComp(f.anchorComp as never),
+      compsUsed: (f.compsUsed ?? [])
+        .map(c => toComp(c as never))
+        .filter((c): c is ValComp => c !== null),
+      indexMovePct:
+        typeof f.indexAdjustment?.movePct === 'number'
+          ? f.indexAdjustment.movePct
+          : null,
+      modelPoint: f.valueEstimate?.pointUsd ?? null,
+      modelLow: f.valueEstimate?.lowUsd ?? null,
+      modelHigh: f.valueEstimate?.highUsd ?? null,
+      today,
+    });
+
+    if (out.pointUsd != null) {
+      f.valueEstimate = {
+        pointUsd: out.pointUsd,
+        lowUsd: out.lowUsd ?? out.pointUsd,
+        highUsd: out.highUsd ?? out.pointUsd,
+        asOf: f.valueEstimate?.asOf ?? today,
+      };
+    }
+    f.valuationConfidence = { pct: out.confidencePct, basis: out.confidenceBasis };
+    return f;
+  }
+
   /** Cached forecast for a card, or null if none yet. */
   async getForecast(
     cardId: string,
@@ -157,6 +222,7 @@ ${this.FORECAST_JSON}`,
       effort: preset.effort,
       meta: { feature: 'card_forecast', adminId },
     });
+    this.applyDeterministicValuation(forecast);
 
     const now = new Date();
     const existing = await this.repo.findOne({
@@ -197,7 +263,7 @@ ${this.FORECAST_JSON}`,
     }
     const depth: AnswerDepth = normalizeDepth(rawDepth);
     const preset = DEEP_DIVE_DEPTH[depth];
-    return this.ai.research<CardForecastData>({
+    const forecast = await this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Subject: ${subject}.
 
@@ -207,5 +273,6 @@ ${this.FORECAST_JSON}`,
       effort: preset.effort,
       meta: { feature: 'deep_dive', adminId },
     });
+    return this.applyDeterministicValuation(forecast);
   }
 }

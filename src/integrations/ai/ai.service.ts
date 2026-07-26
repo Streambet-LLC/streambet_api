@@ -500,8 +500,10 @@ export class AiService {
 
       const continuing =
         res.stop_reason === 'pause_turn' || res.stop_reason === 'tool_use';
-      // Keep interim narration readable — break between turns.
-      if (continuing && turnHadText) opts.onText('\n\n');
+      // Separate any interim narration from the final answer with a single
+      // newline (the system prompt asks the model to stay silent between tool
+      // calls, so this rarely fires — but keeps output clean when it does).
+      if (continuing && turnHadText) opts.onText('\n');
 
       if (res.stop_reason === 'pause_turn') {
         messages.push({
