@@ -132,20 +132,28 @@ export class ValuationService {
     const hit = this.cache.get(cacheKey);
     if (hit && Date.now() - hit.at < this.CACHE_TTL_MS) return hit.value;
 
+    // Hard-bound the interactive latency: few searches, few rounds, and an
+    // overall abort so the chat can never hang on this tool.
     let raw: RawValuation;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 40000);
     try {
       raw = await this.ai.research<RawValuation>({
         system: this.SYSTEM,
         prompt: `Card: ${clean}.\nToday is ${today}.\n\n${this.SCHEMA}`,
         model: this.ai.chatModel,
         maxTokens: 4000,
-        maxSearches: 6,
+        maxSearches: 5,
+        maxRounds: 3,
         effort: 'medium',
+        signal: ctrl.signal,
         meta: { feature: 'value_card', adminId },
       });
     } catch (e) {
       this.logger.warn(`valueCard failed for "${clean}": ${(e as Error).message}`);
       return empty;
+    } finally {
+      clearTimeout(timer);
     }
 
     const method: ValMethod = METHODS.includes(raw.method as ValMethod)
@@ -183,9 +191,14 @@ export class ValuationService {
     const extraSources: { title: string; type?: string; url: string }[] = [];
 
     // #4 — real structured data (Pokémon TCG API): a keyless, deterministic
-    // corroboration. Prices are RAW-card, so for a graded slab it's a reference,
-    // and for a raw card with no sale comps it becomes the value.
-    if (this.pokemon.isPokemon(clean)) {
+    // fallback/corroboration. Prices are RAW-card, so for a graded slab it's a
+    // reference, and for a raw card with no sale comps it becomes the value.
+    // Only consult it when the sale comps didn't yield a number (saves latency
+    // on already-grounded cards).
+    if (
+      this.pokemon.isPokemon(clean) &&
+      (point == null || method === 'triangulation')
+    ) {
       try {
         const sp = await this.pokemon.fetch(clean);
         if (sp) {
