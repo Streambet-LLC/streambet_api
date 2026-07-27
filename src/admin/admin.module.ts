@@ -13,6 +13,7 @@ import { InsightsExchange } from './entities/insights-exchange.entity';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { AnalyticsDashboard } from './entities/analytics-dashboard.entity';
 import { TrackedCard } from './entities/tracked-card.entity';
+import { SoldCard } from './entities/sold-card.entity';
 import { CardValuationSnapshot } from './entities/card-valuation-snapshot.entity';
 import { InsightsFeedback } from './entities/insights-feedback.entity';
 import { ForecastService } from './forecast.service';
@@ -30,6 +31,7 @@ import { EbayBrowseSource } from './card-market/ebay-browse.source';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
 import { MarketService } from './market.service';
+import { SoldCardsService } from './sold-cards.service';
 import { RedditModule } from '../integrations/reddit/reddit.module';
 import { BlueskyModule } from '../integrations/bluesky/bluesky.module';
 import { YoutubeModule } from '../integrations/youtube/youtube.module';
@@ -60,6 +62,7 @@ import { User } from 'src/users/entities/user.entity';
       MarketSnapshot,
       AnalyticsDashboard,
       TrackedCard,
+      SoldCard,
       CardValuationSnapshot,
       InsightsFeedback,
     ]),
@@ -76,6 +79,7 @@ import { User } from 'src/users/entities/user.entity';
     AcquisitionService,
     ConsentedHandlesConnector,
     MarketService,
+    SoldCardsService,
     ForecastService,
     InsightsService,
     DeepResearchService,
