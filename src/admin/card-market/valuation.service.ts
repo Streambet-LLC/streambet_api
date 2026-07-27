@@ -7,6 +7,7 @@ import {
   ValComp,
   ValMethod,
   computeValuation,
+  isSameComp,
 } from './valuation.util';
 import { PokemonPriceSource } from './pokemon-price.source';
 import { EbayBrowseSource } from './ebay-browse.source';
@@ -35,6 +36,14 @@ export interface CardValuation {
   confidencePct: number;
   confidenceBasis: string;
   anchorComp: ValComp | null;
+  /** Age of the anchor sale in days, as of the valuation run. */
+  anchorAgeDays: number | null;
+  /**
+   * The anchor is older than 90 days — it is the best single datum we have but
+   * NOT a current price. Consumers must state the age and avoid "fresh"/"just
+   * sold" framing.
+   */
+  anchorIsStale: boolean;
   /** Sale comps that actually counted toward the price, newest-first. */
   compsUsed: ValComp[];
   indexAdjustment: { index: string; movePct: number; window: string } | null;
@@ -122,6 +131,7 @@ export class ValuationService {
 
   private readonly SYSTEM =
     'You are a trading-card valuation researcher. Your ONLY job is to RETRIEVE the market evidence for ONE specific card and return it as structured JSON — you do NOT compute the final price or confidence (the application does that from your evidence). GROUNDING CONTRACT: never state a sale/price you did not retrieve from a web_search result this run; every comp MUST carry a real retrieved url and a date (YYYY-MM-DD); confirm each comp is the SAME card (player/character, set, parallel/insert, number, year, grade); TYPE each source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask — NOT a sale), price-guide, or index. ' +
+    'EVERY COMP CARRIES ITS OWN TITLE: for each comp set "title" to that sale line\'s title EXACTLY as printed on the page (e.g. "2019 Panini Prizm Color Blast Patrick Mahomes II PSA 10") — verbatim, never the subject card\'s name copied down, never paraphrased, never blank. A sales-history page for one spec can still list DIFFERENT parallels/variants; the title is the only way to tell them apart, so if a row\'s title does not match the subject card (different insert, parallel, set, year, number, or player) LEAVE IT OUT entirely rather than reporting it as a comp. If a row has no readable title, omit the row. ' +
     'RECENCY IS CRITICAL: search MOST-RECENT-FIRST (e.g. include the current and prior year in queries), and for a graded card OPEN the PSA sales-history / auction-prices page for that exact spec and read the sales list top-to-bottom (it is ordered newest first). Return the newest dated sales you can find — do NOT report a 2024/2025 sale as "the latest" if a 2026 sale exists on the same page. Put EVERY dated sale you find (recent ones especially) into compsUsed; the app sorts them and anchors on the newest itself, so give it the full recent set, not just one. If a line item is a wild outlier vs. the others with no support, drop it (do not include obvious mis-scrapes). ' +
     'PICK THE ROUTE from what you find: (1) LIQUID — many recent exact SOLD comps (usually eBay) -> method "recent-median": return the most recent 5-8 exact-card SOLD comps (READ them off the sold-search page, do not just link it). (2) THIN / HIGH-VALUE — few but real recent sales, often on the PSA sales-history page not eBay -> method "anchor-and-adjust": return ALL recent confirmed sales in compsUsed (newest first) and set anchorComp to the single newest, plus the relevant player/segment index move since that newest sale date as indexAdjustment (e.g. Card Ladder). (3) NO direct comps (brand-new / 1-of-1) -> method "triangulation": leave compsUsed empty and put your triangulated range in estimate, based on analogs. ' +
     'Never anchor on a stale/mid-pack sale when a newer one exists. Only include estimate for triangulation. Do NOT invent comps, urls, or sales. Output ONLY the JSON object requested.';
@@ -130,8 +140,8 @@ export class ValuationService {
 {
   "isCard": <boolean>,
   "method": "recent-median" | "anchor-and-adjust" | "triangulation",
-  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale", "url": "<retrieved url>" } | null,
-  "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
+  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale", "url": "<retrieved url>" } | null,
+  "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
   "indexAdjustment": { "index": "<e.g. Card Ladder Patrick Mahomes>", "movePct": <signed number, e.g. -6.3>, "window": "<since the anchor date>" } | null,
   "estimate": { "pointUsd": <number>, "lowUsd": <number>, "highUsd": <number> } | null,
   "liquidity": "High" | "Medium" | "Low",
@@ -155,6 +165,8 @@ export class ValuationService {
       confidencePct: 20,
       confidenceBasis: 'no evidence retrieved',
       anchorComp: null,
+      anchorAgeDays: null,
+      anchorIsStale: false,
       compsUsed: [],
       indexAdjustment: null,
       marketContext: null,
@@ -205,8 +217,13 @@ export class ValuationService {
     const compsUsed = await this.verifyComps(clean, extracted, adminId);
     const rawAnchor = raw.anchorComp ? this.cleanComp(raw.anchorComp) : null;
     // If the anchor got dropped by the verifier, fall back to the newest kept.
+    // Match on the SALE (price+date+url), not the url alone: every row on a PSA
+    // sales-history page shares one url, so a url test passes for any comp on
+    // the page and would resurrect an anchor the verifier just rejected.
     const anchorComp =
-      rawAnchor && compsUsed.some(c => c.url === rawAnchor.url) ? rawAnchor : null;
+      rawAnchor && compsUsed.some(c => isSameComp(c, rawAnchor))
+        ? rawAnchor
+        : null;
 
     const out = computeValuation({
       method,
@@ -296,6 +313,8 @@ export class ValuationService {
       confidencePct: confPct,
       confidenceBasis: confBasis,
       anchorComp: out.anchor ?? anchorComp ?? out.pricingComps[0] ?? null,
+      anchorAgeDays: out.anchor ? out.anchorAgeDays : null,
+      anchorIsStale: out.anchorIsStale,
       compsUsed,
       indexAdjustment:
         raw.indexAdjustment &&
@@ -444,14 +463,19 @@ export class ValuationService {
       const list = comps
         .map(
           (c, i) =>
-            `${i}: $${c.priceUsd} | ${c.date ?? 'no date'} | ${c.grade ?? '?'} | ${c.sourceType} | ${c.url ?? 'NO URL'}`,
+            `${i}: $${c.priceUsd} | ${c.date ?? 'no date'} | title: ${
+              c.title ?? 'NO TITLE'
+            } | ${c.grade ?? '?'} | ${c.sourceType} | ${c.url ?? 'NO URL'}`,
         )
         .join('\n');
       const res = await this.ai.generateJson<{ drop: number[] }>({
         model: this.ai.chatModel,
         maxTokens: 600,
         system:
-          'You are a strict comp verifier for card valuations. You are given a card and a numbered list of comps. Return the indices to DROP because a comp is NOT a trustworthy, same-card confirmed SALE: it has no real sales URL, the URL/domain is not a plausible sale/marketplace source, it is clearly a DIFFERENT card or grade, it is an active listing/ask being passed off as a sale, or its price is a wild outlier vs the others with no support (likely fabricated). Be conservative — DROP only with a clear reason; when unsure, KEEP. Output JSON only.',
+          'You are a strict comp verifier for card valuations. You are given a card and a numbered list of comps. Return the indices to DROP because a comp is NOT a trustworthy, same-card confirmed SALE. ' +
+          'CHECK THE TITLE FIRST — it is the only field that identifies WHICH card sold. Compare each comp\'s title against the subject card field by field: player/character, year, set/product, insert or parallel name, card number, and grade. DROP any comp whose title names a different insert/parallel/variant, a different set or year, a different player, or a different grade — even when the price looks reasonable and even when it shares a url with the other comps. Several comps sharing one url does NOT make them the same card: a PSA sales-history page can list multiple parallels, so judge each title on its own. A comp with NO TITLE cannot be identity-checked — drop it UNLESS its price and date sit comfortably among titled comps that do match. ' +
+          'Also drop a comp that: has no real sales URL, has a URL/domain that is not a plausible sale/marketplace source, is an active listing/ask passed off as a sale, or is a wild price outlier vs the others with no support (likely fabricated or a mis-scrape). ' +
+          'Price agreement is NOT evidence of card identity — never keep a title-mismatched comp because it fits the price cluster. Otherwise be conservative: when the title genuinely matches and you are merely unsure, KEEP. Output JSON only.',
         prompt: `Card: ${subject}\n\nComps (index: price | date | grade | type | url):\n${list}\n\nReturn {"drop": [<indices to drop>]}.`,
         schema: {
           type: 'object',
@@ -491,6 +515,7 @@ export class ValuationService {
     return {
       priceUsd: price,
       date: typeof raw.date === 'string' ? raw.date.slice(0, 10) : null,
+      title: this.str(raw.title),
       grade: this.str(raw.grade),
       sourceType: (this.str(raw.sourceType) ?? 'marketplace-listing').toLowerCase(),
       url: typeof raw.url === 'string' ? raw.url : null,
@@ -499,9 +524,13 @@ export class ValuationService {
 
   private cleanComps(raw: unknown): ValComp[] {
     if (!Array.isArray(raw)) return [];
-    return raw
-      .slice(0, 12)
-      .map(c => this.cleanComp((c ?? {}) as Partial<ValComp>))
-      .filter((c): c is ValComp => c !== null);
+    const out: ValComp[] = [];
+    for (const c of raw.slice(0, 12)) {
+      const comp = this.cleanComp((c ?? {}) as Partial<ValComp>);
+      // Dedupe: reading a page AND its search result commonly returns the same
+      // sale twice, which would inflate the comp count and with it confidence.
+      if (comp && !out.some(k => isSameComp(k, comp))) out.push(comp);
+    }
+    return out;
   }
 }

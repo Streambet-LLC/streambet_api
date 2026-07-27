@@ -33,6 +33,7 @@ import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { MarketService } from './market.service';
+import { SoldCardsService } from './sold-cards.service';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
@@ -64,6 +65,7 @@ export class AdminController {
     private readonly googleSheetsService: GoogleSheetsService,
     private readonly acquisitionService: AcquisitionService,
     private readonly marketService: MarketService,
+    private readonly soldCardsService: SoldCardsService,
     private readonly forecastService: ForecastService,
     private readonly insightsService: InsightsService,
     private readonly deepResearchService: DeepResearchService,
@@ -473,6 +475,91 @@ export class AdminController {
     this.ensureAdmin(req.user);
     const data = await this.marketService.valuePortfolio(req.user.id);
     return { status: HttpStatus.OK, message: 'Portfolio valued', data };
+  }
+
+  // ---- Sold cards — the realized side of the portfolio ----
+
+  @ApiOperation({ summary: 'Logged sales + realized P/L roll-up' })
+  @Get('analytics/portfolio/sold')
+  async listSoldCards(
+    @Request() req: RequestWithUser,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.soldCardsService.list({
+      search,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      offset: offset ? Number.parseInt(offset, 10) : undefined,
+    });
+    return { status: HttpStatus.OK, message: 'Sold cards', data };
+  }
+
+  @ApiOperation({
+    summary: 'Log a sale (optionally drawing down the matching holding)',
+  })
+  @Post('analytics/portfolio/sold')
+  async addSoldCard(
+    @Request() req: RequestWithUser,
+    @Body()
+    body: {
+      name?: string;
+      brand?: string;
+      category?: string;
+      grade?: string;
+      quantity?: number;
+      costBasisUsd?: number | null;
+      salePriceUsd?: number | null;
+      feesUsd?: number | null;
+      platform?: string;
+      soldAt?: string | null;
+      notes?: string;
+      trackedCardId?: string | null;
+      reduceHolding?: boolean;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.soldCardsService.add(body ?? {}, req.user.id);
+    return { status: HttpStatus.CREATED, message: 'Sale logged', data };
+  }
+
+  @ApiOperation({ summary: 'Edit a logged sale' })
+  @ApiParam({ name: 'id', description: 'Sold card ID' })
+  @Patch('analytics/portfolio/sold/:id')
+  async updateSoldCard(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      brand?: string;
+      category?: string;
+      grade?: string;
+      quantity?: number;
+      costBasisUsd?: number | null;
+      salePriceUsd?: number | null;
+      feesUsd?: number | null;
+      platform?: string;
+      soldAt?: string | null;
+      notes?: string;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.soldCardsService.update(id, body ?? {});
+    return { status: HttpStatus.OK, message: 'Sale updated', data };
+  }
+
+  @ApiOperation({ summary: 'Delete a logged sale' })
+  @ApiParam({ name: 'id', description: 'Sold card ID' })
+  @Delete('analytics/portfolio/sold/:id')
+  async removeSoldCard(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.soldCardsService.remove(id);
+    return { status: HttpStatus.OK, message: 'Sale deleted', data };
   }
 
   @ApiOperation({

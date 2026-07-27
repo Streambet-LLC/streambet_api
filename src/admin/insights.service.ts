@@ -45,7 +45,7 @@ SCOPE — you help with trading cards / collectibles and their market. This is G
 3. Predictive outlook — upcoming events/scenarios with odds and price impact (e.g. odds of an MVP or championship run and how it moves a card).
 4. Historical precedents — how comparable cards moved through similar past events.
 5. Macro factors — supply cuts, reprints, and PSA/BGS grading & population shifts and their pricing/supply impact.
-6. Deal / sell-side guidance for a specific card — what to list or accept, countering an offer, negotiating against comps, and sell-vs-hold TIMING. Ground it in recent SOLD comps + the card's outlook and give a concrete number or range. For sell-timing be DATA-CENTRIC and probabilistic, not "could go up or down": give days/weeks to the next real catalyst, then scenarios with rough odds and % moves whose probabilities sum to 100 — e.g. "next catalyst: playoffs in ~90d; upside P~30% +15-25%; base P~50% flat; downside P~20% -10%; expected ~ $Z" — plus a one-line verdict. Keep the brief "market estimate, not financial advice" caveat. This IS in scope — a market read on a collectible, not stock/tax/investment advice.
+6. Deal / sell-side guidance for a specific card — what to list or accept, countering an offer, negotiating against comps, and sell-vs-hold TIMING. Ground it in recent SOLD comps + the card's outlook and give a concrete number or range. For sell-timing be DATA-CENTRIC and probabilistic, not "could go up or down": name the next real catalyst, then scenarios with rough odds and % moves whose probabilities sum to 100 — e.g. "next catalyst: playoffs (~90d out); upside P~30% +15-25%; base P~50% flat; downside P~20% -10%; expected ~ $Z" — plus a one-line verdict. Only attach a countdown ("~90d out") when you have DERIVED it from today's date or retrieved the catalyst's actual date — never from memory. If you don't know when the catalyst lands, name it without a timeframe rather than guessing one. Keep the brief "market estimate, not financial advice" caveat. This IS in scope — a market read on a collectible, not stock/tax/investment advice.
 You ALSO have access to the business's outreach LEADS (prospective collectors discovered on social platforms) via the search_leads tool — use it ONLY when the question is explicitly about leads/prospects.
 
 Answer by calling the tools and synthesizing the results.
@@ -69,7 +69,8 @@ TOOL ROUTING:
 
 RULES (follow strictly):
 - GROUND IN REAL DATA — NEVER STATE A PRICE YOU DIDN'T RETRIEVE. Every sale/market price you cite must come from a specific web_search result you actually opened this turn, with a URL and a date. No prices from memory, no invented sales, no phantom comps, no "typical" figure dressed as a sale. If you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and quote the individual comps in it before answering — a bare search link is NOT a valuation. Never say "not enough data".
-- ANCHOR ON THE MOST RECENT SALE. When you have direct comps, list them with dates, sort newest-first, and anchor on the single MOST RECENT confirmed sale — state "last confirmed sale: $X on <date> (<source-type>, link)". Older comps are trend context only; never anchor on a mid-pack or stale sale.
+- ANCHOR ON THE MOST RECENT SALE, AND STATE ITS AGE. When you have direct comps, list them with dates, sort newest-first, and anchor on the single MOST RECENT confirmed sale. Always state the anchor WITH its age measured against today — "last confirmed sale: $X on <date> (Nd ago, <source-type>, link)". Older comps are trend context only; never anchor on a mid-pack sale when a newer one exists.
+- A STALE ANCHOR IS NOT A CURRENT PRICE. If the newest confirmed sale is more than ~90 days old, say so in the anchor line ("the newest sale is Nd old"), and do NOT present it as what the card is worth today. Either adjust it by the relevant player/segment index move since that date and show the arithmetic, or carry it forward unadjusted and widen the range to match the staleness — then say which you did. Never describe a stale anchor as "fresh", "recent", or "just sold", and never build a confident sell-now call on one old print. When comps are few and spread over years, give the historical RANGE the card trades in alongside the anchor so the number has context.
 - PICK THE VALUATION METHOD FOR THE CARD:
   (a) LOW-POP / HIGH-VALUE, few-but-recent comps -> anchor on the most-recent sale, then ADJUST by how much the relevant player/segment index moved since that sale date. Show it: anchor x (1 +/- index move) ~ estimate (e.g. $17,100 x 0.937 ~ $16,020), then a tight range for scarcity. Keep it short — do not over-engineer.
   (b) LIQUID, many recent comps -> trimmed median of the most recent solds (drop outliers); state N and date range; high confidence.
@@ -87,6 +88,29 @@ RULES (follow strictly):
 - Format money as $X,XXX. Reference cards by name; when summarizing a forecast, give the outlook plus the 2-3 most relevant catalysts/precedents/macro factors with their probabilities.
 - LEAD WITH THE VALUATION; ADD DIMENSIONS ONLY WHEN THE DEPTH STYLE SAYS TO. Default answer shape for a specific card is TIGHT: anchor (most-recent sale) + estimate/range + one-line confidence + one-line take. Do NOT auto-append buyers/liquidity/trajectory/rating on a brief answer — only work those in when the depth style expands or the admin asks. For the full structured version, suggest an AI Market Report.
 - LINK EVERY CITED PRICE TO THE SOURCE YOU RETRIEVED. Hyperlink the NUMBER itself to the exact result the price came from — e.g. "a PSA 10 [sold for $520](https://www.ebay.com/…)". Only use URLs you actually opened this turn. A sold-comps SEARCH link (eBay LH_Sold, PSA sales history) is NOT a price source: first READ that page and cite the specific comps on it; you may then add the search link as a secondary "verify" link. If a number has no retrieved source, present it as a labeled estimate with its method — never attach a fabricated or guessed URL. Put links inline on the prices; no trailing "Links:" list.`;
+
+  /**
+   * Today's date + the rules that depend on it. Built PER REQUEST — a readonly
+   * field would freeze the date at process start, and this API stays up for
+   * weeks. Without this block the model falls back to its training cutoff and
+   * invents the calendar: it called a 10-month-old comp "fresh" and put the NFL
+   * playoffs "~4-6 weeks" out in late July.
+   */
+  private temporalContext(): string {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const pretty = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+    return `TODAY IS ${pretty} (${today}). This is the ONLY correct current date — your training data is older, so never infer "now" from it.
+- AGE EVERY DATE against today before you describe it. Compute the gap and say it: "sold 311 days ago (Sep 19, 2025)". Never call a sale "recent", "fresh", "just sold", "this month/season", or "the current season" without checking it against ${today} first. A comp over 90 days old is STALE — say so plainly.
+- NEVER ASSERT WHERE WE ARE IN A SPORT'S CALENDAR FROM MEMORY. Before you cite a season phase or a dated catalyst (playoffs, the draft, a set release, a grading deadline), derive it from ${today} — and if you are not sure, search for it or describe the catalyst without a countdown. Do not invent "in the next N weeks". Getting this wrong has been a recurring failure: as of ${today}, work out the actual month before you claim a season is starting, ending, or in the playoffs.
+- When value_card returns anchorIsStale or a large anchorAgeDays, LEAD the take with that staleness — the estimate is carried forward from an old print, not a live market price.`;
+  }
 
   private readonly TOOLS: AiToolSpec[] = [
     // NOTE: the former marketplace tools (search_cards / get_card /
@@ -385,7 +409,7 @@ RULES (follow strictly):
     const preset = CHAT_DEPTH[depth];
     const cap = this.captureValuation(adminId, depth);
     const { text, toolCalls } = await this.ai.runToolConversation({
-      system: `${this.SYSTEM}\n\n${preset.style}`,
+      system: `${this.SYSTEM}\n\n${this.temporalContext()}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
       dispatch: cap.dispatch,
@@ -459,10 +483,15 @@ RULES (follow strictly):
       `**~${money(v.pointUsd)}**${range} · **${v.confidencePct}% confidence**${hedge}.`,
     );
     if (v.anchorComp) {
+      // Age, not just the date — a bare "on Sep 19, 2025" reads as current.
+      const age =
+        v.anchorAgeDays != null && v.anchorAgeDays < 3650
+          ? `, ${v.anchorAgeDays}d ago${v.anchorIsStale ? ' — stale' : ''}`
+          : '';
       lines.push(
         `Anchor: last sale [${money(v.anchorComp.priceUsd)}](${
           v.anchorComp.url || '#'
-        }) on ${v.anchorComp.date ?? 'n/a'} (${v.anchorComp.sourceType}). Method: ${
+        }) on ${v.anchorComp.date ?? 'n/a'}${age} (${v.anchorComp.sourceType}). Method: ${
           methodLabel[v.method] ?? v.method
         }.`,
       );
@@ -477,8 +506,11 @@ RULES (follow strictly):
       );
     }
     for (const c of v.compsUsed.filter(c => c.url).slice(0, 4)) {
+      // Show each comp's own title — it's how the admin spots a wrong parallel
+      // that slipped through, which price and date alone can never reveal.
+      const what = c.title ? ` — ${c.title}` : '';
       lines.push(
-        `- [${money(c.priceUsd)}](${c.url}) — ${c.date ?? 'n/a'} — ${
+        `- [${money(c.priceUsd)}](${c.url}) — ${c.date ?? 'n/a'}${what} — ${
           c.grade ?? ''
         } — ${c.sourceType}`,
       );
@@ -580,7 +612,7 @@ RULES (follow strictly):
     const cap = this.captureValuation(adminId, depth);
     let acc = '';
     const { toolCalls } = await this.ai.streamToolConversation({
-      system: `${this.SYSTEM}\n\n${preset.style}`,
+      system: `${this.SYSTEM}\n\n${this.temporalContext()}\n\n${preset.style}`,
       messages: clean,
       tools: this.TOOLS,
       dispatch: cap.dispatch,
