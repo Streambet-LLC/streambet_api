@@ -82,6 +82,16 @@ export class ForecastService {
   private readonly ANALYST_SYSTEM =
     'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. GROUNDING CONTRACT (non-negotiable): never state a sale or market price you did not retrieve from a web_search result this run; every price you cite must carry a real URL and a date; if you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and cite the individual comps in it before using it — a bare search link is not a valuation; confirm each comp is the SAME card (player/character, set, parallel, number, year, grade); and TYPE every source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask, not a sale), price-guide, or index (never call a marketplace like Fanatics Collect a price guide). FIRST CLASSIFY THE CARD, then pick the valuation route: (a) LOW-POP / HIGH-VALUE with few-but-recent comps (it will not be on eBay) -> use the PSA spec + sales-history page and a player/segment index (e.g. Card Ladder); ANCHOR on the single MOST RECENT confirmed sale, then ADJUST by the index move since that sale date (anchor x (1 +/- index move) = estimate) and give a tight range for scarcity; (b) LIQUID with many recent solds -> trimmed median of the most recent eBay SOLD comps (drop outliers), and USE the comps in your own search link; (c) ULTRA-TRADED low-value -> recent median, high confidence; (d) BRAND-NEW / NO comps or (e) UNTRADED 1-of-1 -> only THEN triangulate from analogs (adjacent grades x grade multiplier, raw<->graded, sibling parallels, same player comparable prints, pop scarcity) as a clearly-labeled LOW-confidence estimate. Do NOT triangulate when direct recent comps exist, and never anchor on a stale or mid-pack sale when a newer one exists. Gather in parallel: recent news + social sentiment; upcoming catalysts; PSA/BGS population and policy trends; print-run / reprint / supply news; and historical PRECEDENTS. Assess an overall CardCade RATING (0-100 + label), a LIQUIDITY score, the PRICE TRAJECTORY, and the LIKELY BUYERS. Make CONFIDENCE a function of (# recent comps, recency of the newest, price dispersion): many tight recent comps -> high; one/old/index-adjusted comp -> ~60-72; analogs only -> low. For sell-timing give DATA-CENTRIC probabilistic scenarios (days-to-catalyst; P(up)/P(base)/P(down) summing to 100 with % moves and an expected value), not "could go up or down". If you hit the search budget, answer from the comps already retrieved — never degrade to "not enough data". Output ONLY a JSON object.';
 
+  /**
+   * Today's date for the research prompt. Built per call, not cached in a
+   * field — the process runs for weeks. Without it the model dates catalysts
+   * and comp recency off its training cutoff.
+   */
+  private todayLine(): string {
+    const now = new Date();
+    return `Today is ${now.toISOString().slice(0, 10)}. Age every comp and catalyst against THIS date — never call a sale "recent" or a catalyst "upcoming" without checking it, and never infer the current season or month from your training data. A sale over 90 days old is stale: say so and do not present it as a current price.`;
+  }
+
   private readonly FORECAST_JSON = `Return ONLY this JSON (no prose, no code fences):
 {
   "outlook": "Bullish" | "Neutral" | "Bearish",
@@ -215,6 +225,7 @@ export class ForecastService {
       prompt: `Card: ${card.name} (${card.brand ?? '?'} / ${card.category ?? '?'}${
         card.grade ? `, grade ${card.grade}` : ''
       }).
+${this.todayLine()}
 
 ${this.FORECAST_JSON}`,
       maxTokens: preset.maxTokens,
@@ -266,6 +277,7 @@ ${this.FORECAST_JSON}`,
     const forecast = await this.ai.research<CardForecastData>({
       system: this.ANALYST_SYSTEM,
       prompt: `Subject: ${subject}.
+${this.todayLine()}
 
 ${this.FORECAST_JSON}`,
       maxTokens: preset.maxTokens,

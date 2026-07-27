@@ -35,6 +35,14 @@ export interface CardValuation {
   confidencePct: number;
   confidenceBasis: string;
   anchorComp: ValComp | null;
+  /** Age of the anchor sale in days, as of the valuation run. */
+  anchorAgeDays: number | null;
+  /**
+   * The anchor is older than 90 days — it is the best single datum we have but
+   * NOT a current price. Consumers must state the age and avoid "fresh"/"just
+   * sold" framing.
+   */
+  anchorIsStale: boolean;
   /** Sale comps that actually counted toward the price, newest-first. */
   compsUsed: ValComp[];
   indexAdjustment: { index: string; movePct: number; window: string } | null;
@@ -155,6 +163,8 @@ export class ValuationService {
       confidencePct: 20,
       confidenceBasis: 'no evidence retrieved',
       anchorComp: null,
+      anchorAgeDays: null,
+      anchorIsStale: false,
       compsUsed: [],
       indexAdjustment: null,
       marketContext: null,
@@ -296,6 +306,8 @@ export class ValuationService {
       confidencePct: confPct,
       confidenceBasis: confBasis,
       anchorComp: out.anchor ?? anchorComp ?? out.pricingComps[0] ?? null,
+      anchorAgeDays: out.anchor ? out.anchorAgeDays : null,
+      anchorIsStale: out.anchorIsStale,
       compsUsed,
       indexAdjustment:
         raw.indexAdjustment &&

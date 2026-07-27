@@ -98,6 +98,21 @@ function scoreFixture(
       !!v.anchorComp,
       v.anchorComp ? `${money(v.anchorComp.priceUsd)} @ ${v.anchorComp.date}` : 'no anchor',
     );
+    // A stale anchor must be labelled AND carry a wider range — an old print
+    // quoted at +/-8% reads as a live price. Regression guard.
+    if (v.anchorIsStale && v.pointUsd && v.lowUsd != null && v.highUsd != null) {
+      const halfWidth = (v.highUsd - v.lowUsd) / 2 / v.pointUsd;
+      add(
+        'stale anchor widens the range (>10%)',
+        halfWidth > 0.1,
+        `${v.anchorAgeDays}d old, +/-${Math.round(halfWidth * 100)}%`,
+      );
+      add(
+        'stale anchor is labelled in the confidence basis',
+        /stale/i.test(v.confidenceBasis),
+        v.confidenceBasis,
+      );
+    }
   }
 
   return checks;

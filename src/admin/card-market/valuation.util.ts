@@ -47,7 +47,18 @@ export interface ValOutput {
   pricingComps: ValComp[];
   /** The comp we anchored on — the NEWEST dated sale (code-chosen, not model). */
   anchor: ValComp | null;
+  /** How old the anchor sale is, in days. 3650 when undated/absent. */
+  anchorAgeDays: number;
+  /**
+   * True when the anchor is older than STALE_ANCHOR_DAYS. A stale print is
+   * still the best single datum we have, but it is NOT a current price — the
+   * range widens and the narration must say how old it is.
+   */
+  anchorIsStale: boolean;
 }
+
+/** Past this age a single sale stops being a "current" price. */
+export const STALE_ANCHOR_DAYS = 90;
 
 const SALE_TYPES = new Set(['auction-sale', 'private-sale', 'sold', 'auction']);
 
@@ -108,6 +119,26 @@ const dispersionFactor = (c: number, single: boolean): number => {
 };
 
 /**
+ * Half-width of the anchor-and-adjust range. One sale print gets less
+ * representative the older it is, so the band widens with age — a 10-month-old
+ * anchor quoted at +/-8% reads as a live price when it isn't. An index
+ * adjustment already corrects for drift, so it earns back half the widening.
+ */
+export const anchorBand = (ageDays: number, hasIndex: boolean): number => {
+  const base =
+    ageDays <= 30
+      ? 0.08
+      : ageDays <= 90
+        ? 0.1
+        : ageDays <= 180
+          ? 0.15
+          : ageDays <= 365
+            ? 0.22
+            : 0.3;
+  return hasIndex ? 0.08 + (base - 0.08) / 2 : base;
+};
+
+/**
  * Evidence-tied confidence: f(# recent comps, recency of newest, dispersion),
  * with a small bonus for a real index-adjusted anchor and a hard cap on
  * triangulated estimates.
@@ -138,7 +169,13 @@ export const computeConfidence = (opts: {
   } else if (opts.method === 'anchor-and-adjust') {
     const ageTxt =
       opts.dLastDays >= 3650 ? 'undated' : `${opts.dLastDays}d old`;
-    basis = `anchored on last sale (${ageTxt})${opts.hasIndex ? ', index-adjusted' : ''}`;
+    // Say "stale" out loud — a bare date reads as current to both the model
+    // narrating this and the admin reading it.
+    const stale =
+      opts.dLastDays > STALE_ANCHOR_DAYS && opts.dLastDays < 3650
+        ? ' — STALE, not a current price'
+        : '';
+    basis = `anchored on last sale (${ageTxt})${opts.hasIndex ? ', index-adjusted' : ''}${stale}`;
   } else {
     basis = `${opts.nRecent} recent comp${opts.nRecent === 1 ? '' : 's'}, ${recency}${spread}`;
   }
@@ -179,13 +216,15 @@ export const computeValuation = (input: ValInputs): ValOutput => {
   ].sort(
     (a, b) => daysBetween(a.date, input.today) - daysBetween(b.date, input.today),
   );
-  let anchor: ValComp | null = anchorCandidates[0] ?? null;
+  const anchor: ValComp | null = anchorCandidates[0] ?? null;
+  const anchorAgeDays = anchor ? daysBetween(anchor.date, input.today) : 3650;
+  const anchorIsStale = anchorAgeDays > STALE_ANCHOR_DAYS;
 
   if (input.method === 'anchor-and-adjust') {
     if (anchor) {
       const move = input.indexMovePct ?? 0;
       point = anchor.priceUsd * (1 + move / 100);
-      const h = 0.08;
+      const h = anchorBand(anchorAgeDays, input.indexMovePct != null);
       low = point * (1 - h);
       high = point * (1 + h);
     }
@@ -204,12 +243,14 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     high = input.modelHigh;
   }
 
-  const single =
-    input.method === 'anchor-and-adjust' && nRecent <= 1;
+  const single = input.method === 'anchor-and-adjust' && nRecent <= 1;
   const conf = computeConfidence({
     method: input.method,
     nRecent,
-    dLastDays: dLast,
+    // When we anchor, the anchor's own age is what the estimate rides on —
+    // pricing[0] can be a different comp than the one we anchored on.
+    dLastDays:
+      input.method === 'anchor-and-adjust' && anchor ? anchorAgeDays : dLast,
     cv: dispersion,
     hasIndex: input.indexMovePct != null,
     single,
@@ -226,5 +267,7 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     confidenceBasis: conf.basis,
     pricingComps: pricing,
     anchor,
+    anchorAgeDays,
+    anchorIsStale: !!anchor && anchorIsStale,
   };
 };
