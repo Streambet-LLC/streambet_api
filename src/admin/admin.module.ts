@@ -13,6 +13,8 @@ import { InsightsExchange } from './entities/insights-exchange.entity';
 import { MarketSnapshot } from './entities/market-snapshot.entity';
 import { AnalyticsDashboard } from './entities/analytics-dashboard.entity';
 import { TrackedCard } from './entities/tracked-card.entity';
+import { CardValuationSnapshot } from './entities/card-valuation-snapshot.entity';
+import { InsightsFeedback } from './entities/insights-feedback.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
@@ -24,6 +26,7 @@ import { EbayMarketSource } from './card-market/ebay-market.source';
 import { WebResearchMarketSource } from './card-market/web-research-market.source';
 import { ValuationService } from './card-market/valuation.service';
 import { PokemonPriceSource } from './card-market/pokemon-price.source';
+import { EbayBrowseSource } from './card-market/ebay-browse.source';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import { ConsentedHandlesConnector } from './acquisition/consented-handles.connector';
 import { MarketService } from './market.service';
@@ -57,6 +60,8 @@ import { User } from 'src/users/entities/user.entity';
       MarketSnapshot,
       AnalyticsDashboard,
       TrackedCard,
+      CardValuationSnapshot,
+      InsightsFeedback,
     ]),
     RedditModule,
     BlueskyModule,
@@ -82,6 +87,7 @@ import { User } from 'src/users/entities/user.entity';
     WebResearchMarketSource,
     ValuationService,
     PokemonPriceSource,
+    EbayBrowseSource,
   ],
 })
 export class AdminModule {}

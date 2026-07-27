@@ -2,6 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InsightsExchange } from './entities/insights-exchange.entity';
+import { InsightsFeedback } from './entities/insights-feedback.entity';
+
+export interface FeedbackDto {
+  id: string;
+  rating: string;
+  question: string | null;
+  answer: string | null;
+  note: string | null;
+  subject: string | null;
+  createdAt: string;
+}
 
 export interface ConversationSummary {
   conversationId: string;
@@ -34,7 +45,71 @@ export class InsightsHistoryService {
   constructor(
     @InjectRepository(InsightsExchange)
     private readonly repo: Repository<InsightsExchange>,
+    @InjectRepository(InsightsFeedback)
+    private readonly feedbackRepo: Repository<InsightsFeedback>,
   ) {}
+
+  /** Record a thumbs up/down on a Cardy answer (the reliability flywheel). */
+  async saveFeedback(input: {
+    rating: 'up' | 'down';
+    question?: string;
+    answer?: string;
+    note?: string;
+    subject?: string;
+    conversationId?: string;
+    adminId?: string;
+  }): Promise<{ ok: true }> {
+    const rating = input.rating === 'down' ? 'down' : 'up';
+    try {
+      await this.feedbackRepo.save(
+        this.feedbackRepo.create({
+          rating,
+          question: (input.question ?? '').slice(0, 8000) || null,
+          answer: (input.answer ?? '').slice(0, 20000) || null,
+          note: (input.note ?? '').slice(0, 2000) || null,
+          subject: (input.subject ?? '').slice(0, 300) || null,
+          conversationId: UUID_RE.test(input.conversationId ?? '')
+            ? (input.conversationId as string)
+            : null,
+          adminId: input.adminId ?? null,
+        }),
+      );
+    } catch (e) {
+      this.logger.warn(`Feedback save failed: ${(e as Error).message}`);
+    }
+    return { ok: true };
+  }
+
+  /** List feedback (newest first), optionally filtered to thumbs-down. */
+  async listFeedback(opts: {
+    rating?: 'up' | 'down';
+    limit?: number;
+    offset?: number;
+  }): Promise<{ total: number; data: FeedbackDto[] }> {
+    try {
+      const [rows, total] = await this.feedbackRepo.findAndCount({
+        where: opts.rating ? { rating: opts.rating } : {},
+        order: { createdAt: 'DESC' },
+        take: Math.min(Math.max(opts.limit ?? 50, 1), 200),
+        skip: Math.max(opts.offset ?? 0, 0),
+      });
+      return {
+        total,
+        data: rows.map((r) => ({
+          id: r.id,
+          rating: r.rating,
+          question: r.question,
+          answer: r.answer,
+          note: r.note,
+          subject: r.subject,
+          createdAt: r.createdAt.toISOString(),
+        })),
+      };
+    } catch (e) {
+      this.logger.warn(`Feedback list failed: ${(e as Error).message}`);
+      return { total: 0, data: [] };
+    }
+  }
 
   /** Best-effort save — never throws into the chat response path. */
   async save(entry: {

@@ -60,7 +60,7 @@ PHOTOS: The admin may attach a photo of a card (taken on a phone or uploaded). W
 
 TOOL ROUTING:
 - For a SPECIFIC card, call verify_card FIRST and wait for confirmation (see VERIFY THE CARD FIRST) before any of the below.
-- For a specific card's PRICE / "what is it worth" / sell-vs-hold question (once confirmed): call value_card ONCE. It runs the comp research and computes the price + confidence in CODE. As soon as it returns, immediately NARRATE its result and END — do NOT call value_card again, and do not keep searching. NARRATE its result — use its pointUsd, low/high, confidencePct, method, and comps VERBATIM; hyperlink each comp's price to its url; do NOT recompute, round away, second-guess, or invent any number, and do NOT run your own separate pricing web search when value_card already returned comps. Fold liquidity/trajectory/take into your one-line take.
+- For a specific card's PRICE / "what is it worth" / sell-vs-hold question (once confirmed): call value_card ONCE. It runs the comp research and computes the price + confidence in CODE, and the APP DISPLAYS the price, confidence, method, and comps as a VISUAL CARD automatically. So do NOT restate those numbers/comps in prose (no "~$X, N% confidence, anchor…", no comp list — the card already shows them). Instead reply with just a SHORT take (1-2 sentences): the sell/hold call and any answer to the non-price part of the question (e.g. timing scenarios). If the value_card reliability is thin/unverified, say so in that take. Never call value_card twice or run your own pricing web search once it returned.
 - HONESTY GATE — respect value_card's "reliability": if it is "grounded", state the number with confidence; if "thin", lead with the hedge ("thin data — rough estimate, ~$X, low confidence") and keep the range wide; if "unverified" (or isCard=false / no comps), DO NOT present a confident number — say plainly we couldn't find solid comps, give the labeled estimate if any, and offer an AI Market Report. Never dress a thin/unverified read up as a firm price.
 - For ANY question about a card's pricing/recent sales, social buzz/hype, upcoming events & scenario odds, historical precedents, or supply/reprint/PSA-grading impact: USE WEB SEARCH. Pull recent SOLD prices + news, then ANCHOR on the MOST RECENT confirmed sale (see VALUATION below) and cite where. Pick sources by card type: for a LOW-POP / HIGH-VALUE / thin-comp card (it will NOT be on eBay) use the PSA spec + sales-history page (psacard.com) and a player/segment index (e.g. Card Ladder); for a LIQUID card pull the eBay SOLD comps (ebay.com …&LH_Sold=1&LH_Complete=1) and TCGplayer / PriceCharting / 130point. TYPE every source you cite as exactly one of: auction-sale, private-sale, marketplace-listing (an active ask, NOT a sale), price-guide, or index — never call a listing or a marketplace (e.g. Fanatics Collect) a "price guide", and confirm each comp is the SAME card (player, set, parallel, number, year, grade) before using it.
 - Keep web use efficient but spend enough to land the right comps: for a thin low-pop card that means the PSA sales-history page + an index read; for a liquid card the eBay SOLD page (and READ the comps on it). If you hit the search limit mid-answer, ANSWER FROM THE COMPS YOU ALREADY RETRIEVED — never degrade to "no direct comp found" or to other-player triangulation when you already surfaced direct comps. Note the limit in one clause and still give the anchor, estimate, and confidence.
@@ -157,8 +157,10 @@ RULES (follow strictly):
         'sell-vs-hold question about a specific card, AFTER it is confirmed. ' +
         'Returns pointUsd, lowUsd, highUsd, confidencePct + basis, method, a ' +
         'reliability label (grounded | thin | unverified), the anchor sale, the ' +
-        'comps used (with urls, dates, source types), any index adjustment, and ' +
-        'a liquidity/trajectory/take read. NARRATE these numbers exactly — never ' +
+        'comps used (with urls, dates, source types), any index adjustment, ' +
+        'optional marketContext (live eBay ACTIVE listings = asks, NOT sold ' +
+        'comps — context/liquidity only, never a comp price), and a ' +
+        'liquidity/trajectory/take read. NARRATE these numbers exactly — never ' +
         'change the price or confidence, hyperlink each comp price to its url, ' +
         'and respect the reliability label (see HONESTY GATE). Prefer this over ' +
         'your own pricing web searches for a specific card.',
@@ -358,7 +360,11 @@ RULES (follow strictly):
     adminId?: string,
     conversationId?: string,
     rawDepth?: unknown,
-  ): Promise<{ reply: string; toolCalls: AiToolInvocation[] }> {
+  ): Promise<{
+    reply: string;
+    toolCalls: AiToolInvocation[];
+    valuation: CardValuation | null;
+  }> {
     if (!this.ai.isConfigured()) {
       throw new BadRequestException(
         'AI is not configured (missing ANTHROPIC_API_KEY).',
@@ -372,7 +378,7 @@ RULES (follow strictly):
     // Cheap up-front scope gate: reject off-topic questions before the
     // expensive, data-touching tool loop ever runs.
     if (!(await this.inScope(clean, adminId))) {
-      return { reply: this.OUT_OF_SCOPE, toolCalls: [] };
+      return { reply: this.OUT_OF_SCOPE, toolCalls: [], valuation: null };
     }
 
     const depth = normalizeDepth(rawDepth);
@@ -397,7 +403,7 @@ RULES (follow strictly):
       text ||
       (cap.last() ? this.formatValuation(cap.last()!) : this.EMPTY_REPLY);
     void this.saveExchange(clean, reply, toolCalls, adminId, conversationId);
-    return { reply, toolCalls };
+    return { reply, toolCalls, valuation: cap.last() };
   }
 
   private readonly EMPTY_REPLY =
@@ -560,13 +566,13 @@ RULES (follow strictly):
     handlers: { onText: (t: string) => void; onTool?: (name: string) => void },
     conversationId?: string,
     rawDepth?: unknown,
-  ): Promise<{ toolCalls: AiToolInvocation[] }> {
+  ): Promise<{ toolCalls: AiToolInvocation[]; valuation: CardValuation | null }> {
     const clean = this.prepare(messages);
 
     if (!(await this.inScope(clean, adminId))) {
       handlers.onText(this.OUT_OF_SCOPE);
       void this.saveExchange(clean, this.OUT_OF_SCOPE, [], adminId, conversationId);
-      return { toolCalls: [] };
+      return { toolCalls: [], valuation: null };
     }
 
     const depth = normalizeDepth(rawDepth);
@@ -592,14 +598,16 @@ RULES (follow strictly):
       meta: { feature: 'chat', adminId },
     });
     if (!acc.trim()) {
-      // The model called value_card but didn't narrate → render it ourselves.
-      const fallback = cap.last()
-        ? this.formatValuation(cap.last()!)
-        : this.EMPTY_REPLY;
-      handlers.onText(fallback);
-      acc = fallback;
+      if (cap.last()) {
+        // A valuation card will render from `valuation` — don't stream a
+        // redundant text copy; keep a text form only for saved history.
+        acc = this.formatValuation(cap.last()!);
+      } else {
+        handlers.onText(this.EMPTY_REPLY);
+        acc = this.EMPTY_REPLY;
+      }
     }
     void this.saveExchange(clean, acc, toolCalls, adminId, conversationId);
-    return { toolCalls };
+    return { toolCalls, valuation: cap.last() };
   }
 }

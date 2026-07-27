@@ -1,11 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AiService } from '../../integrations/ai/ai.service';
+import { CardValuationSnapshot } from '../entities/card-valuation-snapshot.entity';
 import {
   ValComp,
   ValMethod,
   computeValuation,
 } from './valuation.util';
 import { PokemonPriceSource } from './pokemon-price.source';
+import { EbayBrowseSource } from './ebay-browse.source';
+
+/** One point in a card's valuation history. */
+export interface ValuationHistoryPoint {
+  at: string;
+  pointUsd: number | null;
+  lowUsd: number | null;
+  highUsd: number | null;
+  confidencePct: number | null;
+}
 
 /** How trustworthy the valuation is, for the honesty gate. */
 export type Reliability = 'grounded' | 'thin' | 'unverified';
@@ -25,6 +38,16 @@ export interface CardValuation {
   /** Sale comps that actually counted toward the price, newest-first. */
   compsUsed: ValComp[];
   indexAdjustment: { index: string; movePct: number; window: string } | null;
+  /**
+   * Live eBay ACTIVE-listing context (asks, not sold comps) — a lowest-ask
+   * ceiling + liquidity signal + shop link. Never the valuation price.
+   */
+  marketContext: {
+    source: string;
+    activeCount: number;
+    lowestAskUsd: number | null;
+    url: string;
+  } | null;
   /**
    * The honesty gate: 'grounded' = real recent comps, trust the number;
    * 'thin' = few/old/index-only, hedge; 'unverified' = no direct evidence,
@@ -69,13 +92,28 @@ const METHODS: ValMethod[] = [
 @Injectable()
 export class ValuationService {
   private readonly logger = new Logger(ValuationService.name);
-  /** Short-lived cache so the same card asked twice gives the SAME number. */
+  /** Cache so the same card asked twice gives the SAME number — and so a
+   *  pre-warmed demo card returns instantly. Sized for a demo session. */
   private readonly cache = new Map<string, { at: number; value: CardValuation }>();
-  private readonly CACHE_TTL_MS = 45 * 60 * 1000;
+  private readonly CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+
+  /** Demo-friendly cards to pre-warm before a live session (liquid, clean
+   *  comps that value reliably). Hitting /valuation/warm caches these. */
+  static readonly SHOWCASE_SUBJECTS = [
+    '2019 Panini Prizm Color Blast Patrick Mahomes PSA 10',
+    '2025 Panini Absolute Kaboom Luther Burden III PSA 10',
+    '2023 Pokemon 151 Charizard ex Special Illustration Rare #199 PSA 10',
+    '2016 Pokemon XY Evolutions Charizard Holo #11 PSA 10',
+    '2018 Panini Prizm Luka Doncic Silver PSA 10',
+    '1999 Pokemon Base Set Charizard #4 PSA 9',
+  ];
 
   constructor(
     private readonly ai: AiService,
     private readonly pokemon: PokemonPriceSource,
+    private readonly ebay: EbayBrowseSource,
+    @InjectRepository(CardValuationSnapshot)
+    private readonly snapshots: Repository<CardValuationSnapshot>,
   ) {}
 
   isConfigured(): boolean {
@@ -118,6 +156,7 @@ export class ValuationService {
       anchorComp: null,
       compsUsed: [],
       indexAdjustment: null,
+      marketContext: null,
       reliability: 'unverified',
       liquidity: null,
       trajectory: null,
@@ -230,6 +269,22 @@ export class ValuationService {
 
     const reliability = this.reliability(point, confPct, out.pricingComps.length);
 
+    // Live eBay active-listing context (asks, not comps) — best-effort.
+    let marketContext: CardValuation['marketContext'] = null;
+    try {
+      const ctx = await this.ebay.listingContext(clean);
+      if (ctx && ctx.activeCount > 0) {
+        marketContext = {
+          source: 'eBay listings',
+          activeCount: ctx.activeCount,
+          lowestAskUsd: ctx.lowestAskUsd,
+          url: ctx.url,
+        };
+      }
+    } catch {
+      /* market context is optional */
+    }
+
     const value: CardValuation = {
       isCard: raw.isCard !== false,
       subject: clean,
@@ -250,6 +305,7 @@ export class ValuationService {
               window: String(raw.indexAdjustment.window ?? '').slice(0, 80),
             }
           : null,
+      marketContext,
       reliability,
       liquidity: this.str(raw.liquidity),
       trajectory: this.str(raw.trajectory),
@@ -270,7 +326,88 @@ export class ValuationService {
       ],
     };
     this.cache.set(cacheKey, { at: Date.now(), value });
+    // Log the point-in-time valuation (data moat / price history) — best-effort.
+    void this.persist(cacheKey, value);
     return value;
+  }
+
+  /** Append a valuation snapshot for the card's price history. */
+  private async persist(subjectKey: string, v: CardValuation): Promise<void> {
+    if (v.pointUsd == null) return; // nothing to chart
+    try {
+      await this.snapshots.save(
+        this.snapshots.create({
+          subjectKey: subjectKey.slice(0, 300),
+          subject: v.subject.slice(0, 300),
+          pointUsd: v.pointUsd,
+          lowUsd: v.lowUsd,
+          highUsd: v.highUsd,
+          confidencePct: v.confidencePct,
+          method: v.method,
+          reliability: v.reliability,
+          valuation: v as unknown as Record<string, unknown>,
+        }),
+      );
+    } catch (e) {
+      this.logger.warn(`valuation snapshot save failed: ${(e as Error).message}`);
+    }
+  }
+
+  /** Price history for a card (our own logged valuations), oldest→newest. */
+  async history(
+    subject: string,
+    limit = 60,
+  ): Promise<ValuationHistoryPoint[]> {
+    const key = (subject ?? '').trim().toLowerCase().slice(0, 300);
+    if (!key) return [];
+    try {
+      const rows = await this.snapshots.find({
+        where: { subjectKey: key },
+        order: { createdAt: 'DESC' },
+        take: Math.min(Math.max(limit, 1), 365),
+      });
+      return rows
+        .reverse()
+        .map(r => ({
+          at: r.createdAt.toISOString(),
+          pointUsd: r.pointUsd,
+          lowUsd: r.lowUsd,
+          highUsd: r.highUsd,
+          confidencePct: r.confidencePct,
+        }));
+    } catch (e) {
+      this.logger.warn(`valuation history failed: ${(e as Error).message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Pre-warm the valuation cache (before a live demo) so these cards return
+   * instantly. Defaults to the showcase set; bounded concurrency.
+   */
+  async warm(
+    subjects?: string[],
+    adminId?: string,
+  ): Promise<{ subject: string; pointUsd: number | null; confidencePct: number }[]> {
+    const list = (
+      subjects && subjects.length ? subjects : ValuationService.SHOWCASE_SUBJECTS
+    ).slice(0, 20);
+    const out: { subject: string; pointUsd: number | null; confidencePct: number }[] = [];
+    const CONCURRENCY = 3;
+    for (let i = 0; i < list.length; i += CONCURRENCY) {
+      const slice = list.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        slice.map(s => this.valueCard(s, adminId).catch(() => null)),
+      );
+      results.forEach((v, k) =>
+        out.push({
+          subject: slice[k],
+          pointUsd: v ? v.pointUsd : null,
+          confidencePct: v ? v.confidencePct : 0,
+        }),
+      );
+    }
+    return out;
   }
 
   /** Evidence-tied trust label (the honesty gate). */
