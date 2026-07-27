@@ -122,7 +122,8 @@ export class ValuationService {
 
   private readonly SYSTEM =
     'You are a trading-card valuation researcher. Your ONLY job is to RETRIEVE the market evidence for ONE specific card and return it as structured JSON — you do NOT compute the final price or confidence (the application does that from your evidence). GROUNDING CONTRACT: never state a sale/price you did not retrieve from a web_search result this run; every comp MUST carry a real retrieved url and a date (YYYY-MM-DD); confirm each comp is the SAME card (player/character, set, parallel/insert, number, year, grade); TYPE each source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask — NOT a sale), price-guide, or index. ' +
-    'PICK THE ROUTE from what you find: (1) LIQUID — many recent exact SOLD comps (usually eBay) -> method "recent-median": return the most recent 5-8 exact-card SOLD comps (READ them off the sold-search page, do not just link it). (2) THIN / HIGH-VALUE — few but real recent sales, often on the PSA sales-history page not eBay -> method "anchor-and-adjust": return the single MOST RECENT confirmed sale as anchorComp, plus the relevant player/segment index move since that sale date as indexAdjustment (e.g. Card Ladder). (3) NO direct comps (brand-new / 1-of-1) -> method "triangulation": leave compsUsed empty and put your triangulated range in estimate, based on analogs. ' +
+    'RECENCY IS CRITICAL: search MOST-RECENT-FIRST (e.g. include the current and prior year in queries), and for a graded card OPEN the PSA sales-history / auction-prices page for that exact spec and read the sales list top-to-bottom (it is ordered newest first). Return the newest dated sales you can find — do NOT report a 2024/2025 sale as "the latest" if a 2026 sale exists on the same page. Put EVERY dated sale you find (recent ones especially) into compsUsed; the app sorts them and anchors on the newest itself, so give it the full recent set, not just one. If a line item is a wild outlier vs. the others with no support, drop it (do not include obvious mis-scrapes). ' +
+    'PICK THE ROUTE from what you find: (1) LIQUID — many recent exact SOLD comps (usually eBay) -> method "recent-median": return the most recent 5-8 exact-card SOLD comps (READ them off the sold-search page, do not just link it). (2) THIN / HIGH-VALUE — few but real recent sales, often on the PSA sales-history page not eBay -> method "anchor-and-adjust": return ALL recent confirmed sales in compsUsed (newest first) and set anchorComp to the single newest, plus the relevant player/segment index move since that newest sale date as indexAdjustment (e.g. Card Ladder). (3) NO direct comps (brand-new / 1-of-1) -> method "triangulation": leave compsUsed empty and put your triangulated range in estimate, based on analogs. ' +
     'Never anchor on a stale/mid-pack sale when a newer one exists. Only include estimate for triangulation. Do NOT invent comps, urls, or sales. Output ONLY the JSON object requested.';
 
   private readonly SCHEMA = `Return ONLY this JSON (no prose, no code fences):
@@ -294,7 +295,7 @@ export class ValuationService {
       highUsd: high,
       confidencePct: confPct,
       confidenceBasis: confBasis,
-      anchorComp: anchorComp ?? out.pricingComps[0] ?? null,
+      anchorComp: out.anchor ?? anchorComp ?? out.pricingComps[0] ?? null,
       compsUsed,
       indexAdjustment:
         raw.indexAdjustment &&

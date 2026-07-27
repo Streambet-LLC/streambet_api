@@ -45,6 +45,8 @@ export interface ValOutput {
   confidenceBasis: string;
   /** The comps that actually counted as priceable sales, newest-first. */
   pricingComps: ValComp[];
+  /** The comp we anchored on — the NEWEST dated sale (code-chosen, not model). */
+  anchor: ValComp | null;
 }
 
 const SALE_TYPES = new Set(['auction-sale', 'private-sale', 'sold', 'auction']);
@@ -166,11 +168,20 @@ export const computeValuation = (input: ValInputs): ValOutput => {
   let low: number | null = null;
   let high: number | null = null;
 
+  // Anchor = the NEWEST dated sale we have, chosen in CODE. We do NOT trust the
+  // model's anchor pick — it has grabbed stale mid-pack comps before. Merge the
+  // model's anchorComp into the candidate set but let recency decide.
+  const anchorCandidates = [
+    ...(input.anchorComp && isPricingComp(input.anchorComp)
+      ? [input.anchorComp]
+      : []),
+    ...pricing,
+  ].sort(
+    (a, b) => daysBetween(a.date, input.today) - daysBetween(b.date, input.today),
+  );
+  let anchor: ValComp | null = anchorCandidates[0] ?? null;
+
   if (input.method === 'anchor-and-adjust') {
-    const anchor =
-      input.anchorComp && isPricingComp(input.anchorComp)
-        ? input.anchorComp
-        : pricing[0] ?? null;
     if (anchor) {
       const move = input.indexMovePct ?? 0;
       point = anchor.priceUsd * (1 + move / 100);
@@ -214,5 +225,6 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     confidencePct: conf.pct,
     confidenceBasis: conf.basis,
     pricingComps: pricing,
+    anchor,
   };
 };
