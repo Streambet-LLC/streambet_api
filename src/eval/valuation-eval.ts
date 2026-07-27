@@ -78,6 +78,15 @@ function scoreFixture(
     );
   }
 
+  // Identity invariant: a sale comp without a title can't be checked against
+  // the subject card at all — it's the wrong-parallel hole.
+  const untitled = v.compsUsed.filter(c => isPricingComp(c) && !c.title);
+  add(
+    'every sale comp carries its own title (anti-wrong-parallel)',
+    untitled.length === 0,
+    untitled.length ? `${untitled.length} sale comp(s) missing title` : '',
+  );
+
   // Grounding invariant (always): every SALE-typed comp must carry a url.
   const unsourced = v.compsUsed.filter(
     c =>
@@ -100,7 +109,12 @@ function scoreFixture(
     );
     // A stale anchor must be labelled AND carry a wider range — an old print
     // quoted at +/-8% reads as a live price. Regression guard.
-    if (v.anchorIsStale && v.pointUsd && v.lowUsd != null && v.highUsd != null) {
+    if (
+      v.anchorIsStale &&
+      v.pointUsd &&
+      v.lowUsd != null &&
+      v.highUsd != null
+    ) {
       const halfWidth = (v.highUsd - v.lowUsd) / 2 / v.pointUsd;
       add(
         'stale anchor widens the range (>10%)',

@@ -16,10 +16,28 @@ export interface ValComp {
   /** YYYY-MM-DD, when known. */
   date: string | null;
   grade: string | null;
+  /**
+   * The sale's OWN title as printed on the source page, verbatim — e.g.
+   * "2019 Panini Prizm Color Blast Patrick Mahomes II PSA 10".
+   *
+   * This is the only per-comp signal that says WHICH card actually sold. On a
+   * PSA sales-history page every row shares one page url, so without a title
+   * the verifier cannot tell the subject card from a different parallel logged
+   * on the same page — it can only spot price outliers, which silently lets a
+   * plausibly-priced wrong-parallel sale through and anchor the valuation.
+   */
+  title: string | null;
   /** auction-sale | private-sale | marketplace-listing | price-guide | index */
   sourceType: string;
   url: string | null;
 }
+
+/**
+ * Same underlying sale? Identity is (price, date, url) — NOT url alone, because
+ * every row on a PSA sales-history page shares the page url.
+ */
+export const isSameComp = (a: ValComp, b: ValComp): boolean =>
+  a.priceUsd === b.priceUsd && a.date === b.date && a.url === b.url;
 
 export interface ValInputs {
   method: ValMethod;

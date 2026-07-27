@@ -506,8 +506,11 @@ RULES (follow strictly):
       );
     }
     for (const c of v.compsUsed.filter(c => c.url).slice(0, 4)) {
+      // Show each comp's own title — it's how the admin spots a wrong parallel
+      // that slipped through, which price and date alone can never reveal.
+      const what = c.title ? ` — ${c.title}` : '';
       lines.push(
-        `- [${money(c.priceUsd)}](${c.url}) — ${c.date ?? 'n/a'} — ${
+        `- [${money(c.priceUsd)}](${c.url}) — ${c.date ?? 'n/a'}${what} — ${
           c.grade ?? ''
         } — ${c.sourceType}`,
       );

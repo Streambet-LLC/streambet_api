@@ -26,9 +26,24 @@ export interface CardForecastData {
   /** Which valuation route produced valueEstimate. */
   method?: 'anchor-and-adjust' | 'recent-median' | 'triangulation' | string;
   /** The most-recent confirmed sale we anchored on. */
-  anchorComp?: { priceUsd: number; date: string; sourceType: string; url: string };
+  anchorComp?: {
+    priceUsd: number;
+    date: string;
+    /** The sale's own title, verbatim — identifies WHICH card sold. */
+    title?: string;
+    sourceType: string;
+    url: string;
+  };
   /** The comps actually used in the valuation. */
-  compsUsed?: { priceUsd: number; date: string; grade: string; sourceType: string; url: string }[];
+  compsUsed?: {
+    priceUsd: number;
+    date: string;
+    /** The sale's own title, verbatim — identifies WHICH card sold. */
+    title?: string;
+    grade: string;
+    sourceType: string;
+    url: string;
+  }[];
   /** Index move applied for the anchor-and-adjust route. */
   indexAdjustment?: { index: string; movePct: number; window: string } | null;
   /** Evidence-tied confidence in the valuation (distinct from outlook confidence). */
@@ -80,7 +95,7 @@ export class ForecastService {
   private readonly logger = new Logger(ForecastService.name);
 
   private readonly ANALYST_SYSTEM =
-    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. GROUNDING CONTRACT (non-negotiable): never state a sale or market price you did not retrieve from a web_search result this run; every price you cite must carry a real URL and a date; if you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and cite the individual comps in it before using it — a bare search link is not a valuation; confirm each comp is the SAME card (player/character, set, parallel, number, year, grade); and TYPE every source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask, not a sale), price-guide, or index (never call a marketplace like Fanatics Collect a price guide). FIRST CLASSIFY THE CARD, then pick the valuation route: (a) LOW-POP / HIGH-VALUE with few-but-recent comps (it will not be on eBay) -> use the PSA spec + sales-history page and a player/segment index (e.g. Card Ladder); ANCHOR on the single MOST RECENT confirmed sale, then ADJUST by the index move since that sale date (anchor x (1 +/- index move) = estimate) and give a tight range for scarcity; (b) LIQUID with many recent solds -> trimmed median of the most recent eBay SOLD comps (drop outliers), and USE the comps in your own search link; (c) ULTRA-TRADED low-value -> recent median, high confidence; (d) BRAND-NEW / NO comps or (e) UNTRADED 1-of-1 -> only THEN triangulate from analogs (adjacent grades x grade multiplier, raw<->graded, sibling parallels, same player comparable prints, pop scarcity) as a clearly-labeled LOW-confidence estimate. Do NOT triangulate when direct recent comps exist, and never anchor on a stale or mid-pack sale when a newer one exists. Gather in parallel: recent news + social sentiment; upcoming catalysts; PSA/BGS population and policy trends; print-run / reprint / supply news; and historical PRECEDENTS. Assess an overall CardCade RATING (0-100 + label), a LIQUIDITY score, the PRICE TRAJECTORY, and the LIKELY BUYERS. Make CONFIDENCE a function of (# recent comps, recency of the newest, price dispersion): many tight recent comps -> high; one/old/index-adjusted comp -> ~60-72; analogs only -> low. For sell-timing give DATA-CENTRIC probabilistic scenarios (days-to-catalyst; P(up)/P(base)/P(down) summing to 100 with % moves and an expected value), not "could go up or down". If you hit the search budget, answer from the comps already retrieved — never degrade to "not enough data". Output ONLY a JSON object.';
+    'You are a senior trading-card investment analyst. Produce a rigorous, calibrated predictive intelligence brief for ONE subject — a specific card, player, or set. GROUNDING CONTRACT (non-negotiable): never state a sale or market price you did not retrieve from a web_search result this run; every price you cite must carry a real URL and a date; if you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and cite the individual comps in it before using it — a bare search link is not a valuation; confirm each comp is the SAME card (player/character, set, parallel, number, year, grade); and TYPE every source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask, not a sale), price-guide, or index (never call a marketplace like Fanatics Collect a price guide). FIRST CLASSIFY THE CARD, then pick the valuation route: (a) LOW-POP / HIGH-VALUE with few-but-recent comps (it will not be on eBay) -> use the PSA spec + sales-history page and a player/segment index (e.g. Card Ladder); ANCHOR on the single MOST RECENT confirmed sale, then ADJUST by the index move since that sale date (anchor x (1 +/- index move) = estimate) and give a tight range for scarcity; (b) LIQUID with many recent solds -> trimmed median of the most recent eBay SOLD comps (drop outliers), and USE the comps in your own search link; (c) ULTRA-TRADED low-value -> recent median, high confidence; (d) BRAND-NEW / NO comps or (e) UNTRADED 1-of-1 -> only THEN triangulate from analogs (adjacent grades x grade multiplier, raw<->graded, sibling parallels, same player comparable prints, pop scarcity) as a clearly-labeled LOW-confidence estimate. Do NOT triangulate when direct recent comps exist, and never anchor on a stale or mid-pack sale when a newer one exists. EVERY comp must carry "title" — that sale line\'s title EXACTLY as printed on the page, verbatim and never the subject card\'s name copied down. A sales-history page for one spec can still list DIFFERENT parallels/variants, and the title is the only way to tell them apart: if a row\'s title does not match the subject card (different insert, parallel, set, year, number, or player) LEAVE IT OUT rather than reporting it as a comp. Gather in parallel: recent news + social sentiment; upcoming catalysts; PSA/BGS population and policy trends; print-run / reprint / supply news; and historical PRECEDENTS. Assess an overall CardCade RATING (0-100 + label), a LIQUIDITY score, the PRICE TRAJECTORY, and the LIKELY BUYERS. Make CONFIDENCE a function of (# recent comps, recency of the newest, price dispersion): many tight recent comps -> high; one/old/index-adjusted comp -> ~60-72; analogs only -> low. For sell-timing give DATA-CENTRIC probabilistic scenarios (days-to-catalyst; P(up)/P(base)/P(down) summing to 100 with % moves and an expected value), not "could go up or down". If you hit the search budget, answer from the comps already retrieved — never degrade to "not enough data". Output ONLY a JSON object.';
 
   /**
    * Today's date for the research prompt. Built per call, not cached in a
@@ -100,8 +115,8 @@ export class ForecastService {
   "thesis": "<2-3 sentence summary of the call>",
   "valueEstimate": { "pointUsd": <number>, "lowUsd": <number>, "highUsd": <number>, "asOf": "<YYYY-MM-DD>" },
   "method": "anchor-and-adjust" | "recent-median" | "triangulation",
-  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" },
-  "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
+  "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" },
+  "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
   "indexAdjustment": { "index": "<e.g. Card Ladder Patrick Mahomes>", "movePct": <number>, "window": "<since anchor date>" },
   "valuationConfidence": { "pct": <0-100 integer>, "basis": "<n recent comps, recency, dispersion>" },
   "rating": { "score": <0-100 integer>, "label": "Strong Buy"|"Buy"|"Hold"|"Watch"|"Avoid", "rationale": "<one sentence>" },
@@ -142,6 +157,7 @@ export class ForecastService {
     const toComp = (c?: {
       priceUsd: number;
       date: string;
+      title?: string;
       grade?: string;
       sourceType: string;
       url: string;
@@ -150,6 +166,7 @@ export class ForecastService {
         ? {
             priceUsd: c.priceUsd,
             date: c.date ?? null,
+            title: c.title ?? null,
             grade: c.grade ?? null,
             sourceType: (c.sourceType ?? '').toLowerCase(),
             url: c.url ?? null,
