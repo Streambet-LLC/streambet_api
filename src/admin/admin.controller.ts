@@ -417,6 +417,91 @@ export class AdminController {
     };
   }
 
+  @ApiOperation({ summary: 'Update a holding (cost basis / quantity / date)' })
+  @ApiParam({ name: 'id', description: 'Tracked card ID' })
+  @Patch('analytics/market/cards/:id/holding')
+  async updateHolding(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      quantity?: number;
+      costBasisUsd?: number | null;
+      acquiredAt?: string | null;
+      alertAboveUsd?: number | null;
+      alertBelowUsd?: number | null;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.updateHolding(id, body ?? {});
+    return { status: HttpStatus.OK, message: 'Holding updated', data };
+  }
+
+  @ApiOperation({ summary: 'Triggered price alerts across holdings' })
+  @Get('analytics/portfolio/alerts')
+  async getPortfolioAlerts(
+    @Request() req: RequestWithUser,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.alerts();
+    return { status: HttpStatus.OK, message: 'Portfolio alerts', data };
+  }
+
+  @ApiOperation({ summary: 'Value one tracked card now (code-computed comps)' })
+  @ApiParam({ name: 'id', description: 'Tracked card ID' })
+  @Post('analytics/market/cards/:id/value')
+  async valueTrackedCard(
+    @Request() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.valueCard(id, req.user.id);
+    return { status: HttpStatus.OK, message: 'Card valued', data };
+  }
+
+  @ApiOperation({ summary: 'Portfolio roll-up (cached valuations)' })
+  @Get('analytics/portfolio')
+  async getPortfolio(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.portfolio();
+    return { status: HttpStatus.OK, message: 'Portfolio', data };
+  }
+
+  @ApiOperation({ summary: 'Value every holding, then return the roll-up' })
+  @Post('analytics/portfolio/value')
+  async valuePortfolio(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.valuePortfolio(req.user.id);
+    return { status: HttpStatus.OK, message: 'Portfolio valued', data };
+  }
+
+  @ApiOperation({
+    summary: 'Pre-warm the valuation cache (showcase set) before a live demo',
+  })
+  @Post('analytics/valuation/warm')
+  async warmValuations(
+    @Request() req: RequestWithUser,
+    @Body() body: { subjects?: string[] },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.warmValuations(
+      body?.subjects,
+      req.user.id,
+    );
+    return { status: HttpStatus.OK, message: 'Valuations warmed', data };
+  }
+
+  @ApiOperation({ summary: 'Our logged price history for a card subject' })
+  @Get('analytics/valuation/history')
+  async valuationHistory(
+    @Request() req: RequestWithUser,
+    @Query('subject') subject?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.marketService.valuationHistory(subject ?? '');
+    return { status: HttpStatus.OK, message: 'Valuation history', data };
+  }
+
   @ApiOperation({ summary: 'Cached predictive forecast for a card' })
   @ApiParam({ name: 'id', description: 'Prize configuration ID' })
   @Get('analytics/market/cards/:id/forecast')
@@ -610,7 +695,7 @@ export class AdminController {
       }
     }, 15000);
     try {
-      const { toolCalls } = await this.insightsService.chatStream(
+      const { toolCalls, valuation } = await this.insightsService.chatStream(
         body?.messages ?? [],
         req.user.id,
         {
@@ -620,7 +705,7 @@ export class AdminController {
         body?.conversationId,
         body?.depth,
       );
-      send({ type: 'done', toolCalls });
+      send({ type: 'done', toolCalls, valuation });
     } catch (e) {
       send({ type: 'error', message: (e as Error).message });
     } finally {
@@ -657,6 +742,50 @@ export class AdminController {
       offset ? parseInt(offset, 10) : 0,
     );
     return { status: HttpStatus.OK, message: 'Insights history', data };
+  }
+
+  @ApiOperation({ summary: 'Rate a Cardy answer (thumbs up/down)' })
+  @Post('analytics/insights/feedback')
+  async saveInsightsFeedback(
+    @Request() req: RequestWithUser,
+    @Body()
+    body: {
+      rating?: 'up' | 'down';
+      question?: string;
+      answer?: string;
+      note?: string;
+      subject?: string;
+      conversationId?: string;
+    },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.insightsHistoryService.saveFeedback({
+      rating: body?.rating === 'down' ? 'down' : 'up',
+      question: body?.question,
+      answer: body?.answer,
+      note: body?.note,
+      subject: body?.subject,
+      conversationId: body?.conversationId,
+      adminId: req.user.id,
+    });
+    return { status: HttpStatus.OK, message: 'Feedback saved', data };
+  }
+
+  @ApiOperation({ summary: 'List answer feedback (e.g. thumbs-down for review)' })
+  @Get('analytics/insights/feedback')
+  async listInsightsFeedback(
+    @Request() req: RequestWithUser,
+    @Query('rating') rating?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.insightsHistoryService.listFeedback({
+      rating: rating === 'up' || rating === 'down' ? rating : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+    return { status: HttpStatus.OK, message: 'Insights feedback', data };
   }
 
   @ApiOperation({ summary: 'One insights conversation (exchanges)' })
