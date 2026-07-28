@@ -19,6 +19,10 @@ import { EbayModule } from 'src/integrations/ebay/ebay.module';
 import { EbaySoldMarketSyncService } from './ebay-sold-market-sync.service';
 import { PaymentsModule } from 'src/payments/payments.module';
 import { AchSettlementReconcilerService } from './ach-settlement-reconciler.service';
+import { PriceAlertService } from './price-alert.service';
+import { AdminModule } from 'src/admin/admin.module';
+import { TrackedCard } from 'src/admin/entities/tracked-card.entity';
+import { User } from 'src/users/entities/user.entity';
 
 @Module({
   imports: [
@@ -28,7 +32,10 @@ import { AchSettlementReconcilerService } from './ach-settlement-reconciler.serv
       PrizeConfiguration,
       PrizeItemEbaySoldListing,
       PrizeItemEbaySyncState,
+      TrackedCard,
+      User,
     ]),
+    AdminModule,
     ReviewsModule,
     InboxModule,
     PrizeModule,
@@ -46,6 +53,7 @@ import { AchSettlementReconcilerService } from './ach-settlement-reconciler.serv
     ReviewReminderService,
     EbaySoldMarketSyncService,
     AchSettlementReconcilerService,
+    PriceAlertService,
   ],
   controllers: [],
   exports: [EbaySoldMarketSyncService],

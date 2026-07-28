@@ -22,6 +22,9 @@ const ENABLED_EMAIL_TYPES: ReadonlySet<string> = new Set([
   EmailType.WaitlistWelcome,
   EmailType.AccountVerification,
   EmailType.PasswordReset,
+  // Portfolio price alerts are user-requested (they set the target), so they
+  // stay enabled through waitlist mode.
+  EmailType.PriceAlert,
 ]);
 
 @Injectable()

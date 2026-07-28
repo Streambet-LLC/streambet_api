@@ -83,6 +83,20 @@ export class TrackedCard extends BaseEntity {
   @Column({ type: 'float', nullable: true })
   alertBelowUsd: number | null;
 
+  /**
+   * The target we last emailed about, and when.
+   *
+   * Without this the nightly job would re-send the same alert every run for as
+   * long as the card sat above its target. Storing the TARGET (not just a
+   * flag) also means editing the target re-arms the alert, and the job clears
+   * both once the value falls back through, so a later crossing fires again.
+   */
+  @Column({ type: 'float', nullable: true })
+  alertNotifiedTargetUsd: number | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  alertNotifiedAt: Date | null;
+
   /** Future: the user whose profile this card is saved to (null = global/admin). */
   @Index()
   @Column({ type: 'uuid', nullable: true })

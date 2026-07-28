@@ -186,5 +186,9 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/waitlist_welcome.ejs',
       schemaPath: './src/templates/waitlist_welcome.json',
     },
+    price_alert: {
+      templatePath: './src/templates/price_alert.ejs',
+      schemaPath: './src/templates/price_alert.json',
+    },
   },
 }));

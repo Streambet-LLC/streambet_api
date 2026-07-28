@@ -1,0 +1,46 @@
+{
+  "id": "http://streambet.com/email-standard-schema#",
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "params": {
+      "type": "object",
+      "required": ["cardName", "direction", "targetUsd", "valueUsd", "siteLink"],
+      "properties": {
+        "cardName": {
+          "type": "string",
+          "description": "The card whose target was reached"
+        },
+        "grade": {
+          "type": "string",
+          "description": "Grade, e.g. 'PSA 10'. Optional."
+        },
+        "direction": {
+          "type": "string",
+          "description": "'above' when it hit the target, 'below' when it hit the floor"
+        },
+        "targetUsd": {
+          "type": "string",
+          "description": "The target the user set, pre-formatted, e.g. '$12,000'"
+        },
+        "valueUsd": {
+          "type": "string",
+          "description": "The current estimated value, pre-formatted"
+        },
+        "confidencePct": {
+          "type": "string",
+          "description": "Confidence in the valuation, e.g. '72'. Optional."
+        },
+        "basis": {
+          "type": "string",
+          "description": "One-line confidence basis, e.g. 'anchored on last sale (12d old)'. Optional."
+        },
+        "siteLink": {
+          "type": "string",
+          "description": "Link to the portfolio"
+        }
+      }
+    }
+  },
+  "required": ["params"]
+}

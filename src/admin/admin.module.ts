@@ -97,5 +97,9 @@ import { User } from 'src/users/entities/user.entity';
     PokemonPriceSource,
     EbayBrowseSource,
   ],
+  // MarketService is exported for the nightly price-alert mailer in
+  // ScheduledTaskModule, which re-values holdings via the same code path the
+  // dashboard uses.
+  exports: [MarketService],
 })
 export class AdminModule {}
