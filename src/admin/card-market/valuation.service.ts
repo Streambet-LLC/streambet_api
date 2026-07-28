@@ -184,11 +184,25 @@ export class ValuationService {
     const hit = this.cache.get(cacheKey);
     if (hit && Date.now() - hit.at < this.CACHE_TTL_MS) return hit.value;
 
+    // Phase timings — a pricing answer is slow enough that "where did the time
+    // go" has to be answerable from the logs rather than guessed at.
+    const t0 = Date.now();
+    const marks: Record<string, number> = {};
+    const mark = (phase: string, since: number) => {
+      marks[phase] = Date.now() - since;
+    };
+
+    // Live eBay asks don't depend on the comps, so start them NOW and collect
+    // the result after the research — it used to run strictly afterwards and
+    // added its latency to the total for no reason.
+    const marketCtxPromise = this.ebay.listingContext(clean).catch(() => null);
+
     // Hard-bound the interactive latency: few searches, few rounds, and an
     // overall abort so the chat can never hang on this tool.
     let raw: RawValuation;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 40000);
+    const tResearch = Date.now();
     try {
       raw = await this.ai.research<RawValuation>({
         system: this.SYSTEM,
@@ -206,6 +220,7 @@ export class ValuationService {
       return empty;
     } finally {
       clearTimeout(timer);
+      mark('research', tResearch);
     }
 
     const method: ValMethod = METHODS.includes(raw.method as ValMethod)
@@ -214,7 +229,9 @@ export class ValuationService {
     const extracted = this.cleanComps(raw.compsUsed);
     // Adversarial verify: drop comps that don't hold up as real same-card sales
     // (the anti-phantom / wrong-card guard) before any math anchors on them.
+    const tVerify = Date.now();
     const compsUsed = await this.verifyComps(clean, extracted, adminId);
+    mark('verify', tVerify);
     const rawAnchor = raw.anchorComp ? this.cleanComp(raw.anchorComp) : null;
     // If the anchor got dropped by the verifier, fall back to the newest kept.
     // Match on the SALE (price+date+url), not the url alone: every row on a PSA
@@ -287,20 +304,19 @@ export class ValuationService {
 
     const reliability = this.reliability(point, confPct, out.pricingComps.length);
 
-    // Live eBay active-listing context (asks, not comps) — best-effort.
+    // Live eBay active-listing context (asks, not comps) — best-effort, and
+    // already in flight since the top of this method.
+    const tMarket = Date.now();
     let marketContext: CardValuation['marketContext'] = null;
-    try {
-      const ctx = await this.ebay.listingContext(clean);
-      if (ctx && ctx.activeCount > 0) {
-        marketContext = {
-          source: 'eBay listings',
-          activeCount: ctx.activeCount,
-          lowestAskUsd: ctx.lowestAskUsd,
-          url: ctx.url,
-        };
-      }
-    } catch {
-      /* market context is optional */
+    const ctx = await marketCtxPromise;
+    mark('marketContext', tMarket);
+    if (ctx && ctx.activeCount > 0) {
+      marketContext = {
+        source: 'eBay listings',
+        activeCount: ctx.activeCount,
+        lowestAskUsd: ctx.lowestAskUsd,
+        url: ctx.url,
+      };
     }
 
     const value: CardValuation = {
@@ -346,6 +362,14 @@ export class ValuationService {
       ],
     };
     this.cache.set(cacheKey, { at: Date.now(), value });
+    // Where the seconds went. A pricing turn is the slowest thing the chat
+    // does, so make the split diagnosable instead of a guess.
+    this.logger.log(
+      `value_card "${clean}" ${Date.now() - t0}ms total — ` +
+        Object.entries(marks)
+          .map(([k, ms]) => `${k} ${ms}ms`)
+          .join(', '),
+    );
     // Log the point-in-time valuation (data moat / price history) — best-effort.
     void this.persist(cacheKey, value);
     return value;
@@ -459,6 +483,15 @@ export class ValuationService {
     adminId?: string,
   ): Promise<ValComp[]> {
     if (comps.length === 0) return comps;
+    // Skip the round trip only when there is genuinely nothing to adjudicate:
+    // the outlier check needs two prices to compare, and the identity check
+    // needs a title. The deterministic gates (real url, sale-typed source) are
+    // already enforced by isPricingComp, so nothing is lost here.
+    //
+    // NOTE: a SINGLE comp that has a title is still verified. Thin, low-pop
+    // cards are exactly where a wrong parallel does the most damage — that was
+    // the $11k anchor complaint — so "one comp" alone is not a safe skip.
+    if (comps.length < 2 && !comps.some((c) => c.title)) return comps;
     try {
       const list = comps
         .map(
@@ -469,7 +502,13 @@ export class ValuationService {
         )
         .join('\n');
       const res = await this.ai.generateJson<{ drop: number[] }>({
-        model: this.ai.chatModel,
+        // Haiku, not the chat model: this is a bounded field-by-field string
+        // comparison against explicit rules, not open reasoning, and it sits
+        // directly in the interactive path — the frontier model was costing
+        // several seconds per pricing answer for no measurable accuracy gain.
+        // If wrong-parallel comps start slipping through, this is the first
+        // knob to turn back.
+        model: 'claude-haiku-4-5',
         maxTokens: 600,
         system:
           'You are a strict comp verifier for card valuations. You are given a card and a numbered list of comps. Return the indices to DROP because a comp is NOT a trustworthy, same-card confirmed SALE. ' +

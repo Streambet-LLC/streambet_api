@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Price alert</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    </style>
+  </head>
+
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #000000;
+      font-family: 'Inter', sans-serif;
+      color: #ffffff;
+    "
+  >
+    <table
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color: #000000; margin: 0; padding: 0; width: 100%"
+    >
+      <tr>
+        <td>
+          <div
+            class="container"
+            style="max-width: 100%; margin: 0 auto; padding: 40px 20px"
+          >
+            <!-- Wordmark (matches waitlist_welcome — no hosted logo yet). -->
+            <table
+              width="100%"
+              cellpadding="0"
+              cellspacing="0"
+              border="0"
+              style="margin-bottom: 40px"
+            >
+              <tr>
+                <td align="center">
+                  <span
+                    style="
+                      font-family: 'Inter', Arial, sans-serif;
+                      font-size: 38px;
+                      font-weight: 700;
+                      letter-spacing: -0.5px;
+                      color: #ffffff;
+                    "
+                    >collect<span style="color: #b4ff39">IQ</span></span
+                  >
+                </td>
+              </tr>
+            </table>
+
+            <div
+              class="box"
+              style="
+                background-color: #181818;
+                border-radius: 16px;
+                border: 1px solid #2c2c2c;
+                padding: 40px;
+                max-width: 700px;
+                width: 100%;
+                box-sizing: border-box;
+                margin: 0 auto;
+              "
+            >
+              <div style="max-width: 700px; margin: 0 auto; color: #ffffff">
+                <p
+                  style="
+                    font-size: 22px;
+                    line-height: 1.4;
+                    margin: 0 0 16px;
+                    font-family: 'Inter', sans-serif;
+                    font-weight: 700;
+                    color: #ffffff;
+                  "
+                >
+                  <% if (params.direction === 'below') { %>📉 A card fell below
+                  your floor<% } else { %>📈 A card hit your target<% } %>
+                </p>
+
+                <p
+                  style="
+                    font-size: 18px;
+                    line-height: 1.5;
+                    margin: 0 0 24px;
+                    font-family: 'Inter', sans-serif;
+                    color: #ffffff;
+                  "
+                >
+                  <strong><%= params.cardName %></strong><% if (params.grade) {
+                  %> · <%= params.grade %><% } %>
+                </p>
+
+                <!-- Numbers, as a table so Outlook keeps the columns. -->
+                <table
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin-bottom: 24px"
+                >
+                  <tr>
+                    <td
+                      style="
+                        padding: 14px 16px;
+                        background-color: #0f0f0f;
+                        border: 1px solid #2c2c2c;
+                        border-radius: 12px;
+                      "
+                    >
+                      <span
+                        style="
+                          display: block;
+                          font-size: 12px;
+                          letter-spacing: 0.5px;
+                          text-transform: uppercase;
+                          color: #9ca3af;
+                          font-family: 'Inter', sans-serif;
+                        "
+                        >Current value</span
+                      >
+                      <span
+                        style="
+                          font-size: 26px;
+                          font-weight: 700;
+                          color: #b4ff39;
+                          font-family: 'Inter', sans-serif;
+                        "
+                        ><%= params.valueUsd %></span
+                      >
+                      <span
+                        style="
+                          font-size: 14px;
+                          color: #9ca3af;
+                          font-family: 'Inter', sans-serif;
+                        "
+                      >
+                        · your <% if (params.direction === 'below') { %>floor<%
+                        } else { %>target<% } %> was <%= params.targetUsd %>
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+
+                <% if (params.confidencePct) { %>
+                <p
+                  style="
+                    font-size: 14px;
+                    line-height: 1.6;
+                    margin: 0 0 24px;
+                    color: #9ca3af;
+                    font-family: 'Inter', sans-serif;
+                  "
+                >
+                  Confidence <%= params.confidencePct %>%<% if (params.basis) {
+                  %> — <%= params.basis %><% } %>
+                </p>
+                <% } %>
+
+                <table cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td
+                      style="border-radius: 10px; background-color: #b4ff39"
+                      align="center"
+                    >
+                      <a
+                        href="<%= params.siteLink %>"
+                        style="
+                          display: inline-block;
+                          padding: 14px 28px;
+                          font-family: 'Inter', sans-serif;
+                          font-size: 16px;
+                          font-weight: 600;
+                          color: #000000;
+                          text-decoration: none;
+                        "
+                        >View your portfolio</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+
+                <p
+                  style="
+                    font-size: 12px;
+                    line-height: 1.6;
+                    margin: 28px 0 0;
+                    color: #6b7280;
+                    font-family: 'Inter', sans-serif;
+                  "
+                >
+                  Values are AI/code-computed from live comps — a market
+                  estimate, not financial advice. You're getting this because
+                  you set a price alert on this card.
+                </p>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

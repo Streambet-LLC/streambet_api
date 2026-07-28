@@ -795,6 +795,11 @@ export class AdminController {
         {
           onText: (text) => send({ type: 'text', text }),
           onTool: (name) => send({ type: 'tool', name }),
+          // Push the code-computed valuation the moment it exists rather than
+          // holding it until 'done' — on a pricing question it IS the answer,
+          // and waiting for the model's prose added tens of seconds of
+          // staring at typing dots.
+          onValuation: (valuation) => send({ type: 'valuation', valuation }),
         },
         body?.conversationId,
         body?.depth,

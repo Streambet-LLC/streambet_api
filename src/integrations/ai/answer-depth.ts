@@ -28,6 +28,19 @@ export interface DeepDiveDepthPreset {
   style: string;
 }
 
+/**
+ * The value_card contract, repeated at the top of every chat style.
+ *
+ * It lives here rather than only in the system prompt because the style block
+ * is appended LAST, and the model follows the last thing it read. Earlier this
+ * text sat only in the system prompt while the styles told it to "start with
+ * the valuation contract" — so it re-searched, re-derived its own price and
+ * confidence, and printed those over the code-computed ones. That cost a
+ * second full research pass in latency and put wrong numbers on screen.
+ */
+const VALUE_CARD_CONTRACT =
+  "value_card has ALREADY done the comp research and computed the price, range and confidence in code, and the app renders them as a visual card above your reply. So: do NOT web_search again for this card, do NOT run value_card again, and do NOT compute or state your own estimate, range or confidence — those numbers are already on screen and yours would contradict them. Cite the card's figures only if a sentence genuinely needs one.";
+
 /** Chat presets (interactive — latency matters, so kept tighter than dives). */
 // NOTE: maxTokens is the WHOLE output budget (extended-thinking/effort tokens +
 // the visible answer). Effort is on now, so these are generous to avoid the
@@ -41,7 +54,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
     maxTurns: 7,
     style:
       'ANSWER STYLE — BRIEF. This block sets the length of your answer; it overrides any other sense of how long to be.\n' +
-      'AFTER value_card ran: the visual card already shows price, range, confidence, method and comps — write ONE sentence only: the sell/hold verdict (add a second only if they asked something non-price, e.g. timing). Do not restate any number the card shows.\n' +
+      `AFTER value_card ran: ${VALUE_CARD_CONTRACT} Write ONE sentence only: the sell/hold verdict (add a second only if they asked something non-price, e.g. timing).\n` +
       'WITHOUT value_card: max ~5 short lines, no headers, no preamble. Lead with the direct answer, then at most 2 supporting lines, then a one-line take. If they asked about sell timing, use the 3-scenario block (P-up/base/down summing to 100 + expected value + verdict) instead of the take.\n' +
       'Skip the buyers/rating/buzz dimension sweep — that is balanced/deep only. Brevity NEVER justifies dropping a confidence %, a source type, or a link on a price you cite.',
   },
@@ -52,7 +65,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
     maxTurns: 8,
     style:
       'ANSWER STYLE — BALANCED. This block sets the length of your answer; it overrides any other sense of how long to be.\n' +
-      'AFTER value_card ran: the visual card already shows price, range, confidence, method and comps — do not restate those. Write 2-4 sentences (or up to 4 bullets): the sell/hold verdict, plus a compact read on liquidity, price trajectory, and likely buyers — one clause each.\n' +
+      `AFTER value_card ran: ${VALUE_CARD_CONTRACT} Write 2-4 sentences (or up to 4 bullets): the sell/hold verdict, plus a compact read on liquidity, price trajectory, and likely buyers — one clause each.\n` +
       'WITHOUT value_card: 4-8 lines. Lead with the direct answer, support it with the comps or evidence you actually retrieved (price — date — grade — source type, price hyperlinked), then the same compact dimensional read.\n' +
       'No filler, no preamble, no repetition.',
   },
@@ -63,7 +76,7 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
     maxTurns: 10,
     style:
       'ANSWER STYLE — DEEP. This block sets the length of your answer; it overrides any other sense of how long to be. The user explicitly asked for thorough, so a long, well-structured answer with short headers and bullets is CORRECT here — do not trim it back toward brevity.\n' +
-      "AFTER value_card ran: still do not restate the price, range, confidence or comps — the card shows them. Everything else expands: open with the verdict, then work through the dimensions that matter with a short header each — liquidity, price trajectory, likely buyers, upcoming catalysts with rough odds, comparable precedents with what their prices did, supply/reprint/grading factors, and the main risks. Explain the MECHANISM in each: how it reaches this card's price and how big the move could be.\n" +
+      `AFTER value_card ran: ${VALUE_CARD_CONTRACT} Everything else expands: open with the verdict, then work through the dimensions that matter with a short header each — liquidity, price trajectory, likely buyers, upcoming catalysts with rough odds, comparable precedents with what their prices did, supply/reprint/grading factors, and the main risks. Explain the MECHANISM in each: how it reaches this card's price and how big the move could be.\n` +
       'WITHOUT value_card: the same structure, with the retrieved evidence laid out first (price — date — grade — source type, each price hyperlinked).\n' +
       'Cite more sources than you would at lower depths. Substance, not padding — never repeat a point across sections to fill space.',
   },
