@@ -17,6 +17,17 @@ export class DeepResearchJob extends BaseEntity {
   @Column({ type: 'varchar', length: 16, default: 'pending' })
   status: string;
 
+  /**
+   * The depth this dive was RUN at ('quick' | 'balanced' | 'deep').
+   *
+   * Persisted so the reuse cache can compare depths — without it a Brief
+   * report was handed back to someone asking for a Deep one, which made the
+   * depth setting look like it did nothing. Null on rows written before this
+   * existed; treated as 'balanced' (the default) when ranking.
+   */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  depth: string | null;
+
   /** The structured forecast brief (CardForecastData) once done. */
   @Column({ type: 'jsonb', nullable: true })
   result: Record<string, unknown> | null;

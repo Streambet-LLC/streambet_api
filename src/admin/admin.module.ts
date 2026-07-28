@@ -16,8 +16,10 @@ import { TrackedCard } from './entities/tracked-card.entity';
 import { SoldCard } from './entities/sold-card.entity';
 import { CardValuationSnapshot } from './entities/card-valuation-snapshot.entity';
 import { InsightsFeedback } from './entities/insights-feedback.entity';
+import { InsightsRun } from './entities/insights-run.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
+import { InsightsRunService } from './insights-run.service';
 import { DeepResearchService } from './deep-research.service';
 import { InsightsHistoryService } from './insights-history.service';
 import { MarketPulseService } from './market-pulse.service';
@@ -65,6 +67,7 @@ import { User } from 'src/users/entities/user.entity';
       SoldCard,
       CardValuationSnapshot,
       InsightsFeedback,
+      InsightsRun,
     ]),
     RedditModule,
     BlueskyModule,
@@ -84,6 +87,7 @@ import { User } from 'src/users/entities/user.entity';
     InsightsService,
     DeepResearchService,
     InsightsHistoryService,
+    InsightsRunService,
     MarketPulseService,
     DashboardConfigService,
     CardProfileService,
