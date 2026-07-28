@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   AiChatMessage,
   AiService,
@@ -39,6 +39,8 @@ const RUN_FLUSH_MS = 1500;
  */
 @Injectable()
 export class InsightsService {
+  private readonly logger = new Logger(InsightsService.name);
+
   constructor(
     private readonly ai: AiService,
     private readonly deepResearch: DeepResearchService,
@@ -626,21 +628,72 @@ RULES (follow strictly):
    * render the valuation server-side if the model ends its turn without
    * narrating it.
    */
-  private captureValuation(adminId: string | undefined, depth: AnswerDepth) {
+  private captureValuation(
+    adminId: string | undefined,
+    depth: AnswerDepth,
+    /**
+     * Fired the instant value_card returns, so the client can render the
+     * valuation card without waiting for the model to finish thinking and
+     * writing. The numbers are code-computed and final at that moment — there
+     * is nothing to gain by holding them back, and it removes tens of seconds
+     * from the time the user sees an answer appear.
+     */
+    onValuation?: (v: CardValuation) => void,
+  ) {
     let last: CardValuation | null = null;
+    // Per-tool wall time, so a slow answer can be attributed to a specific
+    // tool rather than to "the model" in general.
+    const toolMs: Record<string, number> = {};
     const dispatch = async (n: string, i: Record<string, unknown>) => {
-      const r = await this.dispatch(n, i, adminId, depth);
-      if (
-        n === 'value_card' &&
-        r &&
-        typeof r === 'object' &&
-        'confidencePct' in r
-      ) {
-        last = r as CardValuation;
+      const t = Date.now();
+      try {
+        const r = await this.dispatch(n, i, adminId, depth);
+        if (
+          n === 'value_card' &&
+          r &&
+          typeof r === 'object' &&
+          'confidencePct' in r
+        ) {
+          last = r as CardValuation;
+          try {
+            onValuation?.(last);
+          } catch {
+            /* a push failure must never break the tool loop */
+          }
+        }
+        return r;
+      } finally {
+        toolMs[n] = (toolMs[n] ?? 0) + (Date.now() - t);
       }
-      return r;
     };
-    return { dispatch, last: () => last };
+    return { dispatch, last: () => last, toolMs: () => toolMs };
+  }
+
+  /**
+   * One line per answer with the latency split: total, time to the first
+   * visible token, and how long each tool took. Everything unaccounted for is
+   * the model itself — thinking, its own web_search rounds, and generation.
+   */
+  private logLatency(
+    label: string,
+    depth: AnswerDepth,
+    t0: number,
+    toolMs: Record<string, number>,
+    firstTokenMs: number | null,
+    valuationMs: number | null,
+  ) {
+    const total = Date.now() - t0;
+    const tools = Object.entries(toolMs);
+    const toolTotal = tools.reduce((a, [, ms]) => a + ms, 0);
+    const parts = tools.map(([k, ms]) => `${k} ${ms}ms`).join(', ');
+    const ms = (v: number | null) => (v == null ? 'n/a' : `${v}ms`);
+    this.logger.log(
+      `chat[${depth}] ${total}ms total · card ${ms(valuationMs)} · first token ${ms(
+        firstTokenMs,
+      )} · tools ${toolTotal}ms (${parts || 'none'}) · model ${
+        total - toolTotal
+      }ms — ${label}`,
+    );
   }
 
   /** Deterministic brief-contract narration of a code-computed valuation. */
@@ -783,7 +836,12 @@ RULES (follow strictly):
   async chatStream(
     messages: AiChatMessage[],
     adminId: string | undefined,
-    handlers: { onText: (t: string) => void; onTool?: (name: string) => void },
+    handlers: {
+      onText: (t: string) => void;
+      onTool?: (name: string) => void;
+      /** Pushed as soon as value_card returns, ahead of any prose. */
+      onValuation?: (v: CardValuation) => void;
+    },
     conversationId?: string,
     rawDepth?: unknown,
   ): Promise<{ toolCalls: AiToolInvocation[]; valuation: CardValuation | null }> {
@@ -797,8 +855,16 @@ RULES (follow strictly):
 
     const depth = normalizeDepth(rawDepth);
     const preset = CHAT_DEPTH[depth];
-    const cap = this.captureValuation(adminId, depth);
     let acc = '';
+    const t0 = Date.now();
+    let firstTokenMs: number | null = null;
+    let valuationMs: number | null = null;
+    const cap = this.captureValuation(adminId, depth, (v) => {
+      // This, not the first text token, is when the user actually sees an
+      // answer on a pricing question — so it's the number worth watching.
+      if (valuationMs === null) valuationMs = Date.now() - t0;
+      handlers.onValuation?.(v);
+    });
 
     // Publish the turn as in-flight so a client that leaves (or gets its
     // stream cut) can rejoin it. Progress is flushed on a timer, never per
@@ -822,6 +888,7 @@ RULES (follow strictly):
         dispatch: cap.dispatch,
         onText: (t) => {
           acc += t;
+          if (firstTokenMs === null) firstTokenMs = Date.now() - t0;
           handlers.onText(t);
           const now = Date.now();
           if (conversationId && now - lastFlush >= RUN_FLUSH_MS) {
@@ -848,6 +915,14 @@ RULES (follow strictly):
           acc = this.EMPTY_REPLY;
         }
       }
+      this.logLatency(
+        clean[clean.length - 1]?.content?.slice(0, 60) ?? 'photo',
+        depth,
+        t0,
+        cap.toolMs(),
+        firstTokenMs,
+        valuationMs,
+      );
       // History FIRST, then mark the run done: a client that sees 'done' then
       // refetches the conversation must find the exchange already there.
       await this.saveExchange(clean, acc, toolCalls, adminId, conversationId);
