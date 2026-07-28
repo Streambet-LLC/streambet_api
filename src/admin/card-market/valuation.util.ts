@@ -68,6 +68,16 @@ export interface ValOutput {
   /** How old the anchor sale is, in days. 3650 when undated/absent. */
   anchorAgeDays: number;
   /**
+   * The anchor is far off the other comps (>3x or <1/3 their median).
+   *
+   * We deliberately no longer DELETE extreme prices — card prices spike, and a
+   * record sale is often the most important comp there is. But an anchor that
+   * is wildly out of line might equally be a mis-scrape, so we say so instead
+   * of silently presenting it as the market. Null when there aren't enough
+   * other comps to judge against.
+   */
+  anchorIsExtreme: boolean;
+  /**
    * True when the anchor is older than STALE_ANCHOR_DAYS. A stale print is
    * still the best single datum we have, but it is NOT a current price — the
    * range widens and the narration must say how old it is.
@@ -77,6 +87,13 @@ export interface ValOutput {
 
 /** Past this age a single sale stops being a "current" price. */
 export const STALE_ANCHOR_DAYS = 90;
+
+/**
+ * How far off the other comps an anchor has to sit before we call it out.
+ * Only ever produces a WARNING — extreme prices are kept, because spikes are
+ * real and deleting them understates the card.
+ */
+export const EXTREME_ANCHOR_RATIO = 3;
 
 const SALE_TYPES = new Set(['auction-sale', 'private-sale', 'sold', 'auction']);
 
@@ -238,6 +255,23 @@ export const computeValuation = (input: ValInputs): ValOutput => {
   const anchorAgeDays = anchor ? daysBetween(anchor.date, input.today) : 3650;
   const anchorIsStale = anchorAgeDays > STALE_ANCHOR_DAYS;
 
+  // Flag — never drop — an anchor that sits far off the rest. Needs at least
+  // two other comps before "far off the rest" means anything.
+  // Compare against EVERY sale comp, not just `pricing` — that set narrows to
+  // the last 90 days, so the moment one recent sale exists the whole trading
+  // history drops out of it and there is nothing left to judge "extreme"
+  // against. The historical cluster is precisely the reference we need.
+  const otherPrices = anchor
+    ? comps.filter((c) => !isSameComp(c, anchor)).map((c) => c.priceUsd)
+    : [];
+  const medianOthers = otherPrices.length >= 2 ? median(otherPrices) : NaN;
+  const anchorIsExtreme =
+    !!anchor &&
+    Number.isFinite(medianOthers) &&
+    medianOthers > 0 &&
+    (anchor.priceUsd > medianOthers * EXTREME_ANCHOR_RATIO ||
+      anchor.priceUsd < medianOthers / EXTREME_ANCHOR_RATIO);
+
   if (input.method === 'anchor-and-adjust') {
     if (anchor) {
       const move = input.indexMovePct ?? 0;
@@ -274,6 +308,11 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     single,
   });
 
+  // Say it in the basis so the number is never presented as unremarkable.
+  const basis = anchorIsExtreme
+    ? `${conf.basis} — anchor is ${(anchor!.priceUsd / medianOthers).toFixed(1)}x the median of the other comps, worth verifying`
+    : conf.basis;
+
   const round2 = (n: number | null) =>
     n == null ? null : Math.round(n * 100) / 100;
 
@@ -282,10 +321,11 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     lowUsd: round2(low),
     highUsd: round2(high),
     confidencePct: conf.pct,
-    confidenceBasis: conf.basis,
+    confidenceBasis: basis,
     pricingComps: pricing,
     anchor,
     anchorAgeDays,
     anchorIsStale: !!anchor && anchorIsStale,
+    anchorIsExtreme,
   };
 };

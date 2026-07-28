@@ -331,6 +331,35 @@ RULES (follow strictly):
     // the text classifier when the latest turn carries an image.
     const last = messages[messages.length - 1];
     if (last?.images && last.images.length > 0) return true;
+
+    // A short affirmation / continuation ("yes", "sure", "go ahead", "try
+    // again", "thanks") is meaningless on its own — it inherits the running
+    // conversation's scope. The classifier judges it out of context and has
+    // wrongly bounced "sure, let's try again" to the off-topic reply, so treat
+    // these as in-scope whenever there's prior conversation to continue.
+    if (messages.length > 1) {
+      const words = (last?.content ?? '')
+        .toLowerCase()
+        .replace(/[^a-z\s']/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+      const AFFIRM = new Set([
+        'yes', 'yep', 'yeah', 'yup', 'ya', 'yea', 'y', 'sure', 'ok', 'okay',
+        'k', 'please', 'pls', 'confirm', 'confirmed', 'correct', 'right',
+        'thanks', 'thank', 'ty', 'tysm', 'thx', 'great', 'perfect', 'nice',
+        'cool', 'absolutely', 'definitely', 'yessir',
+      ]);
+      const joined = words.join(' ');
+      const phraseOk =
+        /\b(try again|go ahead|do it|let'?s (do|try|go)|sounds good|go for it|that'?s (it|right|the one)|save it|add it|run it)\b/.test(
+          joined,
+        );
+      if (words.length > 0 && words.length <= 6 &&
+        (AFFIRM.has(words[0]) || phraseOk)) {
+        return true;
+      }
+    }
+
     const transcript = messages
       .slice(-4)
       .map((m) => {
