@@ -11,6 +11,17 @@ import { ForecastService } from './forecast.service';
 import { AiService, AiImage } from '../integrations/ai/ai.service';
 import { AnswerDepth, normalizeDepth } from '../integrations/ai/answer-depth';
 
+/**
+ * Depth ordering for cache reuse. A stored report satisfies a request only if
+ * its rank is >= the requested rank — deeper reports are a superset of
+ * shallower ones, never the other way round.
+ */
+const DEPTH_RANK: Record<AnswerDepth, number> = {
+  quick: 0,
+  balanced: 1,
+  deep: 2,
+};
+
 export interface DeepResearchJobDto {
   id: string;
   subject: string;
@@ -91,22 +102,25 @@ export class DeepResearchService implements OnModuleInit {
         'AI is not configured (missing ANTHROPIC_API_KEY).',
       );
     }
+    const depth = normalizeDepth(rawDepth);
     // Reuse a recent completed report for the same subject rather than re-run a
     // full (expensive) web-research job — the market rarely moves enough in a
     // day to justify a fresh dive, and the admin gets the result instantly.
-    const reuse = await this.recentDone(clean);
+    // Only reuse one at least as deep as what was asked for, so raising the
+    // depth setting actually re-runs instead of returning the shallower report.
+    const reuse = await this.recentDone(clean, depth);
     if (reuse) return this.toDto(reuse);
     const job = await this.repo.save(
       this.repo.create({
         subject: clean,
         status: 'pending',
+        depth,
         requestedByAdminId: adminId ?? null,
         imageUrl: this.cleanImageUrl(imageUrl),
       }),
     );
-    // Fire-and-forget — the response returns immediately. Depth is carried
-    // in-memory into the background run (not persisted — dives are one-shot).
-    void this.run(job.id, normalizeDepth(rawDepth));
+    // Fire-and-forget — the response returns immediately.
+    void this.run(job.id, depth);
     return this.toDto(job);
   }
 
@@ -419,17 +433,34 @@ export class DeepResearchService implements OnModuleInit {
     return s.slice(0, 1000);
   }
 
-  /** Most recent completed dive for this subject within the freshness window. */
-  private async recentDone(subject: string): Promise<DeepResearchJob | null> {
+  /**
+   * Most recent completed dive for this subject within the freshness window
+   * that is AT LEAST as deep as the one being asked for.
+   *
+   * The depth check is the point: a Brief report is not an acceptable answer
+   * to a Deep request, and handing one back is what made the depth setting
+   * look broken. The reverse is fine — a Deep report already contains
+   * everything a Brief one would, so asking for Brief happily reuses it.
+   */
+  private async recentDone(
+    subject: string,
+    depth: AnswerDepth,
+  ): Promise<DeepResearchJob | null> {
     try {
       const cutoff = new Date(Date.now() - 24 * 3600 * 1000);
-      return await this.repo
+      const candidates = await this.repo
         .createQueryBuilder('j')
         .where('LOWER(j.subject) = LOWER(:subject)', { subject })
         .andWhere('j.status = :s', { s: 'done' })
         .andWhere('j.completedAt >= :cutoff', { cutoff })
         .orderBy('j.completedAt', 'DESC')
-        .getOne();
+        .take(20)
+        .getMany();
+      const want = DEPTH_RANK[depth];
+      return (
+        candidates.find((j) => DEPTH_RANK[normalizeDepth(j.depth)] >= want) ??
+        null
+      );
     } catch (e) {
       this.logger.warn(`deep-research reuse check failed: ${(e as Error).message}`);
       return null;

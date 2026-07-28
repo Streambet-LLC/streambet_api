@@ -19,6 +19,13 @@ export interface DeepDiveDepthPreset {
   effort: 'low' | 'medium' | 'high' | 'xhigh';
   maxSearches: number;
   maxTokens: number;
+  /**
+   * Appended to the research prompt to shape how much lands in each field of
+   * the report. Without this, depth only changed how hard the model researched
+   * — the JSON schema fixes the report's shape, so every depth produced the
+   * same-sized brief and the setting looked broken.
+   */
+  style: string;
 }
 
 /** Chat presets (interactive — latency matters, so kept tighter than dives). */
@@ -28,20 +35,26 @@ export interface DeepDiveDepthPreset {
 // reply appropriately short at lower depths.
 export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
   quick: {
-    effort: 'medium',
+    effort: 'low',
     maxTokens: 3000,
-    maxSearches: 4,
+    maxSearches: 3,
     maxTurns: 7,
     style:
-      'ANSWER STYLE — QUICK (brief pricing contract, follow exactly): Max ~5 short lines, no headers, no preamble. LINE 1: estimate + a confidence % + the anchor = the MOST RECENT confirmed sale ("~$X (N% confident). Anchor: last sale $Y on <date>"). LINE 2: the method in one clause (index-adjusted anchor / trimmed median of recent solds / triangulated — no direct comps). Then 1-3 COMPS you actually retrieved, one line each: $price — date — grade — source TYPE (auction-sale / private-sale / marketplace-listing / price-guide / index), price hyperlinked to the page you opened. LAST LINE: one sentence folding liquidity + trajectory + a sell/hold verdict. Do NOT run the buyers/rating/buzz dimension sweep — that is balanced/deep only. KEEP the confidence and source-types — those are required, not "nuance to skip". If asked about selling/timing, replace the last line with the 3-scenario block (P-up/base/down summing to 100 + expected value + verdict). Never cite a price without a retrieved link; never invent a sale; if you generated a sold-comps search link you MUST read and cite the comps in it.',
+      'ANSWER STYLE — BRIEF. This block sets the length of your answer; it overrides any other sense of how long to be.\n' +
+      'AFTER value_card ran: the visual card already shows price, range, confidence, method and comps — write ONE sentence only: the sell/hold verdict (add a second only if they asked something non-price, e.g. timing). Do not restate any number the card shows.\n' +
+      'WITHOUT value_card: max ~5 short lines, no headers, no preamble. Lead with the direct answer, then at most 2 supporting lines, then a one-line take. If they asked about sell timing, use the 3-scenario block (P-up/base/down summing to 100 + expected value + verdict) instead of the take.\n' +
+      'Skip the buyers/rating/buzz dimension sweep — that is balanced/deep only. Brevity NEVER justifies dropping a confidence %, a source type, or a link on a price you cite.',
   },
   balanced: {
     effort: 'medium',
     maxTokens: 5000,
-    maxSearches: 4,
+    maxSearches: 5,
     maxTurns: 8,
     style:
-      'ANSWER STYLE — BALANCED: A tight, useful read — 2-4 sentences or up to ~6 bullets. Start with the brief valuation contract (anchor = most-recent sale + estimate/range + confidence % + the comps you retrieved), THEN add a compact read on the key dimensions — likely buyers, liquidity, price trajectory, overall take — one line each. Same grounding rules (no unretrieved prices, anchor most-recent, complete the circle). No filler.',
+      'ANSWER STYLE — BALANCED. This block sets the length of your answer; it overrides any other sense of how long to be.\n' +
+      'AFTER value_card ran: the visual card already shows price, range, confidence, method and comps — do not restate those. Write 2-4 sentences (or up to 4 bullets): the sell/hold verdict, plus a compact read on liquidity, price trajectory, and likely buyers — one clause each.\n' +
+      'WITHOUT value_card: 4-8 lines. Lead with the direct answer, support it with the comps or evidence you actually retrieved (price — date — grade — source type, price hyperlinked), then the same compact dimensional read.\n' +
+      'No filler, no preamble, no repetition.',
   },
   deep: {
     effort: 'high',
@@ -49,15 +62,41 @@ export const CHAT_DEPTH: Record<AnswerDepth, ChatDepthPreset> = {
     maxSearches: 8,
     maxTurns: 10,
     style:
-      'ANSWER STYLE — DEEP (override the brief-by-default rule): The user asked for a thorough answer. Expand with detail and context, work in MORE dimensions where relevant (pricing & recent comps, social buzz, catalysts with odds, precedents, macro/supply/grading, likely buyers, risks), and cite more sources. A longer, well-structured answer with short headers/bullets is expected — but still no filler, preamble, or repetition.',
+      'ANSWER STYLE — DEEP. This block sets the length of your answer; it overrides any other sense of how long to be. The user explicitly asked for thorough, so a long, well-structured answer with short headers and bullets is CORRECT here — do not trim it back toward brevity.\n' +
+      "AFTER value_card ran: still do not restate the price, range, confidence or comps — the card shows them. Everything else expands: open with the verdict, then work through the dimensions that matter with a short header each — liquidity, price trajectory, likely buyers, upcoming catalysts with rough odds, comparable precedents with what their prices did, supply/reprint/grading factors, and the main risks. Explain the MECHANISM in each: how it reaches this card's price and how big the move could be.\n" +
+      'WITHOUT value_card: the same structure, with the retrieved evidence laid out first (price — date — grade — source type, each price hyperlinked).\n' +
+      'Cite more sources than you would at lower depths. Substance, not padding — never repeat a point across sections to fill space.',
   },
 };
 
-/** Deep-dive presets (background — can afford far more searches + tokens). */
+/**
+ * Deep-dive presets (background — can afford far more searches + tokens).
+ * The `style` lines set explicit item counts per section, because "be brief"
+ * and "be thorough" barely move a model that is filling a fixed JSON schema —
+ * countable targets do.
+ */
 export const DEEP_DIVE_DEPTH: Record<AnswerDepth, DeepDiveDepthPreset> = {
-  quick: { effort: 'low', maxSearches: 5, maxTokens: 5000 },
-  balanced: { effort: 'medium', maxSearches: 8, maxTokens: 8000 },
-  deep: { effort: 'high', maxSearches: 16, maxTokens: 12000 },
+  quick: {
+    effort: 'low',
+    maxSearches: 5,
+    maxTokens: 5000,
+    style:
+      'REPORT DEPTH — BRIEF: keep every field tight and prioritise signal over coverage. Thesis: 1-2 sentences. At most 3 catalysts, 2 precedents, 2 macro factors, 2 risks — one short line of explanation each. Include only the strongest items; drop the marginal ones rather than padding the list. Never drop the grounded prices, dates, or source links to save room.',
+  },
+  balanced: {
+    effort: 'medium',
+    maxSearches: 8,
+    maxTokens: 8000,
+    style:
+      'REPORT DEPTH — BALANCED: a useful working brief. Thesis: 2-3 sentences. Up to 5 catalysts, 3 precedents, 3 macro factors, 3 risks — one or two lines each, saying WHY it matters to the price, not just naming it.',
+  },
+  deep: {
+    effort: 'high',
+    maxSearches: 16,
+    maxTokens: 12000,
+    style:
+      "REPORT DEPTH — DEEP: the thorough version the user explicitly asked for. Thesis: 3-5 sentences. Up to 8 catalysts, 5 precedents, 5 macro factors, 5 risks. For each, explain the MECHANISM — how it actually transmits to this card's price, how big the move could be, and what would confirm or kill it. Precedents should name the comparable card, the event, and what the price did, with numbers. Cite more sources. Substance, not padding: never repeat a point across sections to fill space.",
+  },
 };
 
 /** Coerce arbitrary input to a valid depth (defaults to balanced). */

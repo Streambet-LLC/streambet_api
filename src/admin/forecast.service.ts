@@ -244,6 +244,8 @@ export class ForecastService {
       }).
 ${this.todayLine()}
 
+${preset.style}
+
 ${this.FORECAST_JSON}`,
       maxTokens: preset.maxTokens,
       maxSearches: preset.maxSearches,
@@ -295,6 +297,8 @@ ${this.FORECAST_JSON}`,
       system: this.ANALYST_SYSTEM,
       prompt: `Subject: ${subject}.
 ${this.todayLine()}
+
+${preset.style}
 
 ${this.FORECAST_JSON}`,
       maxTokens: preset.maxTokens,
