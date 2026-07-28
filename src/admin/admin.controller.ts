@@ -39,6 +39,7 @@ import { InsightsService } from './insights.service';
 import { DeepResearchService } from './deep-research.service';
 import { ClaudeUsageService } from '../integrations/ai/claude-usage.service';
 import { InsightsHistoryService } from './insights-history.service';
+import { InsightsRunService } from './insights-run.service';
 import {
   MarketPulseService,
   MARKET_SEGMENTS,
@@ -70,6 +71,7 @@ export class AdminController {
     private readonly insightsService: InsightsService,
     private readonly deepResearchService: DeepResearchService,
     private readonly insightsHistoryService: InsightsHistoryService,
+    private readonly insightsRunService: InsightsRunService,
     private readonly marketPulseService: MarketPulseService,
     private readonly dashboardConfigService: DashboardConfigService,
     private readonly cardProfileService: CardProfileService,
@@ -351,12 +353,15 @@ export class AdminController {
     @Query('search') search?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('owned') owned?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.marketService.listCards({
       search,
       limit: limit ? Number.parseInt(limit, 10) : undefined,
       offset: offset ? Number.parseInt(offset, 10) : undefined,
+      // Absent = both buckets; 'true'/'false' narrow to holdings/watchlist.
+      owned: owned === undefined ? undefined : owned === 'true',
     });
     return {
       status: HttpStatus.OK,
@@ -376,6 +381,7 @@ export class AdminController {
       category?: string;
       grade?: string;
       notes?: string;
+      owned?: boolean;
     },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
@@ -432,6 +438,7 @@ export class AdminController {
       acquiredAt?: string | null;
       alertAboveUsd?: number | null;
       alertBelowUsd?: number | null;
+      owned?: boolean;
     },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
@@ -873,6 +880,21 @@ export class AdminController {
       offset: offset ? parseInt(offset, 10) : undefined,
     });
     return { status: HttpStatus.OK, message: 'Insights feedback', data };
+  }
+
+  @ApiOperation({
+    summary:
+      'In-flight state of a conversation (resume a chat left mid-answer)',
+  })
+  @ApiParam({ name: 'conversationId', description: 'Conversation ID' })
+  @Get('analytics/insights/run/:conversationId')
+  async getInsightsRun(
+    @Request() req: RequestWithUser,
+    @Param('conversationId') conversationId: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.insightsRunService.get(conversationId);
+    return { status: HttpStatus.OK, message: 'Insights run', data };
   }
 
   @ApiOperation({ summary: 'One insights conversation (exchanges)' })

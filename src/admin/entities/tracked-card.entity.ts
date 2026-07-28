@@ -31,8 +31,19 @@ export class TrackedCard extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  // ---- Portfolio holding fields (optional — a tracked card becomes a holding
-  // once you record what you paid; otherwise it's just a watchlist entry) ----
+  // ---- Portfolio holding fields ----
+
+  /**
+   * Do they actually own this, or are they only watching it?
+   *
+   * Both live in this table, so this flag is the ONLY thing separating the
+   * watchlist from holdings — without it every watched card counts toward
+   * portfolio value. Cost basis can't stand in for it: you can own a card and
+   * not remember what you paid.
+   */
+  @Index()
+  @Column({ type: 'boolean', default: false })
+  owned: boolean;
 
   /** How many copies held. */
   @Column({ type: 'int', default: 1 })

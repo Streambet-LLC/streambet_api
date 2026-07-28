@@ -19,6 +19,8 @@ export interface TrackedCardDto {
   category: string | null;
   grade: string | null;
   notes: string | null;
+  /** True = a real holding; false = watchlist only. */
+  owned: boolean;
   /** Portfolio: copies held. */
   quantity: number;
   /** Portfolio: per-unit cost basis (what you paid), USD. */
@@ -100,6 +102,7 @@ export class MarketService {
       category: c.category ?? null,
       grade: c.grade ?? null,
       notes: c.notes ?? null,
+      owned: !!c.owned,
       quantity: c.quantity ?? 1,
       costBasisUsd: c.costBasisUsd ?? null,
       acquiredAt: c.acquiredAt ? c.acquiredAt.toISOString() : null,
@@ -123,16 +126,21 @@ export class MarketService {
     return [c.name, c.grade].filter(Boolean).join(' ').trim();
   }
 
-  /** List tracked cards, newest first, with optional name search + owner. */
+  /**
+   * List tracked cards, newest first. `owned` splits the two buckets:
+   * true = holdings, false = watchlist, undefined = both.
+   */
   async listCards(opts: {
     search?: string;
     limit?: number;
     offset?: number;
     ownerUserId?: string;
+    owned?: boolean;
   }): Promise<{ total: number; data: TrackedCardDto[] }> {
     const where: Record<string, unknown> = {};
     if (opts.search) where.name = ILike(`%${opts.search}%`);
     if (opts.ownerUserId) where.ownerUserId = opts.ownerUserId;
+    if (opts.owned !== undefined) where.owned = opts.owned;
     const [rows, total] = await this.repo.findAndCount({
       where,
       order: { createdAt: 'DESC' },
@@ -173,6 +181,8 @@ export class MarketService {
       grade?: string;
       notes?: string;
       ownerUserId?: string;
+      /** Add straight to holdings instead of the watchlist. */
+      owned?: boolean;
     },
     adminId?: string,
   ): Promise<TrackedCardDto> {
@@ -187,6 +197,7 @@ export class MarketService {
         category: clean(input.category),
         grade: clean(input.grade),
         notes: (input.notes ?? '').trim().slice(0, 2000) || null,
+        owned: input.owned === true,
         ownerUserId: input.ownerUserId ?? null,
         addedByAdminId: adminId ?? null,
       }),
@@ -211,10 +222,12 @@ export class MarketService {
       acquiredAt?: string | null;
       alertAboveUsd?: number | null;
       alertBelowUsd?: number | null;
+      owned?: boolean;
     },
   ): Promise<TrackedCardDto> {
     const card = await this.repo.findOne({ where: { id } });
     if (!card) throw new NotFoundException('Tracked card not found');
+    if (input.owned !== undefined) card.owned = input.owned === true;
     if (input.quantity != null) {
       const q = Math.trunc(Number(input.quantity));
       card.quantity = Number.isFinite(q) && q > 0 ? Math.min(q, 100000) : 1;
@@ -247,7 +260,12 @@ export class MarketService {
    * portfolio's "what moved" banner — the retention hook.
    */
   async alerts(ownerUserId?: string): Promise<PortfolioAlert[]> {
-    const { data } = await this.listCards({ ownerUserId, limit: 200 });
+    // Holdings only — alerting on cards you don't own is noise.
+    const { data } = await this.listCards({
+      ownerUserId,
+      owned: true,
+      limit: 200,
+    });
     const out: PortfolioAlert[] = [];
     const MOVE_THRESHOLD = 8; // percent
     for (const c of data) {
@@ -326,7 +344,11 @@ export class MarketService {
     adminId?: string,
     ownerUserId?: string,
   ): Promise<PortfolioSummary> {
-    const { data } = await this.listCards({ ownerUserId, limit: 200 });
+    const { data } = await this.listCards({
+      ownerUserId,
+      owned: true,
+      limit: 200,
+    });
     const ids = data.map((c) => c.id);
     // Bounded parallelism so we don't hammer the AI / rate limits.
     const CONCURRENCY = 3;
@@ -352,7 +374,12 @@ export class MarketService {
 
   /** Portfolio roll-up from the cached per-card valuations. */
   async portfolio(ownerUserId?: string): Promise<PortfolioSummary> {
-    const { data } = await this.listCards({ ownerUserId, limit: 200 });
+    // Only owned cards carry value — watchlist entries are excluded.
+    const { data } = await this.listCards({
+      ownerUserId,
+      owned: true,
+      limit: 200,
+    });
     let totalValueUsd = 0;
     let totalCostUsd = 0;
     let costedCount = 0;
