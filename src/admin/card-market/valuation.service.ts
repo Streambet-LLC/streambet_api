@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { AiService } from '../../integrations/ai/ai.service';
 import { CardValuationSnapshot } from '../entities/card-valuation-snapshot.entity';
 import {
+  ValAnalog,
   ValComp,
   ValMethod,
   computeValuation,
@@ -46,6 +47,12 @@ export interface CardValuation {
   anchorIsStale: boolean;
   /** Sale comps that actually counted toward the price, newest-first. */
   compsUsed: ValComp[];
+  /**
+   * Comparable-but-different cards backing a TRIANGULATED estimate, each with
+   * the multiplier used. Empty unless method === 'triangulation'. These are
+   * NOT sales of this card — never present them as comps.
+   */
+  analogsUsed: ValAnalog[];
   indexAdjustment: { index: string; movePct: number; window: string } | null;
   /**
    * Live eBay ACTIVE-listing context (asks, not sold comps) — a lowest-ask
@@ -76,6 +83,7 @@ interface RawValuation {
   method?: string;
   anchorComp?: Partial<ValComp> | null;
   compsUsed?: Partial<ValComp>[];
+  analogsUsed?: Partial<ValAnalog>[];
   indexAdjustment?: { index?: string; movePct?: number; window?: string } | null;
   estimate?: { pointUsd?: number; lowUsd?: number; highUsd?: number } | null;
   liquidity?: string;
@@ -129,12 +137,21 @@ export class ValuationService {
     return this.ai.isConfigured();
   }
 
+  /**
+   * Kept deliberately TIGHT. This prompt had accreted to ~5,000 chars across
+   * many fixes — "newest" appeared 15 times, "title" 39 — and that weight was
+   * itself the problem: more instructions meant more thinking and more output,
+   * which pushed an interactive call past its timeout and returned nothing at
+   * all. Every guarantee below is load-bearing and stated exactly once. Before
+   * adding to it, check the rule is not already here in other words.
+   */
   private readonly SYSTEM =
-    'You are a trading-card valuation researcher. Your ONLY job is to RETRIEVE the market evidence for ONE specific card and return it as structured JSON — you do NOT compute the final price or confidence (the application does that from your evidence). GROUNDING CONTRACT: never state a sale/price you did not retrieve from a web_search result this run; every comp MUST carry a real retrieved url and a date (YYYY-MM-DD); confirm each comp is the SAME card (player/character, set, parallel/insert, number, year, grade); TYPE each source as exactly one of auction-sale, private-sale, marketplace-listing (an active ask — NOT a sale), price-guide, or index. ' +
-    'EVERY COMP CARRIES ITS OWN TITLE: for each comp set "title" to that sale line\'s title EXACTLY as printed on the page (e.g. "2019 Panini Prizm Color Blast Patrick Mahomes II PSA 10") — verbatim, never the subject card\'s name copied down, never paraphrased, never blank. A sales-history page for one spec can still list DIFFERENT parallels/variants; the title is the only way to tell them apart, so if a row\'s title does not match the subject card (different insert, parallel, set, year, number, or player) LEAVE IT OUT entirely rather than reporting it as a comp. If the title of a row is not readable, STILL report the row and set title to null — never omit a real sale because the title extraction failed. ' +
-    'RECENCY IS CRITICAL: search MOST-RECENT-FIRST (e.g. include the current and prior year in queries), and for a graded card OPEN the PSA sales-history / auction-prices page for that exact spec and read the sales list top-to-bottom (it is ordered newest first). Return the newest dated sales you can find — do NOT report a 2024/2025 sale as "the latest" if a 2026 sale exists on the same page. Put EVERY dated sale you find (recent ones especially) into compsUsed; the app sorts them and anchors on the newest itself, so give it the full recent set, not just one. NEVER omit a sale just because its price is far above or below the rest — a high recent sale is usually the single most important comp, and dropping it understates the card. Report every same-card sale you find and let the app decide; omit a row ONLY when its title shows it is a different item (different parallel/player/year/grade, or a multi-card lot). ' +
-    'PICK THE ROUTE from what you find: (1) LIQUID — many recent exact SOLD comps (usually eBay) -> method "recent-median": return the most recent 5-8 exact-card SOLD comps (READ them off the sold-search page, do not just link it). (2) THIN / HIGH-VALUE — few but real recent sales, often on the PSA sales-history page not eBay -> method "anchor-and-adjust": return ALL recent confirmed sales in compsUsed (newest first) and set anchorComp to the single newest, plus the relevant player/segment index move since that newest sale date as indexAdjustment (e.g. Card Ladder). (3) NO direct comps (brand-new / 1-of-1) -> method "triangulation": leave compsUsed empty and put your triangulated range in estimate, based on analogs. ' +
-    'Never anchor on a stale/mid-pack sale when a newer one exists. Only include estimate for triangulation. Do NOT invent comps, urls, or sales. Output ONLY the JSON object requested.';
+    'You are a trading-card valuation RESEARCHER. You RETRIEVE market evidence for ONE card and return structured JSON. You do NOT compute the final price or confidence — the app does that from your evidence. Output ONLY the JSON object. ' +
+    'GROUNDING: never report a price you did not retrieve this run. Every comp needs a real retrieved url and a date (YYYY-MM-DD). Type each source as exactly one of auction-sale, private-sale, marketplace-listing (an ask, NOT a sale), price-guide, index. ' +
+    'TITLE: set "title" to the title of that sale row, verbatim from the page. It is the only way to tell parallels apart when rows share one url — if a title shows a different item (other insert/parallel/player/year/grade, or a multi-card lot), leave the row out. If a title is unreadable, still report the row with title null. ' +
+    'RECENCY IS THE PRIORITY: for a graded card, open the PSA sales-history page for that exact spec and read it TOP-DOWN, newest first. Return up to 10 sales in newest-first order. Never return a "representative sample" spread across years, and never present an older sale as the latest when newer rows exist on the page. Missing a recent sale is the worst error you can make here. ' +
+    'KEEP EXTREMES: never omit a sale because its price is far above or below the others — spikes are real, and a record sale is usually the most important comp. Only identity (the title) justifies dropping a row. ' +
+    'PICK THE ROUTE: (1) many recent exact SOLD comps, usually eBay -> "recent-median". (2) few but real sales, usually on the PSA page -> "anchor-and-adjust": fill compsUsed newest-first, set anchorComp to the newest, and add the relevant player/segment index move since that date as indexAdjustment. (3) no direct comps for this exact card (a 1/1, a brand-new release, one that has never traded) -> "triangulation": leave compsUsed empty and fill analogsUsed with REAL retrieved sales of the nearest comparable cards, each with the multiplier that carries it to the subject. Prefer in order: same card adjacent grade > same card raw-vs-graded > sibling parallel > same subject comparable print > same set similar tier > numbered sibling scaled for scarcity. Every analog needs a real url — an analog you did not find is a fabrication.';
 
   private readonly SCHEMA = `Return ONLY this JSON (no prose, no code fences):
 {
@@ -143,6 +160,7 @@ export class ValuationService {
   "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale", "url": "<retrieved url>" } | null,
   "compsUsed": [ { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "title": "<the sale's own title, verbatim from the page>", "grade": "<e.g. PSA 10>", "sourceType": "auction-sale"|"private-sale"|"marketplace-listing"|"price-guide"|"index", "url": "<retrieved url>" } ],
   "indexAdjustment": { "index": "<e.g. Card Ladder Patrick Mahomes>", "movePct": <signed number, e.g. -6.3>, "window": "<since the anchor date>" } | null,
+  "analogsUsed": [ { "title": "<the analog's own title, verbatim>", "priceUsd": <what the ANALOG sold for>, "date": "<YYYY-MM-DD>", "relation": "same-card-adjacent-grade"|"same-card-raw-vs-graded"|"sibling-parallel"|"same-subject-comparable-print"|"same-set-comparable-tier"|"scarcity-scaled", "multiplier": <number: subject ≈ priceUsd × multiplier>, "rationale": "<why this multiplier, a few words>", "url": "<retrieved url>" } ],
   "estimate": { "pointUsd": <number>, "lowUsd": <number>, "highUsd": <number> } | null,
   "liquidity": "High" | "Medium" | "Low",
   "trajectory": "Rising" | "Stable" | "Falling",
@@ -152,7 +170,17 @@ export class ValuationService {
 }`;
 
   /** Value ONE card by subject: retrieve evidence → compute in code. */
-  async valueCard(subject: string, adminId?: string): Promise<CardValuation> {
+  async valueCard(
+    subject: string,
+    adminId?: string,
+    /**
+     * Skip the cache read and research from scratch. Set when the user
+     * explicitly asks to re-run/refresh, or disputes the result — otherwise
+     * "run it again" replayed the same cached answer for up to 3 hours and
+     * looked like nothing happened.
+     */
+    forceRefresh = false,
+  ): Promise<CardValuation> {
     const clean = (subject ?? '').trim().slice(0, 300);
     const today = new Date().toISOString().slice(0, 10);
     const empty: CardValuation = {
@@ -168,6 +196,7 @@ export class ValuationService {
       anchorAgeDays: null,
       anchorIsStale: false,
       compsUsed: [],
+      analogsUsed: [],
       indexAdjustment: null,
       marketContext: null,
       reliability: 'unverified',
@@ -182,7 +211,10 @@ export class ValuationService {
     // Serve a recent identical valuation so a demo card is CONSISTENT.
     const cacheKey = clean.toLowerCase();
     const hit = this.cache.get(cacheKey);
-    if (hit && Date.now() - hit.at < this.CACHE_TTL_MS) return hit.value;
+    if (!forceRefresh && hit && Date.now() - hit.at < this.CACHE_TTL_MS) {
+      return hit.value;
+    }
+    if (forceRefresh) this.cache.delete(cacheKey);
 
     // Phase timings — a pricing answer is slow enough that "where did the time
     // go" has to be answerable from the logs rather than guessed at.
@@ -201,22 +233,47 @@ export class ValuationService {
     // overall abort so the chat can never hang on this tool.
     let raw: RawValuation;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 40000);
+    // An abort is no longer total data loss — research() now parses whatever
+    // rounds completed — so this is a latency ceiling rather than a cliff.
+    const timer = setTimeout(() => ctrl.abort(), 55000);
     const tResearch = Date.now();
     try {
       raw = await this.ai.research<RawValuation>({
         system: this.SYSTEM,
-        prompt: `Card: ${clean}.\nToday is ${today}.\n\n${this.SCHEMA}`,
+        // Spell out the current YEAR, not just the date. "Today is
+        // 2026-07-28" was not enough to stop it treating a 2025 sale as the
+        // latest — naming the year makes the check explicit.
+        prompt:
+          `Card: ${clean}.\nToday is ${today}. The CURRENT YEAR IS ${today.slice(0, 4)} — ` +
+          `sales from ${today.slice(0, 4)} very likely exist for this card, and if any do they ` +
+          `belong at the top of compsUsed.\n\n${this.SCHEMA}`,
         model: this.ai.chatModel,
-        maxTokens: 4000,
-        maxSearches: 5,
+        // These exact numbers are the only combination observed to COMPLETE
+        // inside the abort on a thin, high-value card. Raising maxSearches to
+        // 4, or effort to 'medium', timed out at 55s both times and returned
+        // nothing. Do not "restore" them without a measured run to back it up
+        // — search latency, not reasoning quality, is the binding constraint
+        // here. Extra recall now comes from the trimmed prompt instead.
+        maxTokens: 6000,
+        maxSearches: 3,
         maxRounds: 3,
-        effort: 'medium',
+        effort: 'low',
         signal: ctrl.signal,
         meta: { feature: 'value_card', adminId },
       });
     } catch (e) {
-      this.logger.warn(`valueCard failed for "${clean}": ${(e as Error).message}`);
+      // Name the cause explicitly. "unverified, no comps" on screen can mean a
+      // timeout, a truncated JSON body, or a genuinely uncomped card, and
+      // those need completely different fixes.
+      const msg = (e as Error).message ?? '';
+      const cause = ctrl.signal.aborted
+        ? 'TIMED OUT (raise the abort)'
+        : /non-JSON/i.test(msg)
+          ? 'TRUNCATED/INVALID JSON (raise maxTokens)'
+          : 'research error';
+      this.logger.warn(
+        `valueCard "${clean}" failed after ${Date.now() - tResearch}ms — ${cause}: ${msg.slice(0, 300)}`,
+      );
       return empty;
     } finally {
       clearTimeout(timer);
@@ -246,6 +303,7 @@ export class ValuationService {
       method,
       anchorComp,
       compsUsed,
+      analogsUsed: this.cleanAnalogs(raw.analogsUsed),
       indexMovePct:
         typeof raw.indexAdjustment?.movePct === 'number'
           ? raw.indexAdjustment.movePct
@@ -332,6 +390,7 @@ export class ValuationService {
       anchorAgeDays: out.anchor ? out.anchorAgeDays : null,
       anchorIsStale: out.anchorIsStale,
       compsUsed,
+      analogsUsed: out.analogsUsed,
       indexAdjustment:
         raw.indexAdjustment &&
         typeof raw.indexAdjustment.movePct === 'number'
@@ -375,11 +434,20 @@ export class ValuationService {
     }
     // Where the seconds went. A pricing turn is the slowest thing the chat
     // does, so make the split diagnosable instead of a guess.
+    // Include the comp count and newest date: "is it finding recent sales?"
+    // is the question that actually matters, and it should be answerable from
+    // one log line instead of a screenshot.
+    const newest = compsUsed
+      .map((c) => c.date)
+      .filter((d): d is string => !!d)
+      .sort()
+      .pop();
     this.logger.log(
       `value_card "${clean}" ${Date.now() - t0}ms total — ` +
         Object.entries(marks)
           .map(([k, ms]) => `${k} ${ms}ms`)
-          .join(', '),
+          .join(', ') +
+        ` · ${compsUsed.length} comps, newest ${newest ?? 'none'}`,
     );
     // Log the point-in-time valuation (data moat / price history) — best-effort.
     void this.persist(cacheKey, value);
@@ -571,6 +639,34 @@ export class ValuationService {
       sourceType: (this.str(raw.sourceType) ?? 'marketplace-listing').toLowerCase(),
       url: typeof raw.url === 'string' ? raw.url : null,
     };
+  }
+
+  /**
+   * Sanitize the analogs backing a triangulated estimate. Anything without a
+   * real price, a usable multiplier or a source url is dropped by
+   * `isUsableAnalog` downstream — this just coerces shapes and caps sizes.
+   */
+  private cleanAnalogs(raw: unknown): ValAnalog[] {
+    if (!Array.isArray(raw)) return [];
+    const out: ValAnalog[] = [];
+    for (const r of raw.slice(0, 8)) {
+      const a = (r ?? {}) as Partial<ValAnalog>;
+      const price = this.num(a.priceUsd);
+      const mult = this.num(a.multiplier);
+      if (price == null || mult == null) continue;
+      out.push({
+        title: this.str(a.title) ?? 'comparable card',
+        priceUsd: price,
+        date: typeof a.date === 'string' ? a.date.slice(0, 10) : null,
+        relation: (
+          this.str(a.relation) ?? 'same-set-comparable-tier'
+        ).toLowerCase(),
+        multiplier: mult,
+        rationale: this.str(a.rationale),
+        url: typeof a.url === 'string' ? a.url : null,
+      });
+    }
+    return out;
   }
 
   private cleanComps(raw: unknown): ValComp[] {

@@ -39,7 +39,9 @@ export interface DeepDiveDepthPreset {
  * second full research pass in latency and put wrong numbers on screen.
  */
 const VALUE_CARD_CONTRACT =
-  "value_card has ALREADY done the comp research and computed the price, range and confidence in code, and the app renders them as a visual card above your reply. So: do NOT web_search again for this card, do NOT run value_card again, and do NOT compute or state your own estimate, range or confidence — those numbers are already on screen and yours would contradict them. Cite the card's figures only if a sentence genuinely needs one.";
+  'value_card has ALREADY done the comp research and computed the price, range and confidence in code, and the app renders them as a visual card above your reply. ' +
+  'So FOR THE REST OF THIS ANSWER: do not web_search again for this card, do not call value_card a second time, and do not compute or state your own estimate, range or confidence — those numbers are already on screen and yours would contradict them. ' +
+  'This applies ONLY to the answer you are writing now: a later question about the same card must start with a fresh value_card call, never a recap of what you said before.';
 
 /** Chat presets (interactive — latency matters, so kept tighter than dives). */
 // NOTE: maxTokens is the WHOLE output budget (extended-thinking/effort tokens +
