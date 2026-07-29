@@ -17,6 +17,7 @@ import { SoldCard } from './entities/sold-card.entity';
 import { CardValuationSnapshot } from './entities/card-valuation-snapshot.entity';
 import { InsightsFeedback } from './entities/insights-feedback.entity';
 import { InsightsRun } from './entities/insights-run.entity';
+import { UserComp } from './entities/user-comp.entity';
 import { ForecastService } from './forecast.service';
 import { InsightsService } from './insights.service';
 import { InsightsRunService } from './insights-run.service';
@@ -28,6 +29,7 @@ import { CardProfileService } from './card-profile.service';
 import { EbayMarketSource } from './card-market/ebay-market.source';
 import { WebResearchMarketSource } from './card-market/web-research-market.source';
 import { ValuationService } from './card-market/valuation.service';
+import { UserCompsService } from './card-market/user-comps.service';
 import { PokemonPriceSource } from './card-market/pokemon-price.source';
 import { EbayBrowseSource } from './card-market/ebay-browse.source';
 import { AcquisitionService } from './acquisition/acquisition.service';
@@ -68,6 +70,7 @@ import { User } from 'src/users/entities/user.entity';
       CardValuationSnapshot,
       InsightsFeedback,
       InsightsRun,
+      UserComp,
     ]),
     RedditModule,
     BlueskyModule,
@@ -94,6 +97,7 @@ import { User } from 'src/users/entities/user.entity';
     EbayMarketSource,
     WebResearchMarketSource,
     ValuationService,
+    UserCompsService,
     PokemonPriceSource,
     EbayBrowseSource,
   ],

@@ -11,6 +11,7 @@ import {
   isSameComp,
 } from './valuation.util';
 import { PokemonPriceSource } from './pokemon-price.source';
+import { UserCompsService } from './user-comps.service';
 import { EbayBrowseSource } from './ebay-browse.source';
 
 /** One point in a card's valuation history. */
@@ -129,12 +130,23 @@ export class ValuationService {
     private readonly ai: AiService,
     private readonly pokemon: PokemonPriceSource,
     private readonly ebay: EbayBrowseSource,
+    private readonly userComps: UserCompsService,
     @InjectRepository(CardValuationSnapshot)
     private readonly snapshots: Repository<CardValuationSnapshot>,
   ) {}
 
   isConfigured(): boolean {
     return this.ai.isConfigured();
+  }
+
+  /**
+   * Drop the cached valuation for a card. Called when the evidence changes
+   * underneath it — e.g. the user supplies a comp we missed — because the
+   * cached number was computed without that sale and would otherwise be
+   * served for up to 3 hours, making their correction look ignored.
+   */
+  invalidate(subject: string): void {
+    this.cache.delete((subject ?? '').trim().toLowerCase());
   }
 
   /**
@@ -150,6 +162,7 @@ export class ValuationService {
     'GROUNDING: never report a price you did not retrieve this run. Every comp needs a real retrieved url and a date (YYYY-MM-DD). Type each source as exactly one of auction-sale, private-sale, marketplace-listing (an ask, NOT a sale), price-guide, index. ' +
     'TITLE: set "title" to the title of that sale row, verbatim from the page. It is the only way to tell parallels apart when rows share one url — if a title shows a different item (other insert/parallel/player/year/grade, or a multi-card lot), leave the row out. If a title is unreadable, still report the row with title null. ' +
     'RECENCY IS THE PRIORITY: for a graded card, open the PSA sales-history page for that exact spec and read it TOP-DOWN, newest first. Return up to 10 sales in newest-first order. Never return a "representative sample" spread across years, and never present an older sale as the latest when newer rows exist on the page. Missing a recent sale is the worst error you can make here. ' +
+    'WHERE THE NEWEST HIGH-VALUE SALES LIVE: for pricey cards the latest sale is often NOT on eBay — it is on Fanatics Collect (fanaticscollect.com), Goldin, Heritage, or PWCC. Search those auction venues and Card Ladder / PSA sales-history for the most recent sale too; NEVER assume the newest eBay sale is the newest sale overall (a Fanatics Collect auction can be weeks newer and much higher). ' +
     'KEEP EXTREMES: never omit a sale because its price is far above or below the others — spikes are real, and a record sale is usually the most important comp. Only identity (the title) justifies dropping a row. ' +
     'PICK THE ROUTE: (1) many recent exact SOLD comps, usually eBay -> "recent-median". (2) few but real sales, usually on the PSA page -> "anchor-and-adjust": fill compsUsed newest-first, set anchorComp to the newest, and add the relevant player/segment index move since that date as indexAdjustment. (3) no direct comps for this exact card (a 1/1, a brand-new release, one that has never traded) -> "triangulation": leave compsUsed empty and fill analogsUsed with REAL retrieved sales of the nearest comparable cards, each with the multiplier that carries it to the subject. Prefer in order: same card adjacent grade > same card raw-vs-graded > sibling parallel > same subject comparable print > same set similar tier > numbered sibling scaled for scarcity. Every analog needs a real url — an analog you did not find is a fabrication.';
 
@@ -283,11 +296,31 @@ export class ValuationService {
     const method: ValMethod = METHODS.includes(raw.method as ValMethod)
       ? (raw.method as ValMethod)
       : 'triangulation';
+    // Merge in sales the user told us about. These come FIRST so that if the
+    // same sale was also retrieved, the dedupe keeps our copy and theirs drops
+    // out rather than double-counting it.
+    const supplied = await this.userComps.compsFor(clean);
     const extracted = this.cleanComps(raw.compsUsed);
+    if (supplied.length) {
+      for (const s of supplied) {
+        if (!extracted.some((c) => isSameComp(c, s))) extracted.push(s);
+      }
+      this.logger.log(
+        `value_card "${clean}" merged ${supplied.length} user-supplied comp(s)`,
+      );
+    }
     // Adversarial verify: drop comps that don't hold up as real same-card sales
     // (the anti-phantom / wrong-card guard) before any math anchors on them.
     const tVerify = Date.now();
-    const compsUsed = await this.verifyComps(clean, extracted, adminId);
+    // The verifier judges what WE retrieved. A comp the user explicitly
+    // pointed us at is not ours to overrule — dropping it would recreate the
+    // exact complaint this feature exists to answer.
+    const asserted = extracted.filter((c) => c.userSupplied);
+    const retrieved = extracted.filter((c) => !c.userSupplied);
+    const compsUsed = [
+      ...asserted,
+      ...(await this.verifyComps(clean, retrieved, adminId)),
+    ];
     mark('verify', tVerify);
     const rawAnchor = raw.anchorComp ? this.cleanComp(raw.anchorComp) : null;
     // If the anchor got dropped by the verifier, fall back to the newest kept.

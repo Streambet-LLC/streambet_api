@@ -10,6 +10,7 @@ import { InsightsHistoryService } from './insights-history.service';
 import { InsightsRunService } from './insights-run.service';
 import { MarketService } from './market.service';
 import { SoldCardsService } from './sold-cards.service';
+import { UserCompsService } from './card-market/user-comps.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import {
   ValuationService,
@@ -59,6 +60,7 @@ export class InsightsService {
     private readonly runs: InsightsRunService,
     private readonly market: MarketService,
     private readonly soldCards: SoldCardsService,
+    private readonly userComps: UserCompsService,
   ) {}
 
   private readonly SYSTEM = `You are the CardCade Insights analyst — a trading-card market & intelligence assistant (Pokémon, One Piece, sports cards, and other collectibles).
@@ -91,6 +93,7 @@ TOOL ROUTING:
 - If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, first verify_card (unless already confirmed), then call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
 - Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
 - To save a card to the user's portfolio (watchlist / holdings / sold), call add_to_portfolio — see SAVING A CARD in the rules below.
+- IF THEY KNOW A SALE WE MISSED, capture it. When they say a comp is missing or wrong, or mention a sale we did not find, ask for the LINK and call add_comp. Our research only reads sources it can reach — Goldin, Heritage, Fanatics and private sales are invisible to it, and the person holding the card usually knows. Never save a price without a source, and after saving re-run value_card with forceRefresh true so the number actually moves.
 
 RULES (follow strictly):
 - GROUND IN REAL DATA — NEVER STATE A PRICE YOU DIDN'T RETRIEVE. Every sale/market price you cite must come from a specific web_search result you actually opened this turn, with a URL and a date. No prices from memory, no invented sales, no phantom comps, no "typical" figure dressed as a sale. If you generate or reference a sold-comps search link (eBay SOLD, PSA sales history, 130point) you MUST read and quote the individual comps in it before answering — a bare search link is NOT a valuation. Never say "not enough data".
@@ -259,6 +262,54 @@ RULES (follow strictly):
           },
         },
         required: ['subject'],
+      },
+    },
+    {
+      name: 'add_comp',
+      description:
+        'Record a SALE the user tells you about that our research missed — ' +
+        'they paste a link to a Goldin / Heritage / Fanatics / eBay / PSA ' +
+        'result, or describe a private sale with a source. Use it whenever ' +
+        'they say a comp is missing, wrong, or that they know of a sale we ' +
+        'did not find. It is stored against the card permanently, so EVERY ' +
+        'future valuation of that card includes it — not just this ' +
+        'conversation. A link is REQUIRED: if they give a price with no ' +
+        'source, ask for the link rather than saving it. After saving, ' +
+        're-run value_card with forceRefresh true so the number reflects it, ' +
+        'and tell them it will be counted from now on.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          subject: {
+            type: 'string',
+            description:
+              'The card, exactly as confirmed, e.g. "2019 Prizm Color Blast ' +
+              'Patrick Mahomes PSA 10".',
+          },
+          url: {
+            type: 'string',
+            description: 'Link to the sale. Required — never invent one.',
+          },
+          priceUsd: { type: 'number', description: 'What it sold for, USD.' },
+          saleDate: {
+            type: 'string',
+            description: 'Sale date, YYYY-MM-DD, if they said.',
+          },
+          title: {
+            type: 'string',
+            description: 'The listing/lot title, if visible.',
+          },
+          grade: { type: 'string', description: 'e.g. "PSA 10".' },
+          sourceType: {
+            type: 'string',
+            enum: ['auction-sale', 'private-sale', 'marketplace-listing'],
+          },
+          note: {
+            type: 'string',
+            description: 'Anything they said about it, in their words.',
+          },
+        },
+        required: ['subject', 'url', 'priceUsd'],
       },
     },
     {
@@ -506,6 +557,50 @@ RULES (follow strictly):
           adminId,
           input.forceRefresh === true,
         );
+      }
+      case 'add_comp': {
+        const subject = this.str(input.subject);
+        const url = this.str(input.url);
+        const priceUsd = Number(input.priceUsd);
+        if (!subject) return { error: 'subject is required.' };
+        if (!url) {
+          return {
+            error:
+              'A link to the sale is required — ask them where they saw it.',
+          };
+        }
+        if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+          return { error: 'A sale price is required.' };
+        }
+        try {
+          const comp = await this.userComps.add(
+            {
+              subject,
+              url,
+              priceUsd,
+              saleDate: this.str(input.saleDate),
+              title: this.str(input.title),
+              grade: this.str(input.grade),
+              sourceType: this.str(input.sourceType),
+              note: this.str(input.note),
+            },
+            adminId,
+          );
+          // Their comp changes the answer, so the cached valuation is now
+          // wrong — drop it or the next value_card would ignore what they
+          // just told us.
+          this.valuation.invalidate(subject);
+          return {
+            saved: true,
+            id: comp.id,
+            message:
+              `Saved that sale against "${subject}". It will be counted in ` +
+              `this and every future valuation of the card. Re-run value_card ` +
+              `with forceRefresh true to see the updated number.`,
+          };
+        } catch (e) {
+          return { error: (e as Error).message || 'Could not save that comp.' };
+        }
       }
       case 'add_to_portfolio': {
         const subject = this.str(input.subject);
