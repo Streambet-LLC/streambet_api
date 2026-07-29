@@ -78,7 +78,7 @@ Return a WEIGHTED-CONSENSUS current value for THIS exact card (match grade if sp
   "method": "recent-median" | "anchor-and-adjust" | "triangulation",
   "anchorComp": { "priceUsd": <number>, "date": "<YYYY-MM-DD>", "kind": "sold"|"listing"|"guide"|"analog"|"index", "url": "<retrieved url>" } | null,
   "indexMovePct": <number or null>,
-  "basis": "<one short line, e.g. 'trimmed median of 6 recent eBay PSA 10 solds' or 'anchor $17,100 (Feb 26) x -6.3% Mahomes index'>",
+  "basis": "<one short line, e.g. 'trimmed median of N recent eBay PSA 10 solds' or 'anchor $<price> (<Mon YY>) x <index move>% <player> index'. Use placeholders like these — NEVER copy a concrete figure out of this example into your answer.>",
   "components": [
     { "source": "<e.g. eBay sold / PSA sales history / 130point / TCGplayer / PSA 9 comps (analog)>", "priceUsd": <number>, "date": "<YYYY-MM-DD or null>", "sampleSize": <int or null>, "weightPct": <0-100>, "kind": "sold"|"listing"|"guide"|"analog"|"index", "url": "<retrieved url — required for any 'sold'>", "note": "<optional short note>" }
   ],

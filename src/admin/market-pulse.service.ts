@@ -18,14 +18,46 @@ export const MARKET_SEGMENTS = [
 
 /** The market indices we track — all 0-100 AI estimates. */
 export const MARKET_METRICS = [
-  { key: 'heat', label: 'Market heat', help: 'Overall activity & demand' },
-  { key: 'momentum', label: 'Price momentum', help: 'Recent direction (50 = flat)' },
-  { key: 'sentiment', label: 'Sentiment', help: 'Community / social sentiment' },
-  { key: 'demand', label: 'Demand', help: 'Buy-side pressure' },
-  { key: 'supply', label: 'Supply pressure', help: 'New supply / reprints (higher = more)' },
-  { key: 'grading', label: 'Grading activity', help: 'PSA/BGS submissions & pop growth' },
-  { key: 'sealed', label: 'Sealed strength', help: 'Sealed product demand' },
-  { key: 'volatility', label: 'Volatility', help: 'Price choppiness' },
+  {
+    key: 'heat',
+    label: 'Market heat',
+    help: 'How active and in-demand this market is right now overall — a blend of buying, momentum, and attention. 0 = cold and quiet, 100 = red-hot.',
+  },
+  {
+    key: 'momentum',
+    label: 'Price momentum',
+    help: 'Which way prices have been trending lately. 50 = flat; above 50 = rising, below 50 = falling — the further from 50, the sharper the move.',
+  },
+  {
+    key: 'sentiment',
+    label: 'Sentiment',
+    help: 'How collectors feel about this market on social and in the community. 0 = negative/bearish, 100 = hyped and very bullish.',
+  },
+  {
+    key: 'demand',
+    label: 'Demand',
+    help: 'Buy-side pressure — how eager buyers are versus what’s for sale. Higher means more competition to buy, which tends to firm up prices.',
+  },
+  {
+    key: 'supply',
+    label: 'Supply pressure',
+    help: 'How much new supply is hitting the market — fresh pulls, reprints, and print runs. Higher = more supply, which usually weighs on prices.',
+  },
+  {
+    key: 'grading',
+    label: 'Grading activity',
+    help: 'How much of this market is being graded — PSA/BGS submission volume and population growth. Higher = pops climbing fast (more graded copies in circulation).',
+  },
+  {
+    key: 'sealed',
+    label: 'Sealed strength',
+    help: 'Demand for sealed, unopened product (boxes, cases, ETBs). Higher = strong sealed interest, often a sign of confidence in the set.',
+  },
+  {
+    key: 'volatility',
+    label: 'Volatility',
+    help: 'How choppy prices are — how much they swing up and down. Low = stable and predictable, high = big, unpredictable swings (more risk).',
+  },
 ] as const;
 
 const SEGMENT_KEYS = new Set(MARKET_SEGMENTS.map((s) => s.key));

@@ -10,6 +10,7 @@ import { DeepResearchJob } from './entities/deep-research-job.entity';
 import { ForecastService } from './forecast.service';
 import { AiService, AiImage } from '../integrations/ai/ai.service';
 import { AnswerDepth, normalizeDepth } from '../integrations/ai/answer-depth';
+import { EbayBrowseSource } from './card-market/ebay-browse.source';
 
 /**
  * Depth ordering for cache reuse. A stored report satisfies a request only if
@@ -71,6 +72,7 @@ export class DeepResearchService implements OnModuleInit {
     private readonly repo: Repository<DeepResearchJob>,
     private readonly forecast: ForecastService,
     private readonly ai: AiService,
+    private readonly ebay: EbayBrowseSource,
   ) {}
 
   /**
@@ -326,7 +328,18 @@ export class DeepResearchService implements OnModuleInit {
       if (url) return { imageUrl: url };
     }
 
-    // 2) Fallback → bounded web search (any game), never blocking for long.
+    // 2) eBay Browse — a real photo from the top listing. Fast (~1s), works for
+    // virtually any card (sports included), and far more reliable than the slow
+    // web_search URL hunt that kept aborting.
+    try {
+      const ebayImg = await this.ebay.imageFor(subject);
+      const cleaned = this.cleanImageUrl(ebayImg);
+      if (cleaned) return { imageUrl: cleaned };
+    } catch {
+      /* eBay is best-effort */
+    }
+
+    // 3) Last resort → bounded web search (any game), never blocking for long.
     if (!this.ai.isConfigured()) return { imageUrl: null };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 14000);

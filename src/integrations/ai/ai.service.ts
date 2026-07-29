@@ -241,19 +241,52 @@ export class AiService {
     // Server-tool loops may pause_turn; continue a few rounds.
     const maxRounds = opts.maxRounds ?? 5;
     for (let round = 0; round < maxRounds; round++) {
-      const res = await client.messages.create(
-        {
-          model,
-          max_tokens: opts.maxTokens ?? 8000,
-          thinking: { type: 'adaptive' as const },
-          ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
-          ...(opts.system ? { system: opts.system } : {}),
-          tools,
-          messages,
-          ...(containerId ? { container: containerId } : {}),
-        },
-        opts.signal ? { signal: opts.signal } : undefined,
-      );
+      let res: Anthropic.Message;
+      // STREAM rather than await a whole message. web_search makes this one
+      // long-running request, so with a non-streaming call a caller timeout
+      // discarded everything — the JSON was being generated but we never saw
+      // a byte of it. Streaming means the text is already in hand when the
+      // abort lands, and the partial body is repairable downstream.
+      let streamed = '';
+      try {
+        const stream = client.messages.stream(
+          {
+            model,
+            max_tokens: opts.maxTokens ?? 8000,
+            thinking: { type: 'adaptive' as const },
+            ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+            ...(opts.system ? { system: opts.system } : {}),
+            tools,
+            messages,
+            ...(containerId ? { container: containerId } : {}),
+          },
+          opts.signal ? { signal: opts.signal } : undefined,
+        );
+        stream.on('text', (delta: string) => {
+          streamed += delta;
+        });
+        res = await stream.finalMessage();
+      } catch (e) {
+        // A caller-side timeout must NOT discard the rounds that already
+        // finished. Those rounds contain real retrieved comps; throwing them
+        // away turns a slow-but-useful answer into "no data found", which is
+        // strictly worse. Only rethrow when there is genuinely nothing to
+        // salvage.
+        const aborted =
+          opts.signal?.aborted === true ||
+          /abort/i.test((e as Error)?.message ?? '');
+        // Whatever streamed before the abort counts — that is the whole point
+        // of streaming here.
+        const salvage = text + streamed;
+        if (aborted && salvage.trim()) {
+          text = salvage;
+          this.logger.warn(
+            `research aborted mid-round ${round} — parsing the ${salvage.length} chars already streamed`,
+          );
+          break;
+        }
+        throw e;
+      }
       containerId = res.container?.id ?? containerId;
       ClaudeUsageService.add(totals, res.usage);
       text += res.content
@@ -673,10 +706,68 @@ export class AiService {
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fence) s = fence[1].trim();
     const start = s.indexOf('{');
+    if (start === -1) return null;
     const end = s.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return null;
+    if (end > start) {
+      try {
+        return JSON.parse(s.slice(start, end + 1));
+      } catch {
+        /* fall through to the salvage pass */
+      }
+    }
+    // The body was cut off (usually the output token budget). Everything
+    // before the cut is still valid data — recovering five retrieved comps
+    // beats reporting "no comps found" because the closing braces never
+    // arrived, which is the worst possible way to fail here.
+    const repaired = this.repairTruncatedJson(s.slice(start));
+    if (repaired !== null) {
+      this.logger.warn(
+        'AI output was truncated — salvaged the complete portion. Raise maxTokens for this call.',
+      );
+    }
+    return repaired;
+  }
+
+  /**
+   * Close a truncated JSON object, discarding the incomplete tail.
+   *
+   * Rewinds to the last point where a nested element finished cleanly, drops
+   * anything after it, and closes whatever containers are still open. Tracks
+   * string/escape state so braces inside strings (card titles are full of
+   * punctuation) don't corrupt the depth count.
+   */
+  private repairTruncatedJson(s: string): unknown | null {
+    const stack: string[] = [];
+    let inStr = false;
+    let esc = false;
+    let safeCut = -1;
+    let safeStack: string[] = [];
+
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === '{') stack.push('}');
+      else if (ch === '[') stack.push(']');
+      else if (ch === '}' || ch === ']') {
+        stack.pop();
+        // A nested element just closed and we're still inside the root — this
+        // is a valid place to cut.
+        if (stack.length > 0) {
+          safeCut = i;
+          safeStack = [...stack];
+        }
+      }
+    }
+    if (safeCut < 0) return null;
+    const closed = s.slice(0, safeCut + 1) + safeStack.reverse().join('');
     try {
-      return JSON.parse(s.slice(start, end + 1));
+      return JSON.parse(closed);
     } catch {
       return null;
     }

@@ -33,6 +33,75 @@ export interface ValComp {
 }
 
 /**
+ * How an ANALOG relates to the card being valued, strongest evidence first.
+ *
+ * This ladder exists so triangulation is a method rather than a vibe. Some
+ * cards genuinely cannot be comped — a 1/1, a fresh release, a pop-1 slab that
+ * has never traded — and for those the honest answer is not "no idea", it is
+ * "here is the nearest thing that DID sell and what it implies". Naming the
+ * relationship makes the estimate auditable: you can see it came from the PSA 9
+ * of the same card rather than from thin air.
+ */
+export type AnalogRelation =
+  | 'same-card-adjacent-grade'
+  | 'same-card-raw-vs-graded'
+  | 'sibling-parallel'
+  | 'same-subject-comparable-print'
+  | 'same-set-comparable-tier'
+  | 'scarcity-scaled';
+
+/**
+ * Evidential strength per rung, 0-1. Drives confidence only — never the price.
+ * The PSA 9 of the exact same card tells you far more about the PSA 10 than a
+ * different player's card from the same set does.
+ */
+export const ANALOG_STRENGTH: Record<AnalogRelation, number> = {
+  'same-card-adjacent-grade': 1.0,
+  'same-card-raw-vs-graded': 0.85,
+  'sibling-parallel': 0.75,
+  'same-subject-comparable-print': 0.6,
+  'same-set-comparable-tier': 0.45,
+  'scarcity-scaled': 0.4,
+};
+
+/**
+ * A comparable that is NOT this card — a real sale of something related, plus
+ * the multiplier that carries it across to the subject. Kept separate from
+ * ValComp so an analog can never be mistaken for a direct comp of this card.
+ */
+export interface ValAnalog {
+  /** The analog's own title, verbatim — e.g. "…Mahomes Color Blast PSA 9". */
+  title: string;
+  /** What the ANALOG sold for. */
+  priceUsd: number;
+  date: string | null;
+  relation: AnalogRelation | string;
+  /** subject ≈ priceUsd × multiplier. e.g. PSA 9 → PSA 10 might be 2.5. */
+  multiplier: number;
+  /** Why this multiplier, in a few words. */
+  rationale: string | null;
+  url: string | null;
+}
+
+/** Multipliers outside this range are extraction noise, not market reality. */
+const MULTIPLIER_MIN = 0.01;
+const MULTIPLIER_MAX = 100;
+
+/** An analog only counts if it has a real price, a sane multiplier and a source. */
+export const isUsableAnalog = (a: ValAnalog): boolean =>
+  !!a &&
+  typeof a.priceUsd === 'number' &&
+  a.priceUsd > 0 &&
+  typeof a.multiplier === 'number' &&
+  Number.isFinite(a.multiplier) &&
+  a.multiplier >= MULTIPLIER_MIN &&
+  a.multiplier <= MULTIPLIER_MAX &&
+  !!a.url;
+
+/** What the subject would be worth if this analog's relationship holds. */
+export const impliedValue = (a: ValAnalog): number => a.priceUsd * a.multiplier;
+
+/**
  * Same underlying sale? Identity is (price, date, url) — NOT url alone, because
  * every row on a PSA sales-history page shares the page url.
  */
@@ -47,7 +116,9 @@ export interface ValInputs {
   compsUsed: ValComp[];
   /** Signed index move since the anchor date, in percent (e.g. -6.3). */
   indexMovePct: number | null;
-  /** Model's own point/range — used only as the triangulation fallback. */
+  /** Comparable-but-different cards, for when this one can't be comped. */
+  analogsUsed?: ValAnalog[];
+  /** Model's own point/range — used only when nothing at all was retrieved. */
   modelPoint: number | null;
   modelLow: number | null;
   modelHigh: number | null;
@@ -83,6 +154,8 @@ export interface ValOutput {
    * range widens and the narration must say how old it is.
    */
   anchorIsStale: boolean;
+  /** The analogs that actually backed a triangulated estimate. */
+  analogsUsed: ValAnalog[];
 }
 
 /** Past this age a single sale stops being a "current" price. */
@@ -185,6 +258,12 @@ export const computeConfidence = (opts: {
   cv: number;
   hasIndex: boolean;
   single: boolean;
+  /** Triangulation only: how many analogs backed the estimate. */
+  nAnalogs?: number;
+  /** Triangulation only: the strongest analog relationship used. */
+  bestAnalog?: string;
+  /** Triangulation only: strength of that relationship, 0-1. */
+  analogStrength?: number;
 }): { pct: number; basis: string } => {
   const R = recencyFactor(opts.dLastDays);
   const C = countFactor(opts.nRecent);
@@ -192,7 +271,15 @@ export const computeConfidence = (opts: {
   let pct = Math.round(100 * (0.35 * R + 0.3 * C + 0.35 * D));
   if (opts.method === 'anchor-and-adjust' && opts.hasIndex) pct += 6;
   pct = clamp(pct, 20, 98);
-  if (opts.method === 'triangulation') pct = Math.min(pct, 55);
+  if (opts.method === 'triangulation') {
+    // An estimate built from the PSA 9 of the SAME card deserves more credit
+    // than one built from a different player's card — but never as much as a
+    // real sale of the card itself, so the hard cap stays.
+    const strength = opts.analogStrength ?? 0;
+    const backed = Math.min(opts.nAnalogs ?? 0, 4) / 4;
+    pct = Math.round(28 + 27 * (0.6 * strength + 0.4 * backed));
+    pct = Math.min(pct, 55);
+  }
 
   const spread =
     opts.nRecent >= 2 ? ` spread +-${Math.round(opts.cv * 100)}%` : '';
@@ -200,7 +287,9 @@ export const computeConfidence = (opts: {
     opts.dLastDays >= 3650 ? 'no dated comp' : `newest ${opts.dLastDays}d ago`;
   let basis: string;
   if (opts.method === 'triangulation') {
-    basis = 'triangulated estimate — no direct comps';
+    basis = opts.nAnalogs
+      ? `estimated from ${opts.nAnalogs} comparable card${opts.nAnalogs === 1 ? '' : 's'} (${opts.bestAnalog ?? 'analog'}) — no direct comps for this exact card`
+      : 'triangulated estimate — no direct comps';
   } else if (opts.method === 'anchor-and-adjust') {
     const ageTxt =
       opts.dLastDays >= 3650 ? 'undated' : `${opts.dLastDays}d old`;
@@ -225,6 +314,7 @@ export const computeConfidence = (opts: {
  */
 export const computeValuation = (input: ValInputs): ValOutput => {
   const comps = (input.compsUsed ?? []).filter(isPricingComp);
+  const analogs = (input.analogsUsed ?? []).filter(isUsableAnalog);
   // Newest-first.
   comps.sort(
     (a, b) => daysBetween(a.date, input.today) - daysBetween(b.date, input.today),
@@ -288,15 +378,45 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     }
   }
 
-  // Triangulation (or any route with no usable comps) → model's own estimate.
+  // Triangulation: price it from the ANALOGS in code, the same way the other
+  // two routes are computed. Previously this route just adopted the model's
+  // own number, which made it the one place a price wasn't derived from
+  // recorded evidence.
+  if (point == null && analogs.length > 0) {
+    const implied = analogs.map(impliedValue);
+    point = trimmedMedian(implied);
+    // Spread across the analogs IS the uncertainty, floored at +/-25% because
+    // agreement between two guesses is not precision.
+    const lo = Math.min(...implied);
+    const hi = Math.max(...implied);
+    low = Math.min(lo, point * 0.75);
+    high = Math.max(hi, point * 1.25);
+  }
+
+  // Nothing retrieved at all → fall back to the model's own estimate so a
+  // thin answer is still an answer.
   if (point == null) {
     point = input.modelPoint;
     low = input.modelLow;
     high = input.modelHigh;
   }
 
+  // Strongest rung the analogs reached — drives triangulation confidence.
+  const bestAnalog = analogs.reduce<{ relation: string; strength: number }>(
+    (best, a) => {
+      const s = ANALOG_STRENGTH[a.relation as AnalogRelation] ?? 0.35;
+      return s > best.strength
+        ? { relation: String(a.relation), strength: s }
+        : best;
+    },
+    { relation: '', strength: 0 },
+  );
+
   const single = input.method === 'anchor-and-adjust' && nRecent <= 1;
   const conf = computeConfidence({
+    nAnalogs: analogs.length,
+    bestAnalog: bestAnalog.relation || undefined,
+    analogStrength: bestAnalog.strength,
     method: input.method,
     nRecent,
     // When we anchor, the anchor's own age is what the estimate rides on —
@@ -327,5 +447,6 @@ export const computeValuation = (input: ValInputs): ValOutput => {
     anchorAgeDays,
     anchorIsStale: !!anchor && anchorIsStale,
     anchorIsExtreme,
+    analogsUsed: analogs,
   };
 };
