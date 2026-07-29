@@ -29,6 +29,15 @@ import {
 const RUN_FLUSH_MS = 1500;
 
 /**
+ * Vocabulary that only ever appears in collectibles talk. A message containing
+ * any of it is in scope without asking the classifier — cheaper, faster, and
+ * it can't be wrongly bounced. Deliberately unambiguous terms only: generic
+ * words like "set" or "sold" would let genuinely off-topic questions through.
+ */
+const CARD_TERMS =
+  /\b(cards?|slabs?|graded|psa|bgs|cgc|sgc|rookie|holo(?:foil)?|parallel|prizm|refractor|kaboom|charizard|pok[eé]mon|one piece|tcg|booster|sealed|pop report|autograph|topps|panini|bowman|upper deck|comps?)\b/i;
+
+/**
  * Insights — a guarded, conversational card-market analyst.
  *
  * Claude answers admin questions in plain English using live web search plus a
@@ -360,6 +369,21 @@ RULES (follow strictly):
       }
     }
 
+    const text = last?.content ?? '';
+
+    // The app writes this one itself when the admin confirms a verify_card
+    // prompt — we KNOW it is in scope because we generated it. It was being
+    // sent to the classifier like free text and bounced, which dead-ended the
+    // confirm step: the card was verified and then refused.
+    if (/^confirmed\s*[—–-]\s*analyze this exact card/i.test(text.trim())) {
+      return true;
+    }
+
+    // Unambiguous card vocabulary means this is about collectibles by
+    // definition. Skipping the classifier here removes a failure mode AND a
+    // serial round trip from every pricing question.
+    if (CARD_TERMS.test(text)) return true;
+
     const transcript = messages
       .slice(-4)
       .map((m) => {
@@ -396,7 +420,12 @@ RULES (follow strictly):
         },
         meta: { feature: 'chat_scope', adminId },
       });
-      return res.inScope === true;
+      // Fail OPEN on anything that isn't an explicit false. `=== true` meant a
+      // malformed or empty classifier response silently produced the
+      // off-topic reply — the opposite of this gate's documented intent ("when
+      // unsure return inScope=true"), and a real on-topic question got
+      // refused. A stricter guard runs downstream anyway.
+      return res?.inScope !== false;
     } catch {
       // Fail open to the (scope-guarded) tool loop rather than block the user.
       return true;
