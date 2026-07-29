@@ -30,6 +30,13 @@ export interface ValComp {
   /** auction-sale | private-sale | marketplace-listing | price-guide | index */
   sourceType: string;
   url: string | null;
+  /**
+   * Supplied by the user rather than retrieved by us. Counts toward the price
+   * exactly like any other sourced comp — they are usually right, and the
+   * whole point is to capture sales our research cannot reach — but it is
+   * surfaced in the UI so the provenance is never ambiguous.
+   */
+  userSupplied?: boolean;
 }
 
 /**
