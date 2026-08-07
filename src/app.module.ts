@@ -111,12 +111,9 @@ import { WaitlistModule } from './waitlist/waitlist.module';
           synchronize: configService.get('database.synchronize'),
           logging: configService.get('database.logging'),
           dropSchema: configService.get('database.dropSchema'),
-          // ssl: true,
-          // extra: {
-          //   ssl: {
-          //     rejectUnauthorized: false,
-          //   },
-          // },
+          ssl: configService.get('database.ssl')
+            ? { rejectUnauthorized: false }
+            : false,
         }) as DataSourceOptions,
       dataSourceFactory: async (options) => {
         const dataSource = await new DataSource(options).initialize();

@@ -9,4 +9,10 @@ export default registerAs('database', () => ({
   synchronize: process.env.DB_SYNC === 'true',
   logging: process.env.DB_LOGGING === 'true',
   dropSchema: process.env.DB_DROP_SCHEMA === 'true',
+  // Amazon RDS requires SSL. Enable it for any RDS endpoint (or when DB_SSL is
+  // set explicitly). rejectUnauthorized is false because RDS presents an Amazon
+  // CA chain we don't bundle locally.
+  ssl:
+    process.env.DB_SSL === 'true' ||
+    /rds\.amazonaws\.com/i.test(process.env.DB_HOST || ''),
 }));

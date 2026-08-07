@@ -19,6 +19,7 @@
         { "name": "ENABLE_API_LOGGING", "value": "true" },
         { "name": "ENABLE_DETAILED_LOGGING", "value": "true" },
         { "name": "DB_PORT", "value": "5432" },
+        { "name": "DB_SSL", "value": "true" },
         { "name": "JWT_EXPIRES_IN", "value": "1d" },
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
         { "name": "FILE_DRIVER", "value": "s3" },
