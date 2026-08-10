@@ -193,6 +193,71 @@ export class CrmService {
     return contact;
   }
 
+  /**
+   * Bulk-import contacts from a mapped spreadsheet (Excel/CSV upload or Google
+   * Sheet). Rows are already normalized client-side. De-duplicates within the
+   * kind by email → handle → name so re-importing the same list is idempotent.
+   */
+  async importContacts(
+    kind: 'buyer' | 'seller',
+    incoming: CreateContactInput[],
+    adminId: string | null,
+  ): Promise<{ created: number; skipped: number; total: number }> {
+    const rows = (Array.isArray(incoming) ? incoming : []).slice(0, 5000);
+    const keyOf = (
+      email?: string | null,
+      handle?: string | null,
+      name?: string | null,
+    ): string => {
+      const e = (email || '').trim().toLowerCase();
+      if (e) return 'e:' + e;
+      const h = (handle || '').trim().toLowerCase().replace(/^@/, '');
+      if (h) return 'h:' + h;
+      return 'n:' + (name || '').trim().toLowerCase();
+    };
+
+    const existing = await this.contacts.find({
+      where: { kind },
+      select: ['email', 'handle', 'name'],
+    });
+    const seen = new Set(existing.map(c => keyOf(c.email, c.handle, c.name)));
+
+    const toCreate: CrmContact[] = [];
+    let skipped = 0;
+    for (const r of rows) {
+      const name = (r.name || '').trim();
+      if (!name) {
+        skipped++;
+        continue;
+      }
+      const key = keyOf(r.email, r.handle, name);
+      if (seen.has(key)) {
+        skipped++;
+        continue;
+      }
+      seen.add(key);
+      toCreate.push(
+        this.contacts.create({
+          kind,
+          name: name.slice(0, 200),
+          handle: r.handle?.trim() || null,
+          email: r.email?.trim() || null,
+          company: r.company?.trim() || null,
+          location: r.location?.trim() || null,
+          source: r.source?.trim() || 'import',
+          stage: normStage(r.stage),
+          preferred: !!r.preferred,
+          tags: cleanList(r.tags),
+          interests: cleanList(r.interests),
+          leadId: null,
+          createdById: adminId,
+        }),
+      );
+    }
+    if (toCreate.length) await this.contacts.save(toCreate, { chunk: 200 });
+    return { created: toCreate.length, skipped, total: rows.length };
+  }
+
   async stats(): Promise<{
     buyers: number;
     sellers: number;

@@ -149,4 +149,24 @@ export class CrmController {
     const data = await this.crm.convertLead(id, kind, req.user.id);
     return { status: HttpStatus.OK, message: 'Lead converted successfully', data };
   }
+
+  @ApiOperation({ summary: 'Bulk-import CRM contacts from a mapped sheet' })
+  @Post('contacts/import')
+  async importContacts(
+    @Request() req: RequestWithUser,
+    @Body() body: { kind?: 'buyer' | 'seller'; contacts: CreateContactInput[] },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const kind = body?.kind === 'seller' ? 'seller' : 'buyer';
+    const data = await this.crm.importContacts(
+      kind,
+      body?.contacts || [],
+      req.user.id,
+    );
+    return {
+      status: HttpStatus.CREATED,
+      message: 'Contacts imported successfully',
+      data,
+    };
+  }
 }
