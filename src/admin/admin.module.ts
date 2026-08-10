@@ -43,6 +43,10 @@ import { GoogleSearchModule } from '../integrations/google-search/google-search.
 import { TwitchModule } from '../integrations/twitch/twitch.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/users/entities/user.entity';
+import { CrmContact } from './entities/crm-contact.entity';
+import { CrmNote } from './entities/crm-note.entity';
+import { CrmService } from './crm.service';
+import { CrmController } from './crm.controller';
 
 /**
  * Analytics-only admin module. The marketplace data-integration (collector
@@ -71,6 +75,8 @@ import { User } from 'src/users/entities/user.entity';
       InsightsFeedback,
       InsightsRun,
       UserComp,
+      CrmContact,
+      CrmNote,
     ]),
     RedditModule,
     BlueskyModule,
@@ -78,8 +84,9 @@ import { User } from 'src/users/entities/user.entity';
     GoogleSearchModule,
     TwitchModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, CrmController],
   providers: [
+    CrmService,
     SellerInventoryService,
     GoogleSheetsService,
     AcquisitionService,
