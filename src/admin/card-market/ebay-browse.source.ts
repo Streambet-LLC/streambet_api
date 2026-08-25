@@ -158,4 +158,72 @@ export class EbayBrowseSource {
       clearTimeout(timer);
     }
   }
+
+  /**
+   * Raw ACTIVE listings for a query — per-item, for market-heat snapshotting.
+   * Returns the true total match count (a real supply level) plus a sample of
+   * individual listings (itemId + ask) that we track across days to derive
+   * days-on-market and a sell-through/velocity proxy. null on any miss.
+   */
+  async searchActive(
+    query: string,
+    limit = 100,
+  ): Promise<{
+    total: number;
+    items: {
+      externalId: string;
+      title: string | null;
+      priceUsd: number | null;
+      currency: string;
+      url: string | null;
+    }[];
+  } | null> {
+    const q = (query ?? '').trim().slice(0, 200);
+    if (!q || !this.isConfigured()) return null;
+    const token = await this.getToken();
+    if (!token) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    try {
+      const lim = Math.min(Math.max(limit, 1), 200);
+      const url =
+        `https://api.ebay.com/buy/browse/v1/item_summary/search?limit=${lim}&q=` +
+        encodeURIComponent(q);
+      const r = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+        },
+        signal: ctrl.signal,
+      });
+      if (!r.ok) return null;
+      const j = (await r.json()) as {
+        total?: number;
+        itemSummaries?: {
+          itemId?: string;
+          title?: string;
+          itemWebUrl?: string;
+          price?: { value?: string; currency?: string };
+        }[];
+      };
+      const items = (j.itemSummaries ?? [])
+        .filter(it => it.itemId)
+        .map(it => {
+          const v = parseFloat(it.price?.value ?? '');
+          return {
+            externalId: it.itemId as string,
+            title: it.title ?? null,
+            priceUsd: Number.isFinite(v) && v > 0 ? v : null,
+            currency: it.price?.currency ?? 'USD',
+            url: it.itemWebUrl ?? null,
+          };
+        });
+      return { total: j.total ?? items.length, items };
+    } catch (e) {
+      this.logger.warn(`eBay searchActive failed: ${(e as Error).message}`);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }

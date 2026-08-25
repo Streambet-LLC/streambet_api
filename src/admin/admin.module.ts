@@ -47,6 +47,10 @@ import { CrmContact } from './entities/crm-contact.entity';
 import { CrmNote } from './entities/crm-note.entity';
 import { CrmService } from './crm.service';
 import { CrmController } from './crm.controller';
+import { MarketListing } from './entities/market-listing.entity';
+import { MarketHeatPoint } from './entities/market-heat-point.entity';
+import { MarketHeatService } from './market-heat.service';
+import { MarketHeatController } from './market-heat.controller';
 
 /**
  * Analytics-only admin module. The marketplace data-integration (collector
@@ -77,6 +81,8 @@ import { CrmController } from './crm.controller';
       UserComp,
       CrmContact,
       CrmNote,
+      MarketListing,
+      MarketHeatPoint,
     ]),
     RedditModule,
     BlueskyModule,
@@ -84,9 +90,10 @@ import { CrmController } from './crm.controller';
     GoogleSearchModule,
     TwitchModule,
   ],
-  controllers: [AdminController, CrmController],
+  controllers: [AdminController, CrmController, MarketHeatController],
   providers: [
     CrmService,
+    MarketHeatService,
     SellerInventoryService,
     GoogleSheetsService,
     AcquisitionService,

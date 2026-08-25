@@ -203,6 +203,47 @@ export class AcquisitionService {
     return { configured: true, source, leads };
   }
 
+  /**
+   * Lightweight market-buzz volume for a query across configured social sources
+   * — a NON-persisting count of recent posts/hits, used as a leading demand
+   * signal for market heat. Returns null mentions when nothing is configured,
+   * so callers can ignore it gracefully.
+   */
+  async buzzVolume(
+    query: string,
+  ): Promise<{ mentions: number | null; bySource: Record<string, number> }> {
+    const bySource: Record<string, number> = {};
+    if (this.reddit.isConfigured()) {
+      try {
+        const p = await this.reddit.searchPosts({ query, sort: 'new', limit: 50 });
+        bySource.reddit = p.length;
+      } catch {
+        /* skip a failing source */
+      }
+    }
+    if (this.bluesky.isConfigured()) {
+      try {
+        const p = await this.bluesky.searchPosts({ query, sort: 'latest', limit: 50 });
+        bySource.bluesky = p.length;
+      } catch {
+        /* skip */
+      }
+    }
+    if (this.youtube.isConfigured()) {
+      try {
+        const p = await this.youtube.searchCommenters({ query, limit: 25 });
+        bySource.youtube = p.length;
+      } catch {
+        /* skip */
+      }
+    }
+    const keys = Object.keys(bySource);
+    const mentions = keys.length
+      ? keys.reduce((s, k) => s + bySource[k], 0)
+      : null;
+    return { mentions, bySource };
+  }
+
   /** Upsert discovered leads into the pool, deduped by (source, externalId). */
   private async persistLeads(
     source: DiscoverySource,
