@@ -6,7 +6,7 @@ import { AcquisitionService } from './acquisition/acquisition.service';
 
 export interface HeatTopic {
   key: string;
-  scope: 'segment' | 'set' | 'card';
+  scope: 'segment' | 'set' | 'card' | 'player';
   label: string;
   /** eBay search that samples this market's active listings. */
   query: string;
@@ -15,8 +15,9 @@ export interface HeatTopic {
 }
 
 /**
- * The markets we snapshot: 6 broad segments + a curated list of hot sets and
- * marquee cards. Each is tracked through the identical pipeline; edit freely.
+ * Fallback topic list, used only when the `market_taxonomy` table is empty or
+ * unavailable. The live topics are driven by the taxonomy (see loadHeatTopics)
+ * so adding a set / card / player node there gets it snapshotted automatically.
  */
 export const HEAT_TOPICS: HeatTopic[] = [
   { key: 'pokemon', scope: 'segment', label: 'Pokémon', query: 'pokemon card', match: ['pokemon', 'pokémon'] },
@@ -36,6 +37,41 @@ export const HEAT_TOPICS: HeatTopic[] = [
   { key: 'card_jordan_fleer', scope: 'card', label: 'Jordan Fleer RC', query: 'michael jordan 1986 fleer rookie', match: ['jordan'] },
   { key: 'card_lebron_prizm', scope: 'card', label: 'LeBron Prizm', query: 'lebron james prizm', match: ['lebron'] },
 ];
+
+/**
+ * Load the live snapshot topics from the taxonomy — every active node that
+ * carries an eBay query and a heat scope (markets, sets, players, marquee
+ * cards). Adding a node there is all it takes to start tracking a new market.
+ * Falls back to the hardcoded HEAT_TOPICS if the table is empty/absent.
+ */
+export async function loadHeatTopics(ds: DataSource): Promise<HeatTopic[]> {
+  try {
+    const rows = await ds.query(
+      `SELECT key, "heatScope", label, query, "matchTerms"
+         FROM market_taxonomy
+        WHERE active = true AND query IS NOT NULL AND "heatScope" IS NOT NULL
+        ORDER BY "heatScope", "sortOrder", label`,
+    );
+    if (rows && rows.length) {
+      return rows.map((r: {
+        key: string;
+        heatScope: HeatTopic['scope'];
+        label: string;
+        query: string;
+        matchTerms: string[] | null;
+      }) => ({
+        key: r.key,
+        scope: r.heatScope,
+        label: r.label,
+        query: r.query,
+        match: Array.isArray(r.matchTerms) ? r.matchTerms : [],
+      }));
+    }
+  } catch {
+    /* taxonomy table may not exist yet — fall back to the constant */
+  }
+  return HEAT_TOPICS;
+}
 
 /** A social buzz probe (non-persisting) — supplied by the Nest layer. */
 export type SocialBuzzFn = (
@@ -76,7 +112,15 @@ export function computeHeat(x: {
     comps.push({ v: clamp((x.socialMentions / 50) * 100, 0, 100), w: 0.15 }); // social buzz
   if (x.firstPartyAdds != null && x.firstPartyAdds > 0)
     comps.push({ v: clamp((x.firstPartyAdds / 5) * 100, 0, 100), w: 0.1 }); // our saves/follows
-  if (comps.length === 0) return null;
+  // Cold-start guard: a score needs a real ANCHOR — day-over-day momentum
+  // (supply/price/sell-through) or social buzz. Aging / first-party alone are
+  // too weak and, on a first snapshot, spuriously read as hot (fresh listings
+  // look un-aged → 100). Without an anchor we return null ("—") until history
+  // accrues on the next daily snapshot.
+  const hasMomentum =
+    x.clearedRatePct != null || x.askChangePct != null || x.totalActiveChangePct != null;
+  const hasSocial = x.socialMentions != null;
+  if (comps.length === 0 || (!hasMomentum && !hasSocial)) return null;
   const wsum = comps.reduce((s, c) => s + c.w, 0);
   return Math.round(comps.reduce((s, c) => s + c.v * c.w, 0) / wsum);
 }
@@ -266,14 +310,15 @@ export async function collectTopic(
   };
 }
 
-/** Snapshot every segment (sequential — gentle on the eBay rate limit). */
+/** Snapshot every topic (sequential — gentle on the eBay rate limit). */
 export async function collectMarketHeat(
   ds: DataSource,
   ebay: EbayBrowseSource,
   opts?: { social?: SocialBuzzFn },
 ): Promise<CollectResult[]> {
+  const topics = await loadHeatTopics(ds);
   const out: CollectResult[] = [];
-  for (const topic of HEAT_TOPICS) {
+  for (const topic of topics) {
     try {
       const r = await collectTopic(ds, ebay, topic, opts);
       if (r) out.push(r);
@@ -318,14 +363,31 @@ export class MarketHeatService {
     return collectMarketHeat(this.ds, this.ebay, this.opts);
   }
 
-  /** Latest heat point per topic (for the "hottest markets" ranking). */
-  latest(scope?: string): Promise<unknown[]> {
-    const filtered = scope && scope !== 'all';
+  /**
+   * Latest heat point per topic (for the "hottest markets" ranking), enriched
+   * with its taxonomy context (rootMarket / kind / parentKey) so the UI can
+   * roll up and drill down. Optional `scope` and `market` (rootMarket) filters.
+   */
+  latest(scope?: string, market?: string): Promise<unknown[]> {
+    const conds: string[] = [];
+    const params: string[] = [];
+    if (scope && scope !== 'all') {
+      params.push(scope);
+      conds.push(`h.scope = $${params.length}`);
+    }
+    if (market && market !== 'all') {
+      params.push(market);
+      conds.push(`t."rootMarket" = $${params.length}`);
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     return this.ds.query(
-      `SELECT DISTINCT ON (segment) * FROM market_heat_points
-         ${filtered ? 'WHERE scope = $1' : ''}
-         ORDER BY segment, "capturedAt" DESC`,
-      filtered ? [scope] : [],
+      `SELECT DISTINCT ON (h.segment) h.*,
+              t."rootMarket", t.kind AS "taxKind", t."parentKey"
+         FROM market_heat_points h
+         LEFT JOIN market_taxonomy t ON t.key = h.segment
+         ${where}
+         ORDER BY h.segment, h."capturedAt" DESC`,
+      params,
     );
   }
 
@@ -437,10 +499,21 @@ export class MarketHeatService {
     sellers: unknown[];
     leads: unknown[];
   }> {
-    const topic = HEAT_TOPICS.find(t => t.key === marketKey);
-    const kw = (topic?.match?.length ? topic.match : [topic?.label || marketKey])
-      .filter(Boolean)
-      .map(String);
+    const node = (
+      await this.ds.query(
+        `SELECT label, "matchTerms" FROM market_taxonomy WHERE key = $1 LIMIT 1`,
+        [marketKey],
+      )
+    )[0] as { label?: string; matchTerms?: string[] } | undefined;
+    const fallback = HEAT_TOPICS.find(t => t.key === marketKey);
+    const label = node?.label || fallback?.label || marketKey;
+    const rawKw =
+      node?.matchTerms?.length
+        ? node.matchTerms
+        : fallback?.match?.length
+          ? fallback.match
+          : [label];
+    const kw = rawKw.filter(Boolean).map(String);
     const patterns = kw.map(k => `%${k}%`);
     const lim = Math.max(1, Math.min(limit, 50));
 
@@ -474,7 +547,7 @@ export class MarketHeatService {
       ),
     ]);
 
-    return { market: topic?.label || marketKey, keywords: kw, buyers, sellers, leads };
+    return { market: label, keywords: kw, buyers, sellers, leads };
   }
 
   /** Time series for one segment. */

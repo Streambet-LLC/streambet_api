@@ -51,6 +51,12 @@ import { MarketListing } from './entities/market-listing.entity';
 import { MarketHeatPoint } from './entities/market-heat-point.entity';
 import { MarketHeatService } from './market-heat.service';
 import { MarketHeatController } from './market-heat.controller';
+import { MarketTaxonomyNode } from './entities/market-taxonomy.entity';
+import { MarketTaxonomyService } from './market-taxonomy.service';
+import { MarketTaxonomyController } from './market-taxonomy.controller';
+import { MarketEngagementPoint } from './entities/market-engagement-point.entity';
+import { MarketEngagementService } from './market-engagement.service';
+import { MarketEngagementController } from './market-engagement.controller';
 
 /**
  * Analytics-only admin module. The marketplace data-integration (collector
@@ -83,6 +89,8 @@ import { MarketHeatController } from './market-heat.controller';
       CrmNote,
       MarketListing,
       MarketHeatPoint,
+      MarketTaxonomyNode,
+      MarketEngagementPoint,
     ]),
     RedditModule,
     BlueskyModule,
@@ -90,10 +98,18 @@ import { MarketHeatController } from './market-heat.controller';
     GoogleSearchModule,
     TwitchModule,
   ],
-  controllers: [AdminController, CrmController, MarketHeatController],
+  controllers: [
+    AdminController,
+    CrmController,
+    MarketHeatController,
+    MarketTaxonomyController,
+    MarketEngagementController,
+  ],
   providers: [
     CrmService,
     MarketHeatService,
+    MarketTaxonomyService,
+    MarketEngagementService,
     SellerInventoryService,
     GoogleSheetsService,
     AcquisitionService,

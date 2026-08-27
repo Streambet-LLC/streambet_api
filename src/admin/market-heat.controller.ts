@@ -44,14 +44,15 @@ export class MarketHeatController {
     return Number.isFinite(n) ? n : def;
   }
 
-  @ApiOperation({ summary: 'Latest heat point per market (scope: segment|set|card|all)' })
+  @ApiOperation({ summary: 'Latest heat point per market (scope: segment|set|card|player|all; optional market drill-down)' })
   @Get()
   async latest(
     @Request() req: RequestWithUser,
     @Query('scope') scope?: string,
+    @Query('market') market?: string,
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
-    const data = await this.heat.latest(scope);
+    const data = await this.heat.latest(scope, market);
     return { status: HttpStatus.OK, message: 'Market heat fetched successfully', data };
   }
 
