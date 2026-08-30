@@ -364,6 +364,66 @@ export class MarketHeatService {
   }
 
   /**
+   * Snapshot a SINGLE taxonomy topic now — used right after a user adds a new
+   * player/card/set from the heat panel, so it shows data immediately instead
+   * of waiting for the nightly cron.
+   */
+  async collectOne(key: string): Promise<CollectResult | null> {
+    if (!this.ebay.isConfigured()) return null;
+    const rows = await this.ds.query(
+      `SELECT key, "heatScope", label, query, "matchTerms"
+         FROM market_taxonomy
+        WHERE key = $1 AND active = true AND query IS NOT NULL
+        LIMIT 1`,
+      [key],
+    );
+    const n = rows[0] as
+      | { key: string; heatScope: HeatTopic['scope'] | null; label: string; query: string; matchTerms: string[] | null }
+      | undefined;
+    if (!n) return null;
+    return collectTopic(
+      this.ds,
+      this.ebay,
+      {
+        key: n.key,
+        scope: n.heatScope ?? 'segment',
+        label: n.label,
+        query: n.query,
+        match: Array.isArray(n.matchTerms) ? n.matchTerms : [],
+      },
+      this.opts,
+    );
+  }
+
+  /**
+   * Purge a topic's stored snapshots (heat points, sampled listings, engagement
+   * points) so a removed/untracked market leaves the board. The taxonomy node
+   * itself is deleted separately via the taxonomy API.
+   */
+  async removeTopic(key: string): Promise<{ removed: string }> {
+    await this.ds.query(`DELETE FROM market_heat_points WHERE segment = $1`, [key]);
+    await this.ds.query(`DELETE FROM market_listings WHERE segment = $1`, [key]);
+    await this.ds.query(`DELETE FROM market_engagement_points WHERE segment = $1`, [key]);
+    return { removed: key };
+  }
+
+  /**
+   * Preview what an eBay query returns (active total + a few sample listings)
+   * so a market can be sanity-checked before it's saved as a tracked topic.
+   */
+  async preview(
+    query: string,
+  ): Promise<{ total: number; items: { title: string; priceUsd: number | null; url: string }[] }> {
+    if (!query || !this.ebay.isConfigured()) return { total: 0, items: [] };
+    const res = await this.ebay.searchActive(query, 10);
+    if (!res) return { total: 0, items: [] };
+    return {
+      total: res.total,
+      items: res.items.slice(0, 6).map(i => ({ title: i.title, priceUsd: i.priceUsd, url: i.url })),
+    };
+  }
+
+  /**
    * Latest heat point per topic (for the "hottest markets" ranking), enriched
    * with its taxonomy context (rootMarket / kind / parentKey) so the UI can
    * roll up and drill down. Optional `scope` and `market` (rootMarket) filters.

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Request,
@@ -68,6 +69,17 @@ export class MarketHeatController {
     return { status: HttpStatus.OK, message: 'Market movers fetched successfully', data };
   }
 
+  @ApiOperation({ summary: 'Preview an eBay query (active total + sample) before saving a topic' })
+  @Get('preview')
+  async preview(
+    @Request() req: RequestWithUser,
+    @Query('q') q?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.preview((q ?? '').trim());
+    return { status: HttpStatus.OK, message: 'Query preview', data };
+  }
+
   @ApiOperation({ summary: 'Composed market digest + notable moves (alerts)' })
   @Get('digest')
   async digest(
@@ -109,5 +121,27 @@ export class MarketHeatController {
     this.ensureAdmin(req.user);
     const data = await this.heat.collectAll();
     return { status: HttpStatus.OK, message: 'Market heat collected', data };
+  }
+
+  @ApiOperation({ summary: 'Snapshot a single topic now (e.g. a just-added player/card)' })
+  @Post('collect/:segment')
+  async collectOne(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.collectOne(segment);
+    return { status: HttpStatus.OK, message: 'Topic snapshotted', data };
+  }
+
+  @ApiOperation({ summary: "Purge a topic's stored snapshots (after untracking it)" })
+  @Delete(':segment')
+  async remove(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.removeTopic(segment);
+    return { status: HttpStatus.OK, message: 'Topic snapshots purged', data };
   }
 }
