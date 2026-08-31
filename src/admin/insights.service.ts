@@ -10,6 +10,7 @@ import { InsightsHistoryService } from './insights-history.service';
 import { InsightsRunService } from './insights-run.service';
 import { MarketService } from './market.service';
 import { SoldCardsService } from './sold-cards.service';
+import { MarketHeatService } from './market-heat.service';
 import { UserCompsService } from './card-market/user-comps.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import {
@@ -61,6 +62,7 @@ export class InsightsService {
     private readonly market: MarketService,
     private readonly soldCards: SoldCardsService,
     private readonly userComps: UserCompsService,
+    private readonly marketHeat: MarketHeatService,
   ) {}
 
   private readonly SYSTEM = `You are the CardCade Insights analyst — a trading-card market & intelligence assistant (Pokémon, One Piece, sports cards, and other collectibles).
@@ -92,6 +94,7 @@ TOOL ROUTING:
 - Keep web use efficient but spend enough to land the right comps: for a thin low-pop card that means the PSA sales-history page + an index read; for a liquid card the eBay SOLD page (and READ the comps on it). If you hit the search limit mid-answer, ANSWER FROM THE COMPS YOU ALREADY RETRIEVED — never degrade to "no direct comp found" or to other-player triangulation when you already surfaced direct comps. Note the limit in one clause and still give the anchor, estimate, and confidence.
 - If the user EXPLICITLY asks for a "market report", "deep dive", "deep research", "full report", or thorough analysis on a card/player/set, first verify_card (unless already confirmed), then call start_deep_dive (it runs in the background) and tell them — in one short line — that the AI Market Report is running in the AI Market Reports panel above and will fill in there shortly. Do NOT try to produce the full report inline. For normal questions, just answer with web search.
 - Only use search_leads (the business's outreach prospects) when the question is explicitly about leads/prospects.
+- For "what's hot / heating up / cooling / momentum / which markets, sets, or cards are moving right now": call market_heat. It returns OUR real-time heat leaderboard + movers computed from LIVE active-listing data (a leading signal that moves before sold comps), so prefer it over a web search for market-momentum questions. It's a market/segment/set/card view, NOT a per-card price — for "what's it worth" still use value_card. Cite the specific numbers it returns (heat score, supply, ask change), and note supply/price momentum are the firm signals while velocity/days-listed are still warming up.
 - To save a card to the user's portfolio (watchlist / holdings / sold), call add_to_portfolio — see SAVING A CARD in the rules below.
 - IF THEY KNOW A SALE WE MISSED, capture it. When they say a comp is missing or wrong, or mention a sale we did not find, ask for the LINK and call add_comp. Our research only reads sources it can reach — Goldin, Heritage, Fanatics and private sales are invisible to it, and the person holding the card usually knows. Never save a price without a source, and after saving re-run value_card with forceRefresh true so the number actually moves.
 
@@ -148,6 +151,28 @@ RULES (follow strictly):
     // search_buyers) were removed with the marketplace itself — card questions
     // are now answered via live web search, and per-card tracking will return
     // with the tracked-cards feature.
+    {
+      name: 'market_heat',
+      description:
+        'Real-time market HEAT for card markets — leading indicators from live ' +
+        'ACTIVE-listing snapshots (supply level + supply/price momentum), which ' +
+        'move BEFORE lagging sold comps. Use for "what is hot / heating up / ' +
+        'cooling", momentum, or which markets/sets/cards are moving right now. ' +
+        'Returns a 0-100 heat leaderboard with total active listings, median ask ' +
+        '+ change, and the biggest recent movers. This is a MARKET view, NOT a ' +
+        "per-card price — use value_card for a card's worth.",
+      input_schema: {
+        type: 'object',
+        properties: {
+          scope: {
+            type: 'string',
+            enum: ['segment', 'set', 'card', 'all'],
+            description:
+              'segment = broad markets (Pokémon, Sports…); set/card = granular topics.',
+          },
+        },
+      },
+    },
     {
       name: 'search_leads',
       description:
@@ -722,6 +747,43 @@ RULES (follow strictly):
             buyerScore: l.buyerScore,
             intent: l.intent,
             interests: l.interests,
+          })),
+        };
+      }
+      case 'market_heat': {
+        const scope = this.str(input.scope) || 'segment';
+        const [latest, movers] = await Promise.all([
+          this.marketHeat.latest(scope),
+          this.marketHeat.movers(scope, 8),
+        ]);
+        const rows = latest as Array<Record<string, unknown>>;
+        const markets = rows
+          .slice()
+          .sort(
+            (a, b) =>
+              ((b.heatScore as number) ?? -1) - ((a.heatScore as number) ?? -1),
+          )
+          .map((r) => ({
+            market: r.label || r.segment,
+            scope: r.scope,
+            heat: r.heatScore,
+            totalActiveListings: r.totalActive,
+            supplyChangePct: r.totalActiveChangePct,
+            medianAskUsd: r.medianAskUsd,
+            askChangePct: r.askChangePct,
+            medianDaysListed: r.medianDaysListed,
+          }));
+        return {
+          note:
+            'Leading indicators from live active listings, not sold comps. ' +
+            'Supply level and supply/price momentum are the reliable signals; ' +
+            'sell-through velocity and days-listed firm up as daily snapshots accrue.',
+          asOf: rows[0]?.capturedAt ?? null,
+          markets,
+          movers: (movers as Array<Record<string, unknown>>).map((m) => ({
+            market: m.label || m.segment,
+            heatChange: m.heatChange,
+            askChangePct: m.askChangePct,
           })),
         };
       }
