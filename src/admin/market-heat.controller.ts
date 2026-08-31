@@ -80,6 +80,19 @@ export class MarketHeatController {
     return { status: HttpStatus.OK, message: 'Query preview', data };
   }
 
+  @ApiOperation({ summary: 'Momentum forecast — projected heat next horizon (default 7d)' })
+  @Get('forecast')
+  async forecast(
+    @Request() req: RequestWithUser,
+    @Query('scope') scope?: string,
+    @Query('market') market?: string,
+    @Query('horizon') horizon?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.forecast(scope, market, this.int(horizon, 7));
+    return { status: HttpStatus.OK, message: 'Market forecast', data };
+  }
+
   @ApiOperation({ summary: 'Composed market digest + notable moves (alerts)' })
   @Get('digest')
   async digest(

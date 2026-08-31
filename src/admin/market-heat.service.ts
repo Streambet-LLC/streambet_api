@@ -84,6 +84,34 @@ const num = (v: unknown): number | null => {
 };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/** Least-squares linear fit; null if <2 points or degenerate. */
+function fitLine(
+  points: { x: number; y: number }[],
+): { slope: number; intercept: number; r2: number; n: number } | null {
+  const n = points.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of points) {
+    sx += p.x;
+    sy += p.y;
+    sxx += p.x * p.x;
+    sxy += p.x * p.y;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  const meanY = sy / n;
+  let ssTot = 0, ssRes = 0;
+  for (const p of points) {
+    const pred = slope * p.x + intercept;
+    ssRes += (p.y - pred) ** 2;
+    ssTot += (p.y - meanY) ** 2;
+  }
+  const r2 = ssTot === 0 ? (ssRes === 0 ? 1 : 0) : 1 - ssRes / ssTot;
+  return { slope, intercept, r2, n };
+}
+
 /**
  * Composite 0-100 heat from the leading indicators. Each component degrades
  * gracefully — day 1 (no prior snapshot) leans on aging alone; velocity and
@@ -618,5 +646,123 @@ export class MarketHeatService {
          ORDER BY "capturedAt" ASC`,
       [segment, String(Math.max(1, Math.min(sinceDays, 365)))],
     );
+  }
+
+  /**
+   * Simple momentum forecast — a least-squares trend fit on each topic's recent
+   * heat (and median ask) history, projected `horizonDays` ahead. Honest about
+   * confidence: few points / poor fit → low or "insufficient". Sharpens as
+   * snapshots accrue. Sorted by biggest expected rise.
+   */
+  async forecast(scope?: string, market?: string, horizonDays = 7): Promise<unknown[]> {
+    const conds: string[] = [`h."capturedAt" >= now() - interval '60 days'`];
+    const params: string[] = [];
+    if (scope && scope !== 'all') {
+      params.push(scope);
+      conds.push(`h.scope = $${params.length}`);
+    }
+    if (market && market !== 'all') {
+      params.push(market);
+      conds.push(`t."rootMarket" = $${params.length}`);
+    }
+    const rows: {
+      segment: string;
+      scope: string;
+      label: string | null;
+      capturedAt: string;
+      heatScore: number | null;
+      medianAskUsd: number | null;
+      rootMarket: string | null;
+      taxKind: string | null;
+    }[] = await this.ds.query(
+      `SELECT h.segment, h.scope, h.label, h."capturedAt", h."heatScore", h."medianAskUsd",
+              t."rootMarket", t.kind AS "taxKind"
+         FROM market_heat_points h
+         LEFT JOIN market_taxonomy t ON t.key = h.segment
+        WHERE ${conds.join(' AND ')}
+        ORDER BY h.segment, h."capturedAt" ASC`,
+      params,
+    );
+
+    const horizon = Math.max(1, Math.min(Number.isFinite(horizonDays) ? horizonDays : 7, 30));
+    const bySeg = new Map<string, typeof rows>();
+    for (const r of rows) {
+      if (!bySeg.has(r.segment)) bySeg.set(r.segment, []);
+      bySeg.get(r.segment)!.push(r);
+    }
+
+    const out: Record<string, unknown>[] = [];
+    for (const [segment, pts] of bySeg) {
+      const t0 = new Date(pts[0].capturedAt).getTime();
+      const dayIdx = (ts: string) => (new Date(ts).getTime() - t0) / 86400000;
+      const last = pts[pts.length - 1];
+      const xLast = dayIdx(last.capturedAt);
+      const currentHeat = last.heatScore != null ? Number(last.heatScore) : null;
+      const currentAsk = last.medianAskUsd != null ? Number(last.medianAskUsd) : null;
+
+      const heatFit = fitLine(
+        pts.filter(p => p.heatScore != null).map(p => ({ x: dayIdx(p.capturedAt), y: Number(p.heatScore) })),
+      );
+      const askFit = fitLine(
+        pts
+          .filter(p => p.medianAskUsd != null && Number(p.medianAskUsd) > 0)
+          .map(p => ({ x: dayIdx(p.capturedAt), y: Number(p.medianAskUsd) })),
+      );
+
+      let projectedHeat: number | null = null;
+      let slopePerWeek: number | null = null;
+      let direction = 'flat';
+      let confidence = 'insufficient';
+      // ≥2 points define a momentum (rate of change); confidence tiers reflect
+      // how much history + fit quality backs it, so 2-point reads are honestly
+      // flagged "low" and firm up to "medium"/"high" as snapshots accrue.
+      if (heatFit && heatFit.n >= 2) {
+        slopePerWeek = Math.round(heatFit.slope * 7 * 10) / 10;
+        confidence = heatFit.n >= 7 && heatFit.r2 >= 0.5 ? 'high' : heatFit.n >= 4 ? 'medium' : 'low';
+        const raw = clamp(heatFit.intercept + heatFit.slope * (xLast + horizon), 0, 100);
+        // Damp thin-history extrapolation: cap how far a low-confidence trend
+        // can project, so a 2-point slope can't shoot to 0/100.
+        const cap = confidence === 'high' ? 40 : confidence === 'medium' ? 25 : 15;
+        const base = currentHeat ?? raw;
+        const capped = Math.max(-cap, Math.min(cap, raw - base));
+        projectedHeat = Math.round(clamp(base + capped, 0, 100));
+        const delta = currentHeat != null ? projectedHeat - currentHeat : 0;
+        direction = delta >= 5 ? 'rising' : delta <= -5 ? 'cooling' : 'flat';
+      }
+
+      let projectedAskUsd: number | null = null;
+      let askChangePct: number | null = null;
+      if (askFit && askFit.n >= 2 && currentAsk && currentAsk > 0) {
+        const projAsk = Math.max(0, askFit.intercept + askFit.slope * (xLast + horizon));
+        // Same damping for price — cap the projected swing at ±40%.
+        const pct = Math.max(-40, Math.min(40, ((projAsk - currentAsk) / currentAsk) * 100));
+        askChangePct = Math.round(pct * 10) / 10;
+        projectedAskUsd = Math.round(currentAsk * (1 + pct / 100) * 100) / 100;
+      }
+
+      out.push({
+        segment,
+        label: last.label,
+        scope: last.scope,
+        rootMarket: last.rootMarket,
+        taxKind: last.taxKind,
+        points: pts.length,
+        horizonDays: horizon,
+        currentHeat,
+        projectedHeat,
+        heatDelta: currentHeat != null && projectedHeat != null ? projectedHeat - currentHeat : null,
+        slopePerWeek,
+        direction,
+        confidence,
+        currentAskUsd: currentAsk,
+        projectedAskUsd,
+        askChangePct,
+        asOf: last.capturedAt,
+      });
+    }
+
+    // Biggest expected rise first; insufficient/unknown sink to the bottom.
+    out.sort((a, b) => Number(b.heatDelta ?? -999) - Number(a.heatDelta ?? -999));
+    return out;
   }
 }
