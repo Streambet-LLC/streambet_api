@@ -134,23 +134,29 @@ export function computeHeat(x: {
     comps.push({ v: clamp(50 - x.totalActiveChangePct * 2, 0, 100), w: 0.3 }); // supply momentum (robust)
   if (x.clearedRatePct != null)
     comps.push({ v: clamp((x.clearedRatePct / 40) * 100, 0, 100), w: 0.15 }); // sell-through (noisy)
-  if (x.agingPct != null)
+  // Aging only counts once some listings have actually aged. On a freshly
+  // tracked market everything looks un-aged (agingPct 0), which would wrongly
+  // read as hot, so we skip it until real sitting time shows up.
+  if (x.agingPct != null && x.agingPct > 0)
     comps.push({ v: clamp(100 - x.agingPct, 0, 100), w: 0.1 }); // less sitting (noisy)
   if (x.socialMentions != null)
     comps.push({ v: clamp((x.socialMentions / 50) * 100, 0, 100), w: 0.15 }); // social buzz
   if (x.firstPartyAdds != null && x.firstPartyAdds > 0)
     comps.push({ v: clamp((x.firstPartyAdds / 5) * 100, 0, 100), w: 0.1 }); // our saves/follows
-  // Cold-start guard: a score needs a real ANCHOR — day-over-day momentum
-  // (supply/price/sell-through) or social buzz. Aging / first-party alone are
-  // too weak and, on a first snapshot, spuriously read as hot (fresh listings
-  // look un-aged → 100). Without an anchor we return null ("—") until history
-  // accrues on the next daily snapshot.
+
+  // A score needs day-over-day momentum (a prior snapshot to compare against).
+  // Without it — i.e. a market's very first snapshot — we return null ("—")
+  // instead of a spurious high score, and it fills in on the next daily run.
   const hasMomentum =
     x.clearedRatePct != null || x.askChangePct != null || x.totalActiveChangePct != null;
-  const hasSocial = x.socialMentions != null;
-  if (comps.length === 0 || (!hasMomentum && !hasSocial)) return null;
+  if (comps.length === 0 || !hasMomentum) return null;
+
   const wsum = comps.reduce((s, c) => s + c.w, 0);
-  return Math.round(comps.reduce((s, c) => s + c.v * c.w, 0) / wsum);
+  const raw = comps.reduce((s, c) => s + c.v * c.w, 0) / wsum;
+  // Soft ceiling: leave headroom at the top so scores don't pile up at 100.
+  // Scores up to 80 are untouched; the hot end above 80 is gently compressed.
+  const scaled = raw <= 80 ? raw : 80 + (raw - 80) * 0.6;
+  return Math.round(scaled);
 }
 
 export interface CollectResult {
