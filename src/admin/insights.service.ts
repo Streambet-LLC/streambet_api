@@ -14,6 +14,7 @@ import {
   MarketHeatService,
   toHeatIndex,
   toHeatIndexDelta,
+  type HeatDriver,
 } from './market-heat.service';
 import { UserCompsService } from './card-market/user-comps.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
@@ -762,7 +763,7 @@ RULES (follow strictly):
           this.marketHeat.movers(scope, 8),
           this.marketHeat.scale(),
         ]);
-        const rows = latest as Array<Record<string, unknown>>;
+        const rows = latest;
         const markets = rows
           .slice()
           .sort(
@@ -774,6 +775,12 @@ RULES (follow strictly):
             scope: r.scope,
             heat: toHeatIndex(r.heatScore as number | null, scale),
             ownPeakHeat: toHeatIndex(r.peakHeat as number | null, scale),
+            // Sub-scores (0-100 each; price/supply 50 = flat) and how much each counts.
+            drivers: (r.heatDrivers as HeatDriver[] | null)?.map((d) => ({
+              driver: d.key,
+              score: d.score,
+              weightPct: Math.round(d.share * 100),
+            })) ?? null,
             totalActiveListings: r.totalActive,
             supplyChangePct: r.totalActiveChangePct,
             medianAskUsd: r.medianAskUsd,
@@ -787,7 +794,10 @@ RULES (follow strictly):
             'sell-through velocity and days-listed firm up as daily snapshots accrue. ' +
             'heat is an index against our all-time record: 100 = the hottest reading ' +
             'we have ever recorded (see record), 0 = the coldest. ownPeakHeat is that ' +
-            "market's own best on the same scale.",
+            "market's own best on the same scale. drivers are the sub-scores the heat " +
+            'blends (price = asks rising, supply = listings drying up, sellThrough, ' +
+            'freshness = few stale listings, buzz = social mentions, tracking = our ' +
+            'users adding the cards); use them to explain WHY a market is hot or cold.',
           asOf: rows[0]?.capturedAt ?? null,
           record: scale
             ? {

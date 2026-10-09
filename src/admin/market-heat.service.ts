@@ -112,44 +112,105 @@ function fitLine(
   return { slope, intercept, r2, n };
 }
 
-/**
- * Composite 0-100 heat from the leading indicators. Each component degrades
- * gracefully — day 1 (no prior snapshot) leans on aging alone; velocity and
- * price/supply momentum kick in once history exists. Weights are tunable.
- */
-export function computeHeat(x: {
+/** Inputs to the heat score — all stored on each heat point. */
+export interface HeatInputs {
   clearedRatePct: number | null;
   askChangePct: number | null;
   agingPct: number | null;
   totalActiveChangePct: number | null;
   socialMentions?: number | null;
   firstPartyAdds?: number | null;
-}): number | null {
+}
+
+export type HeatDriverKey = 'price' | 'supply' | 'sellThrough' | 'freshness' | 'buzz' | 'tracking';
+
+/**
+ * One sub-score of the heat score. `score` is 0-100 on its own scale (for price
+ * and supply, 50 = flat); `share` is the fraction of the blend it carried.
+ */
+export interface HeatDriver {
+  key: HeatDriverKey;
+  score: number;
+  weight: number;
+  share: number;
+}
+
+/**
+ * The components the heat score blends, unrounded. Each degrades gracefully —
+ * a component with no data yet is simply left out and the rest re-weighted.
+ */
+function heatComponents(x: HeatInputs): { key: HeatDriverKey; v: number; w: number }[] {
   // Weights favour the robust aggregate signals (price + supply momentum) over
   // the page-level sample velocity/aging, which is noisier (Best-Match churn).
-  const comps: { v: number; w: number }[] = [];
+  const comps: { key: HeatDriverKey; v: number; w: number }[] = [];
   if (x.askChangePct != null)
-    comps.push({ v: clamp(50 + x.askChangePct * 2.5, 0, 100), w: 0.3 }); // price momentum (robust)
+    comps.push({ key: 'price', v: clamp(50 + x.askChangePct * 2.5, 0, 100), w: 0.3 }); // price momentum (robust)
   if (x.totalActiveChangePct != null)
-    comps.push({ v: clamp(50 - x.totalActiveChangePct * 2, 0, 100), w: 0.3 }); // supply momentum (robust)
+    comps.push({ key: 'supply', v: clamp(50 - x.totalActiveChangePct * 2, 0, 100), w: 0.3 }); // supply momentum (robust)
   if (x.clearedRatePct != null)
-    comps.push({ v: clamp((x.clearedRatePct / 40) * 100, 0, 100), w: 0.15 }); // sell-through (noisy)
+    comps.push({ key: 'sellThrough', v: clamp((x.clearedRatePct / 40) * 100, 0, 100), w: 0.15 }); // sell-through (noisy)
   // Aging only counts once some listings have actually aged. On a freshly
   // tracked market everything looks un-aged (agingPct 0), which would wrongly
   // read as hot, so we skip it until real sitting time shows up.
   if (x.agingPct != null && x.agingPct > 0)
-    comps.push({ v: clamp(100 - x.agingPct, 0, 100), w: 0.1 }); // less sitting (noisy)
+    comps.push({ key: 'freshness', v: clamp(100 - x.agingPct, 0, 100), w: 0.1 }); // less sitting (noisy)
   if (x.socialMentions != null)
-    comps.push({ v: clamp((x.socialMentions / 50) * 100, 0, 100), w: 0.15 }); // social buzz
+    comps.push({ key: 'buzz', v: clamp((x.socialMentions / 50) * 100, 0, 100), w: 0.15 }); // social buzz
   if (x.firstPartyAdds != null && x.firstPartyAdds > 0)
-    comps.push({ v: clamp((x.firstPartyAdds / 5) * 100, 0, 100), w: 0.1 }); // our saves/follows
+    comps.push({ key: 'tracking', v: clamp((x.firstPartyAdds / 5) * 100, 0, 100), w: 0.1 }); // our saves/follows
+  return comps;
+}
 
-  // A score needs day-over-day momentum (a prior snapshot to compare against).
-  // Without it — i.e. a market's very first snapshot — we return null ("—")
-  // instead of a spurious high score, and it fills in on the next daily run.
-  const hasMomentum =
-    x.clearedRatePct != null || x.askChangePct != null || x.totalActiveChangePct != null;
-  if (comps.length === 0 || !hasMomentum) return null;
+/** A score needs day-over-day momentum (a prior snapshot to compare against). */
+const hasMomentum = (x: HeatInputs) =>
+  x.clearedRatePct != null || x.askChangePct != null || x.totalActiveChangePct != null;
+
+/** The heat score's sub-scores, or null when there's no score (first snapshot). */
+export function heatDrivers(x: HeatInputs): HeatDriver[] | null {
+  const comps = heatComponents(x);
+  if (comps.length === 0 || !hasMomentum(x)) return null;
+  const wsum = comps.reduce((s, c) => s + c.w, 0);
+  return comps.map(c => ({
+    key: c.key,
+    score: Math.round(c.v),
+    weight: c.w,
+    share: c.w / wsum,
+  }));
+}
+
+/**
+ * Sub-scores for a stored heat point (a market_heat_points row): the ones saved
+ * with it, else recomputed from its stored inputs. Points saved before the
+ * current weights may not blend back to their exact stored score.
+ */
+export function pointHeatDrivers(r: Record<string, unknown>): HeatDriver[] | null {
+  if (r.heatScore == null) return null;
+  const extra = (r.extra ?? null) as {
+    social?: { mentions?: number | null } | null;
+    firstParty?: { recentAdds?: number } | null;
+    drivers?: HeatDriver[] | null;
+  } | null;
+  if (Array.isArray(extra?.drivers)) return extra.drivers;
+  return heatDrivers({
+    clearedRatePct: num(r.clearedRatePct),
+    askChangePct: num(r.askChangePct),
+    agingPct: num(r.agingPct),
+    totalActiveChangePct: num(r.totalActiveChangePct),
+    socialMentions: num(extra?.social?.mentions),
+    firstPartyAdds: num(extra?.firstParty?.recentAdds),
+  });
+}
+
+/**
+ * Composite 0-100 heat from the leading indicators (see heatComponents).
+ * Day 1 (no prior snapshot) returns null; velocity and price/supply momentum
+ * kick in once history exists. Weights are tunable.
+ */
+export function computeHeat(x: HeatInputs): number | null {
+  const comps = heatComponents(x);
+  // Without momentum — i.e. a market's very first snapshot — we return null
+  // ("new") instead of a spurious high score; it fills in on the next run.
+  if (comps.length === 0 || !hasMomentum(x)) return null;
 
   const wsum = comps.reduce((s, c) => s + c.w, 0);
   const raw = comps.reduce((s, c) => s + c.v * c.w, 0) / wsum;
@@ -236,18 +297,26 @@ export async function collectTopic(
   const { total, items } = res;
   const seenIds = items.map(i => i.externalId);
 
+  const prevPoint = await ds.query(
+    `SELECT "medianAskUsd", "totalActive", "sampleQuery" FROM market_heat_points
+       WHERE segment=$1 ORDER BY "capturedAt" DESC LIMIT 1`,
+    [segment],
+  );
+  // The search was edited since the last snapshot: it's a different listing
+  // pool, so start a fresh baseline instead of comparing across searches (which
+  // reads as a huge supply/price swing and marks every old listing "sold").
+  const queryChanged =
+    prevPoint[0]?.sampleQuery != null && prevPoint[0].sampleQuery !== query;
+  if (queryChanged) {
+    await ds.query(`DELETE FROM market_listings WHERE segment=$1`, [segment]);
+  }
+  const prevMedianAsk = queryChanged ? null : num(prevPoint[0]?.medianAskUsd);
+  const prevTotalActive = queryChanged ? null : num(prevPoint[0]?.totalActive);
+
   const [{ n: prevActive }] = await ds.query(
     `SELECT COUNT(*)::int AS n FROM market_listings WHERE segment=$1 AND active=true`,
     [segment],
   );
-
-  const prevPoint = await ds.query(
-    `SELECT "medianAskUsd", "totalActive" FROM market_heat_points
-       WHERE segment=$1 ORDER BY "capturedAt" DESC LIMIT 1`,
-    [segment],
-  );
-  const prevMedianAsk = num(prevPoint[0]?.medianAskUsd);
-  const prevTotalActive = num(prevPoint[0]?.totalActive);
 
   const existingRows = await ds.query(
     `SELECT "externalId" FROM market_listings
@@ -351,15 +420,18 @@ export async function collectTopic(
     }
   }
 
-  const heatScore = computeHeat({
+  const inputs: HeatInputs = {
     clearedRatePct,
     askChangePct,
     agingPct,
     totalActiveChangePct,
     socialMentions: social?.mentions ?? null,
     firstPartyAdds: firstParty?.recentAdds ?? null,
-  });
-  const extra = JSON.stringify({ social, firstParty });
+  };
+  const heatScore = computeHeat(inputs);
+  // Store the sub-scores that produced this score, so the breakdown stays
+  // exact even if the weights are retuned later.
+  const extra = JSON.stringify({ social, firstParty, drivers: heatDrivers(inputs) });
 
   await ds.query(
     `INSERT INTO market_heat_points
@@ -504,7 +576,7 @@ export class MarketHeatService {
    * with its taxonomy context (rootMarket / kind / parentKey) so the UI can
    * roll up and drill down. Optional `scope` and `market` (rootMarket) filters.
    */
-  latest(scope?: string, market?: string): Promise<unknown[]> {
+  async latest(scope?: string, market?: string): Promise<Record<string, unknown>[]> {
     const conds: string[] = [];
     const params: string[] = [];
     if (scope && scope !== 'all') {
@@ -518,7 +590,7 @@ export class MarketHeatService {
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     // peakHeat = this topic's own all-time high, scoredReadings = how many scored
     // snapshots back it (windows run before DISTINCT ON).
-    return this.ds.query(
+    const rows: Record<string, unknown>[] = await this.ds.query(
       `SELECT DISTINCT ON (h.segment) h.*,
               MAX(h."heatScore") OVER (PARTITION BY h.segment) AS "peakHeat",
               COUNT(h."heatScore") OVER (PARTITION BY h.segment)::int AS "scoredReadings",
@@ -529,6 +601,8 @@ export class MarketHeatService {
          ORDER BY h.segment, h."capturedAt" DESC`,
       params,
     );
+    // Sub-scores behind each heat score, recomputed from the stored inputs.
+    return rows.map(r => ({ ...r, heatDrivers: pointHeatDrivers(r) }));
   }
 
   /**
@@ -629,7 +703,7 @@ export class MarketHeatService {
       askChangePct: r.askChangePct,
       supplyChangePct: r.totalActiveChangePct,
     });
-    const rows = (latest as Record<string, unknown>[])
+    const rows = latest
       .filter(r => r.heatScore != null)
       .sort((a, b) => (b.heatScore as number) - (a.heatScore as number));
     const hottest = rows.slice(0, 3).map(pick);
