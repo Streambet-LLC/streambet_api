@@ -795,7 +795,8 @@ RULES (follow strictly):
             'heat is an index against our all-time record: 100 = the hottest reading ' +
             'we have ever recorded (see record), 0 = the coldest. ownPeakHeat is that ' +
             "market's own best on the same scale. drivers are the sub-scores the heat " +
-            'blends (price = asks rising, supply = listings drying up, sellThrough, ' +
+            'blends (price = asks rising, supply = listings drying up, listed = how ' +
+            'scarce a single card is by its live listing count (cards only), sellThrough, ' +
             'freshness = few stale listings, buzz = social mentions, tracking = our ' +
             'users adding the cards); use them to explain WHY a market is hot or cold.',
           asOf: rows[0]?.capturedAt ?? null,

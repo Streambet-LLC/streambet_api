@@ -120,9 +120,26 @@ export interface HeatInputs {
   totalActiveChangePct: number | null;
   socialMentions?: number | null;
   firstPartyAdds?: number | null;
+  /** Topic scope + eBay's live listing count — scarcity only scores for single cards. */
+  scope?: string | null;
+  totalActive?: number | null;
 }
 
-export type HeatDriverKey = 'price' | 'supply' | 'sellThrough' | 'freshness' | 'buzz' | 'tracking';
+export type HeatDriverKey =
+  | 'price'
+  | 'supply'
+  | 'listed'
+  | 'sellThrough'
+  | 'freshness'
+  | 'buzz'
+  | 'tracking';
+
+/**
+ * Single-card scarcity from how many copies are listed, on a log scale:
+ * 10 or fewer → 100, 100,000+ → 0, and each 10× more listings costs 25.
+ */
+const scarcityScore = (listed: number) =>
+  clamp(((5 - Math.log10(Math.max(1, listed))) / 4) * 100, 0, 100);
 
 /**
  * One sub-score of the heat score. `score` is 0-100 on its own scale (for price
@@ -147,6 +164,10 @@ function heatComponents(x: HeatInputs): { key: HeatDriverKey; v: number; w: numb
     comps.push({ key: 'price', v: clamp(50 + x.askChangePct * 2.5, 0, 100), w: 0.3 }); // price momentum (robust)
   if (x.totalActiveChangePct != null)
     comps.push({ key: 'supply', v: clamp(50 - x.totalActiveChangePct * 2, 0, 100), w: 0.3 }); // supply momentum (robust)
+  // Supply LEVEL (scarcity) only means something for a single card — a whole
+  // market with millions of listings isn't "scarce" in any useful sense.
+  if (x.scope === 'card' && x.totalActive != null && x.totalActive > 0)
+    comps.push({ key: 'listed', v: scarcityScore(x.totalActive), w: 0.15 }); // card scarcity
   if (x.clearedRatePct != null)
     comps.push({ key: 'sellThrough', v: clamp((x.clearedRatePct / 40) * 100, 0, 100), w: 0.15 }); // sell-through (noisy)
   // Aging only counts once some listings have actually aged. On a freshly
@@ -198,6 +219,8 @@ export function pointHeatDrivers(r: Record<string, unknown>): HeatDriver[] | nul
     totalActiveChangePct: num(r.totalActiveChangePct),
     socialMentions: num(extra?.social?.mentions),
     firstPartyAdds: num(extra?.firstParty?.recentAdds),
+    scope: typeof r.scope === 'string' ? r.scope : null,
+    totalActive: num(r.totalActive),
   });
 }
 
@@ -427,6 +450,8 @@ export async function collectTopic(
     totalActiveChangePct,
     socialMentions: social?.mentions ?? null,
     firstPartyAdds: firstParty?.recentAdds ?? null,
+    scope: topic.scope,
+    totalActive: total,
   };
   const heatScore = computeHeat(inputs);
   // Store the sub-scores that produced this score, so the breakdown stays
