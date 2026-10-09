@@ -159,6 +159,48 @@ export function computeHeat(x: {
   return Math.round(scaled);
 }
 
+/** One end of the all-time record: the reading that set it. */
+export interface HeatRecord {
+  score: number;
+  segment: string;
+  label: string | null;
+  capturedAt: string;
+}
+
+/**
+ * Site-wide record scale for the heat index: 100 = the hottest raw reading
+ * ever recorded (any topic, any scope), 0 = the coldest. `floor`/`ceiling` are
+ * the effective raw bounds the index is mapped across.
+ */
+export interface HeatScale {
+  floor: number;
+  ceiling: number;
+  high: HeatRecord;
+  low: HeatRecord;
+  readings: number;
+}
+
+/**
+ * The record scale is never stretched over fewer raw points than this, so a
+ * thin history (e.g. everything between 47 and 52) can't blow a 2-point gap
+ * up into 0 vs. 100. Widened downward so 100 always stays the true record.
+ */
+const MIN_SCALE_SPAN = 20;
+
+/** Raw heat → 0-100 index on the record scale. Passes raw through with no scale. */
+export function toHeatIndex(raw: number | null | undefined, s: HeatScale | null): number | null {
+  if (raw == null) return null;
+  if (!s) return raw;
+  return Math.round(clamp(((raw - s.floor) / (s.ceiling - s.floor)) * 100, 0, 100));
+}
+
+/** Raw heat change → change in index points on the record scale. */
+export function toHeatIndexDelta(delta: number | null | undefined, s: HeatScale | null): number | null {
+  if (delta == null) return null;
+  if (!s) return delta;
+  return Math.round((delta / (s.ceiling - s.floor)) * 100);
+}
+
 export interface CollectResult {
   segment: string;
   label: string;
@@ -474,8 +516,12 @@ export class MarketHeatService {
       conds.push(`t."rootMarket" = $${params.length}`);
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    // peakHeat = this topic's own all-time high, scoredReadings = how many scored
+    // snapshots back it (windows run before DISTINCT ON).
     return this.ds.query(
       `SELECT DISTINCT ON (h.segment) h.*,
+              MAX(h."heatScore") OVER (PARTITION BY h.segment) AS "peakHeat",
+              COUNT(h."heatScore") OVER (PARTITION BY h.segment)::int AS "scoredReadings",
               t."rootMarket", t.kind AS "taxKind", t."parentKey"
          FROM market_heat_points h
          LEFT JOIN market_taxonomy t ON t.key = h.segment
@@ -483,6 +529,46 @@ export class MarketHeatService {
          ORDER BY h.segment, h."capturedAt" DESC`,
       params,
     );
+  }
+
+  /**
+   * The site-wide record scale (see HeatScale): the hottest and coldest raw
+   * readings ever stored, across every topic and scope. Ties go to whichever
+   * reading got there first. Null until at least one scored snapshot exists.
+   */
+  async scale(): Promise<HeatScale | null> {
+    const rows: Array<{
+      kind: 'high' | 'low';
+      segment: string;
+      label: string | null;
+      score: number;
+      capturedAt: string;
+      readings: number;
+    }> = await this.ds.query(
+      `(SELECT 'high' AS kind, segment, label, "heatScore" AS score, "capturedAt",
+               COUNT(*) OVER ()::int AS readings
+          FROM market_heat_points WHERE "heatScore" IS NOT NULL
+         ORDER BY "heatScore" DESC, "capturedAt" ASC LIMIT 1)
+       UNION ALL
+       (SELECT 'low' AS kind, segment, label, "heatScore" AS score, "capturedAt",
+               COUNT(*) OVER ()::int AS readings
+          FROM market_heat_points WHERE "heatScore" IS NOT NULL
+         ORDER BY "heatScore" ASC, "capturedAt" ASC LIMIT 1)`,
+    );
+    const pick = (k: 'high' | 'low'): HeatRecord | null => {
+      const r = rows.find(x => x.kind === k);
+      return r ? { score: r.score, segment: r.segment, label: r.label, capturedAt: r.capturedAt } : null;
+    };
+    const high = pick('high');
+    const low = pick('low');
+    if (!high || !low) return null;
+    return {
+      ceiling: high.score,
+      floor: Math.min(low.score, high.score - MIN_SCALE_SPAN),
+      high,
+      low,
+      readings: rows[0].readings,
+    };
   }
 
   /**
@@ -528,14 +614,17 @@ export class MarketHeatService {
     movers: Record<string, unknown>[];
     notable: Record<string, unknown>[];
   }> {
-    const [latest, movers] = await Promise.all([
+    const [latest, movers, scale] = await Promise.all([
       this.latest(scope),
       this.movers(scope, 20),
+      this.scale(),
     ]);
+    // `heat` / `heatChange` are on the record-scale index (what the board shows);
+    // the notable threshold stays on raw points so alerting doesn't drift as records move.
     const pick = (r: Record<string, unknown>) => ({
       market: r.label || r.segment,
       scope: r.scope,
-      heat: r.heatScore,
+      heat: toHeatIndex(r.heatScore as number | null, scale),
       totalActive: r.totalActive,
       askChangePct: r.askChangePct,
       supplyChangePct: r.totalActiveChangePct,
@@ -547,7 +636,7 @@ export class MarketHeatService {
     const coolest = rows.slice(-3).reverse().map(pick);
     const mv = (movers as Record<string, unknown>[]).map(m => ({
       market: m.label || m.segment,
-      heatChange: m.heatChange,
+      heatChange: toHeatIndexDelta(m.heatChange as number | null, scale),
       askChangePct: m.askChangePct,
       notable: Math.abs((m.heatChange as number) ?? 0) >= 10,
     }));

@@ -104,6 +104,14 @@ export class MarketHeatController {
     return { status: HttpStatus.OK, message: 'Market digest fetched', data };
   }
 
+  @ApiOperation({ summary: 'Site-wide heat record scale (all-time hottest/coldest readings)' })
+  @Get('scale')
+  async scale(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.scale();
+    return { status: HttpStatus.OK, message: 'Market heat scale fetched', data };
+  }
+
   @ApiOperation({ summary: 'Heat time series for one market segment' })
   @Get(':segment')
   async series(

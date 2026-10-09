@@ -10,7 +10,11 @@ import { InsightsHistoryService } from './insights-history.service';
 import { InsightsRunService } from './insights-run.service';
 import { MarketService } from './market.service';
 import { SoldCardsService } from './sold-cards.service';
-import { MarketHeatService } from './market-heat.service';
+import {
+  MarketHeatService,
+  toHeatIndex,
+  toHeatIndexDelta,
+} from './market-heat.service';
 import { UserCompsService } from './card-market/user-comps.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import {
@@ -158,7 +162,8 @@ RULES (follow strictly):
         'ACTIVE-listing snapshots (supply level + supply/price momentum), which ' +
         'move BEFORE lagging sold comps. Use for "what is hot / heating up / ' +
         'cooling", momentum, or which markets/sets/cards are moving right now. ' +
-        'Returns a 0-100 heat leaderboard with total active listings, median ask ' +
+        'Returns a heat-index leaderboard (100 = the hottest reading we have ever ' +
+        'recorded, 0 = the coldest) with total active listings, median ask ' +
         '+ change, and the biggest recent movers. This is a MARKET view, NOT a ' +
         "per-card price — use value_card for a card's worth.",
       input_schema: {
@@ -752,9 +757,10 @@ RULES (follow strictly):
       }
       case 'market_heat': {
         const scope = this.str(input.scope) || 'segment';
-        const [latest, movers] = await Promise.all([
+        const [latest, movers, scale] = await Promise.all([
           this.marketHeat.latest(scope),
           this.marketHeat.movers(scope, 8),
+          this.marketHeat.scale(),
         ]);
         const rows = latest as Array<Record<string, unknown>>;
         const markets = rows
@@ -766,7 +772,8 @@ RULES (follow strictly):
           .map((r) => ({
             market: r.label || r.segment,
             scope: r.scope,
-            heat: r.heatScore,
+            heat: toHeatIndex(r.heatScore as number | null, scale),
+            ownPeakHeat: toHeatIndex(r.peakHeat as number | null, scale),
             totalActiveListings: r.totalActive,
             supplyChangePct: r.totalActiveChangePct,
             medianAskUsd: r.medianAskUsd,
@@ -777,12 +784,21 @@ RULES (follow strictly):
           note:
             'Leading indicators from live active listings, not sold comps. ' +
             'Supply level and supply/price momentum are the reliable signals; ' +
-            'sell-through velocity and days-listed firm up as daily snapshots accrue.',
+            'sell-through velocity and days-listed firm up as daily snapshots accrue. ' +
+            'heat is an index against our all-time record: 100 = the hottest reading ' +
+            'we have ever recorded (see record), 0 = the coldest. ownPeakHeat is that ' +
+            "market's own best on the same scale.",
           asOf: rows[0]?.capturedAt ?? null,
+          record: scale
+            ? {
+                market: scale.high.label || scale.high.segment,
+                on: scale.high.capturedAt,
+              }
+            : null,
           markets,
           movers: (movers as Array<Record<string, unknown>>).map((m) => ({
             market: m.label || m.segment,
-            heatChange: m.heatChange,
+            heatChange: toHeatIndexDelta(m.heatChange as number | null, scale),
             askChangePct: m.askChangePct,
           })),
         };
