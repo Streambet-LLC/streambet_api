@@ -136,6 +136,11 @@ export class MarketTaxonomyService {
     this.cache = null;
   }
 
+  /** Drop the cache after nodes were written elsewhere (e.g. Spike Radar auto-discovery). */
+  refresh(): void {
+    this.invalidate();
+  }
+
   private async nodes(): Promise<MarketTaxonomyNode[]> {
     if (!this.cache) {
       this.cache = await this.repo.find({ order: { rootMarket: 'ASC', kind: 'ASC', sortOrder: 'ASC' } });

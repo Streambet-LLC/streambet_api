@@ -25,6 +25,8 @@
     "migration:generate": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate -d=typeorm.config.ts",
     "migration:run": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d=typeorm.config.ts",
     "migration:revert": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d=typeorm.config.ts",
+    "env:staging": "node scripts/use-env.js staging",
+    "env:prod": "node scripts/use-env.js production",
     "db:sync": "cross-env DB_SYNC=true npm run start:dev",
     "db:sync:prod": "cross-env DB_SYNC=true npm run start:prod",
     "db:reset": "cross-env DB_SYNC=true DB_DROP_SCHEMA=true npm run start:dev",

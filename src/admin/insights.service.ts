@@ -12,10 +12,12 @@ import { MarketService } from './market.service';
 import { SoldCardsService } from './sold-cards.service';
 import {
   MarketHeatService,
+  SPIKE_LABELS,
   toHeatIndex,
   toHeatIndexDelta,
   type HeatDriver,
 } from './market-heat.service';
+import type { SpikeSignal } from './spike-radar';
 import { UserCompsService } from './card-market/user-comps.service';
 import { AcquisitionService } from './acquisition/acquisition.service';
 import {
@@ -781,6 +783,16 @@ RULES (follow strictly):
               score: d.score,
               weightPct: Math.round(d.share * 100),
             })) ?? null,
+            // Spike Radar: how unusual today is for THIS market, and why.
+            spike:
+              r.spikeScore == null
+                ? null
+                : {
+                    score: r.spikeScore,
+                    firing: ((r.spikeSignals as SpikeSignal[] | null) ?? [])
+                      .filter((s) => s.firing)
+                      .map((s) => `${SPIKE_LABELS[s.key]} (${s.value})`),
+                  },
             totalActiveListings: r.totalActive,
             supplyChangePct: r.totalActiveChangePct,
             medianAskUsd: r.medianAskUsd,
@@ -798,7 +810,10 @@ RULES (follow strictly):
             'blends (price = asks rising, supply = listings drying up, listed = how ' +
             'scarce a single card is by its live listing count (cards only), sellThrough, ' +
             'freshness = few stale listings, buzz = social mentions, tracking = our ' +
-            'users adding the cards); use them to explain WHY a market is hot or cold.',
+            'users adding the cards); use them to explain WHY a market is hot or cold. ' +
+            'spike (Spike Radar) is how unusual today is for that market against its OWN ' +
+            'normal (0-100; 60+ or 2+ firing signals = flagged as spiking now) with the ' +
+            'signals firing — lead with these for "what is moving right now".',
           asOf: rows[0]?.capturedAt ?? null,
           record: scale
             ? {

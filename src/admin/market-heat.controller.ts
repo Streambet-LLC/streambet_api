@@ -5,9 +5,11 @@ import {
   Delete,
   Param,
   Query,
+  Body,
   Request,
   UseGuards,
   ForbiddenException,
+  BadRequestException,
   HttpStatus,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
@@ -110,6 +112,53 @@ export class MarketHeatController {
     this.ensureAdmin(req.user);
     const data = await this.heat.scale();
     return { status: HttpStatus.OK, message: 'Market heat scale fetched', data };
+  }
+
+  @ApiOperation({
+    summary: 'Spike Radar — spiking topics, rotation catch-up, discovered cards, watch list',
+  })
+  @Get('radar')
+  async radar(@Request() req: RequestWithUser): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.radar();
+    return { status: HttpStatus.OK, message: 'Spike radar fetched', data };
+  }
+
+  @ApiOperation({ summary: 'Track a specific card the radar found (adds it as a card topic)' })
+  @Post('radar/promote')
+  async promote(
+    @Request() req: RequestWithUser,
+    @Body() body: { segment?: string; signature?: string },
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    if (!body?.segment || !body?.signature) {
+      throw new BadRequestException('segment and signature are required');
+    }
+    const data = await this.heat.promote(body.segment, body.signature);
+    return { status: HttpStatus.OK, message: 'Card tracked', data };
+  }
+
+  @ApiOperation({ summary: 'Watch a topic: snapshot it hourly for `hours` (default 72)' })
+  @Post('watch/:segment')
+  async watch(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+    @Query('hours') hours?: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.setWatch(segment, this.int(hours, 72));
+    return { status: HttpStatus.OK, message: 'Watching hourly', data };
+  }
+
+  @ApiOperation({ summary: 'Stop watching a topic (back to daily snapshots)' })
+  @Delete('watch/:segment')
+  async unwatch(
+    @Request() req: RequestWithUser,
+    @Param('segment') segment: string,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.heat.clearWatch(segment);
+    return { status: HttpStatus.OK, message: 'Stopped watching', data };
   }
 
   @ApiOperation({ summary: 'Heat time series for one market segment' })

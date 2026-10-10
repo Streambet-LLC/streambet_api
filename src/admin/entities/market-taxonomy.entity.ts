@@ -64,4 +64,12 @@ export class MarketTaxonomyNode extends BaseEntity {
 
   @Column({ type: 'jsonb', nullable: true })
   extra: Record<string, unknown> | null;
+
+  /** Snapshotted hourly (Spike Radar watch mode) until this time. */
+  @Column({ type: 'timestamp', nullable: true })
+  watchUntil: Date | null;
+
+  /** Why it's being watched ("manual", "radar: …", "discovered"). */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  watchReason: string | null;
 }
