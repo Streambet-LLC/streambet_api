@@ -70,6 +70,26 @@ export class MarketHeatPoint extends BaseEntity {
   @Column({ type: 'int', nullable: true })
   heatScore: number | null;
 
+  /** Floor ask (10th-percentile of sampled asks, USD) — moves first on a buy-up. */
+  @Column({ type: 'double precision', nullable: true })
+  floorAskUsd: number | null;
+
+  /** Floor change vs ~a day earlier, %. */
+  @Column({ type: 'double precision', nullable: true })
+  floorChangePct: number | null;
+
+  /** Of the cheapest listings ~a day earlier, the share now gone, %. */
+  @Column({ type: 'double precision', nullable: true })
+  sweptPct: number | null;
+
+  /** Spike Radar score (0-100) — how unusual today is for THIS topic. */
+  @Column({ type: 'int', nullable: true })
+  spikeScore: number | null;
+
+  /** The per-signal readings behind spikeScore. */
+  @Column({ type: 'jsonb', nullable: true })
+  spikeSignals: Record<string, unknown>[] | null;
+
   /** The eBay query used for this segment's sample. */
   @Column({ type: 'varchar', length: 200, nullable: true })
   sampleQuery: string | null;
