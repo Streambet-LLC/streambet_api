@@ -133,7 +133,7 @@ import { MarketEngagementController } from './market-engagement.controller';
   ],
   // MarketService is exported for the nightly price-alert mailer in
   // ScheduledTaskModule, which re-values holdings via the same code path the
-  // dashboard uses.
-  exports: [MarketService],
+  // dashboard uses. ValuationService backs Hermes Auctions' Est. Value.
+  exports: [MarketService, ValuationService],
 })
 export class AdminModule {}

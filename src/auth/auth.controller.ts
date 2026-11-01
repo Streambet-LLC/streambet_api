@@ -64,49 +64,41 @@ export class AuthController {
    * @returns The created user details along with an access token.
    */
 
-  // ---------------------------------------------------------------------------
-  // TODO(reactivate-signup): Public registration is DISABLED while the app is in
-  // private beta (waitlist-only). The app is currently admin-login-only; public
-  // visitors join the waitlist (`POST /waitlist`) instead of creating accounts.
-  // To turn sign-ups back on:
-  //   1. Uncomment the `register` and `usernameExists` endpoints below.
-  //   2. Re-enable Google-account auto-creation in
-  //      `auth.service.ts` → `validateOAuthUser` (see matching TODO there).
-  //   3. Restore a signup page/link in the frontend (Login page + router).
-  // ---------------------------------------------------------------------------
-  // @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  // @ApiResponse({
-  //   status: 409,
-  //   description: 'Conflict - Email or username already exists',
-  // })
-  // @ApiOperation({
-  //   summary: 'Register a new user',
-  //   description:
-  //     'This endpoint allows users to register by providing their email, password, profileImageUrl(optional), isOlder, tosAccepted, username, lastKnownIP(optional). It returns the created user details along with an access token.',
-  // })
-  // @ApiResponse({
-  //   status: 201,
-  //   description: 'User created successfully.',
-  //   type: UserRegistrationResponseDto,
-  // })
-  // @ApiBody({ type: RegisterDto })
-  // @Post('register')
-  // async register(@Body() registerDto: RegisterDto) {
-  //   const data = await this.authService.register(registerDto);
-  //   return {
-  //     data,
-  //     message: 'User registered successfully',
-  //     statusCode: HttpStatus.CREATED,
-  //   };
-  // }
+  // Public registration is open for Hermes Auctions bidders. New accounts are
+  // always role=user; the analytics dashboard and every /admin route stay
+  // admin-only (each admin handler checks the role).
+  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Email or username already exists',
+  })
+  @ApiOperation({
+    summary: 'Register a new user',
+    description:
+      'This endpoint allows users to register by providing their email, password, profileImageUrl(optional), isOlder, tosAccepted, username, lastKnownIP(optional). It returns the created user details along with an access token.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'User created successfully.',
+    type: UserRegistrationResponseDto,
+  })
+  @ApiBody({ type: RegisterDto })
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    const data = await this.authService.register(registerDto);
+    return {
+      data,
+      message: 'User registered successfully',
+      statusCode: HttpStatus.CREATED,
+    };
+  }
 
-  // Signup helper (username availability) — disabled together with `register`.
-  // @Get('username')
-  // async usernameExists(@Query() usernameDto: UserNameDto) {
-  //   const username = usernameDto.username;
-  //   const data = await this.authService.usernameExists(username);
-  //   return data;
-  // }
+  @Get('username')
+  async usernameExists(@Query() usernameDto: UserNameDto) {
+    const username = usernameDto.username;
+    const data = await this.authService.usernameExists(username);
+    return data;
+  }
 
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({

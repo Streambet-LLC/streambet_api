@@ -71,7 +71,10 @@ export class AppGateway
           : undefined;
 
       if (!token) {
-        return this.forceDisconnect(client, 'Missing token');
+        // Anonymous viewer (e.g. a logged-out visitor watching a Hermes
+        // auction). Stays connected for public rooms only: there is no
+        // `data.user`, so WsJwtGuard-protected handlers still reject it.
+        return;
       }
 
       // Verify JWT (returns decoded payload if valid)

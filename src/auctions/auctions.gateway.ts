@@ -10,15 +10,13 @@ import type { Server, Socket } from 'socket.io';
 
 /**
  * Auctions gateway. Each auction has its own room `auction:{id}`.
- * Clients viewing an auction page join the room to receive:
- *   - bid.placed
- *   - auction.extended
- *   - auction.cancelled
- *   - auction.closed (emitted by close job)
+ * Anyone viewing an auction page (signed in or not) can join to receive
+ * `auction.update` events: bid.placed, auction.extended, auction.updated,
+ * auction.activated, auction.cancelled, auction.closed.
  *
- * Authentication is handled by the global socket adapter / AppGateway
- * connection logic; this gateway only adds the join/leave message
- * handlers and the broadcast helper.
+ * Payloads are public by design — bidders appear only as masked handles,
+ * never user ids. Clients refetch the auction (with their own auth) to
+ * learn viewer-specific state such as "am I leading".
  */
 @Injectable()
 @WebSocketGateway({ cors: true })
@@ -37,7 +35,10 @@ export class AuctionsGateway {
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { auctionId: string },
   ): Promise<{ ok: true }> {
-    if (body?.auctionId) {
+    if (
+      typeof body?.auctionId === 'string' &&
+      /^[0-9a-f-]{36}$/i.test(body.auctionId)
+    ) {
       await client.join(this.roomFor(body.auctionId));
     }
     return { ok: true };

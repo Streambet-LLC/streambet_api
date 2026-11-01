@@ -158,6 +158,10 @@ export default registerAs('email', () => ({
       templatePath: './src/templates/watcher_sold_out.ejs',
       schemaPath: './src/templates/watcher_sold_out.json',
     },
+    hermes_auction_notice: {
+      templatePath: './src/templates/hermes_auction_notice.ejs',
+      schemaPath: './src/templates/hermes_auction_notice.json',
+    },
     auction_outbid: {
       templatePath: './src/templates/auction_outbid.ejs',
       schemaPath: './src/templates/auction_outbid.json',

@@ -15,6 +15,7 @@ import {
 } from '@nestjs/swagger';
 
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { AdminRoleGuard } from 'src/auth/guards/admin-role.guard';
 import { EmailsService } from './email.service';
 import {
   EmailOkResponseDto,
@@ -44,7 +45,9 @@ export class EmailsController {
   })
   @Post(':emailType')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  // Open sign-up means any account can authenticate; sending arbitrary
+  // templated mail from our domain must stay admin-only.
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   async sendEmails(
     @Body() payload: EmailPayloadDto,
     @Param() type: EmailTypeDto,

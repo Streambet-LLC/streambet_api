@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Auction } from './auction.entity';
 import { User } from '../../users/entities/user.entity';
+import type { AuctionFundingMethod } from '../../auctions/hermes.types';
 
 /**
  * Append-only bid log for an auction. We always insert; we never update or
@@ -54,7 +55,7 @@ export class AuctionBid {
   @Column({ type: 'boolean', name: 'is_proxy_auto', default: false })
   isProxyAuto: boolean;
 
-  /** Snapshot of the saved Stripe PaymentMethod id at bid time. */
+  /** Snapshot of the saved Stripe PaymentMethod id at bid time (card / ach). */
   @Column({
     type: 'varchar',
     length: 255,
@@ -62,6 +63,24 @@ export class AuctionBid {
     nullable: true,
   })
   stripePaymentMethodId: string | null;
+
+  /** How this bid is funded. Auto-bids inherit the bidder's last funding. */
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'funding_method',
+    default: 'card',
+  })
+  fundingMethod: AuctionFundingMethod;
+
+  /** Solana wallet backing a `usdc` bid (its escrow is seeded by it). */
+  @Column({
+    type: 'varchar',
+    length: 64,
+    name: 'crypto_wallet',
+    nullable: true,
+  })
+  cryptoWallet: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

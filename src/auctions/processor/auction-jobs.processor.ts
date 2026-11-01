@@ -7,19 +7,20 @@ import {
   AUCTION_CLOSING_SOON_JOB,
   AUCTION_ACTIVATE_JOB,
   AUCTION_QUEUE,
+  AUCTION_RECONCILE_JOB,
+  AUCTION_SWEEP_JOB,
 } from '../../common/constants/queue.constants';
 import { AuctionsService } from '../auctions.service';
 import { AuctionsNotificationsService } from '../auctions-notifications.service';
 
 export interface AuctionJobData {
+  /** Target auction, or 'all' for the periodic sweep. */
   auctionId: string;
-  /** For autopay-retry: the runner-up bidder we want to attempt next. */
-  retryUserId?: string;
 }
 
 /**
- * Single processor for all 3 auction job types. Job name routing is
- * cleaner than 3 separate processors for related lifecycle events.
+ * Single processor for every auction job type. All handlers are
+ * idempotent, so BullMQ retries are safe.
  */
 @Injectable()
 @Processor(AUCTION_QUEUE)
@@ -42,8 +43,6 @@ export class AuctionJobsProcessor extends WorkerHost {
       return;
     }
 
-    this.logger.log(`Processing ${name} for auction ${auctionId}`);
-
     try {
       switch (name) {
         case AUCTION_CLOSING_SOON_JOB:
@@ -56,10 +55,13 @@ export class AuctionJobsProcessor extends WorkerHost {
           await this.auctionsService.runActivateJob(auctionId);
           return;
         case AUCTION_AUTOPAY_RETRY_JOB:
-          await this.auctionsService.runAutopayRetry(
-            auctionId,
-            data.retryUserId,
-          );
+          await this.auctionsService.runAutopayRetry(auctionId);
+          return;
+        case AUCTION_RECONCILE_JOB:
+          await this.auctionsService.reconcileCrypto(auctionId);
+          return;
+        case AUCTION_SWEEP_JOB:
+          await this.auctionsService.runSweep();
           return;
         default:
           this.logger.warn(`Unknown auction job name: ${name}`);
