@@ -137,6 +137,22 @@ export class CreateAuctionDto {
   isFeatured?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Show Est. Value to bidders. Default true.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  showEstValue?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Seller shown to bidders. Empty/null = Hermes Auctions.',
+    example: 'Hermes Auctions',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sellerName?: string | null;
+
+  @ApiPropertyOptional({
     enum: ['fiat', 'crypto', 'both'],
     description:
       'fiat = card + bank (ACH), crypto = USDC escrow. Default both.',

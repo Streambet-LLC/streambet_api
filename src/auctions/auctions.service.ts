@@ -74,6 +74,8 @@ const MIN_LENGTH_MS = 60 * 60 * 1000;
 const MAX_LENGTH_MS = 60 * DAY_MS;
 /** A fresh USDC deposit gets this long to back a bid before it's refunded. */
 const UNUSED_DEPOSIT_GRACE_MS = 20 * 60 * 1000;
+/** Seller shown to bidders when an auction doesn't name one. */
+const HOUSE_SELLER_NAME = 'Hermes Auctions';
 
 /** "j***e" style handle so bidders are recognizable but not identifiable. */
 export function maskHandle(username: string | null | undefined): string {
@@ -357,6 +359,8 @@ export class AuctionsService implements OnModuleInit {
           (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
         shippingUsd: dto.shippingUsd.toFixed(2),
         isFeatured: !!dto.isFeatured,
+        showEstValue: dto.showEstValue ?? true,
+        sellerName: dto.sellerName?.trim() || null,
         acceptedPayments,
         currentBidUsd: null,
         currentLeaderUserId: null,
@@ -403,6 +407,9 @@ export class AuctionsService implements OnModuleInit {
     }
     if (dto.videos !== undefined) a.videos = this.normalizeVideos(dto.videos);
     if (dto.isFeatured !== undefined) a.isFeatured = dto.isFeatured;
+    if (dto.showEstValue !== undefined) a.showEstValue = dto.showEstValue;
+    if (dto.sellerName !== undefined)
+      a.sellerName = dto.sellerName?.trim() || null;
     if (dto.estValueUsd !== undefined) {
       a.estValueUsd =
         dto.estValueUsd != null ? dto.estValueUsd.toFixed(2) : null;
@@ -720,8 +727,13 @@ export class AuctionsService implements OnModuleInit {
         hasReserve: reserve !== null,
         reserveMet:
           reserve === null ? null : current !== null && current >= reserve,
-        estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
-        estValueSource: a.estValueSource,
+        // Hidden Est. Value never leaves the server for bidders.
+        estValueUsd:
+          a.showEstValue !== false && a.estValueUsd != null
+            ? Number(a.estValueUsd)
+            : null,
+        estValueSource: a.showEstValue !== false ? a.estValueSource : null,
+        sellerName: a.sellerName || HOUSE_SELLER_NAME,
         acceptedPayments: a.acceptedPayments ?? 'both',
         acceptedMethods: methodsFor(a.acceptedPayments ?? 'both'),
         shippingUsd: Number(a.shippingUsd ?? 0),
@@ -817,6 +829,8 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       fulfillmentStatus: a.fulfillmentStatus,
       isFeatured: a.isFeatured,
+      showEstValue: a.showEstValue !== false,
+      sellerName: a.sellerName || HOUSE_SELLER_NAME,
       acceptedPayments: a.acceptedPayments ?? 'both',
       isOverdue:
         (a.status === AuctionStatus.ACTIVE ||

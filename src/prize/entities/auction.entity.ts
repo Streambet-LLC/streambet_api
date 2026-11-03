@@ -149,6 +149,14 @@ export class Auction extends BaseEntity {
   @Column({ type: 'jsonb', name: 'est_value_meta', nullable: true })
   estValueMeta: EstValueMeta | null;
 
+  /** When false, Est. Value is hidden from bidders (admins still see it). */
+  @Column({ type: 'boolean', name: 'show_est_value', default: true })
+  showEstValue: boolean;
+
+  /** Seller shown to bidders; null = the house (Hermes Auctions). */
+  @Column({ type: 'varchar', length: 80, name: 'seller_name', nullable: true })
+  sellerName: string | null;
+
   /** Flat shipping the winner pays on top of the hammer price. */
   @Column({
     type: 'decimal',
