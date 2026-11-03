@@ -18,7 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { AuctionCategory } from '../../prize/enums/auction-category.enum';
-import type { AuctionLengthPreset } from '../hermes.types';
+import type { AcceptedPayments, AuctionLengthPreset } from '../hermes.types';
 
 export class AuctionImageDto {
   @ApiProperty()
@@ -135,6 +135,15 @@ export class CreateAuctionDto {
   @IsOptional()
   @IsBoolean()
   isFeatured?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['fiat', 'crypto', 'both'],
+    description:
+      'fiat = card + bank (ACH), crypto = USDC escrow. Default both.',
+  })
+  @IsOptional()
+  @IsIn(['fiat', 'crypto', 'both'])
+  acceptedPayments?: AcceptedPayments;
 }
 
 /** Everything is optional on update; the service decides what's editable. */

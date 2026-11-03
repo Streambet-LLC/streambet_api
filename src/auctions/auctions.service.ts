@@ -59,12 +59,14 @@ import {
   winTotals,
 } from './hermes.pricing';
 import {
+  AcceptedPayments,
   AuctionBucket,
   AuctionFundingMethod,
   AuctionVideo,
   BUCKET_STATUSES,
   ShippingAddressSnapshot,
   bucketForStatus,
+  methodsFor,
 } from './hermes.types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -298,6 +300,15 @@ export class AuctionsService implements OnModuleInit {
     });
   }
 
+  /** Crypto-only lots need the escrow live, or nobody could bid on them. */
+  private assertPaymentsAvailable(accepted: AcceptedPayments): void {
+    if (accepted === 'crypto' && !this.crypto.isEnabled()) {
+      throw new BadRequestException(
+        "USDC escrow isn't live yet, so a crypto-only auction couldn't take bids. Choose Fiat or Both.",
+      );
+    }
+  }
+
   private assertReserve(starting: number, reserve: number | null | undefined) {
     if (reserve != null && reserve < starting) {
       throw new BadRequestException(
@@ -314,6 +325,8 @@ export class AuctionsService implements OnModuleInit {
       throw new BadRequestException('Add at least one photo.');
     }
     this.assertReserve(dto.startingPriceUsd, dto.reservePriceUsd);
+    const acceptedPayments = dto.acceptedPayments ?? 'both';
+    this.assertPaymentsAvailable(acceptedPayments);
     const timing = this.resolveTiming(dto);
     const status =
       timing.startsAt.getTime() <= Date.now() + 5_000
@@ -344,6 +357,7 @@ export class AuctionsService implements OnModuleInit {
           (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
         shippingUsd: dto.shippingUsd.toFixed(2),
         isFeatured: !!dto.isFeatured,
+        acceptedPayments,
         currentBidUsd: null,
         currentLeaderUserId: null,
         proxyMaxUsd: null,
@@ -406,6 +420,7 @@ export class AuctionsService implements OnModuleInit {
       dto.startingPriceUsd !== undefined ||
       dto.reservePriceUsd !== undefined ||
       dto.shippingUsd !== undefined ||
+      dto.acceptedPayments !== undefined ||
       dto.startsAt !== undefined ||
       dto.lengthPreset !== undefined ||
       dto.endsAt !== undefined;
@@ -413,8 +428,12 @@ export class AuctionsService implements OnModuleInit {
     if (termsTouched) {
       if (a.status !== AuctionStatus.SCHEDULED) {
         throw new BadRequestException(
-          'Price, reserve, shipping and timing are locked once an auction is live.',
+          'Price, reserve, shipping, payment options and timing are locked once an auction is live.',
         );
+      }
+      if (dto.acceptedPayments !== undefined) {
+        this.assertPaymentsAvailable(dto.acceptedPayments);
+        a.acceptedPayments = dto.acceptedPayments;
       }
       const starting = dto.startingPriceUsd ?? Number(a.startingPriceUsd);
       const reserve =
@@ -703,6 +722,8 @@ export class AuctionsService implements OnModuleInit {
           reserve === null ? null : current !== null && current >= reserve,
         estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
         estValueSource: a.estValueSource,
+        acceptedPayments: a.acceptedPayments ?? 'both',
+        acceptedMethods: methodsFor(a.acceptedPayments ?? 'both'),
         shippingUsd: Number(a.shippingUsd ?? 0),
         isFeatured: a.isFeatured,
         leader: a.currentLeaderUserId
@@ -796,6 +817,7 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       fulfillmentStatus: a.fulfillmentStatus,
       isFeatured: a.isFeatured,
+      acceptedPayments: a.acceptedPayments ?? 'both',
       isOverdue:
         (a.status === AuctionStatus.ACTIVE ||
           a.status === AuctionStatus.SCHEDULED) &&
@@ -922,6 +944,16 @@ export class AuctionsService implements OnModuleInit {
     if (!this.hasShippingAddress(user)) {
       throw new BadRequestException('Add a shipping address before bidding.');
     }
+    const pre = await this.getOrThrow(auctionId);
+    if (
+      !methodsFor(pre.acceptedPayments ?? 'both').includes(dto.fundingMethod)
+    ) {
+      throw new BadRequestException(
+        pre.acceptedPayments === 'crypto'
+          ? 'This auction only accepts USDC.'
+          : 'This auction only accepts card or bank (ACH) payments.',
+      );
+    }
 
     const funding: LeaderFunding = {
       fundingMethod: dto.fundingMethod,
@@ -948,7 +980,6 @@ export class AuctionsService implements OnModuleInit {
         await this.depositRepository.save(dep);
       }
       // A USDC win settles hammer + shipping from escrow, so both must fit.
-      const pre = await this.getOrThrow(auctionId);
       const shipping = Number(pre.shippingUsd ?? 0);
       if (round2(proxyMax + shipping) > onChain) {
         throw new BadRequestException(
@@ -1871,6 +1902,11 @@ export class AuctionsService implements OnModuleInit {
       throw new BadRequestException('USDC bidding is not available right now.');
     }
     const a = await this.getOrThrow(auctionId);
+    if (!methodsFor(a.acceptedPayments ?? 'both').includes('usdc')) {
+      throw new BadRequestException(
+        'This auction only accepts card or bank (ACH) payments.',
+      );
+    }
     if (
       a.status !== AuctionStatus.ACTIVE &&
       a.status !== AuctionStatus.SCHEDULED

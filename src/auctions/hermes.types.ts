@@ -4,6 +4,16 @@ import { AuctionStatus } from '../prize/enums/auction-status.enum';
 export type AuctionFundingMethod = 'card' | 'ach' | 'usdc';
 export const FUNDING_METHODS: AuctionFundingMethod[] = ['card', 'ach', 'usdc'];
 
+/** Which payment rails an auction accepts. Fiat = card + bank (ACH). */
+export type AcceptedPayments = 'fiat' | 'crypto' | 'both';
+export const ACCEPTED_PAYMENTS: AcceptedPayments[] = ['fiat', 'crypto', 'both'];
+
+export function methodsFor(accepted: AcceptedPayments): AuctionFundingMethod[] {
+  if (accepted === 'fiat') return ['card', 'ach'];
+  if (accepted === 'crypto') return ['usdc'];
+  return FUNDING_METHODS;
+}
+
 /** Admin-facing review buckets. Bidders only ever see live + upcoming. */
 export type AuctionBucket = 'live' | 'upcoming' | 'settled';
 

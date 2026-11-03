@@ -15,6 +15,7 @@ import { AuctionStatus } from '../enums/auction-status.enum';
 import { AuctionCategory } from '../enums/auction-category.enum';
 import { AuctionBid } from './auction-bid.entity';
 import type {
+  AcceptedPayments,
   AuctionFundingMethod,
   AuctionImage,
   AuctionLengthPreset,
@@ -160,6 +161,15 @@ export class Auction extends BaseEntity {
 
   @Column({ type: 'boolean', name: 'is_featured', default: false })
   isFeatured: boolean;
+
+  /** Payment rails bidders may use: fiat (card + ACH), crypto (USDC) or both. */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'accepted_payments',
+    default: 'both',
+  })
+  acceptedPayments: AcceptedPayments;
 
   /** Current displayed high bid. Null until the first bid. */
   @Column({
