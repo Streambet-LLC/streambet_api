@@ -13,6 +13,7 @@ export enum EmailType {
   ProSubscriptionActivated = 'pro_subscription_activated',
   ProSubscriptionCancelled = 'pro_subscription_cancelled',
   ConciergeAssigned = 'concierge_assigned',
+  HermesAuctionNotice = 'hermes_auction_notice',
   AuctionOutbid = 'auction_outbid',
   AuctionClosingSoon = 'auction_closing_soon',
   AuctionWon = 'auction_won',

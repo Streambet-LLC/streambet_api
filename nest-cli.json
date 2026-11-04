@@ -11,6 +11,10 @@
       {
         "include": "integrations/solana/*.json",
         "outDir": "dist"
+      },
+      {
+        "include": "auctions/idl/*.json",
+        "outDir": "dist"
       }
     ],
     "deleteOutDir": true

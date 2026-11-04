@@ -4,27 +4,37 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
-import { PrizeConfiguration } from '../prize/entities/prize-configuration.entity';
-import { PrizeItemWatcher } from '../prize/entities/prize-item-watcher.entity';
-import { PrizeOrder } from '../prize/entities/prize-order.entity';
 import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
 import { QueueService } from '../queue/queue.service';
-import { InboxService } from '../inbox/inbox.service';
-import { EmailsService } from '../emails/email.service';
+import { minNextBid } from './hermes.pricing';
+
+interface NoticeRow {
+  label: string;
+  value: string;
+}
+
+interface Notice {
+  subject: string;
+  heading: string;
+  intro: string;
+  itemName?: string;
+  rows?: NoticeRow[];
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footnote?: string;
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  card: 'Card',
+  ach: 'Bank (ACH)',
+  usdc: 'USDC',
+};
 
 /**
- * Centralized auction notification dispatch.
- *
- * Channels:
- *  - Inbox (CardCade system bot, markdown link supported)
- *  - Email (queued via QueueService → EmailProcessor → SES/MailHog)
- *
- * Both channels are best-effort and isolated via Promise.allSettled so a
- * single recipient's failure never poisons the rest of the batch.
- *
- * Outbid notifications fire on every outbid event (no debounce) so bidders
- * can react in real time to fast proxy-bid wars.
+ * Hermes Auctions email notifications (one branded template, varied copy).
+ * Best-effort: every send is isolated so one bad address never blocks the
+ * rest of a batch, and failures are logged rather than thrown.
  */
 @Injectable()
 export class AuctionsNotificationsService {
@@ -35,597 +45,330 @@ export class AuctionsNotificationsService {
     private readonly auctionRepository: Repository<Auction>,
     @InjectRepository(AuctionBid)
     private readonly bidRepository: Repository<AuctionBid>,
-    @InjectRepository(PrizeConfiguration)
-    private readonly prizeRepository: Repository<PrizeConfiguration>,
-    @InjectRepository(PrizeItemWatcher)
-    private readonly watcherRepository: Repository<PrizeItemWatcher>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(PrizeOrder)
-    private readonly prizeOrderRepository: Repository<PrizeOrder>,
     private readonly queueService: QueueService,
-    private readonly inboxService: InboxService,
     private readonly configService: ConfigService,
-    private readonly emailsService: EmailsService,
   ) {}
 
-  /** Public site host used in inbox/email links. */
-  private appHost(): string {
+  private site(): string {
     return (
-      this.configService.get<string>('email.HOST_URL') ||
+      this.configService.get<string>('CLIENT_URL') ||
       this.configService.get<string>('APP_HOST_URL') ||
       ''
-    );
+    ).replace(/\/$/, '');
   }
 
-  private auctionUrl(auctionId: string, prizeId: string): string {
-    const host = this.appHost().replace(/\/$/, '');
-    return `${host}/shop/item/${prizeId}?auction=${auctionId}`;
+  private auctionUrl(id: string): string {
+    return `${this.site()}/auctions/${id}`;
   }
 
-  private orderUrl(orderId: string): string {
-    const host = this.appHost().replace(/\/$/, '');
-    return `${host}/account/orders/${orderId}`;
+  private payUrl(id: string): string {
+    return `${this.site()}/auctions/${id}/pay`;
+  }
+
+  private logoUrl(): string {
+    return `${this.site()}/hermes/hermes-auctions-logo.png`;
   }
 
   private fmtUsd(n: number): string {
-    return `$${n.toFixed(2)}`;
+    return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
-  /**
-   * Format a date for inclusion in reminder/notification emails.
-   *
-   * We don't store a per-user timezone, so rather than emitting an
-   * ambiguous server-local string (which renders as UTC in production
-   * with no zone label), we render the same instant in ET plus UTC,
-   * e.g.:
-   *
-   *   "May 12, 2026, 6:45 PM ET (22:45 UTC)"
-   *
-   * That keeps the primary line short and US-readable while making the
-   * exact instant unambiguous for any recipient regardless of locale.
-   */
+  /** ET + UTC so the instant is unambiguous without a per-user timezone. */
   private fmtDate(d: Date): string {
-    const inZone = (timeZone: string, opts: Intl.DateTimeFormatOptions) =>
-      d.toLocaleString('en-US', { ...opts, timeZone });
-
-    const eastern = inZone('America/New_York', {
+    const et = d.toLocaleString('en-US', {
+      timeZone: 'America/New_York',
       month: 'short',
       day: 'numeric',
       year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true,
     });
-    const utc = inZone('UTC', {
+    const utc = d.toLocaleString('en-US', {
+      timeZone: 'UTC',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
     });
-
-    return `${eastern} ET (${utc} UTC)`;
+    return `${et} ET (${utc} UTC)`;
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Outbid (debounced)
-  // ─────────────────────────────────────────────────────────────────────
-
-  /**
-   * Notify the previous leader they were outbid. Sent on EVERY outbid
-   * event (no debounce) so bidders can react in real time during fast
-   * proxy-bid wars. The matching inbox message + email both fire on each
-   * call.
-   */
-  async notifyOutbid(params: {
-    previousLeaderUserId: string;
-    auctionId: string;
-  }): Promise<void> {
-    const { previousLeaderUserId, auctionId } = params;
-
-    const auction = await this.auctionRepository.findOne({
-      where: { id: auctionId },
-    });
-    if (!auction) return;
-    const prize = await this.prizeRepository.findOne({
-      where: { id: auction.prizeConfigurationId },
-    });
-    const user = await this.userRepository.findOne({
-      where: { id: previousLeaderUserId },
-    });
-    if (!user || !prize) return;
-
-    const itemName = prize.name || 'an auction item';
-    const url = this.auctionUrl(auction.id, prize.id);
-    const currentBid = auction.currentBidUsd
-      ? this.fmtUsd(Number(auction.currentBidUsd))
-      : this.fmtUsd(Number(auction.startingPriceUsd));
-    const minNext = this.fmtUsd(
-      this.computeMinNext(
-        auction.currentBidUsd ? Number(auction.currentBidUsd) : null,
-        Number(auction.startingPriceUsd),
-      ),
-    );
-    const endsAt = this.fmtDate(auction.endsAt);
-
-    await Promise.allSettled([
-      this.inboxService
-        .sendSystemMessageToUser(
-          previousLeaderUserId,
-          `You've been outbid on ${itemName}. Current bid is ${currentBid}, min next bid ${minNext}. [Place a higher bid](${url})`,
-          { suppressEmail: true },
-        )
-        .catch((err) =>
-          this.logger.warn(`Outbid inbox failed: ${err?.message}`),
-        ),
-      user.email
-        ? this.queueService
-            .addEmailJob(
-              {
-                toAddress: [user.email],
-                subject: `You've been outbid on ${itemName}`,
-                params: {
-                  userName: user.username || 'there',
-                  itemName,
-                  currentBid,
-                  minNextBid: minNext,
-                  endsAt,
-                  auctionUrl: url,
-                },
-              } as never,
-              EmailType.AuctionOutbid,
-            )
-            .catch((err) =>
-              this.logger.warn(`Outbid email failed: ${err?.message}`),
-            )
-        : Promise.resolve(),
-    ]);
+  private itemName(a: Auction): string {
+    return a.title || 'your Hermes auction item';
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Closing soon (1h before endsAt)
-  // ─────────────────────────────────────────────────────────────────────
+  private async send(user: User | null, notice: Notice): Promise<void> {
+    if (!user?.email) return;
+    try {
+      await this.queueService.addEmailJob(
+        {
+          toAddress: [user.email],
+          subject: notice.subject,
+          params: {
+            logoUrl: this.logoUrl(),
+            heading: notice.heading,
+            userName: user.username || 'there',
+            intro: notice.intro,
+            itemName: notice.itemName ?? '',
+            rows: notice.rows ?? [],
+            ctaLabel: notice.ctaLabel ?? '',
+            ctaUrl: notice.ctaUrl ?? '',
+            footnote: notice.footnote ?? '',
+          },
+        } as never,
+        EmailType.HermesAuctionNotice,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Hermes email "${notice.subject}" to ${user.id} failed: ${(err as Error).message}`,
+      );
+    }
+  }
 
-  async notifyClosingSoon(auctionId: string): Promise<void> {
-    const auction = await this.auctionRepository.findOne({
-      where: { id: auctionId },
-    });
-    if (!auction) return;
-    if (auction.endsAt.getTime() - Date.now() < 0) return; // already over
-
-    const prize = await this.prizeRepository.findOne({
-      where: { id: auction.prizeConfigurationId },
-    });
-    if (!prize) return;
-
-    // Distinct bidders + watchers (deduplicated)
-    const bidderRows = await this.bidRepository
+  private async bidderIds(auctionId: string): Promise<string[]> {
+    const rows = await this.bidRepository
       .createQueryBuilder('b')
       .select('DISTINCT b.user_id', 'userId')
       .where('b.auction_id = :id', { id: auctionId })
       .getRawMany<{ userId: string }>();
-    const watcherRows = await this.watcherRepository.find({
-      where: { itemId: prize.id },
-      select: { userId: true },
-    });
-    const userIdSet = new Set<string>([
-      ...bidderRows.map((r) => r.userId),
-      ...watcherRows.map((w) => w.userId),
-    ]);
-    if (userIdSet.size === 0) return;
+    return rows.map((r) => r.userId);
+  }
 
-    const users = await this.userRepository.find({
-      where: { id: In(Array.from(userIdSet)) },
+  async notifyOutbid(params: {
+    previousLeaderUserId: string;
+    auctionId: string;
+  }): Promise<void> {
+    const a = await this.auctionRepository.findOne({
+      where: { id: params.auctionId },
     });
-    const itemName = prize.name || 'an auction item';
-    const url = this.auctionUrl(auction.id, prize.id);
-    const currentBid = auction.currentBidUsd
-      ? this.fmtUsd(Number(auction.currentBidUsd))
-      : this.fmtUsd(Number(auction.startingPriceUsd));
-    const endsAt = this.fmtDate(auction.endsAt);
+    const user = await this.userRepository.findOne({
+      where: { id: params.previousLeaderUserId },
+    });
+    if (!a || !user) return;
+    const current = a.currentBidUsd ? Number(a.currentBidUsd) : null;
+    await this.send(user, {
+      subject: `You've been outbid: ${this.itemName(a)}`,
+      heading: "You've been outbid",
+      intro:
+        'Someone placed a higher max bid. Raise yours before the clock runs out — we bid for you up to your max.',
+      itemName: this.itemName(a),
+      rows: [
+        {
+          label: 'Current bid',
+          value: this.fmtUsd(current ?? Number(a.startingPriceUsd)),
+        },
+        {
+          label: 'Min next bid',
+          value: this.fmtUsd(minNextBid(current, Number(a.startingPriceUsd))),
+        },
+        { label: 'Ends', value: this.fmtDate(a.endsAt) },
+      ],
+      ctaLabel: 'Bid again',
+      ctaUrl: this.auctionUrl(a.id),
+      footnote:
+        'If you bid with USDC, your escrow for this auction is being returned to your wallet.',
+    });
+  }
 
+  async notifyClosingSoon(auctionId: string): Promise<void> {
+    const a = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (!a || a.endsAt.getTime() < Date.now()) return;
+    const ids = await this.bidderIds(auctionId);
+    if (ids.length === 0) return;
+    const users = await this.userRepository.find({ where: { id: In(ids) } });
+    const current = a.currentBidUsd
+      ? Number(a.currentBidUsd)
+      : Number(a.startingPriceUsd);
     await Promise.allSettled(
-      users.flatMap((u) => [
-        this.inboxService
-          .sendSystemMessageToUser(
-            u.id,
-            `${itemName} closes in ~1 hour. Current bid ${currentBid}. Bids in the final 30s extend the auction. [View the auction](${url})`,
-            { suppressEmail: true },
-          )
-          .catch((err) =>
-            this.logger.warn(`Closing-soon inbox failed: ${err?.message}`),
-          ),
-        u.email
-          ? this.queueService
-              .addEmailJob(
-                {
-                  toAddress: [u.email],
-                  subject: `Closing soon: ${itemName}`,
-                  params: {
-                    userName: u.username || 'there',
-                    itemName,
-                    currentBid,
-                    endsAt,
-                    auctionUrl: url,
-                  },
-                } as never,
-                EmailType.AuctionClosingSoon,
-              )
-              .catch((err) =>
-                this.logger.warn(`Closing-soon email failed: ${err?.message}`),
-              )
-          : Promise.resolve(),
-      ]),
-    );
-    this.logger.log(
-      `Closing-soon dispatched for auction ${auctionId} to ${users.length} recipients`,
+      users.map((u) =>
+        this.send(u, {
+          subject: `Closing in 1 hour: ${this.itemName(a)}`,
+          heading: 'Closing in about an hour',
+          intro: `${
+            u.id === a.currentLeaderUserId
+              ? "You're the high bidder right now."
+              : "You're not the high bidder right now."
+          } Bids in the final minute extend the clock, so there's always time to respond.`,
+          itemName: this.itemName(a),
+          rows: [
+            { label: 'Current bid', value: this.fmtUsd(current) },
+            { label: 'Ends', value: this.fmtDate(a.endsAt) },
+          ],
+          ctaLabel: 'View auction',
+          ctaUrl: this.auctionUrl(a.id),
+        }),
+      ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Won / Lost (after close)
-  // ─────────────────────────────────────────────────────────────────────
-
   async notifyWinner(params: {
+    auction: Auction;
     winnerUserId: string;
-    auctionId: string;
-    winningBidUsd: number;
-    buyerFeeUsd: number;
-    shippingUsd?: number;
-    totalChargedUsd: number;
-    chargeStatus: 'charged' | 'pending_action' | 'failed';
-    orderId: string | null;
+    outcome: 'paid' | 'processing' | 'action_required' | 'failed';
   }): Promise<void> {
-    const auction = await this.auctionRepository.findOne({
-      where: { id: params.auctionId },
-    });
-    if (!auction) return;
-    const prize = await this.prizeRepository.findOne({
-      where: { id: auction.prizeConfigurationId },
-    });
+    const a = params.auction;
     const user = await this.userRepository.findOne({
       where: { id: params.winnerUserId },
     });
-    if (!user || !prize) return;
-
-    // Resolve the seller (if any). Prizes with a non-null createdBy that
-    // resolves to a seller account are seller-owned; otherwise the item
-    // is sold directly by CardCade. We use this to (a) show the seller's
-    // shop name in the email and (b) swap the shipping confirmation copy
-    // since CardCade ships its own inventory but seller items are
-    // shipped directly by the seller.
-    let seller: User | null = null;
-    if (prize.createdBy) {
-      seller = await this.userRepository.findOne({
-        where: { id: prize.createdBy },
+    if (!user) return;
+    const hammer = Number(a.winningAmountUsd ?? a.currentBidUsd ?? 0);
+    const rows: NoticeRow[] = [
+      { label: 'Winning bid', value: this.fmtUsd(hammer) },
+      { label: 'Shipping', value: this.fmtUsd(Number(a.shippingUsd ?? 0)) },
+    ];
+    if (Number(a.cardFeeUsd ?? 0) > 0) {
+      rows.push({
+        label: 'Card processing',
+        value: this.fmtUsd(Number(a.cardFeeUsd)),
       });
     }
-    const isSellerOwned = !!seller && seller.isSeller === true;
-    const sellerName =
-      isSellerOwned && seller
-        ? seller.shopName || seller.username || 'the seller'
-        : 'CardCade';
+    rows.push({
+      label: 'Total',
+      value: this.fmtUsd(Number(a.totalChargedUsd ?? 0)),
+    });
+    if (a.paymentMethod) {
+      rows.push({ label: 'Paid with', value: METHOD_LABEL[a.paymentMethod] });
+    }
 
-    const itemName = prize.name || 'an auction item';
-    const orderUrl = params.orderId
-      ? this.orderUrl(params.orderId)
-      : `${this.appHost().replace(/\/$/, '')}/account/orders`;
-    const winningBid = this.fmtUsd(params.winningBidUsd);
-    const buyerFee = this.fmtUsd(params.buyerFeeUsd);
-    // Fall back to the prize's stored shipping if the caller didn't
-    // pass one (kept optional so existing call sites don't break during
-    // partial rollouts).
-    const shippingUsdValue =
-      params.shippingUsd != null
-        ? params.shippingUsd
-        : prize.shippingCostUsd != null
-          ? Number(prize.shippingCostUsd)
-          : 0;
-    const shippingFee = this.fmtUsd(shippingUsdValue);
-    const totalCharged = this.fmtUsd(params.totalChargedUsd);
-    const chargeStatus =
-      params.chargeStatus === 'charged'
-        ? 'Charged successfully'
-        : params.chargeStatus === 'pending_action'
-          ? 'Awaiting card authentication (3DS)'
-          : 'Charge failed — please update your card';
-
-    // Failed / pending payment: branch off into the dedicated
-    // "update payment" email + inbox flow. This way the user gets a
-    // single, action-oriented notification (with a deep-link to the
-    // retry page) instead of the generic "you won" email which would
-    // be confusing when no charge actually went through. We still
-    // suppress the inbox's auto-email so the user only gets one email.
-    if (
-      params.chargeStatus === 'failed' ||
-      params.chargeStatus === 'pending_action'
-    ) {
-      const retryUrl = `${this.appHost().replace(/\/$/, '')}/auctions/${
-        auction.id
-      }/retry-payment`;
-      const failureReason =
-        params.chargeStatus === 'pending_action'
-          ? 'Your card requires additional authentication (3DS).'
-          : '';
-
-      await Promise.allSettled([
-        this.inboxService
-          .sendSystemMessageToUser(
-            params.winnerUserId,
-            `You won ${itemName} for ${winningBid} but we couldn't charge your card (total ${totalCharged}). Your win is held for 24 hours — [update payment & complete purchase](${retryUrl}) before the next bidder is offered the item.`,
-            { suppressEmail: true },
-          )
-          .catch((err) =>
-            this.logger.warn(`Winner-failed inbox failed: ${err?.message}`),
-          ),
-        user.email
-          ? this.queueService
-              .addEmailJob(
-                {
-                  toAddress: [user.email],
-                  subject: `Action needed: payment failed for ${itemName}`,
-                  params: {
-                    userName: user.username || 'there',
-                    itemName,
-                    winningBid,
-                    buyerFee,
-                    shippingFee,
-                    totalCharged,
-                    failureReason,
-                    retryUrl,
-                  },
-                } as never,
-                EmailType.AuctionPaymentFailed,
-              )
-              .catch((err) =>
-                this.logger.warn(`Winner-failed email failed: ${err?.message}`),
-              )
-          : Promise.resolve(),
-      ]);
+    if (params.outcome === 'paid' || params.outcome === 'processing') {
+      await this.send(user, {
+        subject: `You won: ${this.itemName(a)}`,
+        heading: 'You won! 🏆',
+        intro:
+          params.outcome === 'paid'
+            ? "Your payment went through. We'll email tracking as soon as it ships."
+            : "Your bank payment is processing (ACH usually clears in 1–4 business days). We'll ship once it clears.",
+        itemName: this.itemName(a),
+        rows,
+        ctaLabel: 'View your win',
+        ctaUrl: this.payUrl(a.id),
+        footnote:
+          'Zero buyer premium. You only paid the hammer price plus shipping.',
+      });
       return;
     }
 
-    await Promise.allSettled([
-      this.inboxService
-        .sendSystemMessageToUser(
-          params.winnerUserId,
-          `You won ${itemName} for ${winningBid}. Total charged: ${totalCharged} (incl. ${buyerFee} buyer fee + ${shippingFee} shipping). [View your order](${orderUrl})`,
-          { suppressEmail: true },
-        )
-        .catch((err) =>
-          this.logger.warn(`Winner inbox failed: ${err?.message}`),
-        ),
-      user.email
-        ? this.queueService
-            .addEmailJob(
-              {
-                toAddress: [user.email],
-                subject: `You won the auction: ${itemName}`,
-                params: {
-                  userName: user.username || 'there',
-                  itemName,
-                  winningBid,
-                  buyerFee,
-                  shippingFee,
-                  totalCharged,
-                  chargeStatus,
-                  sellerName,
-                  isSellerOwned,
-                  orderUrl,
-                },
-              } as never,
-              EmailType.AuctionWon,
-            )
-            .catch((err) =>
-              this.logger.warn(`Winner email failed: ${err?.message}`),
-            )
-        : Promise.resolve(),
-    ]);
-  }
-
-  /**
-   * Notify the seller (or CardCade admin for house items) that their
-   * auction item has sold + paid. Mirrors `seller_shop_purchase` from
-   * the shop flow so we can re-use the existing template (which already
-   * renders buyer name, shipping address block and a "Mark as Shipped &
-   * Add Tracking" CTA pointing at the seller dashboard / admin
-   * redemptions page).
-   *
-   * Best-effort: failures are logged, never thrown.
-   */
-  async notifySellerOfSale(params: {
-    auctionId: string;
-    orderId: string;
-  }): Promise<void> {
-    try {
-      const auction = await this.auctionRepository.findOne({
-        where: { id: params.auctionId },
-      });
-      if (!auction) return;
-      const prize = await this.prizeRepository.findOne({
-        where: { id: auction.prizeConfigurationId },
-      });
-      if (!prize) return;
-      const order = await this.prizeOrderRepository.findOne({
-        where: { id: params.orderId },
-        relations: ['user'],
-      });
-      if (!order) return;
-      const buyer = order.user;
-
-      const frontendUrl =
-        this.configService.get<string>('CLIENT_URL') ||
-        this.appHost() ||
-        'http://localhost:3000';
-
-      // Route to admin (CardCade-owned items) vs seller dashboard.
-      let recipientEmail: string | null = null;
-      let recipientName = 'Seller';
-      // In-person items don't ship — omit the Mark-as-Shipped CTA. The EJS
-      // template's `<% if (params.markShippedUrl) %>` guard hides the button.
-      let markShippedUrl: string | undefined;
-      const isInPerson = prize.isInPerson === true;
-
-      if (!prize.createdBy) {
-        recipientEmail =
-          this.configService.get<string>('ADMIN_EMAIL') ||
-          'contact@cardcade.fun';
-        recipientName = 'CardCade Admin';
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl.replace(/\/$/, '')}/admin/prizes/redemptions?orderId=${order.id}`;
-      } else {
-        const seller = await this.userRepository.findOne({
-          where: { id: prize.createdBy },
-        });
-        if (!seller || !seller.email) {
-          this.logger.warn(
-            `Seller ${prize.createdBy} not found / no email for auction ${auction.id}`,
-          );
-          return;
-        }
-        recipientEmail = seller.email;
-        recipientName =
-          seller.shopName || seller.name || seller.username || 'Seller';
-        markShippedUrl = isInPerson
-          ? undefined
-          : `${frontendUrl.replace(/\/$/, '')}/seller/shop/manage?tab=orders&orderId=${order.id}`;
-      }
-
-      // Show seller the amount net of buyer fee (matches shop email).
-      const charged = parseFloat(order.usdCharged?.toString() || '0');
-      const sellerVisibleAmount =
-        charged > 0
-          ? parseFloat((charged / 1.05).toFixed(2)) // ~5% buyer fee
-          : Number(order.totalPrice ?? 0);
-
-      const shipping: PrizeOrder['shippingAddress'] =
-        order.shippingAddress || {
-          firstName: '',
-          lastName: '',
-          addressLine1: '',
-          city: '',
-          state: '',
-          zipCode: '',
-          country: '',
-        };
-      const buyerFullName =
-        [shipping.firstName, shipping.lastName].filter(Boolean).join(' ') ||
-        buyer?.name ||
-        buyer?.username ||
-        'Buyer';
-
-      await this.emailsService.sendEmailSMTP(
-        {
-          toAddress: [recipientEmail],
-          subject: `New Sale! ${prize.name} won at auction 🎉`,
-          params: {
-            sellerName: recipientName,
-            itemName: prize.name,
-            buyerName: buyer?.name || buyer?.username || 'Buyer',
-            amount: sellerVisibleAmount,
-            orderId: order.id,
-            purchaseDate: new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-            buyerFullName,
-            shippingAddressLine1: isInPerson ? '' : shipping.addressLine1 || '',
-            shippingAddressLine2: isInPerson ? '' : shipping.addressLine2 || '',
-            shippingCity: isInPerson ? '' : shipping.city || '',
-            shippingState: isInPerson ? '' : shipping.state || '',
-            shippingZipCode: isInPerson ? '' : shipping.zipCode || '',
-            shippingCountry: isInPerson ? '' : shipping.country || '',
-            markShippedUrl,
-          },
-        },
-        'seller_shop_purchase',
-      );
-
-      this.logger.log(
-        `Auction-sale notification sent to ${recipientEmail} for order ${order.id}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `notifySellerOfSale failed for auction ${params.auctionId}: ${
-          (err as Error)?.message
-        }`,
-      );
-    }
+    const due = a.paymentDueAt ? this.fmtDate(a.paymentDueAt) : 'soon';
+    await this.send(user, {
+      subject: `Action needed: complete payment for ${this.itemName(a)}`,
+      heading: 'You won — finish your payment',
+      intro:
+        params.outcome === 'action_required'
+          ? 'Your bank needs you to confirm this charge.'
+          : "We couldn't charge your saved payment method.",
+      itemName: this.itemName(a),
+      rows: [...rows, { label: 'Pay by', value: due }],
+      ctaLabel: 'Complete payment',
+      ctaUrl: this.payUrl(a.id),
+      footnote:
+        "If payment isn't completed by the deadline, the item may be offered to the next bidder.",
+    });
   }
 
   async notifyLosers(params: {
-    auctionId: string;
+    auction: Auction;
     winnerUserId: string | null;
-    winningBidUsd: number;
   }): Promise<void> {
-    const auction = await this.auctionRepository.findOne({
-      where: { id: params.auctionId },
-    });
-    if (!auction) return;
-    const prize = await this.prizeRepository.findOne({
-      where: { id: auction.prizeConfigurationId },
-    });
-    if (!prize) return;
-
-    const bidderRows = await this.bidRepository
-      .createQueryBuilder('b')
-      .select('DISTINCT b.user_id', 'userId')
-      .where('b.auction_id = :id', { id: params.auctionId })
-      .getRawMany<{ userId: string }>();
-    const loserIds = bidderRows
-      .map((r) => r.userId)
-      .filter((id) => id !== params.winnerUserId);
-    if (loserIds.length === 0) return;
-
-    const users = await this.userRepository.find({
-      where: { id: In(loserIds) },
-    });
-    const itemName = prize.name || 'an auction item';
-    const winningBid = this.fmtUsd(params.winningBidUsd);
-    const shopUrl = `${this.appHost().replace(/\/$/, '')}/shop`;
-
+    const a = params.auction;
+    const ids = (await this.bidderIds(a.id)).filter(
+      (id) => id !== params.winnerUserId,
+    );
+    if (ids.length === 0) return;
+    const users = await this.userRepository.find({ where: { id: In(ids) } });
+    const sold = !!params.winnerUserId;
     await Promise.allSettled(
-      users.flatMap((u) => [
-        this.inboxService
-          .sendSystemMessageToUser(
-            u.id,
-            `The auction for ${itemName} has ended. Winning bid was ${winningBid}. No charge was made to your card. [Browse the shop](${shopUrl})`,
-            { suppressEmail: true },
-          )
-          .catch((err) =>
-            this.logger.warn(`Loser inbox failed: ${err?.message}`),
-          ),
-        u.email
-          ? this.queueService
-              .addEmailJob(
+      users.map((u) =>
+        this.send(u, {
+          subject: `Auction ended: ${this.itemName(a)}`,
+          heading: 'This auction has ended',
+          intro: sold
+            ? "You didn't win this one. Nothing was charged, and any USDC escrow has been returned to your wallet."
+            : 'The reserve was not met, so this item did not sell. Nothing was charged, and any USDC escrow has been returned.',
+          itemName: this.itemName(a),
+          rows: sold
+            ? [
                 {
-                  toAddress: [u.email],
-                  subject: `Auction ended: ${itemName}`,
-                  params: {
-                    userName: u.username || 'there',
-                    itemName,
-                    winningBid,
-                    shopUrl,
-                  },
-                } as never,
-                EmailType.AuctionLost,
-              )
-              .catch((err) =>
-                this.logger.warn(`Loser email failed: ${err?.message}`),
-              )
-          : Promise.resolve(),
-      ]),
+                  label: 'Winning bid',
+                  value: this.fmtUsd(Number(a.winningAmountUsd ?? 0)),
+                },
+              ]
+            : [],
+          ctaLabel: 'Browse live auctions',
+          ctaUrl: `${this.site()}/auctions`,
+        }),
+      ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────────────────────────────
+  /** Lets the house know an item sold and where to ship it. */
+  async notifyAdminSold(auction: Auction): Promise<void> {
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
+    if (!adminEmail) return;
+    const winner = auction.winnerUserId
+      ? await this.userRepository.findOne({
+          where: { id: auction.winnerUserId },
+        })
+      : null;
+    const addr = auction.shippingAddress;
+    await this.send({ email: adminEmail, username: 'Hermes team' } as User, {
+      subject: `Sold: ${this.itemName(auction)} — ${this.fmtUsd(Number(auction.winningAmountUsd ?? 0))}`,
+      heading: 'An auction sold',
+      intro: `Won by ${winner?.username ?? 'a bidder'}. Ship to the address below, then mark it shipped in admin.`,
+      itemName: this.itemName(auction),
+      rows: [
+        {
+          label: 'Winning bid',
+          value: this.fmtUsd(Number(auction.winningAmountUsd ?? 0)),
+        },
+        {
+          label: 'Collected',
+          value: this.fmtUsd(Number(auction.totalChargedUsd ?? 0)),
+        },
+        {
+          label: 'Method',
+          value: METHOD_LABEL[auction.paymentMethod ?? ''] ?? '—',
+        },
+        ...(addr
+          ? [
+              {
+                label: 'Ship to',
+                value: [
+                  `${addr.firstName} ${addr.lastName}`.trim(),
+                  addr.addressLine1,
+                  addr.addressLine2,
+                  `${addr.city}, ${addr.state} ${addr.zipCode}`,
+                  addr.country,
+                ]
+                  .filter(Boolean)
+                  .join(', '),
+              },
+            ]
+          : []),
+      ],
+      ctaLabel: 'Open in admin',
+      ctaUrl: `${this.site()}/analytics?tab=auctions&auction=${auction.id}`,
+    });
+  }
 
-  private computeMinNext(currentUsd: number | null, startUsd: number): number {
-    if (currentUsd === null) return startUsd;
-    const inc = currentUsd < 50 ? 1 : currentUsd < 250 ? 3 : 5;
-    return +(currentUsd + inc).toFixed(2);
+  async notifyShipped(auction: Auction): Promise<void> {
+    if (!auction.winnerUserId) return;
+    const user = await this.userRepository.findOne({
+      where: { id: auction.winnerUserId },
+    });
+    await this.send(user, {
+      subject: `Shipped: ${this.itemName(auction)}`,
+      heading: 'Your item shipped 📦',
+      intro: 'Your Hermes Auctions win is on its way.',
+      itemName: this.itemName(auction),
+      rows: [
+        { label: 'Carrier', value: auction.carrier ?? '—' },
+        { label: 'Tracking', value: auction.trackingNumber ?? '—' },
+      ],
+      ctaLabel: 'View your win',
+      ctaUrl: this.payUrl(auction.id),
+    });
   }
 }

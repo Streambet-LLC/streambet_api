@@ -25,6 +25,9 @@ const ENABLED_EMAIL_TYPES: ReadonlySet<string> = new Set([
   // Portfolio price alerts are user-requested (they set the target), so they
   // stay enabled through waitlist mode.
   EmailType.PriceAlert,
+  // Hermes Auctions is live: outbid / closing soon / won / payment needed /
+  // lost / shipped / house "sold" notices all use this one template.
+  EmailType.HermesAuctionNotice,
 ]);
 
 @Injectable()

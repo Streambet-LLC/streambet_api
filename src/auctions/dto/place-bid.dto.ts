@@ -1,42 +1,81 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  Min,
+} from 'class-validator';
+import type { AuctionFundingMethod } from '../hermes.types';
 
 /**
- * Place a bid on an auction. The bidder commits a `proxyMaxUsd` (their
- * willing-to-pay max). The service runs the proxy engine and inserts:
- *  - a primary bid row at the necessary visible amount
- *  - if the previous leader's saved proxy outranks them, an auto bid row
- *    on behalf of the previous leader to counter them up to that proxy.
+ * Place a (proxy) bid. `proxyMaxUsd` is the bidder's willing-to-pay max;
+ * the engine shows only the price needed to lead.
  *
- * The bidder must have a saved Stripe PaymentMethod attached to their
- * customer (from the prior SetupIntent). That id is snapshot on the bid
- * row so we can later run an off-session charge against it at close.
+ * Funding:
+ *  - `card` / `ach`: a saved Stripe PaymentMethod of that type is charged
+ *    off-session at close (`stripePaymentMethodId`, or the newest saved).
+ *  - `usdc`: the bidder's on-chain escrow for this auction must already
+ *    hold at least `proxyMaxUsd`.
  */
 export class PlaceBidDto {
-  @ApiProperty({
-    example: 75,
-    description:
-      'Maximum the bidder is willing to pay (USD, 2dp). Must be >= the current minimum next bid for this auction.',
-  })
+  @ApiProperty({ example: 75 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(1)
   proxyMaxUsd: number;
 
-  @ApiProperty({
-    description:
-      'Stripe PaymentMethod id (pm_...) confirmed by the SetupIntent. Required on the very first bid; subsequent bids may reuse the saved one.',
-    required: false,
-  })
+  @ApiProperty({ enum: ['card', 'ach', 'usdc'] })
+  @IsIn(['card', 'ach', 'usdc'])
+  fundingMethod: AuctionFundingMethod;
+
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Matches(/^pm_[A-Za-z0-9]+$/)
   stripePaymentMethodId?: string;
+}
 
-  /**
-   * Shipping snapshot is optional in the bid payload — the user already
-   * has a default address on their profile. The frontend lets them edit
-   * it inline, and the edit goes through the existing `/users/me/address`
-   * endpoint before the bid is submitted. We do NOT persist a per-bid
-   * shipping snapshot — only the address-at-close is what matters for
-   * fulfillment. This field is reserved for a future per-bid override.
-   */
+export class PaymentSetupDto {
+  @ApiProperty({ enum: ['card', 'ach'] })
+  @IsIn(['card', 'ach'])
+  method: 'card' | 'ach';
+
+  @ApiProperty({ description: 'Where Stripe returns the bidder.' })
+  @IsUrl({ require_tld: false })
+  returnUrl: string;
+}
+
+export class RetryCheckoutDto {
+  @ApiProperty({ enum: ['card', 'ach'] })
+  @IsIn(['card', 'ach'])
+  method: 'card' | 'ach';
+
+  @ApiProperty()
+  @IsUrl({ require_tld: false })
+  returnUrl: string;
+}
+
+const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export class CryptoDepositQuoteDto {
+  @ApiProperty({ description: 'Bidder Solana wallet (base58).' })
+  @Matches(BASE58)
+  wallet: string;
+
+  @ApiProperty({ description: 'USDC to add to the escrow (USD, 2dp).' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(1)
+  amountUsd: number;
+}
+
+export class CryptoDepositConfirmDto {
+  @ApiProperty()
+  @Matches(BASE58)
+  wallet: string;
+
+  @ApiProperty({ description: 'Signature of the deposit transaction.' })
+  @Matches(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/)
+  signature: string;
 }

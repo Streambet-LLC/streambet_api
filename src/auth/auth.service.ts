@@ -438,41 +438,38 @@ export class AuthService {
   ): Promise<{ user: User; accessToken: string; refreshToken: string }> {
     const { email, name, profileImageUrl } = profile;
 
-    const user = await this.usersService.findByEmail(email);
+    let user = await this.usersService.findByEmail(email);
 
+    // Sign-ups are open again for Hermes Auctions bidders. New accounts are
+    // always plain users — the analytics dashboard stays admin-only.
     if (!user) {
-      // TODO(reactivate-signup): Google sign-UP is DISABLED while the app is in
-      // private beta (waitlist-only) — only EXISTING accounts (i.e. admins) can
-      // log in with Google. To re-enable auto-creation of accounts for new
-      // Google users, delete the `throw` below and uncomment this block (see
-      // the matching TODO in auth.controller.ts):
-      //
-      // const baseUsername = name.givenName || email.split('@')[0];
-      // const username = await this.generateUsernameSuggestion(baseUsername);
-      // user = await this.usersService.create({
-      //   username,
-      //   email,
-      //   isGoogleAccount: true,
-      //   tosAccepted: true,
-      //   isVerify: true,
-      //   tosAcceptedAt: new Date(),
-      //   role: UserRole.USER,
-      //   password: '',
-      //   profileImageUrl,
-      //   accountCreationDate: new Date(),
-      //   tosAcceptanceTimestamp: new Date(),
-      //   lastLogin: new Date(),
-      // });
-      // // Create wallet for the user
-      // await this.walletsService.create(user.id);
-      // await this.notificationService.sendSMTPForWelcome(
-      //   user.id,
-      //   user.email,
-      //   username,
-      // );
-      throw new UnauthorizedException(
-        'Sign-ups are currently closed — join the waitlist on our homepage.',
+      const baseUsername = (name.givenName || email.split('@')[0]).replace(
+        /[^a-zA-Z0-9_-]/g,
+        '',
       );
+      const username = await this.generateUsernameSuggestion(
+        baseUsername || 'bidder',
+      );
+      user = await this.usersService.create({
+        username,
+        email,
+        isGoogleAccount: true,
+        tosAccepted: true,
+        isVerify: true,
+        tosAcceptedAt: new Date(),
+        role: UserRole.USER,
+        password: '',
+        profileImageUrl,
+        accountCreationDate: new Date(),
+        tosAcceptanceTimestamp: new Date(),
+        lastLogin: new Date(),
+      });
+      await this.walletsService.create(user.id);
+      await this.notificationService
+        .sendSMTPForWelcome(user.id, user.email, username)
+        .catch((e) =>
+          this.logger.warn(`Welcome email failed: ${(e as Error).message}`),
+        );
     }
     // Generate tokens
     const accessToken = this.generateToken(user);

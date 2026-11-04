@@ -12,22 +12,32 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { PrizeConfiguration } from './prize-configuration.entity';
 import { User } from '../../users/entities/user.entity';
 import { AuctionStatus } from '../enums/auction-status.enum';
+import { AuctionCategory } from '../enums/auction-category.enum';
 import { AuctionBid } from './auction-bid.entity';
+import type {
+  AcceptedPayments,
+  AuctionFundingMethod,
+  AuctionImage,
+  AuctionLengthPreset,
+  AuctionVideo,
+  EstValueMeta,
+  FulfillmentStatus,
+  ShippingAddressSnapshot,
+} from '../../auctions/hermes.types';
 
 /**
- * One auction per `PrizeConfiguration` (the "item"). The link is unique:
- * an item can only have a single auction at a time. When admins create a
- * follow-up auction on the same physical card they create a new
- * PrizeConfiguration row first (existing data-hardening pattern).
+ * A Hermes auction. Hermes auctions are standalone — the item (title,
+ * description, category, media) lives on this row. Legacy shop auctions
+ * kept a 1:1 link to a `PrizeConfiguration`; that link is now optional.
  *
  * Money fields are stored in USD with 2-decimal precision. The cached
  * `current_bid_usd` / `current_leader_user_id` / `bid_count` / `proxy_max_usd`
  * are maintained transactionally by the auction service; the source of
  * truth is the `auction_bids` table.
  *
- * Anti-snipe: when a bid lands within the last 30 seconds of `ends_at`
- * the service extends `ends_at` by 30 seconds and increments
- * `extension_count` (no cap).
+ * Anti-snipe: a bid landing inside the final window pushes `ends_at` out
+ * so there is always a full window left to respond (no cap), and
+ * increments `extension_count`.
  */
 @Entity('auctions')
 @Unique('UQ_auctions_prize_configuration_id', ['prizeConfigurationId'])
@@ -35,15 +45,45 @@ import { AuctionBid } from './auction-bid.entity';
 @Index('IDX_auctions_ends_at', ['endsAt'])
 @Index('IDX_auctions_status', ['status'])
 export class Auction extends BaseEntity {
-  @Column({ type: 'uuid', name: 'prize_configuration_id' })
-  prizeConfigurationId: string;
+  @Column({ type: 'uuid', name: 'prize_configuration_id', nullable: true })
+  prizeConfigurationId: string | null;
 
   @OneToOne(() => PrizeConfiguration, (p) => p.auction, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'prize_configuration_id' })
-  prizeConfiguration: PrizeConfiguration;
+  prizeConfiguration: PrizeConfiguration | null;
 
-  @Column({ type: 'integer', name: 'duration_days' })
-  durationDays: number; // 1 | 3 | 5 | 7 (validated in DTO)
+  @Column({ type: 'varchar', length: 200, name: 'title', nullable: true })
+  title: string | null;
+
+  @Column({ type: 'text', name: 'description', nullable: true })
+  description: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: AuctionCategory,
+    enumName: 'auction_category_enum',
+    name: 'category',
+    nullable: true,
+  })
+  category: AuctionCategory | null;
+
+  @Column({ type: 'jsonb', name: 'images', default: () => "'[]'" })
+  images: AuctionImage[];
+
+  @Column({ type: 'jsonb', name: 'videos', default: () => "'[]'" })
+  videos: AuctionVideo[];
+
+  /** Whole days for preset lengths; null for a custom end. */
+  @Column({ type: 'integer', name: 'duration_days', nullable: true })
+  durationDays: number | null;
+
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'length_preset',
+    nullable: true,
+  })
+  lengthPreset: AuctionLengthPreset | null;
 
   @Column({ type: 'timestamptz', name: 'starts_at' })
   startsAt: Date;
@@ -77,7 +117,7 @@ export class Auction extends BaseEntity {
   })
   reservePriceUsd: string | null;
 
-  /** Internal "card value" admins record at setup. Not surfaced to users. */
+  /** Legacy internal "card value" from shop auctions. Not surfaced to users. */
   @Column({
     type: 'decimal',
     precision: 12,
@@ -86,6 +126,58 @@ export class Auction extends BaseEntity {
     nullable: true,
   })
   cardValueUsd: string | null;
+
+  /** Public "Est. Value" shown to bidders. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'est_value_usd',
+    nullable: true,
+  })
+  estValueUsd: string | null;
+
+  /** `manual` (admin typed it) or `pulled` (accepted comp recommendation). */
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'est_value_source',
+    nullable: true,
+  })
+  estValueSource: 'manual' | 'pulled' | null;
+
+  @Column({ type: 'jsonb', name: 'est_value_meta', nullable: true })
+  estValueMeta: EstValueMeta | null;
+
+  /** When false, Est. Value is hidden from bidders (admins still see it). */
+  @Column({ type: 'boolean', name: 'show_est_value', default: true })
+  showEstValue: boolean;
+
+  /** Seller shown to bidders; null = the house (Hermes Auctions). */
+  @Column({ type: 'varchar', length: 80, name: 'seller_name', nullable: true })
+  sellerName: string | null;
+
+  /** Flat shipping the winner pays on top of the hammer price. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'shipping_usd',
+    default: 0,
+  })
+  shippingUsd: string;
+
+  @Column({ type: 'boolean', name: 'is_featured', default: false })
+  isFeatured: boolean;
+
+  /** Payment rails bidders may use: fiat (card + ACH), crypto (USDC) or both. */
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'accepted_payments',
+    default: 'both',
+  })
+  acceptedPayments: AcceptedPayments;
 
   /** Current displayed high bid. Null until the first bid. */
   @Column({
@@ -152,9 +244,85 @@ export class Auction extends BaseEntity {
   })
   paymentIntentId: string | null;
 
-  /** PrizeOrder created on successful autopay (links to existing fulfillment flow). */
+  /** PrizeOrder created on successful autopay (legacy shop auctions only). */
   @Column({ type: 'uuid', name: 'prize_order_id', nullable: true })
   prizeOrderId: string | null;
+
+  /** How the winner paid (or is paying): card | ach | usdc. */
+  @Column({
+    type: 'varchar',
+    length: 16,
+    name: 'payment_method',
+    nullable: true,
+  })
+  paymentMethod: AuctionFundingMethod | null;
+
+  /** Card processing passed through to card payers. Zero for ACH / USDC. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'card_fee_usd',
+    nullable: true,
+  })
+  cardFeeUsd: string | null;
+
+  /** Hammer + shipping + card fee actually charged / settled. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'total_charged_usd',
+    nullable: true,
+  })
+  totalChargedUsd: string | null;
+
+  /** Grace deadline for a winner whose charge needs action / failed. */
+  @Column({ type: 'timestamptz', name: 'payment_due_at', nullable: true })
+  paymentDueAt: Date | null;
+
+  /** Winners whose payment declined — never offered the item again. */
+  @Column({
+    type: 'uuid',
+    array: true,
+    name: 'declined_user_ids',
+    default: () => "'{}'",
+  })
+  declinedUserIds: string[];
+
+  @Column({ type: 'jsonb', name: 'shipping_address', nullable: true })
+  shippingAddress: ShippingAddressSnapshot | null;
+
+  @Column({
+    type: 'varchar',
+    length: 24,
+    name: 'fulfillment_status',
+    default: 'pending',
+  })
+  fulfillmentStatus: FulfillmentStatus;
+
+  @Column({ type: 'varchar', length: 64, name: 'carrier', nullable: true })
+  carrier: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    name: 'tracking_number',
+    nullable: true,
+  })
+  trackingNumber: string | null;
+
+  @Column({ type: 'timestamptz', name: 'shipped_at', nullable: true })
+  shippedAt: Date | null;
+
+  /** HermesAuction PDA once opened on-chain (first USDC deposit). */
+  @Column({
+    type: 'varchar',
+    length: 64,
+    name: 'onchain_auction',
+    nullable: true,
+  })
+  onchainAuction: string | null;
 
   @Column({ type: 'uuid', name: 'created_by' })
   createdBy: string;
