@@ -31,9 +31,18 @@ const S3_ERROR_HINT: Record<string, string> = {
   CredentialsProviderError:
     "Storage isn't configured: no AWS credentials are available to the server.",
   AccessDenied:
-    "The server's AWS key isn't allowed to write to the media bucket (needs s3:PutObject).",
-  NoSuchBucket: "The media bucket (AWS_DEFAULT_S3_BUCKET) doesn't exist.",
+    "The server's AWS key isn't allowed to write to the media bucket {bucket} (its IAM policy needs s3:PutObject on arn:aws:s3:::{bucket}/*).",
+  NoSuchBucket:
+    "The media bucket {bucket} (AWS_DEFAULT_S3_BUCKET) doesn't exist.",
+  AllAccessDisabled:
+    'The media bucket {bucket} (AWS_DEFAULT_S3_BUCKET) is disabled. Point AWS_DEFAULT_S3_BUCKET at an active bucket and redeploy.',
 };
+
+/** Errors where the bucket may just be refusing the public-read ACL. */
+const RETRY_WITHOUT_ACL = new Set([
+  'AccessControlListNotSupported',
+  'AccessDenied',
+]);
 
 function s3ErrorCode(err: unknown): string {
   const e = err as { name?: string; Code?: string };
@@ -47,8 +56,9 @@ function s3ErrorCode(err: unknown): string {
  *
  * Uses the explicit ACCESS_KEY_ID / SECRET_ACCESS_KEY when set, otherwise
  * the default AWS credential chain (e.g. an ECS task role). Objects are
- * uploaded public-read; on a bucket with ACLs disabled it retries without
- * the ACL (public access then comes from the bucket policy).
+ * uploaded public-read. If the bucket refuses the ACL (ACLs disabled, or
+ * Block Public Access rejecting public ACLs with AccessDenied) it retries
+ * once without it; public access then comes from the bucket policy.
  */
 @Injectable()
 export class AuctionsMediaService {
@@ -117,7 +127,11 @@ export class AuctionsMediaService {
       try {
         url = await this.put({ ...args, acl: true });
       } catch (err) {
-        if (s3ErrorCode(err) !== 'AccessControlListNotSupported') throw err;
+        const code = s3ErrorCode(err);
+        if (!RETRY_WITHOUT_ACL.has(code)) throw err;
+        this.logger.warn(
+          `Hermes ${kind} upload: bucket refused public-read ACL [${code}]; retrying without it`,
+        );
         url = await this.put({ ...args, acl: false });
       }
       return { key, url, kind };
@@ -127,8 +141,13 @@ export class AuctionsMediaService {
       this.logger.error(
         `Hermes ${kind} upload failed [${code}]: ${(err as Error).message}`,
       );
+      const bucket = String(
+        this.config.get('file.awsDefaultS3Bucket', { infer: true }) ??
+          '(unset)',
+      );
+      const hint = S3_ERROR_HINT[code]?.split('{bucket}').join(bucket);
       throw new BadRequestException(
-        S3_ERROR_HINT[code] ?? `Upload failed (${code}). Please try again.`,
+        hint ?? `Upload failed (${code}). Please try again.`,
       );
     } finally {
       await fs.unlink(file.path).catch(() => undefined);
