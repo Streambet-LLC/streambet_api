@@ -17,7 +17,6 @@ import { IsString, Matches } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
-import { AuctionCategory } from '../prize/enums/auction-category.enum';
 import { AuctionsService } from './auctions.service';
 import { AuctionsPaymentsService } from './auctions-payments.service';
 import { AuctionsCryptoService } from './auctions-crypto.service';
@@ -28,10 +27,13 @@ import {
   PlaceBidDto,
   RetryCheckoutDto,
 } from './dto/place-bid.dto';
+import { ListAuctionsQueryDto } from './dto/list-auctions.dto';
 import {
+  BUYER_PREMIUM_PERCENT,
   CARD_PROCESSING_FIXED_USD,
   CARD_PROCESSING_PERCENT,
 } from './hermes.pricing';
+import { isClientOrigin } from '../common/utils/client-origins';
 
 interface RequestWithUser extends Request {
   user: User;
@@ -57,48 +59,33 @@ export class AuctionsController {
     private readonly config: ConfigService,
   ) {}
 
-  /** Stripe may only send bidders back to our own site. */
+  /** Stripe may only send bidders back to our own sites (main or Hermes). */
   private assertReturnUrl(url: string): void {
-    const allowed = [
-      this.config.get<string>('CLIENT_URL'),
-      this.config.get<string>('APP_HOST_URL'),
-    ]
-      .filter(Boolean)
-      .map((u) => new URL(u).origin);
-    const origin = new URL(url).origin;
-    if (
-      !allowed.includes(origin) &&
-      !/^http:\/\/localhost(:\d+)?$/.test(origin)
-    ) {
+    if (!isClientOrigin(this.config, url, { allowAnyLocalhost: true })) {
       throw new BadRequestException('Invalid return URL.');
     }
   }
 
-  private parseCategory(raw?: string): AuctionCategory | undefined {
-    if (!raw) return undefined;
-    if (!Object.values(AuctionCategory).includes(raw as AuctionCategory)) {
-      throw new BadRequestException('Unknown category.');
-    }
-    return raw as AuctionCategory;
-  }
-
+  /** Browse / search. `total` counts every match, for "load more". */
   @UseGuards(OptionalJwtAuthGuard)
   @Get()
   async list(
     @Request() req: RequestWithOptionalUser,
-    @Query('bucket') bucket = 'live',
-    @Query('category') category?: string,
+    @Query() query: ListAuctionsQueryDto,
   ) {
-    if (bucket !== 'live' && bucket !== 'upcoming') {
-      throw new BadRequestException('bucket must be live or upcoming');
+    if (
+      query.minPrice != null &&
+      query.maxPrice != null &&
+      query.minPrice > query.maxPrice
+    ) {
+      throw new BadRequestException('minPrice must be at most maxPrice.');
     }
-    return {
-      data: await this.auctions.listPublic({
-        bucket,
-        category: this.parseCategory(category),
-        viewerId: req.user?.id,
-      }),
-    };
+    const { rows, total } = await this.auctions.listPublic({
+      ...query,
+      bucket: query.bucket ?? 'live',
+      viewerId: req.user?.id,
+    });
+    return { data: rows, total };
   }
 
   @UseGuards(OptionalJwtAuthGuard)
@@ -118,7 +105,8 @@ export class AuctionsController {
       data: {
         crypto: this.crypto.publicConfig(),
         fees: {
-          buyerPremiumPercent: 0,
+          // Rate for new auctions; each auction's own rate is in its `fees`.
+          buyerPremiumPercent: BUYER_PREMIUM_PERCENT,
           cardProcessingPercent: CARD_PROCESSING_PERCENT,
           cardProcessingFixedUsd: CARD_PROCESSING_FIXED_USD,
         },

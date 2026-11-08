@@ -51,6 +51,8 @@ export interface AuctionVideo {
   /** Iframe-safe embed URL for external providers. */
   embedUrl?: string;
   key?: string;
+  /** A generated 360° spin (Pika). Plays muted on loop, shown right after the cover. */
+  spin?: boolean;
 }
 
 export interface ShippingAddressSnapshot {

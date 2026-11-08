@@ -11,6 +11,7 @@ import { AuctionsPaymentsService } from './auctions-payments.service';
 import { AuctionsCryptoService } from './auctions-crypto.service';
 import { AuctionsMediaService } from './auctions-media.service';
 import { AuctionsEstimateService } from './auctions-estimate.service';
+import { AuctionsSpinService } from './auctions-spin.service';
 import { AuctionsGateway } from './auctions.gateway';
 import { AuctionsNotificationsService } from './auctions-notifications.service';
 import { AuctionJobsProcessor } from './processor/auction-jobs.processor';
@@ -23,13 +24,15 @@ import { AdminModule } from '../admin/admin.module';
 import { AUCTION_QUEUE } from '../common/constants/queue.constants';
 
 /**
- * Hermes Auctions — admin-hosted, zero-fee collectibles auctions.
+ * Hermes Auctions — admin-hosted, zero-seller-fee collectibles auctions
+ * (the buyer pays a premium on the hammer; see hermes.pricing.ts).
  *
  *  - AuctionsService: lifecycle, proxy bidding, settlement
  *  - AuctionsPaymentsService: Stripe saved card / ACH + off-session charge
  *  - AuctionsCryptoService: hermes-auctions USDC escrow program
  *  - AuctionsEstimateService: "pull it for me" Est. Value
  *  - AuctionsMediaService: admin photo / video uploads
+ *  - AuctionsSpinService: Pika-generated 360° spin videos (front + back)
  *  - AuctionsGateway: live updates; AuctionJobsProcessor: BullMQ jobs
  *
  * Exports `AuctionsService` for the legacy PrizeService / PaymentsService
@@ -65,6 +68,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     AuctionsCryptoService,
     AuctionsMediaService,
     AuctionsEstimateService,
+    AuctionsSpinService,
     AuctionsGateway,
     AuctionsNotificationsService,
     AuctionJobsProcessor,

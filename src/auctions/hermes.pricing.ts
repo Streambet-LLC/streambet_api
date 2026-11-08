@@ -1,19 +1,43 @@
 import type { AuctionFundingMethod } from './hermes.types';
 
 /**
- * Hermes Auctions pricing. Zero-fee: there is no buyer premium and no
- * seller fee. The winner pays hammer + flat shipping; card payers also
- * cover card processing (grossed up so Stripe's 2.9% + 30¢ nets to zero).
- * ACH and USDC carry no processing charge.
+ * Hermes Auctions pricing. Zero seller fee. The winner pays hammer + a
+ * buyer premium on the hammer + flat shipping; card payers also cover card
+ * processing on that whole amount (grossed up so Stripe's 2.9% + 30¢ nets to
+ * zero). ACH and USDC carry no processing charge.
  */
 export const CARD_PROCESSING_PERCENT = 2.9;
 export const CARD_PROCESSING_FIXED_USD = 0.3;
 
-/** Bids inside this many seconds of the end push the end out to now + window. */
-export const ANTI_SNIPE_WINDOW_SECONDS = 60;
+/**
+ * Buyer premium for newly created auctions, as a percent of the hammer.
+ * Each auction stores its own rate (`buyer_premium_percent`) at creation, so
+ * changing this never changes the terms of an auction already listed.
+ */
+export const BUYER_PREMIUM_PERCENT = 4;
+
+/**
+ * Soft close: a bid inside this many seconds of the end resets the clock to
+ * now + window (no cap). Sent to bidders as `extensionWindowSeconds`.
+ */
+export const ANTI_SNIPE_WINDOW_SECONDS = 120;
+
+/** "2 minutes", "1 minute", "30 seconds" — for bidder-facing copy. */
+export function fmtExtensionWindow(
+  seconds = ANTI_SNIPE_WINDOW_SECONDS,
+): string {
+  if (seconds % 60 === 0) {
+    const m = seconds / 60;
+    return `${m} minute${m === 1 ? '' : 's'}`;
+  }
+  return `${seconds} seconds`;
+}
 
 /** Grace period for a winner whose charge needs action or declined. */
 export const PAYMENT_GRACE_HOURS = 48;
+
+/** The unpaid winner gets a reminder email this long before the grace window ends. */
+export const PAYMENT_REMINDER_HOURS_BEFORE_DUE = 12;
 
 /** USDC escrow self-withdraw unlocks this long after the scheduled end. */
 export const ESCROW_REFUND_AFTER_DAYS = 7;
@@ -59,8 +83,28 @@ export function cardFeeFor(subtotalUsd: number): number {
   return round2(Math.ceil(gross * 100) / 100 - subtotalUsd);
 }
 
+/** Premium on the hammer, rounded half-up to the cent (integer-cent math). */
+export function buyerPremiumFor(hammerUsd: number, percent: number): number {
+  if (hammerUsd <= 0 || !(percent > 0)) return 0;
+  const hammerCents = Math.round(hammerUsd * 100);
+  return Math.round((hammerCents * percent) / 100) / 100;
+}
+
+/**
+ * What a USDC bidder's escrow must hold to back `maxUsd`: a win settles
+ * hammer + premium + shipping from escrow, and the hammer can reach the max.
+ */
+export function usdcEscrowNeeded(
+  maxUsd: number,
+  shippingUsd: number,
+  premiumPercent: number,
+): number {
+  return round2(maxUsd + buyerPremiumFor(maxUsd, premiumPercent) + shippingUsd);
+}
+
 export interface WinTotals {
   hammerUsd: number;
+  buyerPremiumUsd: number;
   shippingUsd: number;
   cardFeeUsd: number;
   totalUsd: number;
@@ -70,15 +114,19 @@ export function winTotals(
   hammerUsd: number,
   shippingUsd: number,
   method: AuctionFundingMethod,
+  premiumPercent: number,
 ): WinTotals {
   const hammer = round2(Math.max(0, hammerUsd));
+  const premium = buyerPremiumFor(hammer, premiumPercent);
   const shipping = round2(Math.max(0, shippingUsd));
-  const cardFee = method === 'card' ? cardFeeFor(hammer + shipping) : 0;
+  const cardFee =
+    method === 'card' ? cardFeeFor(round2(hammer + premium + shipping)) : 0;
   return {
     hammerUsd: hammer,
+    buyerPremiumUsd: premium,
     shippingUsd: shipping,
     cardFeeUsd: cardFee,
-    totalUsd: round2(hammer + shipping + cardFee),
+    totalUsd: round2(hammer + premium + shipping + cardFee),
   };
 }
 

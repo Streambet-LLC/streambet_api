@@ -4,10 +4,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
+import { AuctionStatus } from '../prize/enums/auction-status.enum';
 import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
 import { QueueService } from '../queue/queue.service';
-import { minNextBid } from './hermes.pricing';
+import { fmtExtensionWindow, minNextBid } from './hermes.pricing';
 
 interface NoticeRow {
   label: string;
@@ -51,8 +52,10 @@ export class AuctionsNotificationsService {
     private readonly configService: ConfigService,
   ) {}
 
+  /** The Hermes Auctions site when it has its own domain, else the main site. */
   private site(): string {
     return (
+      this.configService.get<string>('HERMES_WEB_URL') ||
       this.configService.get<string>('CLIENT_URL') ||
       this.configService.get<string>('APP_HOST_URL') ||
       ''
@@ -147,6 +150,10 @@ export class AuctionsNotificationsService {
     });
     if (!a || !user) return;
     const current = a.currentBidUsd ? Number(a.currentBidUsd) : null;
+    const lastBid = await this.bidRepository.findOne({
+      where: { auctionId: a.id, userId: user.id },
+      order: { createdAt: 'DESC' },
+    });
     await this.send(user, {
       subject: `You've been outbid: ${this.itemName(a)}`,
       heading: "You've been outbid",
@@ -167,7 +174,113 @@ export class AuctionsNotificationsService {
       ctaLabel: 'Bid again',
       ctaUrl: this.auctionUrl(a.id),
       footnote:
-        'If you bid with USDC, your escrow for this auction is being returned to your wallet.',
+        lastBid?.fundingMethod === 'usdc'
+          ? 'Your USDC escrow for this auction is being returned to your wallet.'
+          : 'Nothing is charged unless you win.',
+    });
+  }
+
+  /** Receipt for a bid the user placed (or a max they raised). Auto proxy bids don't send one. */
+  async notifyBidPlaced(params: {
+    userId: string;
+    auctionId: string;
+    proxyMaxUsd: number;
+    currentBidUsd: number;
+    leading: boolean;
+    fundingMethod: string;
+  }): Promise<void> {
+    const [a, user] = await Promise.all([
+      this.auctionRepository.findOne({ where: { id: params.auctionId } }),
+      this.userRepository.findOne({ where: { id: params.userId } }),
+    ]);
+    if (!a || !user) return;
+    const premiumPct = Number(a.buyerPremiumPercent ?? 0);
+    const costs = [
+      'the winning bid (never more than your max)',
+      ...(premiumPct > 0 ? [`a ${premiumPct}% buyer premium`] : []),
+      'shipping',
+      ...(params.fundingMethod === 'card' ? ['card processing'] : []),
+    ];
+    const pays =
+      costs.length > 2
+        ? `${costs.slice(0, -1).join(', ')}, and ${costs[costs.length - 1]}`
+        : costs.join(' plus ');
+    await this.send(user, {
+      subject: `Bid placed: ${this.itemName(a)}`,
+      heading: params.leading
+        ? "Your bid is in. You're the high bidder"
+        : "Your bid is in, but you're not leading",
+      intro: params.leading
+        ? "We'll bid for you automatically, only as much as needed to keep you in front, up to your max."
+        : `Another bidder's max is higher, so the current bid moved up to ${this.fmtUsd(params.currentBidUsd)}. Raise your max to get in front.`,
+      itemName: this.itemName(a),
+      rows: [
+        { label: 'Your max bid', value: this.fmtUsd(params.proxyMaxUsd) },
+        { label: 'Current bid', value: this.fmtUsd(params.currentBidUsd) },
+        {
+          label: 'Paying with',
+          value: METHOD_LABEL[params.fundingMethod] ?? params.fundingMethod,
+        },
+        { label: 'Ends', value: this.fmtDate(a.endsAt) },
+      ],
+      ctaLabel: params.leading ? 'View auction' : 'Raise your max',
+      ctaUrl: this.auctionUrl(a.id),
+      footnote: `All bids are final: a bid can't be withdrawn or lowered. If you win, you pay ${pays}.`,
+    });
+  }
+
+  /** A live auction was cancelled by the house; tell everyone who bid. */
+  async notifyCancelled(auction: Auction): Promise<void> {
+    const ids = await this.bidderIds(auction.id);
+    if (ids.length === 0) return;
+    const users = await this.userRepository.find({ where: { id: In(ids) } });
+    await Promise.allSettled(
+      users.map((u) =>
+        this.send(u, {
+          subject: `Auction cancelled: ${this.itemName(auction)}`,
+          heading: 'This auction was cancelled',
+          intro:
+            "Hermes Auctions cancelled this auction before it closed. Your bids are void and you won't be charged. Any USDC escrow is being returned to your wallet.",
+          itemName: this.itemName(auction),
+          ctaLabel: 'Browse live auctions',
+          ctaUrl: `${this.site()}/auctions`,
+        }),
+      ),
+    );
+  }
+
+  /** Winner still hasn't paid and the grace window is nearly over. */
+  async notifyPaymentReminder(auctionId: string): Promise<void> {
+    const a = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (
+      !a?.winnerUserId ||
+      !a.paymentDueAt ||
+      a.paymentDueAt.getTime() <= Date.now() ||
+      (a.status !== AuctionStatus.ENDED && a.status !== AuctionStatus.FAILED)
+    ) {
+      return;
+    }
+    const user = await this.userRepository.findOne({
+      where: { id: a.winnerUserId },
+    });
+    await this.send(user, {
+      subject: `Reminder: payment due for ${this.itemName(a)}`,
+      heading: 'Your win is waiting on payment',
+      intro: `You won this auction, but we still haven't been able to collect payment. Please complete it by ${this.fmtDate(a.paymentDueAt)}.`,
+      itemName: this.itemName(a),
+      rows: [
+        {
+          label: 'Total due',
+          value: this.fmtUsd(Number(a.totalChargedUsd ?? 0)),
+        },
+        { label: 'Pay by', value: this.fmtDate(a.paymentDueAt) },
+      ],
+      ctaLabel: 'Complete payment',
+      ctaUrl: this.payUrl(a.id),
+      footnote:
+        "All bids are final. If payment isn't completed by the deadline, the item may be offered to the next bidder.",
     });
   }
 
@@ -191,7 +304,7 @@ export class AuctionsNotificationsService {
             u.id === a.currentLeaderUserId
               ? "You're the high bidder right now."
               : "You're not the high bidder right now."
-          } Bids in the final minute extend the clock, so there's always time to respond.`,
+          } A bid in the final ${fmtExtensionWindow()} resets the clock to ${fmtExtensionWindow()}, so there's always time to respond.`,
           itemName: this.itemName(a),
           rows: [
             { label: 'Current bid', value: this.fmtUsd(current) },
@@ -215,10 +328,20 @@ export class AuctionsNotificationsService {
     });
     if (!user) return;
     const hammer = Number(a.winningAmountUsd ?? a.currentBidUsd ?? 0);
+    const premiumPct = Number(a.buyerPremiumPercent ?? 0);
     const rows: NoticeRow[] = [
       { label: 'Winning bid', value: this.fmtUsd(hammer) },
-      { label: 'Shipping', value: this.fmtUsd(Number(a.shippingUsd ?? 0)) },
     ];
+    if (Number(a.buyerPremiumUsd ?? 0) > 0) {
+      rows.push({
+        label: `Buyer premium (${premiumPct}%)`,
+        value: this.fmtUsd(Number(a.buyerPremiumUsd)),
+      });
+    }
+    rows.push({
+      label: 'Shipping',
+      value: this.fmtUsd(Number(a.shippingUsd ?? 0)),
+    });
     if (Number(a.cardFeeUsd ?? 0) > 0) {
       rows.push({
         label: 'Card processing',
@@ -233,20 +356,38 @@ export class AuctionsNotificationsService {
       rows.push({ label: 'Paid with', value: METHOD_LABEL[a.paymentMethod] });
     }
 
+    // Runner-up offered the item after the original winner didn't pay.
+    const secondChance =
+      (a.declinedUserIds ?? []).length > 0 &&
+      !(a.declinedUserIds ?? []).includes(params.winnerUserId);
+    const lead = secondChance
+      ? `The original winner didn't complete payment, so this item went to you at your highest bid (${this.fmtUsd(hammer)}). `
+      : '';
+    // ACH is always "processing" first (that email already said "You won"),
+    // so a later "paid" for ACH is the clearing confirmation.
+    const achCleared = params.outcome === 'paid' && a.paymentMethod === 'ach';
+
     if (params.outcome === 'paid' || params.outcome === 'processing') {
       await this.send(user, {
-        subject: `You won: ${this.itemName(a)}`,
-        heading: 'You won! 🏆',
+        subject: achCleared
+          ? `Payment received: ${this.itemName(a)}`
+          : `You won: ${this.itemName(a)}`,
+        heading: achCleared ? 'Payment received ✅' : 'You won! 🏆',
         intro:
-          params.outcome === 'paid'
-            ? "Your payment went through. We'll email tracking as soon as it ships."
-            : "Your bank payment is processing (ACH usually clears in 1–4 business days). We'll ship once it clears.",
+          lead +
+          (achCleared
+            ? "Your bank payment cleared. We'll email tracking as soon as it ships."
+            : params.outcome === 'paid'
+              ? "Your payment went through. We'll email tracking as soon as it ships."
+              : "Your bank payment is processing (ACH usually clears in 1–4 business days). We'll ship once it clears."),
         itemName: this.itemName(a),
         rows,
         ctaLabel: 'View your win',
         ctaUrl: this.payUrl(a.id),
         footnote:
-          'Zero buyer premium. You only paid the hammer price plus shipping.',
+          premiumPct > 0
+            ? `You paid the winning bid plus a ${premiumPct}% buyer premium and shipping.`
+            : 'You paid the winning bid plus shipping.',
       });
       return;
     }
@@ -256,9 +397,10 @@ export class AuctionsNotificationsService {
       subject: `Action needed: complete payment for ${this.itemName(a)}`,
       heading: 'You won — finish your payment',
       intro:
-        params.outcome === 'action_required'
+        lead +
+        (params.outcome === 'action_required'
           ? 'Your bank needs you to confirm this charge.'
-          : "We couldn't charge your saved payment method.",
+          : "We couldn't charge your saved payment method."),
       itemName: this.itemName(a),
       rows: [...rows, { label: 'Pay by', value: due }],
       ctaLabel: 'Complete payment',
@@ -298,6 +440,9 @@ export class AuctionsNotificationsService {
             : [],
           ctaLabel: 'Browse live auctions',
           ctaUrl: `${this.site()}/auctions`,
+          footnote: sold
+            ? "If the winner doesn't complete payment, the item may be offered to the next-highest card or bank bidder at their highest bid. We'll email you if that's you."
+            : undefined,
         }),
       ),
     );

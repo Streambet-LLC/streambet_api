@@ -31,8 +31,10 @@ import {
   VIDEO_MAX_BYTES,
 } from './auctions-media.service';
 import { AuctionsEstimateService } from './auctions-estimate.service';
+import { AuctionsSpinService } from './auctions-spin.service';
 import {
   CreateAuctionDto,
+  CreateSpinDto,
   EstimateValueDto,
   MarkShippedDto,
   UpdateAuctionDto,
@@ -63,6 +65,7 @@ export class AdminAuctionsController {
     private readonly auctions: AuctionsService,
     private readonly media: AuctionsMediaService,
     private readonly estimate: AuctionsEstimateService,
+    private readonly spin: AuctionsSpinService,
   ) {}
 
   private ensureAdmin(user: User) {
@@ -129,6 +132,32 @@ export class AdminAuctionsController {
     return {
       data: await this.estimate.value({ ...dto, adminId: req.user.id }),
     };
+  }
+
+  // 360° spin (Pika). Declared before `:id` so "spin" isn't parsed as a UUID.
+
+  @Get('spin')
+  spinConfig(@Request() req: RequestWithUser) {
+    this.ensureAdmin(req.user);
+    return { data: this.spin.getConfig() };
+  }
+
+  @HttpCode(200)
+  @Post('spin')
+  async startSpin(@Request() req: RequestWithUser, @Body() dto: CreateSpinDto) {
+    this.ensureAdmin(req.user);
+    return {
+      data: await this.spin.start({ ...dto, adminId: req.user.id }),
+    };
+  }
+
+  @Get('spin/:jobId')
+  async spinStatus(
+    @Request() req: RequestWithUser,
+    @Param('jobId') jobId: string,
+  ) {
+    this.ensureAdmin(req.user);
+    return { data: await this.spin.status(jobId) };
   }
 
   @Get(':id')
