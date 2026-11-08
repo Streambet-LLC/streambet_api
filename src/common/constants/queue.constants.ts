@@ -16,6 +16,7 @@ export const AUCTION_QUEUE = `${prefix}AUCTION`;
 export const AUCTION_CLOSE_JOB = 'auction-close';
 export const AUCTION_CLOSING_SOON_JOB = 'auction-closing-soon';
 export const AUCTION_AUTOPAY_RETRY_JOB = 'auction-autopay-retry';
+export const AUCTION_PAYMENT_REMINDER_JOB = 'auction-payment-reminder';
 export const AUCTION_ACTIVATE_JOB = 'auction-activate';
 export const AUCTION_RECONCILE_JOB = 'auction-reconcile';
 export const AUCTION_SWEEP_JOB = 'auction-sweep';

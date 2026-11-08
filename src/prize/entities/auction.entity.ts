@@ -35,9 +35,10 @@ import type {
  * are maintained transactionally by the auction service; the source of
  * truth is the `auction_bids` table.
  *
- * Anti-snipe: a bid landing inside the final window pushes `ends_at` out
- * so there is always a full window left to respond (no cap), and
- * increments `extension_count`.
+ * Anti-snipe (soft close): a bid landing inside the final window
+ * (`ANTI_SNIPE_WINDOW_SECONDS`, 2 min) resets `ends_at` to now + window so
+ * there is always a full window left to respond (no cap), and increments
+ * `extension_count`.
  */
 @Entity('auctions')
 @Unique('UQ_auctions_prize_configuration_id', ['prizeConfigurationId'])
@@ -167,6 +168,20 @@ export class Auction extends BaseEntity {
   })
   shippingUsd: string;
 
+  /**
+   * Buyer premium on the hammer, in percent. Set from
+   * `BUYER_PREMIUM_PERCENT` when a Hermes auction is created and never
+   * changed after, so bidders keep the terms they saw. 0 on legacy rows.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    name: 'buyer_premium_percent',
+    default: 0,
+  })
+  buyerPremiumPercent: string;
+
   @Column({ type: 'boolean', name: 'is_featured', default: false })
   isFeatured: boolean;
 
@@ -267,7 +282,17 @@ export class Auction extends BaseEntity {
   })
   cardFeeUsd: string | null;
 
-  /** Hammer + shipping + card fee actually charged / settled. */
+  /** Buyer premium charged on the hammer (set with the winner). */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'buyer_premium_usd',
+    nullable: true,
+  })
+  buyerPremiumUsd: string | null;
+
+  /** Hammer + premium + shipping + card fee actually charged / settled. */
   @Column({
     type: 'decimal',
     precision: 12,

@@ -44,6 +44,27 @@ export class AuctionVideoDto {
   @IsOptional()
   @IsString()
   key?: string;
+
+  @ApiPropertyOptional({ description: 'Generated 360° spin (uploads only).' })
+  @IsOptional()
+  @IsBoolean()
+  spin?: boolean;
+}
+
+/** Front + back photos for a generated 360° spin. */
+export class CreateSpinDto {
+  @ApiProperty()
+  @IsUrl({ require_tld: false })
+  frontUrl: string;
+
+  @ApiProperty()
+  @IsUrl({ require_tld: false })
+  backUrl: string;
+
+  @ApiPropertyOptional({ enum: AuctionCategory })
+  @IsOptional()
+  @IsEnum(AuctionCategory)
+  category?: AuctionCategory;
 }
 
 /**

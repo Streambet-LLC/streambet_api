@@ -16,8 +16,9 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { AuthGuard } from '@nestjs/passport';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { Response } from 'express';
+import { isClientOrigin, originOf } from '../common/utils/client-origins';
 import { ConfigService } from '@nestjs/config';
 import {
   ApiTags,
@@ -232,7 +233,7 @@ export class AuthController {
     description: 'Redirects to Google authentication page',
   })
   @Get('google')
-  @UseGuards(AuthGuard('google')) // , GeoFencingGuard)
+  @UseGuards(GoogleOAuthGuard) // , GeoFencingGuard)
   async googleAuth(): Promise<void> {
     // This route triggers Google OAuth2 flow
     // The actual implementation is handled by Passport
@@ -246,11 +247,18 @@ export class AuthController {
     description: 'Redirects to frontend with authentication tokens',
   })
   @Get('google/callback')
-  @UseGuards(AuthGuard('google')) // , GeoFencingGuard)
+  @UseGuards(GoogleOAuthGuard) // , GeoFencingGuard)
   async googleAuthRedirect(
     @Request() req: { user: GoogleAuthResponse },
     @Res() res: Response,
+    @Query('state') state?: string,
   ): Promise<void> {
+    // Back to the site that started sign-in (see GoogleOAuthGuard), if it's
+    // one of ours; otherwise the main site.
+    const returnOrigin =
+      state && isClientOrigin(this.configService, state)
+        ? originOf(state)
+        : null;
     try {
       this.logger.log(
         'Google callback reached. User object present:',
@@ -271,10 +279,12 @@ export class AuthController {
       const { accessToken, refreshToken } = req.user;
 
       // Get client URL from config
-      const clientUrl = this.configService.get<string>(
-        'app.clientUrl',
-        'http://localhost:8080',
-      );
+      const clientUrl =
+        returnOrigin ??
+        this.configService.get<string>(
+          'app.clientUrl',
+          'http://localhost:8080',
+        );
 
       // Ensure proper URL formatting
       const baseUrl = clientUrl.endsWith('/')
@@ -289,10 +299,12 @@ export class AuthController {
         name: (error as Error)?.name,
       });
 
-      const clientUrl = this.configService.get<string>(
-        'app.clientUrl',
-        'http://localhost:8080',
-      );
+      const clientUrl =
+        returnOrigin ??
+        this.configService.get<string>(
+          'app.clientUrl',
+          'http://localhost:8080',
+        );
 
       const baseUrl = clientUrl.endsWith('/')
         ? clientUrl.slice(0, -1)

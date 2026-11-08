@@ -100,6 +100,32 @@ export class AuctionsMediaService {
     return result.Location;
   }
 
+  /** put() with the public-read ACL, retrying once without it if refused. */
+  private async putPublic(
+    args: { key: string; path: string; contentType: string },
+    label: string,
+  ): Promise<string> {
+    try {
+      return await this.put({ ...args, acl: true });
+    } catch (err) {
+      const code = s3ErrorCode(err);
+      if (!RETRY_WITHOUT_ACL.has(code)) throw err;
+      this.logger.warn(
+        `Hermes ${label} upload: bucket refused public-read ACL [${code}]; retrying without it`,
+      );
+      return this.put({ ...args, acl: false });
+    }
+  }
+
+  /** Stores a server-generated file (e.g. a Pika spin video) at `key`. */
+  async storeGenerated(
+    key: string,
+    path: string,
+    contentType: string,
+  ): Promise<string> {
+    return this.putPublic({ key, path, contentType }, 'generated');
+  }
+
   async upload(
     kind: 'image' | 'video',
     file: Express.Multer.File | undefined,
@@ -122,18 +148,10 @@ export class AuctionsMediaService {
         );
       }
       const key = `hermes/${kind}s/${uuid()}${ext}`;
-      const args = { key, path: file.path, contentType: file.mimetype };
-      let url: string;
-      try {
-        url = await this.put({ ...args, acl: true });
-      } catch (err) {
-        const code = s3ErrorCode(err);
-        if (!RETRY_WITHOUT_ACL.has(code)) throw err;
-        this.logger.warn(
-          `Hermes ${kind} upload: bucket refused public-read ACL [${code}]; retrying without it`,
-        );
-        url = await this.put({ ...args, acl: false });
-      }
+      const url = await this.putPublic(
+        { key, path: file.path, contentType: file.mimetype },
+        kind,
+      );
       return { key, url, kind };
     } catch (err) {
       if (err instanceof BadRequestException) throw err;

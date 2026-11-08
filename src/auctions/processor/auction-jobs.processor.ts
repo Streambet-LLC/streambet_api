@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   AUCTION_AUTOPAY_RETRY_JOB,
+  AUCTION_PAYMENT_REMINDER_JOB,
   AUCTION_CLOSE_JOB,
   AUCTION_CLOSING_SOON_JOB,
   AUCTION_ACTIVATE_JOB,
@@ -56,6 +57,9 @@ export class AuctionJobsProcessor extends WorkerHost {
           return;
         case AUCTION_AUTOPAY_RETRY_JOB:
           await this.auctionsService.runAutopayRetry(auctionId);
+          return;
+        case AUCTION_PAYMENT_REMINDER_JOB:
+          await this.notifications.notifyPaymentReminder(auctionId);
           return;
         case AUCTION_RECONCILE_JOB:
           await this.auctionsService.reconcileCrypto(auctionId);

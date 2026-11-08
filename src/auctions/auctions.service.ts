@@ -26,6 +26,7 @@ import { AuctionStatus } from '../prize/enums/auction-status.enum';
 import { AuctionCategory } from '../prize/enums/auction-category.enum';
 import { UserRole } from '../enums/user-role.enum';
 import { CreateAuctionDto, UpdateAuctionDto } from './dto/create-auction.dto';
+import type { AuctionSort, PublicBucket } from './dto/list-auctions.dto';
 import {
   CryptoDepositConfirmDto,
   CryptoDepositQuoteDto,
@@ -41,6 +42,7 @@ import { AuctionsNotificationsService } from './auctions-notifications.service';
 import { AuctionSummaryDto } from '../prize/dto/prize-config.dto';
 import {
   AUCTION_AUTOPAY_RETRY_JOB,
+  AUCTION_PAYMENT_REMINDER_JOB,
   AUCTION_CLOSE_JOB,
   AUCTION_CLOSING_SOON_JOB,
   AUCTION_ACTIVATE_JOB,
@@ -50,12 +52,15 @@ import {
 } from '../common/constants/queue.constants';
 import {
   ANTI_SNIPE_WINDOW_SECONDS,
+  BUYER_PREMIUM_PERCENT,
   CARD_PROCESSING_FIXED_USD,
   CARD_PROCESSING_PERCENT,
   PAYMENT_GRACE_HOURS,
+  PAYMENT_REMINDER_HOURS_BEFORE_DUE,
   minIncrementFor,
   minNextBid,
   round2,
+  usdcEscrowNeeded,
   winTotals,
 } from './hermes.pricing';
 import {
@@ -76,6 +81,11 @@ const MAX_LENGTH_MS = 60 * DAY_MS;
 const UNUSED_DEPOSIT_GRACE_MS = 20 * 60 * 1000;
 /** Seller shown to bidders when an auction doesn't name one. */
 const HOUSE_SELLER_NAME = 'Hermes Auctions';
+
+/** The auction's own buyer premium rate (fixed at creation; 0 on legacy rows). */
+function premiumPercentOf(a: Pick<Auction, 'buyerPremiumPercent'>): number {
+  return Number(a.buyerPremiumPercent ?? 0);
+}
 
 /** "j***e" style handle so bidders are recognizable but not identifiable. */
 export function maskHandle(username: string | null | undefined): string {
@@ -291,7 +301,12 @@ export class AuctionsService implements OnModuleInit {
   private normalizeVideos(videos: CreateAuctionDto['videos']): AuctionVideo[] {
     return (videos ?? []).map((v) => {
       if (v.kind === 'upload')
-        return { kind: 'upload', url: v.url, key: v.key };
+        return {
+          kind: 'upload',
+          url: v.url,
+          key: v.key,
+          ...(v.spin ? { spin: true } : {}),
+        };
       const embedUrl = toEmbed(v.kind, v.url);
       if (!embedUrl) {
         throw new BadRequestException(
@@ -358,6 +373,7 @@ export class AuctionsService implements OnModuleInit {
         estValueMeta:
           (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
         shippingUsd: dto.shippingUsd.toFixed(2),
+        buyerPremiumPercent: BUYER_PREMIUM_PERCENT.toFixed(2),
         isFeatured: !!dto.isFeatured,
         showEstValue: dto.showEstValue ?? true,
         sellerName: dto.sellerName?.trim() || null,
@@ -494,6 +510,9 @@ export class AuctionsService implements OnModuleInit {
       );
     }
     if (a.status === AuctionStatus.CANCELLED) return a;
+    // Only a live lot's bidders get an email. After close, winners/losers
+    // were already told the outcome and any payment mess is handled by hand.
+    const wasLive = a.status === AuctionStatus.ACTIVE;
     a.status = AuctionStatus.CANCELLED;
     const saved = await this.auctionRepository.save(a);
     await this.removeAuctionJobs(a.id);
@@ -501,6 +520,7 @@ export class AuctionsService implements OnModuleInit {
       type: 'auction.cancelled',
       auctionId: a.id,
     });
+    if (wasLive) void this.notifications.notifyCancelled(saved);
     await this.enqueueReconcile(a.id, 0);
     this.logger.log(`Hermes auction ${a.id} cancelled by ${adminId}`);
     return saved;
@@ -559,26 +579,80 @@ export class AuctionsService implements OnModuleInit {
     return 'a.title IS NOT NULL';
   }
 
+  /** Buyer marketplace browse / search. */
   async listPublic(params: {
-    bucket: 'live' | 'upcoming';
+    bucket: PublicBucket;
     category?: AuctionCategory;
+    q?: string;
+    sort?: AuctionSort;
+    minPrice?: number;
+    maxPrice?: number;
+    payment?: 'fiat' | 'crypto';
     viewerId?: string;
     limit?: number;
+    offset?: number;
   }) {
+    // "Ended" is results people can learn from: sold or unsold, never
+    // cancelled lots or ones still sorting out a failed payment.
+    const statuses =
+      params.bucket === 'ended'
+        ? [AuctionStatus.ENDED, AuctionStatus.PAID, AuctionStatus.UNSOLD]
+        : BUCKET_STATUSES[params.bucket];
     const qb = this.auctionRepository
       .createQueryBuilder('a')
       .where(this.hermesOnly())
-      .andWhere('a.status IN (:...statuses)', {
-        statuses: BUCKET_STATUSES[params.bucket],
-      });
+      .andWhere('a.status IN (:...statuses)', { statuses });
     if (params.category)
       qb.andWhere('a.category = :cat', { cat: params.category });
-    qb.orderBy(
-      params.bucket === 'live' ? 'a.endsAt' : 'a.startsAt',
-      'ASC',
-    ).take(Math.min(params.limit ?? 60, 100));
-    const rows = await qb.getMany();
-    return this.toPublicMany(rows, params.viewerId);
+
+    // Every word must appear somewhere (title, description or seller).
+    const terms = (params.q ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 8);
+    terms.forEach((term, i) => {
+      qb.andWhere(
+        `(a.title ILIKE :t${i} OR a.description ILIKE :t${i} OR a.sellerName ILIKE :t${i})`,
+        { [`t${i}`]: `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%` },
+      );
+    });
+
+    // The price a buyer sees on the card: winning, else current, else start.
+    const price =
+      'COALESCE(a.winningAmountUsd, a.currentBidUsd, a.startingPriceUsd)';
+    if (params.minPrice != null)
+      qb.andWhere(`${price} >= :minPrice`, { minPrice: params.minPrice });
+    if (params.maxPrice != null)
+      qb.andWhere(`${price} <= :maxPrice`, { maxPrice: params.maxPrice });
+    if (params.payment)
+      qb.andWhere('a.acceptedPayments IN (:...rails)', {
+        rails: [params.payment, 'both'],
+      });
+
+    switch (params.sort ?? 'ending') {
+      case 'newest':
+        qb.orderBy('a.createdAt', 'DESC');
+        break;
+      case 'price_asc':
+        qb.orderBy(price, 'ASC');
+        break;
+      case 'price_desc':
+        qb.orderBy(price, 'DESC');
+        break;
+      case 'bids':
+        qb.orderBy('a.bidCount', 'DESC');
+        break;
+      default:
+        if (params.bucket === 'upcoming') qb.orderBy('a.startsAt', 'ASC');
+        else qb.orderBy('a.endsAt', params.bucket === 'ended' ? 'DESC' : 'ASC');
+    }
+    qb.addOrderBy('a.id', 'ASC') // stable pages
+      .skip(params.offset ?? 0)
+      .take(Math.min(params.limit ?? 48, 100));
+
+    const [rows, total] = await qb.getManyAndCount();
+    return { rows: await this.toPublicMany(rows, params.viewerId), total };
   }
 
   /** Landing-page rail: featured first, then live soonest-ending, then upcoming. */
@@ -712,6 +786,7 @@ export class AuctionsService implements OnModuleInit {
           kind: v.kind,
           url: v.url,
           embedUrl: v.embedUrl ?? null,
+          ...(v.spin ? { spin: true } : {}),
         })),
         status: a.status,
         bucket: bucketForStatus(a.status),
@@ -724,6 +799,7 @@ export class AuctionsService implements OnModuleInit {
         minIncrementUsd: minIncrementFor(current ?? start),
         bidCount: a.bidCount,
         extensionCount: a.extensionCount,
+        extensionWindowSeconds: ANTI_SNIPE_WINDOW_SECONDS,
         hasReserve: reserve !== null,
         reserveMet:
           reserve === null ? null : current !== null && current >= reserve,
@@ -767,7 +843,7 @@ export class AuctionsService implements OnModuleInit {
             }
           : null,
         fees: {
-          buyerPremiumPercent: 0,
+          buyerPremiumPercent: premiumPercentOf(a),
           cardProcessingPercent: CARD_PROCESSING_PERCENT,
           cardProcessingFixedUsd: CARD_PROCESSING_FIXED_USD,
         },
@@ -887,8 +963,11 @@ export class AuctionsService implements OnModuleInit {
         proxyMaxUsd: a.proxyMaxUsd != null ? Number(a.proxyMaxUsd) : null,
         estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
         shippingUsd: Number(a.shippingUsd ?? 0),
+        buyerPremiumPercent: premiumPercentOf(a),
         winningAmountUsd:
           a.winningAmountUsd != null ? Number(a.winningAmountUsd) : null,
+        buyerPremiumUsd:
+          a.buyerPremiumUsd != null ? Number(a.buyerPremiumUsd) : null,
         cardFeeUsd: a.cardFeeUsd != null ? Number(a.cardFeeUsd) : null,
         totalChargedUsd:
           a.totalChargedUsd != null ? Number(a.totalChargedUsd) : null,
@@ -993,11 +1072,16 @@ export class AuctionsService implements OnModuleInit {
         dep.amountUsd = onChain.toFixed(2);
         await this.depositRepository.save(dep);
       }
-      // A USDC win settles hammer + shipping from escrow, so both must fit.
+      // A USDC win settles hammer + premium + shipping from escrow, so all
+      // three must fit at the bidder's max.
       const shipping = Number(pre.shippingUsd ?? 0);
-      if (round2(proxyMax + shipping) > onChain) {
+      const premiumPct = premiumPercentOf(pre);
+      const needed = usdcEscrowNeeded(proxyMax, shipping, premiumPct);
+      if (needed > onChain) {
         throw new BadRequestException(
-          `Your escrow ($${onChain.toFixed(2)}) must cover your max bid plus $${shipping.toFixed(2)} shipping. Add more USDC first.`,
+          `Your escrow ($${onChain.toFixed(2)}) must cover your max bid` +
+            (premiumPct > 0 ? `, the ${premiumPct}% buyer premium` : '') +
+            ` and $${shipping.toFixed(2)} shipping ($${needed.toFixed(2)} total). Add more USDC first.`,
         );
       }
       funding.cryptoWallet = dep.wallet;
@@ -1208,6 +1292,14 @@ export class AuctionsService implements OnModuleInit {
         auctionId: a.id,
       });
     }
+    void this.notifications.notifyBidPlaced({
+      userId,
+      auctionId: a.id,
+      proxyMaxUsd: proxyMax,
+      currentBidUsd: Number(a.currentBidUsd),
+      leading: a.currentLeaderUserId === userId,
+      fundingMethod: dto.fundingMethod,
+    });
     await this.enqueueReconcile(a.id);
 
     return {
@@ -1375,6 +1467,9 @@ export class AuctionsService implements OnModuleInit {
 
     auction.status = AuctionStatus.ENDED;
     await this.settleWinner(auction, winnerId, hammer);
+    // Everyone else hears once, here, whatever happens with the winner's
+    // payment (paid, ACH processing, or failed → grace window / runner-up).
+    void this.notifications.notifyLosers({ auction, winnerUserId: winnerId });
   }
 
   private async leaderFunding(
@@ -1420,10 +1515,12 @@ export class AuctionsService implements OnModuleInit {
       hammer,
       Number(auction.shippingUsd ?? 0),
       funding.fundingMethod,
+      premiumPercentOf(auction),
     );
     auction.winnerUserId = winnerId;
     auction.winningAmountUsd = totals.hammerUsd.toFixed(2);
     auction.paymentMethod = funding.fundingMethod;
+    auction.buyerPremiumUsd = totals.buyerPremiumUsd.toFixed(2);
     auction.cardFeeUsd = totals.cardFeeUsd.toFixed(2);
     auction.totalChargedUsd = totals.totalUsd.toFixed(2);
     auction.shippingAddress = await this.addressFor(winnerId);
@@ -1433,19 +1530,18 @@ export class AuctionsService implements OnModuleInit {
 
     if (funding.fundingMethod === 'usdc') {
       try {
+        // No card fee on USDC, so this is hammer + premium + shipping.
         const sig = await this.crypto.settle(
           auction.id,
           funding.cryptoWallet,
-          round2(totals.hammerUsd + totals.shippingUsd),
+          totals.totalUsd,
         );
         await this.depositRepository.update(
           { auctionId: auction.id, userId: winnerId },
           {
             status: 'settled',
             settleSignature: sig,
-            settledAmountUsd: round2(
-              totals.hammerUsd + totals.shippingUsd,
-            ).toFixed(2),
+            settledAmountUsd: totals.totalUsd.toFixed(2),
           },
         );
         await this.markPaid(auction, { reference: sig });
@@ -1506,10 +1602,6 @@ export class AuctionsService implements OnModuleInit {
         winnerUserId: auction.winnerUserId,
         outcome: 'processing',
       });
-      void this.notifications.notifyLosers({
-        auction,
-        winnerUserId: auction.winnerUserId,
-      });
       await this.enqueueReconcile(auction.id, 0);
     } else if (
       intent.status === 'requires_action' ||
@@ -1548,6 +1640,22 @@ export class AuctionsService implements OnModuleInit {
         removeOnFail: 1000,
       },
     );
+    const reminderJobId = `auction-payment-reminder__${auction.id}`;
+    await this.auctionQueue.remove(reminderJobId).catch(() => undefined);
+    await this.auctionQueue.add(
+      AUCTION_PAYMENT_REMINDER_JOB,
+      { auctionId: auction.id },
+      {
+        jobId: reminderJobId,
+        delay:
+          (PAYMENT_GRACE_HOURS - PAYMENT_REMINDER_HOURS_BEFORE_DUE) *
+          60 *
+          60 *
+          1000,
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      },
+    );
     void this.notifications.notifyWinner({
       auction,
       winnerUserId: auction.winnerUserId,
@@ -1565,24 +1673,22 @@ export class AuctionsService implements OnModuleInit {
     if (info.reference.startsWith('pi_'))
       auction.paymentIntentId = info.reference;
     await this.auctionRepository.save(auction);
-    await this.auctionQueue
-      .remove(`auction-autopay-retry__${auction.id}`)
-      .catch(() => undefined);
+    await Promise.allSettled([
+      this.auctionQueue.remove(`auction-autopay-retry__${auction.id}`),
+      this.auctionQueue.remove(`auction-payment-reminder__${auction.id}`),
+    ]);
     this.gateway.emitAuctionUpdate(auction.id, {
       type: 'auction.closed',
       auctionId: auction.id,
       outcome: 'paid',
       winningBidUsd: Number(auction.winningAmountUsd),
     });
+    // Losers were already told at close (closeAuction).
     await Promise.allSettled([
       this.notifications.notifyWinner({
         auction,
         winnerUserId: auction.winnerUserId,
         outcome: 'paid',
-      }),
-      this.notifications.notifyLosers({
-        auction,
-        winnerUserId: auction.winnerUserId,
       }),
       this.notifications.notifyAdminSold(auction),
     ]);
@@ -1712,6 +1818,7 @@ export class AuctionsService implements OnModuleInit {
     }
     const hammer = Number(a.winningAmountUsd ?? 0);
     const shipping = Number(a.shippingUsd ?? 0);
+    const premiumPct = premiumPercentOf(a);
     let intentStatus: string | null = null;
     if (a.paymentIntentId && a.status !== AuctionStatus.PAID) {
       intentStatus = (
@@ -1731,6 +1838,8 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       intentStatus,
       hammerUsd: hammer,
+      buyerPremiumPercent: premiumPct,
+      buyerPremiumUsd: Number(a.buyerPremiumUsd ?? 0),
       shippingUsd: shipping,
       cardFeeUsd: Number(a.cardFeeUsd ?? 0),
       totalUsd: Number(a.totalChargedUsd ?? 0),
@@ -1738,8 +1847,8 @@ export class AuctionsService implements OnModuleInit {
       paidAt: a.paidAt?.toISOString() ?? null,
       canPay,
       options: {
-        card: winTotals(hammer, shipping, 'card'),
-        ach: winTotals(hammer, shipping, 'ach'),
+        card: winTotals(hammer, shipping, 'card', premiumPct),
+        ach: winTotals(hammer, shipping, 'ach', premiumPct),
       },
       fulfillment: {
         status: a.fulfillmentStatus,
@@ -1800,8 +1909,10 @@ export class AuctionsService implements OnModuleInit {
       Number(a.winningAmountUsd),
       Number(a.shippingUsd ?? 0),
       kind,
+      premiumPercentOf(a),
     );
     a.paymentMethod = kind;
+    a.buyerPremiumUsd = totals.buyerPremiumUsd.toFixed(2);
     a.cardFeeUsd = totals.cardFeeUsd.toFixed(2);
     a.totalChargedUsd = totals.totalUsd.toFixed(2);
     const piId =
@@ -2085,9 +2196,12 @@ export class AuctionsService implements OnModuleInit {
       auction.reservePriceUsd != null ? Number(auction.reservePriceUsd) : null;
     const shipping = opts.shippingCostUsd ?? Number(auction.shippingUsd ?? 0);
     const next = minNextBid(current, start);
+    const premiumPct = premiumPercentOf(auction);
     const nowTotals =
-      current === null ? null : winTotals(current, shipping, 'card');
-    const nextTotals = winTotals(next, shipping, 'card');
+      current === null
+        ? null
+        : winTotals(current, shipping, 'card', premiumPct);
+    const nextTotals = winTotals(next, shipping, 'card', premiumPct);
     return {
       id: auction.id,
       status: auction.status,
