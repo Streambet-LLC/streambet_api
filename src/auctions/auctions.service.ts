@@ -53,8 +53,6 @@ import {
 import {
   ANTI_SNIPE_WINDOW_SECONDS,
   BUYER_PREMIUM_PERCENT,
-  CARD_PROCESSING_FIXED_USD,
-  CARD_PROCESSING_PERCENT,
   PAYMENT_GRACE_HOURS,
   PAYMENT_REMINDER_HOURS_BEFORE_DUE,
   minIncrementFor,
@@ -844,8 +842,6 @@ export class AuctionsService implements OnModuleInit {
           : null,
         fees: {
           buyerPremiumPercent: premiumPercentOf(a),
-          cardProcessingPercent: CARD_PROCESSING_PERCENT,
-          cardProcessingFixedUsd: CARD_PROCESSING_FIXED_USD,
         },
       };
     });
@@ -1514,14 +1510,13 @@ export class AuctionsService implements OnModuleInit {
     const totals = winTotals(
       hammer,
       Number(auction.shippingUsd ?? 0),
-      funding.fundingMethod,
       premiumPercentOf(auction),
     );
     auction.winnerUserId = winnerId;
     auction.winningAmountUsd = totals.hammerUsd.toFixed(2);
     auction.paymentMethod = funding.fundingMethod;
     auction.buyerPremiumUsd = totals.buyerPremiumUsd.toFixed(2);
-    auction.cardFeeUsd = totals.cardFeeUsd.toFixed(2);
+    auction.cardFeeUsd = '0.00';
     auction.totalChargedUsd = totals.totalUsd.toFixed(2);
     auction.shippingAddress = await this.addressFor(winnerId);
     auction.paymentIntentId = null;
@@ -1530,7 +1525,7 @@ export class AuctionsService implements OnModuleInit {
 
     if (funding.fundingMethod === 'usdc') {
       try {
-        // No card fee on USDC, so this is hammer + premium + shipping.
+        // Hammer + premium + shipping, same as every other method.
         const sig = await this.crypto.settle(
           auction.id,
           funding.cryptoWallet,
@@ -1847,8 +1842,8 @@ export class AuctionsService implements OnModuleInit {
       paidAt: a.paidAt?.toISOString() ?? null,
       canPay,
       options: {
-        card: winTotals(hammer, shipping, 'card', premiumPct),
-        ach: winTotals(hammer, shipping, 'ach', premiumPct),
+        card: winTotals(hammer, shipping, premiumPct),
+        ach: winTotals(hammer, shipping, premiumPct),
       },
       fulfillment: {
         status: a.fulfillmentStatus,
@@ -1908,12 +1903,11 @@ export class AuctionsService implements OnModuleInit {
     const totals = winTotals(
       Number(a.winningAmountUsd),
       Number(a.shippingUsd ?? 0),
-      kind,
       premiumPercentOf(a),
     );
     a.paymentMethod = kind;
     a.buyerPremiumUsd = totals.buyerPremiumUsd.toFixed(2);
-    a.cardFeeUsd = totals.cardFeeUsd.toFixed(2);
+    a.cardFeeUsd = '0.00';
     a.totalChargedUsd = totals.totalUsd.toFixed(2);
     const piId =
       typeof session.payment_intent === 'string'
@@ -2198,10 +2192,8 @@ export class AuctionsService implements OnModuleInit {
     const next = minNextBid(current, start);
     const premiumPct = premiumPercentOf(auction);
     const nowTotals =
-      current === null
-        ? null
-        : winTotals(current, shipping, 'card', premiumPct);
-    const nextTotals = winTotals(next, shipping, 'card', premiumPct);
+      current === null ? null : winTotals(current, shipping, premiumPct);
+    const nextTotals = winTotals(next, shipping, premiumPct);
     return {
       id: auction.id,
       status: auction.status,
@@ -2218,10 +2210,11 @@ export class AuctionsService implements OnModuleInit {
         reserve === null ? null : current !== null && current >= reserve,
       isLeader: !!opts.userId && auction.currentLeaderUserId === opts.userId,
       isBidder: !!opts.isBidder,
-      buyerProcessingFeePercent: CARD_PROCESSING_PERCENT,
-      buyerProcessingFeeUsd: nowTotals?.cardFeeUsd ?? null,
+      // No processing fee any more; kept at 0 for older clients.
+      buyerProcessingFeePercent: 0,
+      buyerProcessingFeeUsd: nowTotals ? 0 : null,
       totalDueIfWonUsd: nowTotals?.totalUsd ?? null,
-      minNextBidProcessingFeeUsd: nextTotals.cardFeeUsd,
+      minNextBidProcessingFeeUsd: 0,
       minNextBidTotalUsd: nextTotals.totalUsd,
       currentUserProxyMaxUsd:
         !!opts.userId &&

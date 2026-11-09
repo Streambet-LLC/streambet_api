@@ -28,11 +28,7 @@ import {
   RetryCheckoutDto,
 } from './dto/place-bid.dto';
 import { ListAuctionsQueryDto } from './dto/list-auctions.dto';
-import {
-  BUYER_PREMIUM_PERCENT,
-  CARD_PROCESSING_FIXED_USD,
-  CARD_PROCESSING_PERCENT,
-} from './hermes.pricing';
+import { BUYER_PREMIUM_PERCENT } from './hermes.pricing';
 import { isClientOrigin } from '../common/utils/client-origins';
 
 interface RequestWithUser extends Request {
@@ -107,8 +103,6 @@ export class AuctionsController {
         fees: {
           // Rate for new auctions; each auction's own rate is in its `fees`.
           buyerPremiumPercent: BUYER_PREMIUM_PERCENT,
-          cardProcessingPercent: CARD_PROCESSING_PERCENT,
-          cardProcessingFixedUsd: CARD_PROCESSING_FIXED_USD,
         },
       },
     };
