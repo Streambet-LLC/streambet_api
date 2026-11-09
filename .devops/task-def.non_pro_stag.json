@@ -323,6 +323,10 @@
         {
           "name": "ANTHROPIC_API_KEY",
           "valueFrom": "/cardcade/non_pro_stag/ANTHROPIC_API_KEY"
+        },
+        {
+          "name": "PIKA_API_KEY",
+          "valueFrom": "/cardcade/non_pro_stag/PIKA_API_KEY"
         }
       ],
       "mountPoints": [],
