@@ -845,6 +845,8 @@ export class AuctionsService implements OnModuleInit {
         extensionCount: a.extensionCount,
         extensionWindowSeconds: ANTI_SNIPE_WINDOW_SECONDS,
         hasReserve: reserve !== null,
+        // Bidders see the reserve amount (2026-11-09; it used to be hidden).
+        reservePriceUsd: reserve,
         reserveMet:
           reserve === null ? null : current !== null && current >= reserve,
         // Hidden Est. Value never leaves the server for bidders. With a
