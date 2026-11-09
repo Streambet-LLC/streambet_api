@@ -14,6 +14,8 @@ import {
   Delete,
   HttpCode,
   Res,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -50,6 +52,8 @@ import { CardProfileService } from './card-profile.service';
 import type { AiChatMessage, AiImage } from '../integrations/ai/ai.service';
 import { IngestSellerInventoryDto } from './dto/seller-inventory.dto';
 import { UserRole } from 'src/enums/user-role.enum';
+import { UserFilterDto } from '../users/dto/user.requests.dto';
+import { UsersService } from '../users/users.service';
 
 // Define the request type with user property
 interface RequestWithUser extends Request {
@@ -76,6 +80,9 @@ export class AdminController {
     private readonly dashboardConfigService: DashboardConfigService,
     private readonly cardProfileService: CardProfileService,
     private readonly claudeUsageService: ClaudeUsageService,
+    // forwardRef: see the UsersModule import in admin.module.ts.
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) {}
 
   // Helper method to check if user is admin
@@ -85,12 +92,29 @@ export class AdminController {
     }
   }
 
+  @ApiOperation({ summary: 'List registered users' })
+  @Get('users')
+  async getUsers(
+    @Request() req: RequestWithUser,
+    @Query() filters: UserFilterDto,
+  ): Promise<ApiResponse> {
+    this.ensureAdmin(req.user);
+    const data = await this.usersService.findAllUser(filters);
+    return {
+      status: HttpStatus.OK,
+      message: 'Users fetched successfully',
+      data,
+    };
+  }
+
   // ----------------------------------------------------------------------
   // Seller document ingest — upload inventory (CSV / Excel / Google Sheets)
   // and match products against CardCade buyers.
   // ----------------------------------------------------------------------
 
-  @ApiOperation({ summary: 'Ingest a seller inventory upload and match buyers' })
+  @ApiOperation({
+    summary: 'Ingest a seller inventory upload and match buyers',
+  })
   @Post('analytics/sellers/inventory')
   async ingestSellerInventory(
     @Request() req: RequestWithUser,
@@ -119,7 +143,9 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: 'Get a seller inventory upload with matched buyers' })
+  @ApiOperation({
+    summary: 'Get a seller inventory upload with matched buyers',
+  })
   @ApiParam({ name: 'id', description: 'Upload ID' })
   @Get('analytics/sellers/inventory/:id')
   async getSellerInventory(
@@ -158,9 +184,7 @@ export class AdminController {
 
   @ApiOperation({ summary: 'Get Google OAuth consent URL for Sheets import' })
   @Get('analytics/sellers/google/auth-url')
-  async googleAuthUrl(
-    @Request() req: RequestWithUser,
-  ): Promise<ApiResponse> {
+  async googleAuthUrl(@Request() req: RequestWithUser): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = this.googleSheetsService.getAuthUrl(req.user.id);
     return {
@@ -635,7 +659,9 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: "A card's market profile + historical price series" })
+  @ApiOperation({
+    summary: "A card's market profile + historical price series",
+  })
   @Get('analytics/market/cards/:id/profile')
   async getCardProfile(
     @Request() req: RequestWithUser,
@@ -647,7 +673,8 @@ export class AdminController {
   }
 
   @ApiOperation({
-    summary: 'Refresh a card market profile from all live sources (writes a snapshot)',
+    summary:
+      'Refresh a card market profile from all live sources (writes a snapshot)',
   })
   @Post('analytics/market/cards/:id/profile/refresh')
   async refreshCardProfile(
@@ -737,7 +764,11 @@ export class AdminController {
   async insightsChat(
     @Request() req: RequestWithUser,
     @Body()
-    body: { messages?: AiChatMessage[]; conversationId?: string; depth?: string },
+    body: {
+      messages?: AiChatMessage[];
+      conversationId?: string;
+      depth?: string;
+    },
   ): Promise<ApiResponse> {
     this.ensureAdmin(req.user);
     const data = await this.insightsService.chat(
@@ -753,16 +784,24 @@ export class AdminController {
     };
   }
 
-  @ApiOperation({ summary: 'Streaming conversational analytics assistant (SSE)' })
+  @ApiOperation({
+    summary: 'Streaming conversational analytics assistant (SSE)',
+  })
   @Post('analytics/insights/chat/stream')
   async insightsChatStream(
     @Request() req: RequestWithUser,
     @Body()
-    body: { messages?: AiChatMessage[]; conversationId?: string; depth?: string },
+    body: {
+      messages?: AiChatMessage[];
+      conversationId?: string;
+      depth?: string;
+    },
     @Res() res: Response,
   ): Promise<void> {
     if (req.user.role !== UserRole.ADMIN) {
-      res.status(HttpStatus.FORBIDDEN).json({ message: 'Admin access required' });
+      res
+        .status(HttpStatus.FORBIDDEN)
+        .json({ message: 'Admin access required' });
       return;
     }
     res.setHeader('Content-Type', 'text/event-stream');
@@ -870,7 +909,9 @@ export class AdminController {
     return { status: HttpStatus.OK, message: 'Feedback saved', data };
   }
 
-  @ApiOperation({ summary: 'List answer feedback (e.g. thumbs-down for review)' })
+  @ApiOperation({
+    summary: 'List answer feedback (e.g. thumbs-down for review)',
+  })
   @Get('analytics/insights/feedback')
   async listInsightsFeedback(
     @Request() req: RequestWithUser,

@@ -30,6 +30,15 @@ import { ConfigService } from '@nestjs/config';
 import { QueueService } from 'src/queue/queue.service';
 import { EmailType } from 'src/enums/email-type.enum';
 
+/** Columns the admin user list may sort by (the sort comes from the request). */
+const USER_SORT_COLUMNS = new Set([
+  'createdAt',
+  'email',
+  'username',
+  'name',
+  'role',
+]);
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -537,14 +546,14 @@ export class UsersService {
   ): Promise<{ data: any[]; total: number }> {
     const sort: Sort = userFilterDto.sort
       ? (JSON.parse(userFilterDto.sort) as Sort)
-      : undefined;
+      : ['createdAt', 'DESC'];
 
     const filter: FilterDto = userFilterDto.filter
       ? (JSON.parse(userFilterDto.filter) as FilterDto)
-      : undefined;
+      : ({} as FilterDto);
     const range: Range = userFilterDto.range
       ? (JSON.parse(userFilterDto.range) as Range)
-      : [0, 10];
+      : [0, 50];
     const { pagination = true } = userFilterDto;
 
     const usersQB = this.usersRepository
@@ -559,12 +568,16 @@ export class UsersService {
       );
     }
 
-    // Sorting logic
+    // Sorting logic. The column comes from the request, so only known ones
+    // reach the SQL.
     if (sort) {
       const [sortColumn, sortOrder] = sort;
+      const column = USER_SORT_COLUMNS.has(sortColumn)
+        ? sortColumn
+        : 'createdAt';
       usersQB.orderBy(
-        `u.${sortColumn}`,
-        sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+        `u.${column}`,
+        String(sortOrder).toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
       );
     }
     usersQB.andWhere('u.deleted_at IS  NULL');

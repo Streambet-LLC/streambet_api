@@ -220,6 +220,7 @@ export class UserFilterDto extends AdminFilterDto {
     required: false,
     default: '{}',
   })
+  @IsOptional()
   @IsString()
   public filter: string;
 
