@@ -295,7 +295,7 @@ export class AuctionsPaymentsService {
             unit_amount: amountCents,
             product_data: {
               name: params.itemName || 'Hermes Auctions win',
-              description: 'Winning bid + buyer premium + shipping',
+              description: 'Winning bid + buyer fee + shipping',
             },
           },
         },

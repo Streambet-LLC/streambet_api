@@ -52,8 +52,9 @@ import {
 } from '../common/constants/queue.constants';
 import {
   ANTI_SNIPE_WINDOW_SECONDS,
-  BUYER_PREMIUM_PERCENT,
+  BUYER_PREMIUM_RATES,
   PAYMENT_GRACE_HOURS,
+  PremiumRates,
   PAYMENT_REMINDER_HOURS_BEFORE_DUE,
   minIncrementFor,
   minNextBid,
@@ -80,9 +81,20 @@ const UNUSED_DEPOSIT_GRACE_MS = 20 * 60 * 1000;
 /** Seller shown to bidders when an auction doesn't name one. */
 const HOUSE_SELLER_NAME = 'Hermes Auctions';
 
-/** The auction's own buyer premium rate (fixed at creation; 0 on legacy rows). */
-function premiumPercentOf(a: Pick<Auction, 'buyerPremiumPercent'>): number {
-  return Number(a.buyerPremiumPercent ?? 0);
+/** The auction's own buyer fee rates by tender (fixed at creation; 0 on legacy rows). */
+function premiumRatesOf(
+  a: Pick<
+    Auction,
+    | 'buyerPremiumCardPercent'
+    | 'buyerPremiumAchPercent'
+    | 'buyerPremiumUsdcPercent'
+  >,
+): PremiumRates {
+  return {
+    card: Number(a.buyerPremiumCardPercent ?? 0),
+    ach: Number(a.buyerPremiumAchPercent ?? 0),
+    usdc: Number(a.buyerPremiumUsdcPercent ?? 0),
+  };
 }
 
 /** "j***e" style handle so bidders are recognizable but not identifiable. */
@@ -371,7 +383,9 @@ export class AuctionsService implements OnModuleInit {
         estValueMeta:
           (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
         shippingUsd: dto.shippingUsd.toFixed(2),
-        buyerPremiumPercent: BUYER_PREMIUM_PERCENT.toFixed(2),
+        buyerPremiumCardPercent: BUYER_PREMIUM_RATES.card.toFixed(2),
+        buyerPremiumAchPercent: BUYER_PREMIUM_RATES.ach.toFixed(2),
+        buyerPremiumUsdcPercent: BUYER_PREMIUM_RATES.usdc.toFixed(2),
         isFeatured: !!dto.isFeatured,
         showEstValue: dto.showEstValue ?? true,
         sellerName: dto.sellerName?.trim() || null,
@@ -841,7 +855,9 @@ export class AuctionsService implements OnModuleInit {
             }
           : null,
         fees: {
-          buyerPremiumPercent: premiumPercentOf(a),
+          // Card rate, for clients that predate per-tender rates.
+          buyerPremiumPercent: premiumRatesOf(a).card,
+          buyerPremiumByMethod: premiumRatesOf(a),
         },
       };
     });
@@ -959,7 +975,11 @@ export class AuctionsService implements OnModuleInit {
         proxyMaxUsd: a.proxyMaxUsd != null ? Number(a.proxyMaxUsd) : null,
         estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
         shippingUsd: Number(a.shippingUsd ?? 0),
-        buyerPremiumPercent: premiumPercentOf(a),
+        buyerPremiumByMethod: premiumRatesOf(a),
+        // The rate the winner was (or is being) charged, once there is one.
+        buyerPremiumPercent: a.paymentMethod
+          ? premiumRatesOf(a)[a.paymentMethod]
+          : null,
         winningAmountUsd:
           a.winningAmountUsd != null ? Number(a.winningAmountUsd) : null,
         buyerPremiumUsd:
@@ -1071,12 +1091,12 @@ export class AuctionsService implements OnModuleInit {
       // A USDC win settles hammer + premium + shipping from escrow, so all
       // three must fit at the bidder's max.
       const shipping = Number(pre.shippingUsd ?? 0);
-      const premiumPct = premiumPercentOf(pre);
+      const premiumPct = premiumRatesOf(pre).usdc;
       const needed = usdcEscrowNeeded(proxyMax, shipping, premiumPct);
       if (needed > onChain) {
         throw new BadRequestException(
           `Your escrow ($${onChain.toFixed(2)}) must cover your max bid` +
-            (premiumPct > 0 ? `, the ${premiumPct}% buyer premium` : '') +
+            (premiumPct > 0 ? `, the ${premiumPct}% USDC buyer fee` : '') +
             ` and $${shipping.toFixed(2)} shipping ($${needed.toFixed(2)} total). Add more USDC first.`,
         );
       }
@@ -1510,7 +1530,7 @@ export class AuctionsService implements OnModuleInit {
     const totals = winTotals(
       hammer,
       Number(auction.shippingUsd ?? 0),
-      premiumPercentOf(auction),
+      premiumRatesOf(auction)[funding.fundingMethod],
     );
     auction.winnerUserId = winnerId;
     auction.winningAmountUsd = totals.hammerUsd.toFixed(2);
@@ -1813,7 +1833,7 @@ export class AuctionsService implements OnModuleInit {
     }
     const hammer = Number(a.winningAmountUsd ?? 0);
     const shipping = Number(a.shippingUsd ?? 0);
-    const premiumPct = premiumPercentOf(a);
+    const rates = premiumRatesOf(a);
     let intentStatus: string | null = null;
     if (a.paymentIntentId && a.status !== AuctionStatus.PAID) {
       intentStatus = (
@@ -1833,7 +1853,11 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       intentStatus,
       hammerUsd: hammer,
-      buyerPremiumPercent: premiumPct,
+      // The rate charged for the method on file; each option has its own.
+      buyerPremiumPercent: a.paymentMethod
+        ? rates[a.paymentMethod]
+        : rates.card,
+      buyerPremiumByMethod: rates,
       buyerPremiumUsd: Number(a.buyerPremiumUsd ?? 0),
       shippingUsd: shipping,
       cardFeeUsd: Number(a.cardFeeUsd ?? 0),
@@ -1842,8 +1866,8 @@ export class AuctionsService implements OnModuleInit {
       paidAt: a.paidAt?.toISOString() ?? null,
       canPay,
       options: {
-        card: winTotals(hammer, shipping, premiumPct),
-        ach: winTotals(hammer, shipping, premiumPct),
+        card: winTotals(hammer, shipping, rates.card),
+        ach: winTotals(hammer, shipping, rates.ach),
       },
       fulfillment: {
         status: a.fulfillmentStatus,
@@ -1903,7 +1927,7 @@ export class AuctionsService implements OnModuleInit {
     const totals = winTotals(
       Number(a.winningAmountUsd),
       Number(a.shippingUsd ?? 0),
-      premiumPercentOf(a),
+      premiumRatesOf(a)[kind],
     );
     a.paymentMethod = kind;
     a.buyerPremiumUsd = totals.buyerPremiumUsd.toFixed(2);
@@ -2190,7 +2214,8 @@ export class AuctionsService implements OnModuleInit {
       auction.reservePriceUsd != null ? Number(auction.reservePriceUsd) : null;
     const shipping = opts.shippingCostUsd ?? Number(auction.shippingUsd ?? 0);
     const next = minNextBid(current, start);
-    const premiumPct = premiumPercentOf(auction);
+    // Legacy shop auctions: card rate (0 on those rows).
+    const premiumPct = premiumRatesOf(auction).card;
     const nowTotals =
       current === null ? null : winTotals(current, shipping, premiumPct);
     const nextTotals = winTotals(next, shipping, premiumPct);
