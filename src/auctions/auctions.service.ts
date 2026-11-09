@@ -344,6 +344,48 @@ export class AuctionsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Est. Value columns from a create/update payload. `estValueUsd` is the
+   * single value or the low end; `estValueHighUsd` (above it) makes it a range.
+   */
+  private resolveEstValue(
+    dto: Pick<
+      CreateAuctionDto,
+      'estValueUsd' | 'estValueHighUsd' | 'estValueSource' | 'estValueMeta'
+    >,
+  ): Pick<
+    Auction,
+    'estValueUsd' | 'estValueHighUsd' | 'estValueSource' | 'estValueMeta'
+  > {
+    const low = dto.estValueUsd ?? null;
+    const high = dto.estValueHighUsd ?? null;
+    if (low == null) {
+      if (high != null) {
+        throw new BadRequestException(
+          'Enter the low end of the Est. Value range too.',
+        );
+      }
+      return {
+        estValueUsd: null,
+        estValueHighUsd: null,
+        estValueSource: null,
+        estValueMeta: null,
+      };
+    }
+    if (high != null && high <= low) {
+      throw new BadRequestException(
+        'The top of the Est. Value range must be above the low end.',
+      );
+    }
+    return {
+      estValueUsd: low.toFixed(2),
+      estValueHighUsd: high != null ? high.toFixed(2) : null,
+      estValueSource: dto.estValueSource ?? 'manual',
+      estValueMeta:
+        (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
+    };
+  }
+
   async createAuction(
     adminId: string,
     dto: CreateAuctionDto,
@@ -352,6 +394,7 @@ export class AuctionsService implements OnModuleInit {
       throw new BadRequestException('Add at least one photo.');
     }
     this.assertReserve(dto.startingPriceUsd, dto.reservePriceUsd);
+    const est = this.resolveEstValue(dto);
     const acceptedPayments = dto.acceptedPayments ?? 'both';
     this.assertPaymentsAvailable(acceptedPayments);
     const timing = this.resolveTiming(dto);
@@ -376,12 +419,7 @@ export class AuctionsService implements OnModuleInit {
         startingPriceUsd: dto.startingPriceUsd.toFixed(2),
         reservePriceUsd:
           dto.reservePriceUsd != null ? dto.reservePriceUsd.toFixed(2) : null,
-        estValueUsd:
-          dto.estValueUsd != null ? dto.estValueUsd.toFixed(2) : null,
-        estValueSource:
-          dto.estValueUsd != null ? (dto.estValueSource ?? 'manual') : null,
-        estValueMeta:
-          (dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null,
+        ...est,
         shippingUsd: dto.shippingUsd.toFixed(2),
         buyerPremiumCardPercent: BUYER_PREMIUM_RATES.card.toFixed(2),
         buyerPremiumAchPercent: BUYER_PREMIUM_RATES.ach.toFixed(2),
@@ -438,15 +476,9 @@ export class AuctionsService implements OnModuleInit {
     if (dto.showEstValue !== undefined) a.showEstValue = dto.showEstValue;
     if (dto.sellerName !== undefined)
       a.sellerName = dto.sellerName?.trim() || null;
-    if (dto.estValueUsd !== undefined) {
-      a.estValueUsd =
-        dto.estValueUsd != null ? dto.estValueUsd.toFixed(2) : null;
-      a.estValueSource =
-        dto.estValueUsd != null ? (dto.estValueSource ?? 'manual') : null;
-      a.estValueMeta =
-        dto.estValueUsd != null
-          ? ((dto.estValueMeta as unknown as Auction['estValueMeta']) ?? null)
-          : null;
+    // The Est. Value fields are sent (and replaced) together.
+    if (dto.estValueUsd !== undefined || dto.estValueHighUsd !== undefined) {
+      Object.assign(a, this.resolveEstValue(dto));
     }
     if (dto.category !== undefined) a.category = dto.category;
 
@@ -813,12 +845,21 @@ export class AuctionsService implements OnModuleInit {
         extensionCount: a.extensionCount,
         extensionWindowSeconds: ANTI_SNIPE_WINDOW_SECONDS,
         hasReserve: reserve !== null,
+        // Bidders see the reserve amount (2026-11-09; it used to be hidden).
+        reservePriceUsd: reserve,
         reserveMet:
           reserve === null ? null : current !== null && current >= reserve,
-        // Hidden Est. Value never leaves the server for bidders.
+        // Hidden Est. Value never leaves the server for bidders. With a
+        // range, estValueUsd is the low end and estValueHighUsd the top.
         estValueUsd:
           a.showEstValue !== false && a.estValueUsd != null
             ? Number(a.estValueUsd)
+            : null,
+        estValueHighUsd:
+          a.showEstValue !== false &&
+          a.estValueUsd != null &&
+          a.estValueHighUsd != null
+            ? Number(a.estValueHighUsd)
             : null,
         estValueSource: a.showEstValue !== false ? a.estValueSource : null,
         sellerName: a.sellerName || HOUSE_SELLER_NAME,
@@ -907,6 +948,8 @@ export class AuctionsService implements OnModuleInit {
         a.reservePriceUsd != null ? Number(a.reservePriceUsd) : null,
       currentBidUsd: a.currentBidUsd != null ? Number(a.currentBidUsd) : null,
       estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
+      estValueHighUsd:
+        a.estValueHighUsd != null ? Number(a.estValueHighUsd) : null,
       bidCount: a.bidCount,
       leader: a.currentLeaderUserId
         ? (name.get(a.currentLeaderUserId) ?? null)
@@ -974,6 +1017,8 @@ export class AuctionsService implements OnModuleInit {
         currentBidUsd: a.currentBidUsd != null ? Number(a.currentBidUsd) : null,
         proxyMaxUsd: a.proxyMaxUsd != null ? Number(a.proxyMaxUsd) : null,
         estValueUsd: a.estValueUsd != null ? Number(a.estValueUsd) : null,
+        estValueHighUsd:
+          a.estValueHighUsd != null ? Number(a.estValueHighUsd) : null,
         shippingUsd: Number(a.shippingUsd ?? 0),
         buyerPremiumByMethod: premiumRatesOf(a),
         // The rate the winner was (or is being) charged, once there is one.

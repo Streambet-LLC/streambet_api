@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { SellerInventoryService } from './seller-inventory.service';
 import { GoogleSheetsService } from './google-sheets.service';
@@ -57,6 +57,7 @@ import { MarketTaxonomyController } from './market-taxonomy.controller';
 import { MarketEngagementPoint } from './entities/market-engagement-point.entity';
 import { MarketEngagementService } from './market-engagement.service';
 import { MarketEngagementController } from './market-engagement.controller';
+import { UsersModule } from '../users/users.module';
 
 /**
  * Analytics-only admin module. The marketplace data-integration (collector
@@ -92,6 +93,9 @@ import { MarketEngagementController } from './market-engagement.controller';
       MarketTaxonomyNode,
       MarketEngagementPoint,
     ]),
+    // forwardRef: UsersModule → PrizeModule → … → AuctionsModule → AdminModule
+    // is a cycle, so a plain import is still undefined here at boot.
+    forwardRef(() => UsersModule),
     RedditModule,
     BlueskyModule,
     YoutubeModule,

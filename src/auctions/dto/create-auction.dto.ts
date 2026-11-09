@@ -129,11 +129,23 @@ export class CreateAuctionDto {
   @Min(1)
   reservePriceUsd?: number | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'The Est. Value, or the low end of the range when estValueHighUsd is set.',
+  })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   estValueUsd?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Top of the Est. Value range (above estValueUsd). Omit or null for a single value. Sent together with estValueUsd.',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  estValueHighUsd?: number | null;
 
   @ApiPropertyOptional({ enum: ['manual', 'pulled'] })
   @IsOptional()
