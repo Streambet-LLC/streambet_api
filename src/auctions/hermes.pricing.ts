@@ -48,25 +48,32 @@ export const PAYMENT_REMINDER_HOURS_BEFORE_DUE = 12;
 /** USDC escrow self-withdraw unlocks this long after the scheduled end. */
 export const ESCROW_REFUND_AFTER_DAYS = 7;
 
+/**
+ * Bid increments (Aaron, 2026-11-09; 40–50% of the old steps from $100 up).
+ * Each row is [current bid below this, step]. Not stored per auction, so a
+ * change applies to live lots right away.
+ */
 const INCREMENT_LADDER: Array<[upTo: number, step: number]> = [
   [25, 1],
-  [100, 5],
-  [250, 10],
-  [500, 25],
-  [1_000, 50],
-  [2_500, 100],
-  [5_000, 250],
-  [10_000, 500],
-  [25_000, 1_000],
-  [50_000, 2_500],
+  [250, 5],
+  [500, 10],
+  [1_000, 25],
+  [2_500, 50],
+  [5_000, 100],
+  [10_000, 250],
+  [25_000, 500],
+  [50_000, 1_000],
 ];
 
-/** Minimum raise over `currentUsd`, roughly 5–10% at every price tier. */
+/** Step above the last rung ($50,000+). */
+const TOP_INCREMENT = 2_500;
+
+/** Minimum raise over `currentUsd`. */
 export function minIncrementFor(currentUsd: number): number {
   for (const [upTo, step] of INCREMENT_LADDER) {
     if (currentUsd < upTo) return step;
   }
-  return 5_000;
+  return TOP_INCREMENT;
 }
 
 export function minNextBid(
