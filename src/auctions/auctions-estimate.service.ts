@@ -14,6 +14,46 @@ const CATEGORY_LABEL: Record<AuctionCategory, string> = {
   [AuctionCategory.SPORTS_MEMORABILIA]: 'piece of sports memorabilia',
 };
 
+/** Share of the point estimate used each side when the model gives no range. */
+const FALLBACK_RANGE_SPREAD = 0.15;
+
+const positive = (n: unknown): number | null =>
+  typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
+
+/**
+ * The recommended Est. Value as an auction-style range ("$400 – $600"):
+ * always low < high, the point (if any) inside it, and both ends rounded
+ * outward to two significant figures of the top (whole dollars at minimum).
+ * Without a usable range from the model it falls back to ±15% of the point.
+ */
+export function estimateRange(est: {
+  pointUsd: number | null;
+  lowUsd: number | null;
+  highUsd: number | null;
+}): { pointUsd: number | null; lowUsd: number | null; highUsd: number | null } {
+  let point = positive(est.pointUsd);
+  let low = positive(est.lowUsd);
+  let high = positive(est.highUsd);
+  if (low != null && high != null && low > high) [low, high] = [high, low];
+  if (point == null) {
+    if (low == null || high == null) {
+      return { pointUsd: null, lowUsd: null, highUsd: null };
+    }
+    point = (low + high) / 2;
+  }
+  if (low == null || low > point) low = point * (1 - FALLBACK_RANGE_SPREAD);
+  if (high == null || high < point) high = point * (1 + FALLBACK_RANGE_SPREAD);
+  const step = Math.max(1, 10 ** (Math.floor(Math.log10(high)) - 1));
+  const lo = Math.max(step, Math.floor(low / step) * step);
+  let hi = Math.ceil(high / step) * step;
+  if (hi <= lo) hi = lo + step;
+  return {
+    pointUsd: Math.round(point * 100) / 100,
+    lowUsd: lo,
+    highUsd: hi,
+  };
+}
+
 interface RawMemorabiliaValuation {
   estimate?: { pointUsd?: number; lowUsd?: number; highUsd?: number } | null;
   confidencePct?: number;
@@ -34,6 +74,8 @@ interface RawMemorabiliaValuation {
  *      one precise search subject the admin can confirm or edit;
  *   2. value — comp-grounded valuation of that subject. Cards reuse the
  *      card-market ValuationService; memorabilia gets its own research pass.
+ *      The result is a rounded low–high range (see estimateRange) plus the
+ *      point estimate inside it.
  * The result is a recommendation only — the admin accepts or edits it.
  */
 @Injectable()
@@ -174,9 +216,7 @@ export class AuctionsEstimateService {
       const v = await this.valuation.valueCard(subject, params.adminId);
       return {
         subject: v.subject || subject,
-        pointUsd: v.pointUsd,
-        lowUsd: v.lowUsd,
-        highUsd: v.highUsd,
+        ...estimateRange(v),
         confidencePct: v.confidencePct,
         reliability: v.reliability,
         method: v.method,
@@ -209,6 +249,7 @@ export class AuctionsEstimateService {
           `Today is ${pulledAt.slice(0, 10)}. Find recent sold prices for: "${subject}". ` +
           'Prefer completed auction results (Goldin, Heritage, Fanatics Collect, SCP/Lelands, PWCC, Hunt) and eBay sold listings over asking prices. ' +
           'Match the exact item type, signature, authentication and game-used status; leave out sales that differ. ' +
+          'lowUsd–highUsd is the range you would expect it to sell for at auction today (not the full spread of every sale); pointUsd is the most likely price inside it. ' +
           'Return JSON: {"estimate":{"pointUsd":n,"lowUsd":n,"highUsd":n}|null,"confidencePct":0-100,' +
           '"comps":[{"title":"...","priceUsd":n,"date":"YYYY-MM-DD","url":"...","source":"..."}],"note":"one line on what drives the value"}. ' +
           'If you find no reliable sales, return estimate null and say so in note.',
@@ -232,9 +273,11 @@ export class AuctionsEstimateService {
       const est = raw.estimate ?? null;
       return {
         subject,
-        pointUsd: est?.pointUsd ?? null,
-        lowUsd: est?.lowUsd ?? null,
-        highUsd: est?.highUsd ?? null,
+        ...estimateRange({
+          pointUsd: est?.pointUsd ?? null,
+          lowUsd: est?.lowUsd ?? null,
+          highUsd: est?.highUsd ?? null,
+        }),
         confidencePct:
           typeof raw.confidencePct === 'number'
             ? Math.max(0, Math.min(100, Math.round(raw.confidencePct)))

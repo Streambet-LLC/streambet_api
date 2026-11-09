@@ -128,7 +128,10 @@ export class Auction extends BaseEntity {
   })
   cardValueUsd: string | null;
 
-  /** Public "Est. Value" shown to bidders. */
+  /**
+   * Public "Est. Value" shown to bidders: the single value, or the low end of
+   * the range when `estValueHighUsd` is set.
+   */
   @Column({
     type: 'decimal',
     precision: 12,
@@ -137,6 +140,16 @@ export class Auction extends BaseEntity {
     nullable: true,
   })
   estValueUsd: string | null;
+
+  /** Top of the Est. Value range; null = a single value. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'est_value_high_usd',
+    nullable: true,
+  })
+  estValueHighUsd: string | null;
 
   /** `manual` (admin typed it) or `pulled` (accepted comp recommendation). */
   @Column({
