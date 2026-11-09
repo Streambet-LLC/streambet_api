@@ -199,7 +199,6 @@ export class AuctionsNotificationsService {
       'the winning bid (never more than your max)',
       ...(premiumPct > 0 ? [`a ${premiumPct}% buyer premium`] : []),
       'shipping',
-      ...(params.fundingMethod === 'card' ? ['card processing'] : []),
     ];
     const pays =
       costs.length > 2

@@ -1,13 +1,9 @@
-import type { AuctionFundingMethod } from './hermes.types';
-
 /**
  * Hermes Auctions pricing. Zero seller fee. The winner pays hammer + a
- * buyer premium on the hammer + flat shipping; card payers also cover card
- * processing on that whole amount (grossed up so Stripe's 2.9% + 30¢ nets to
- * zero). ACH and USDC carry no processing charge.
+ * buyer premium on the hammer + flat shipping, the same whichever way they
+ * pay. Payment processing (Stripe card / ACH fees) comes out of the premium;
+ * nothing is added on top (no card surcharge, since 2026-11-09).
  */
-export const CARD_PROCESSING_PERCENT = 2.9;
-export const CARD_PROCESSING_FIXED_USD = 0.3;
 
 /**
  * Buyer premium for newly created auctions, as a percent of the hammer.
@@ -75,14 +71,6 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export function cardFeeFor(subtotalUsd: number): number {
-  if (subtotalUsd <= 0) return 0;
-  const gross =
-    (subtotalUsd + CARD_PROCESSING_FIXED_USD) /
-    (1 - CARD_PROCESSING_PERCENT / 100);
-  return round2(Math.ceil(gross * 100) / 100 - subtotalUsd);
-}
-
 /** Premium on the hammer, rounded half-up to the cent (integer-cent math). */
 export function buyerPremiumFor(hammerUsd: number, percent: number): number {
   if (hammerUsd <= 0 || !(percent > 0)) return 0;
@@ -106,27 +94,23 @@ export interface WinTotals {
   hammerUsd: number;
   buyerPremiumUsd: number;
   shippingUsd: number;
-  cardFeeUsd: number;
   totalUsd: number;
 }
 
+/** What the winner owes. Identical for card, ACH and USDC. */
 export function winTotals(
   hammerUsd: number,
   shippingUsd: number,
-  method: AuctionFundingMethod,
   premiumPercent: number,
 ): WinTotals {
   const hammer = round2(Math.max(0, hammerUsd));
   const premium = buyerPremiumFor(hammer, premiumPercent);
   const shipping = round2(Math.max(0, shippingUsd));
-  const cardFee =
-    method === 'card' ? cardFeeFor(round2(hammer + premium + shipping)) : 0;
   return {
     hammerUsd: hammer,
     buyerPremiumUsd: premium,
     shippingUsd: shipping,
-    cardFeeUsd: cardFee,
-    totalUsd: round2(hammer + premium + shipping + cardFee),
+    totalUsd: round2(hammer + premium + shipping),
   };
 }
 

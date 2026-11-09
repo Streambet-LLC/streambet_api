@@ -266,7 +266,7 @@ export class AuctionsPaymentsService {
   /**
    * Hosted Checkout (mode=payment) so a winner whose autopay declined or
    * needs 3DS can pay — same amount we'd have charged, restricted to the
-   * method they picked so the quoted processing fee is what Stripe takes.
+   * method they picked.
    */
   async createRetryPaymentCheckoutSession(params: {
     userId: string;
@@ -295,10 +295,7 @@ export class AuctionsPaymentsService {
             unit_amount: amountCents,
             product_data: {
               name: params.itemName || 'Hermes Auctions win',
-              description:
-                params.kind === 'card'
-                  ? 'Winning bid + shipping + card processing'
-                  : 'Winning bid + shipping',
+              description: 'Winning bid + buyer premium + shipping',
             },
           },
         },

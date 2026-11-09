@@ -272,7 +272,11 @@ export class Auction extends BaseEntity {
   })
   paymentMethod: AuctionFundingMethod | null;
 
-  /** Card processing passed through to card payers. Zero for ACH / USDC. */
+  /**
+   * Card processing passed through to card payers. Only wins settled before
+   * 2026-11-09 have a non-zero value; since then processing comes out of the
+   * buyer premium and this is always 0.
+   */
   @Column({
     type: 'decimal',
     precision: 12,
