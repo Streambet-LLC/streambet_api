@@ -9,6 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
 import { QueueService } from '../queue/queue.service';
 import { fmtExtensionWindow, minNextBid } from './hermes.pricing';
+import type { AuctionFundingMethod } from './hermes.types';
 
 interface NoticeRow {
   label: string;
@@ -60,6 +61,17 @@ export class AuctionsNotificationsService {
       this.configService.get<string>('APP_HOST_URL') ||
       ''
     ).replace(/\/$/, '');
+  }
+
+  /** The auction's buyer fee rate (percent) for a tender; all-in. */
+  private premiumRate(a: Auction, method: AuctionFundingMethod): number {
+    const raw =
+      method === 'ach'
+        ? a.buyerPremiumAchPercent
+        : method === 'usdc'
+          ? a.buyerPremiumUsdcPercent
+          : a.buyerPremiumCardPercent;
+    return Number(raw ?? 0);
   }
 
   private auctionUrl(id: string): string {
@@ -194,10 +206,17 @@ export class AuctionsNotificationsService {
       this.userRepository.findOne({ where: { id: params.userId } }),
     ]);
     if (!a || !user) return;
-    const premiumPct = Number(a.buyerPremiumPercent ?? 0);
+    const method = (
+      ['card', 'ach', 'usdc'].includes(params.fundingMethod)
+        ? params.fundingMethod
+        : 'card'
+    ) as AuctionFundingMethod;
+    const premiumPct = this.premiumRate(a, method);
     const costs = [
       'the winning bid (never more than your max)',
-      ...(premiumPct > 0 ? [`a ${premiumPct}% buyer premium`] : []),
+      ...(premiumPct > 0
+        ? [`a ${premiumPct}% buyer fee (${METHOD_LABEL[method]})`]
+        : []),
       'shipping',
     ];
     const pays =
@@ -327,13 +346,14 @@ export class AuctionsNotificationsService {
     });
     if (!user) return;
     const hammer = Number(a.winningAmountUsd ?? a.currentBidUsd ?? 0);
-    const premiumPct = Number(a.buyerPremiumPercent ?? 0);
+    // The rate for the tender actually charged (card / ACH / USDC).
+    const premiumPct = this.premiumRate(a, a.paymentMethod ?? 'card');
     const rows: NoticeRow[] = [
       { label: 'Winning bid', value: this.fmtUsd(hammer) },
     ];
     if (Number(a.buyerPremiumUsd ?? 0) > 0) {
       rows.push({
-        label: `Buyer premium (${premiumPct}%)`,
+        label: `Buyer fee (${premiumPct}%)`,
         value: this.fmtUsd(Number(a.buyerPremiumUsd)),
       });
     }
@@ -385,7 +405,7 @@ export class AuctionsNotificationsService {
         ctaUrl: this.payUrl(a.id),
         footnote:
           premiumPct > 0
-            ? `You paid the winning bid plus a ${premiumPct}% buyer premium and shipping.`
+            ? `You paid the winning bid plus a ${premiumPct}% buyer fee and shipping.`
             : 'You paid the winning bid plus shipping.',
       });
       return;

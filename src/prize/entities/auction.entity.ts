@@ -169,9 +169,11 @@ export class Auction extends BaseEntity {
   shippingUsd: string;
 
   /**
-   * Buyer premium on the hammer, in percent. Set from
-   * `BUYER_PREMIUM_PERCENT` when a Hermes auction is created and never
-   * changed after, so bidders keep the terms they saw. 0 on legacy rows.
+   * Buyer fee ("premium") on the hammer, in percent, by the tender the winner
+   * pays with. Set from `BUYER_PREMIUM_RATES` when a Hermes auction is
+   * created and never changed after, so bidders keep the terms they saw.
+   * All-in: processing comes out of it. 0 on legacy rows. (The card rate
+   * keeps the original single-rate column name, `buyer_premium_percent`.)
    */
   @Column({
     type: 'decimal',
@@ -180,7 +182,25 @@ export class Auction extends BaseEntity {
     name: 'buyer_premium_percent',
     default: 0,
   })
-  buyerPremiumPercent: string;
+  buyerPremiumCardPercent: string;
+
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    name: 'buyer_premium_ach_percent',
+    default: 0,
+  })
+  buyerPremiumAchPercent: string;
+
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    name: 'buyer_premium_usdc_percent',
+    default: 0,
+  })
+  buyerPremiumUsdcPercent: string;
 
   @Column({ type: 'boolean', name: 'is_featured', default: false })
   isFeatured: boolean;

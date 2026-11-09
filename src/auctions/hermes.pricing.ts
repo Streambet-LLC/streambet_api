@@ -1,16 +1,25 @@
-/**
- * Hermes Auctions pricing. Zero seller fee. The winner pays hammer + a
- * buyer premium on the hammer + flat shipping, the same whichever way they
- * pay. Payment processing (Stripe card / ACH fees) comes out of the premium;
- * nothing is added on top (no card surcharge, since 2026-11-09).
- */
+import type { AuctionFundingMethod } from './hermes.types';
 
 /**
- * Buyer premium for newly created auctions, as a percent of the hammer.
- * Each auction stores its own rate (`buyer_premium_percent`) at creation, so
- * changing this never changes the terms of an auction already listed.
+ * Hermes Auctions pricing. Zero seller fee. The winner pays hammer + a
+ * buyer fee ("premium") on the hammer + flat shipping. The fee rate depends
+ * on how they pay (see BUYER_PREMIUM_RATES) and is all-in: payment processing
+ * (Stripe's card / ACH fees) comes out of it, nothing is added on top.
  */
-export const BUYER_PREMIUM_PERCENT = 4;
+
+export type PremiumRates = Record<AuctionFundingMethod, number>;
+
+/**
+ * Buyer fee for newly created auctions, as a percent of the hammer, by the
+ * tender the winner pays with (2026-11-09: card 4%, ACH 1%, USDC 0.5%).
+ * Each auction stores its own three rates at creation, so changing these
+ * never changes the terms of an auction already listed.
+ */
+export const BUYER_PREMIUM_RATES: Readonly<PremiumRates> = Object.freeze({
+  card: 4,
+  ach: 1,
+  usdc: 0.5,
+});
 
 /**
  * Soft close: a bid inside this many seconds of the end resets the clock to
@@ -97,7 +106,7 @@ export interface WinTotals {
   totalUsd: number;
 }
 
-/** What the winner owes. Identical for card, ACH and USDC. */
+/** What the winner owes at `premiumPercent` (the rate for their tender). */
 export function winTotals(
   hammerUsd: number,
   shippingUsd: number,
