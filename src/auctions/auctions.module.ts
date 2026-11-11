@@ -18,6 +18,7 @@ import { AuctionJobsProcessor } from './processor/auction-jobs.processor';
 import { AuctionsController } from './auctions.controller';
 import { AdminAuctionsController } from './admin-auctions.controller';
 import { AuctionsWebhookController } from './auctions-webhook.controller';
+import { AuctionsOgController } from './auctions-og.controller';
 import { AuthModule } from '../auth/auth.module';
 import { QueueModule } from '../queue/queue.module';
 import { AdminModule } from '../admin/admin.module';
@@ -61,6 +62,7 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
     AuctionsController,
     AdminAuctionsController,
     AuctionsWebhookController,
+    AuctionsOgController,
   ],
   providers: [
     AuctionsService,
