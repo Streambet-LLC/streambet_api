@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
+import { AuctionWatcher } from '../prize/entities/auction-watcher.entity';
 import { AuctionStatus } from '../prize/enums/auction-status.enum';
 import { User } from '../users/entities/user.entity';
 import { EmailType } from '../enums/email-type.enum';
@@ -27,6 +28,10 @@ interface Notice {
   footnote?: string;
 }
 
+/** Footnote on every watcher-only email. */
+const WATCHER_FOOTNOTE =
+  "You're getting this because this lot is on your Hermes Auctions watchlist. Remove it from your watchlist to stop these emails.";
+
 const METHOD_LABEL: Record<string, string> = {
   card: 'Card',
   ach: 'Bank (ACH)',
@@ -47,6 +52,8 @@ export class AuctionsNotificationsService {
     private readonly auctionRepository: Repository<Auction>,
     @InjectRepository(AuctionBid)
     private readonly bidRepository: Repository<AuctionBid>,
+    @InjectRepository(AuctionWatcher)
+    private readonly watcherRepository: Repository<AuctionWatcher>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly queueService: QueueService,
@@ -150,6 +157,92 @@ export class AuctionsNotificationsService {
     return rows.map((r) => r.userId);
   }
 
+  /**
+   * Watchers who haven't bid. Bidders already get their own email for the
+   * same event, so nobody gets two.
+   */
+  private async watchersOnly(auctionId: string): Promise<User[]> {
+    const bidders = new Set(await this.bidderIds(auctionId));
+    const rows = await this.watcherRepository.find({
+      where: { auctionId },
+      select: ['userId'],
+    });
+    const ids = rows.map((r) => r.userId).filter((id) => !bidders.has(id));
+    if (ids.length === 0) return [];
+    return this.userRepository.find({ where: { id: In(ids) } });
+  }
+
+  /** An upcoming lot on someone's watchlist just opened for bidding. */
+  async notifyWatchersOpened(auctionId: string): Promise<void> {
+    const a = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (!a?.title || a.status !== AuctionStatus.ACTIVE) return;
+    const users = await this.watchersOnly(a.id);
+    if (users.length === 0) return;
+    const start = Number(a.startingPriceUsd);
+    const current = a.currentBidUsd != null ? Number(a.currentBidUsd) : null;
+    await Promise.allSettled(
+      users.map((u) =>
+        this.send(u, {
+          subject: `Bidding is open: ${this.itemName(a)}`,
+          heading: 'Bidding is open',
+          intro:
+            'A lot on your watchlist just opened for bidding. Set a max and we bid for you, only as much as needed to keep you in front.',
+          itemName: this.itemName(a),
+          rows: [
+            current != null
+              ? { label: 'Current bid', value: this.fmtUsd(current) }
+              : { label: 'Starting bid', value: this.fmtUsd(start) },
+            { label: 'Ends', value: this.fmtDate(a.endsAt) },
+          ],
+          ctaLabel: 'Place a bid',
+          ctaUrl: this.auctionUrl(a.id),
+          footnote: WATCHER_FOOTNOTE,
+        }),
+      ),
+    );
+  }
+
+  /** A watched lot closed: the result, for watchers who didn't bid. */
+  async notifyWatchersClosed(params: {
+    auction: Auction;
+    sold: boolean;
+  }): Promise<void> {
+    const a = params.auction;
+    const users = await this.watchersOnly(a.id);
+    if (users.length === 0) return;
+    const high = a.currentBidUsd != null ? Number(a.currentBidUsd) : null;
+    const hammer = Number(a.winningAmountUsd ?? a.currentBidUsd ?? 0);
+    const intro = params.sold
+      ? `A lot on your watchlist sold for ${this.fmtUsd(hammer)}.`
+      : high == null
+        ? 'A lot on your watchlist closed without any bids, so it did not sell.'
+        : 'A lot on your watchlist closed below its reserve, so it did not sell.';
+    const rows: NoticeRow[] = params.sold
+      ? [{ label: 'Sold for', value: this.fmtUsd(hammer) }]
+      : high != null
+        ? [{ label: 'High bid', value: this.fmtUsd(high) }]
+        : [];
+    rows.push({ label: 'Bids', value: String(a.bidCount ?? 0) });
+    await Promise.allSettled(
+      users.map((u) =>
+        this.send(u, {
+          subject: params.sold
+            ? `Sold for ${this.fmtUsd(hammer)}: ${this.itemName(a)}`
+            : `Ended without a sale: ${this.itemName(a)}`,
+          heading: params.sold ? 'A watched lot sold' : 'A watched lot ended',
+          intro,
+          itemName: this.itemName(a),
+          rows,
+          ctaLabel: 'Browse live auctions',
+          ctaUrl: `${this.site()}/auctions`,
+          footnote: WATCHER_FOOTNOTE,
+        }),
+      ),
+    );
+  }
+
   async notifyOutbid(params: {
     previousLeaderUserId: string;
     auctionId: string;
@@ -247,13 +340,18 @@ export class AuctionsNotificationsService {
     });
   }
 
-  /** A live auction was cancelled by the house; tell everyone who bid. */
+  /**
+   * A live or upcoming auction was cancelled by the house; tell everyone who
+   * bid, and watchers who didn't.
+   */
   async notifyCancelled(auction: Auction): Promise<void> {
     const ids = await this.bidderIds(auction.id);
-    if (ids.length === 0) return;
-    const users = await this.userRepository.find({ where: { id: In(ids) } });
-    await Promise.allSettled(
-      users.map((u) =>
+    const bidders = ids.length
+      ? await this.userRepository.find({ where: { id: In(ids) } })
+      : [];
+    const watchers = await this.watchersOnly(auction.id);
+    await Promise.allSettled([
+      ...bidders.map((u) =>
         this.send(u, {
           subject: `Auction cancelled: ${this.itemName(auction)}`,
           heading: 'This auction was cancelled',
@@ -264,7 +362,19 @@ export class AuctionsNotificationsService {
           ctaUrl: `${this.site()}/auctions`,
         }),
       ),
-    );
+      ...watchers.map((u) =>
+        this.send(u, {
+          subject: `Auction cancelled: ${this.itemName(auction)}`,
+          heading: 'A watched lot was cancelled',
+          intro:
+            'Hermes Auctions cancelled this auction, so it has come off your watchlist.',
+          itemName: this.itemName(auction),
+          ctaLabel: 'Browse live auctions',
+          ctaUrl: `${this.site()}/auctions`,
+          footnote: WATCHER_FOOTNOTE,
+        }),
+      ),
+    ]);
   }
 
   /** Winner still hasn't paid and the grace window is nearly over. */
@@ -307,14 +417,19 @@ export class AuctionsNotificationsService {
       where: { id: auctionId },
     });
     if (!a || a.endsAt.getTime() < Date.now()) return;
+    if (a.status !== AuctionStatus.ACTIVE) return;
     const ids = await this.bidderIds(auctionId);
-    if (ids.length === 0) return;
-    const users = await this.userRepository.find({ where: { id: In(ids) } });
+    const users = ids.length
+      ? await this.userRepository.find({ where: { id: In(ids) } })
+      : [];
+    const watchers = await this.watchersOnly(auctionId);
+    if (users.length === 0 && watchers.length === 0) return;
     const current = a.currentBidUsd
       ? Number(a.currentBidUsd)
       : Number(a.startingPriceUsd);
-    await Promise.allSettled(
-      users.map((u) =>
+    const softClose = `A bid in the final ${fmtExtensionWindow()} resets the clock to ${fmtExtensionWindow()}, so there's always time to respond.`;
+    await Promise.allSettled([
+      ...users.map((u) =>
         this.send(u, {
           subject: `Closing in 1 hour: ${this.itemName(a)}`,
           heading: 'Closing in about an hour',
@@ -322,7 +437,7 @@ export class AuctionsNotificationsService {
             u.id === a.currentLeaderUserId
               ? "You're the high bidder right now."
               : "You're not the high bidder right now."
-          } A bid in the final ${fmtExtensionWindow()} resets the clock to ${fmtExtensionWindow()}, so there's always time to respond.`,
+          } ${softClose}`,
           itemName: this.itemName(a),
           rows: [
             { label: 'Current bid', value: this.fmtUsd(current) },
@@ -332,7 +447,34 @@ export class AuctionsNotificationsService {
           ctaUrl: this.auctionUrl(a.id),
         }),
       ),
-    );
+      ...watchers.map((u) =>
+        this.send(u, {
+          subject: `Closing in 1 hour: ${this.itemName(a)}`,
+          heading: 'Closing in about an hour',
+          intro: `A lot on your watchlist closes in about an hour. ${softClose}`,
+          itemName: this.itemName(a),
+          rows: [
+            {
+              label: a.currentBidUsd ? 'Current bid' : 'Starting bid',
+              value: this.fmtUsd(current),
+            },
+            {
+              label: 'Min next bid',
+              value: this.fmtUsd(
+                minNextBid(
+                  a.currentBidUsd ? Number(a.currentBidUsd) : null,
+                  Number(a.startingPriceUsd),
+                ),
+              ),
+            },
+            { label: 'Ends', value: this.fmtDate(a.endsAt) },
+          ],
+          ctaLabel: 'Place a bid',
+          ctaUrl: this.auctionUrl(a.id),
+          footnote: WATCHER_FOOTNOTE,
+        }),
+      ),
+    ]);
   }
 
   async notifyWinner(params: {

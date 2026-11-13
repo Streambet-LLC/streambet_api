@@ -21,6 +21,7 @@ import Stripe from 'stripe';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { AuctionCryptoDeposit } from '../prize/entities/auction-crypto-deposit.entity';
+import { AuctionWatcher } from '../prize/entities/auction-watcher.entity';
 import { User } from '../users/entities/user.entity';
 import { AuctionStatus } from '../prize/enums/auction-status.enum';
 import { AuctionCategory } from '../prize/enums/auction-category.enum';
@@ -162,6 +163,8 @@ export class AuctionsService implements OnModuleInit {
     private readonly bidRepository: Repository<AuctionBid>,
     @InjectRepository(AuctionCryptoDeposit)
     private readonly depositRepository: Repository<AuctionCryptoDeposit>,
+    @InjectRepository(AuctionWatcher)
+    private readonly watcherRepository: Repository<AuctionWatcher>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
@@ -462,6 +465,7 @@ export class AuctionsService implements OnModuleInit {
     if (a.status === AuctionStatus.CANCELLED) {
       throw new BadRequestException('Cancelled auctions cannot be edited.');
     }
+    const wasScheduled = a.status === AuctionStatus.SCHEDULED;
 
     // Content can change at any time.
     if (dto.title !== undefined) a.title = dto.title.trim();
@@ -537,6 +541,10 @@ export class AuctionsService implements OnModuleInit {
 
     const saved = await this.auctionRepository.save(a);
     if (reschedule) await this.scheduleAuctionJobs(saved.id, saved.endsAt);
+    // Rescheduled to start now: same "bidding is open" email as the job.
+    if (wasScheduled && saved.status === AuctionStatus.ACTIVE) {
+      void this.notifications.notifyWatchersOpened(saved.id);
+    }
     this.gateway.emitAuctionUpdate(saved.id, {
       type: 'auction.updated',
       auctionId: saved.id,
@@ -554,9 +562,11 @@ export class AuctionsService implements OnModuleInit {
       );
     }
     if (a.status === AuctionStatus.CANCELLED) return a;
-    // Only a live lot's bidders get an email. After close, winners/losers
-    // were already told the outcome and any payment mess is handled by hand.
-    const wasLive = a.status === AuctionStatus.ACTIVE;
+    // Only a live or upcoming lot's bidders and watchers get an email. After
+    // close, everyone was already told the outcome and any payment mess is
+    // handled by hand.
+    const wasOpen =
+      a.status === AuctionStatus.ACTIVE || a.status === AuctionStatus.SCHEDULED;
     a.status = AuctionStatus.CANCELLED;
     const saved = await this.auctionRepository.save(a);
     await this.removeAuctionJobs(a.id);
@@ -564,7 +574,7 @@ export class AuctionsService implements OnModuleInit {
       type: 'auction.cancelled',
       auctionId: a.id,
     });
-    if (wasLive) void this.notifications.notifyCancelled(saved);
+    if (wasOpen) void this.notifications.notifyCancelled(saved);
     await this.enqueueReconcile(a.id, 0);
     this.logger.log(`Hermes auction ${a.id} cancelled by ${adminId}`);
     return saved;
@@ -753,6 +763,19 @@ export class AuctionsService implements OnModuleInit {
     }));
   }
 
+  /** Watchers per auction (auctions nobody watches are absent). */
+  private async watcherCounts(ids: string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.watcherRepository
+      .createQueryBuilder('w')
+      .select('w.auction_id', 'auctionId')
+      .addSelect('COUNT(*)', 'n')
+      .where('w.auction_id IN (:...ids)', { ids })
+      .groupBy('w.auction_id')
+      .getRawMany<{ auctionId: string; n: string }>();
+    return new Map(rows.map((r) => [r.auctionId, Number(r.n)]));
+  }
+
   private async toPublicMany(rows: Auction[], viewerId?: string) {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
@@ -774,6 +797,17 @@ export class AuctionsService implements OnModuleInit {
           })
         : [];
     const nameOf = new Map(users.map((u) => [u.id, u.username]));
+    const watcherCounts = await this.watcherCounts(ids);
+    const viewerWatching = viewerId
+      ? new Set(
+          (
+            await this.watcherRepository.find({
+              where: { userId: viewerId, auctionId: In(ids) },
+              select: ['auctionId'],
+            })
+          ).map((w) => w.auctionId),
+        )
+      : new Set<string>();
 
     let viewerBids = new Map<
       string,
@@ -867,6 +901,7 @@ export class AuctionsService implements OnModuleInit {
         acceptedMethods: methodsFor(a.acceptedPayments ?? 'both'),
         shippingUsd: Number(a.shippingUsd ?? 0),
         isFeatured: a.isFeatured,
+        watcherCount: watcherCounts.get(a.id) ?? 0,
         leader: a.currentLeaderUserId
           ? maskHandle(nameOf.get(a.currentLeaderUserId))
           : null,
@@ -893,6 +928,7 @@ export class AuctionsService implements OnModuleInit {
                   : (mine?.max ?? null),
               fundingMethod: mine?.funding ?? null,
               escrowUsd: viewerDeposits.get(a.id) ?? null,
+              isWatching: viewerWatching.has(a.id),
             }
           : null,
         fees: {
@@ -933,6 +969,7 @@ export class AuctionsService implements OnModuleInit {
         })
       : [];
     const name = new Map(users.map((u) => [u.id, u.username]));
+    const watchers = await this.watcherCounts(rows.map((r) => r.id));
     const now = Date.now();
     return rows.map((a) => ({
       id: a.id,
@@ -951,6 +988,7 @@ export class AuctionsService implements OnModuleInit {
       estValueHighUsd:
         a.estValueHighUsd != null ? Number(a.estValueHighUsd) : null,
       bidCount: a.bidCount,
+      watcherCount: watchers.get(a.id) ?? 0,
       leader: a.currentLeaderUserId
         ? (name.get(a.currentLeaderUserId) ?? null)
         : null,
@@ -1002,6 +1040,9 @@ export class AuctionsService implements OnModuleInit {
     const deposits = await this.depositRepository.find({
       where: { auctionId: id },
     });
+    const watcherCount = await this.watcherRepository.count({
+      where: { auctionId: id },
+    });
     const winner = a.winnerUserId
       ? await this.userRepository.findOne({
           where: { id: a.winnerUserId },
@@ -1033,6 +1074,7 @@ export class AuctionsService implements OnModuleInit {
         totalChargedUsd:
           a.totalChargedUsd != null ? Number(a.totalChargedUsd) : null,
         bucket: bucketForStatus(a.status),
+        watcherCount,
       },
       winner,
       bids: bids.map((b) => ({
@@ -1470,6 +1512,7 @@ export class AuctionsService implements OnModuleInit {
         type: 'auction.activated',
         auctionId,
       });
+      void this.notifications.notifyWatchersOpened(auctionId);
       this.logger.log(`Auction ${auctionId} activated`);
     }
   }
@@ -1521,6 +1564,7 @@ export class AuctionsService implements OnModuleInit {
         outcome: 'unsold',
       });
       void this.notifications.notifyLosers({ auction, winnerUserId: null });
+      void this.notifications.notifyWatchersClosed({ auction, sold: false });
       await this.enqueueReconcile(auctionId, 0);
       this.logger.log(`Auction ${auctionId} closed UNSOLD`);
       return;
@@ -1531,6 +1575,7 @@ export class AuctionsService implements OnModuleInit {
     // Everyone else hears once, here, whatever happens with the winner's
     // payment (paid, ACH processing, or failed → grace window / runner-up).
     void this.notifications.notifyLosers({ auction, winnerUserId: winnerId });
+    void this.notifications.notifyWatchersClosed({ auction, sold: true });
   }
 
   private async leaderFunding(
@@ -2075,6 +2120,72 @@ export class AuctionsService implements OnModuleInit {
       } else state = 'lost';
       return { ...d, state };
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Watchlist
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * The user's watched lots: live (ending soonest), then upcoming (opening
+   * soonest), then ended (most recent). Cancelled lots drop off.
+   */
+  async listWatchlist(userId: string) {
+    const watched = await this.watcherRepository.find({
+      where: { userId },
+      select: ['auctionId'],
+      order: { createdAt: 'DESC' },
+      take: 500,
+    });
+    if (watched.length === 0) return [];
+    const rows = (
+      await this.auctionRepository.find({
+        where: { id: In(watched.map((w) => w.auctionId)) },
+      })
+    ).filter((r) => !!r.title && r.status !== AuctionStatus.CANCELLED);
+    const rank = { live: 0, upcoming: 1, settled: 2 } as const;
+    rows.sort((a, b) => {
+      const ba = bucketForStatus(a.status);
+      const bb = bucketForStatus(b.status);
+      if (ba !== bb) return rank[ba] - rank[bb];
+      if (ba === 'upcoming') return a.startsAt.getTime() - b.startsAt.getTime();
+      if (ba === 'live') return a.endsAt.getTime() - b.endsAt.getTime();
+      return b.endsAt.getTime() - a.endsAt.getTime();
+    });
+    return this.toPublicMany(rows, userId);
+  }
+
+  /** Adds a live or upcoming lot to the user's watchlist (idempotent). */
+  async watch(userId: string, auctionId: string) {
+    const a = await this.getOrThrow(auctionId);
+    if (!a.title) throw new NotFoundException('Auction not found');
+    if (bucketForStatus(a.status) === 'settled') {
+      throw new BadRequestException('This auction has ended.');
+    }
+    await this.watcherRepository
+      .createQueryBuilder()
+      .insert()
+      .into(AuctionWatcher)
+      .values({ auctionId, userId })
+      .orIgnore()
+      .execute();
+    return {
+      watching: true,
+      watcherCount: await this.watcherRepository.count({
+        where: { auctionId },
+      }),
+    };
+  }
+
+  /** Removes a lot from the user's watchlist (any status; idempotent). */
+  async unwatch(userId: string, auctionId: string) {
+    await this.watcherRepository.delete({ auctionId, userId });
+    return {
+      watching: false,
+      watcherCount: await this.watcherRepository.count({
+        where: { auctionId },
+      }),
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────
