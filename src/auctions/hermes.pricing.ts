@@ -11,15 +11,15 @@ export type PremiumRates = Record<AuctionFundingMethod, number>;
 
 /**
  * Buyer fee for newly created auctions, as a percent of the hammer, by the
- * tender the winner pays with (2026-11-09: card 4%, ACH 1%, USDC 1%;
- * USDC was 0.5% earlier that day).
+ * tender the winner pays with (2026-11-12: card 5%, ACH 2%, USDC 2%;
+ * was card 4% / ACH 1% / USDC 1% from 2026-11-09).
  * Each auction stores its own three rates at creation, so changing these
  * never changes the terms of an auction already listed.
  */
 export const BUYER_PREMIUM_RATES: Readonly<PremiumRates> = Object.freeze({
-  card: 4,
-  ach: 1,
-  usdc: 1,
+  card: 5,
+  ach: 2,
+  usdc: 2,
 });
 
 /**
