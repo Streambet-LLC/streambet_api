@@ -22,6 +22,8 @@ export interface GoogleAuthResponse {
   role: string;
   accessToken: string;
   refreshToken: string;
+  /** This sign-in created the account. */
+  isNewUser: boolean;
 }
 
 @Injectable()
@@ -86,6 +88,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         user: createdUser,
         accessToken: token,
         refreshToken: userRefreshToken,
+        isNewUser,
       } = await this.authService.validateOAuthUser(googleUser);
 
       // Create a clean response object without spreading user properties
@@ -97,6 +100,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         role: createdUser.role,
         accessToken: token,
         refreshToken: userRefreshToken,
+        isNewUser,
       };
 
       Logger.log('Google OAuth success for user:', createdUser.email);

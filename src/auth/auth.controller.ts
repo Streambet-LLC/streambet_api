@@ -31,6 +31,7 @@ import { User } from '../users/entities/user.entity';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import {
   RegisterDto,
+  SignupAttributionDto,
   UserNameDto,
   UserRegistrationResponseDto,
 } from './dto/register.dto';
@@ -48,6 +49,8 @@ interface GoogleAuthResponse {
   user: User;
   accessToken: string;
   refreshToken: string;
+  /** Set by GoogleStrategy when this sign-in created the account. */
+  isNewUser?: boolean;
 }
 
 @ApiTags('auth')
@@ -204,6 +207,30 @@ export class AuthController {
     };
   }
 
+  @ApiOperation({
+    summary: 'Save first-touch ad attribution on a just-created account',
+    description:
+      'Google sign-ups post the utm_* / fbclid params the visitor landed with right after the OAuth callback. Saved only if the account is under a day old and has none yet.',
+  })
+  @ApiBody({ type: SignupAttributionDto })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('signup-attribution')
+  async saveSignupAttribution(
+    @Request() req: RequestWithUser,
+    @Body() dto: SignupAttributionDto,
+  ) {
+    const data = await this.authService.saveSignupAttribution(
+      req.user.id,
+      dto.attribution,
+    );
+    return {
+      data,
+      message: data.saved ? 'Attribution saved' : 'Nothing to save',
+      statusCode: HttpStatus.OK,
+    };
+  }
+
   @ApiOperation({ summary: 'Get the Old user profile' })
   @ApiResponse({
     status: 200,
@@ -290,7 +317,10 @@ export class AuthController {
       const baseUrl = clientUrl.endsWith('/')
         ? clientUrl.slice(0, -1)
         : clientUrl;
-      const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}`;
+      // `new=1` tells the web app this sign-in created the account, so it
+      // fires its signup events and saves the ad attribution.
+      const newFlag = req.user.isNewUser ? '&new=1' : '';
+      const redirectUrl = `${baseUrl}/auth/google-callback?token=${accessToken}&refreshToken=${refreshToken}${newFlag}`;
       return res.redirect(redirectUrl);
     } catch (error) {
       this.logger.error('Google OAuth callback error:', {
