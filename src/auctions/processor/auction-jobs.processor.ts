@@ -5,6 +5,7 @@ import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_PAYMENT_REMINDER_JOB,
   AUCTION_CLOSE_JOB,
+  AUCTION_CLOSING_DAY_JOB,
   AUCTION_CLOSING_SOON_JOB,
   AUCTION_ACTIVATE_JOB,
   AUCTION_QUEUE,
@@ -48,6 +49,9 @@ export class AuctionJobsProcessor extends WorkerHost {
       switch (name) {
         case AUCTION_CLOSING_SOON_JOB:
           await this.notifications.notifyClosingSoon(auctionId);
+          return;
+        case AUCTION_CLOSING_DAY_JOB:
+          await this.notifications.notifyWatchersClosingDay(auctionId);
           return;
         case AUCTION_CLOSE_JOB:
           await this.auctionsService.runCloseJob(auctionId);

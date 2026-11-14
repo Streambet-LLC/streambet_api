@@ -204,6 +204,48 @@ export class AuctionsNotificationsService {
     );
   }
 
+  /**
+   * A watched lot closes in about 24 hours (watchers who haven't bid; bidders
+   * get their 1-hour email). Skipped if the lot isn't live, or if the job
+   * ran so late that the 1-hour reminder is next anyway.
+   */
+  async notifyWatchersClosingDay(auctionId: string): Promise<void> {
+    const a = await this.auctionRepository.findOne({
+      where: { id: auctionId },
+    });
+    if (!a?.title || a.status !== AuctionStatus.ACTIVE) return;
+    const msLeft = a.endsAt.getTime() - Date.now();
+    if (msLeft < 2 * 60 * 60 * 1000 || msLeft > 25 * 60 * 60 * 1000) return;
+    const users = await this.watchersOnly(a.id);
+    if (users.length === 0) return;
+    const current = a.currentBidUsd != null ? Number(a.currentBidUsd) : null;
+    const start = Number(a.startingPriceUsd);
+    await Promise.allSettled(
+      users.map((u) =>
+        this.send(u, {
+          subject: `Ends in 24 hours: ${this.itemName(a)}`,
+          heading: 'Closing in 24 hours',
+          intro: `A lot on your watchlist closes in about 24 hours. Set a max now and we bid for you, only as much as needed to keep you in front. A bid in the final ${fmtExtensionWindow()} resets the clock to ${fmtExtensionWindow()}.`,
+          itemName: this.itemName(a),
+          rows: [
+            current != null
+              ? { label: 'Current bid', value: this.fmtUsd(current) }
+              : { label: 'Starting bid', value: this.fmtUsd(start) },
+            {
+              label: 'Min next bid',
+              value: this.fmtUsd(minNextBid(current, start)),
+            },
+            { label: 'Bids', value: String(a.bidCount ?? 0) },
+            { label: 'Ends', value: this.fmtDate(a.endsAt) },
+          ],
+          ctaLabel: 'Place a bid',
+          ctaUrl: this.auctionUrl(a.id),
+          footnote: WATCHER_FOOTNOTE,
+        }),
+      ),
+    );
+  }
+
   /** A watched lot closed: the result, for watchers who didn't bid. */
   async notifyWatchersClosed(params: {
     auction: Auction;

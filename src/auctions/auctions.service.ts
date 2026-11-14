@@ -45,6 +45,7 @@ import {
   AUCTION_AUTOPAY_RETRY_JOB,
   AUCTION_PAYMENT_REMINDER_JOB,
   AUCTION_CLOSE_JOB,
+  AUCTION_CLOSING_DAY_JOB,
   AUCTION_CLOSING_SOON_JOB,
   AUCTION_ACTIVATE_JOB,
   AUCTION_QUEUE,
@@ -81,6 +82,15 @@ const MAX_LENGTH_MS = 60 * DAY_MS;
 const UNUSED_DEPOSIT_GRACE_MS = 20 * 60 * 1000;
 /** Seller shown to bidders when an auction doesn't name one. */
 const HOUSE_SELLER_NAME = 'Hermes Auctions';
+/** The watcher reminder goes out this long before the scheduled close. */
+const CLOSING_DAY_BEFORE_MS = DAY_MS;
+/** Only scheduled when the close is at least this far out (else it'd fire at once). */
+const CLOSING_DAY_MIN_LEAD_MS = DAY_MS + 5 * 60 * 1000;
+
+/** BullMQ job id for the 24h watcher reminder (job ids can't contain ':'). */
+function closingDayJobId(auctionId: string): string {
+  return `auction-closing-day__${auctionId}`;
+}
 
 /** The auction's own buyer fee rates by tender (fixed at creation; 0 on legacy rows). */
 function premiumRatesOf(
@@ -236,6 +246,10 @@ export class AuctionsService implements OnModuleInit {
     for (const a of due) {
       await this.runActivateJob(a.id).catch(() => undefined);
     }
+
+    await this.ensureClosingDayJobs().catch((err) =>
+      this.logger.warn(`Sweep 24h reminders failed: ${(err as Error).message}`),
+    );
 
     const pending = await this.auctionRepository.find({
       where: [
@@ -1421,6 +1435,7 @@ export class AuctionsService implements OnModuleInit {
     // BullMQ job ids can't contain ':'.
     const closeJobId = `auction-close__${auctionId}`;
     const soonJobId = `auction-closing-soon__${auctionId}`;
+    const dayJobId = closingDayJobId(auctionId);
     const activateJobId = `auction-activate__${auctionId}`;
     const now = Date.now();
     const auction = await this.auctionRepository.findOne({
@@ -1431,6 +1446,7 @@ export class AuctionsService implements OnModuleInit {
     await Promise.allSettled([
       this.auctionQueue.remove(closeJobId),
       this.auctionQueue.remove(soonJobId),
+      this.auctionQueue.remove(dayJobId),
       this.auctionQueue.remove(activateJobId),
     ]);
 
@@ -1455,6 +1471,17 @@ export class AuctionsService implements OnModuleInit {
         },
       );
     }
+    if (endsAt.getTime() - now > CLOSING_DAY_MIN_LEAD_MS) {
+      await this.auctionQueue.add(
+        AUCTION_CLOSING_DAY_JOB,
+        { auctionId },
+        {
+          ...opts,
+          jobId: dayJobId,
+          delay: endsAt.getTime() - CLOSING_DAY_BEFORE_MS - now,
+        },
+      );
+    }
     if (
       auction?.status === AuctionStatus.SCHEDULED &&
       auction.startsAt.getTime() > now
@@ -1475,9 +1502,48 @@ export class AuctionsService implements OnModuleInit {
     await Promise.allSettled([
       this.auctionQueue.remove(`auction-close__${auctionId}`),
       this.auctionQueue.remove(`auction-closing-soon__${auctionId}`),
+      this.auctionQueue.remove(closingDayJobId(auctionId)),
       this.auctionQueue.remove(`auction-activate__${auctionId}`),
       this.auctionQueue.remove(`auction-autopay-retry__${auctionId}`),
     ]);
+  }
+
+  /**
+   * Adds the 24-hours-before-close watcher reminder to live / upcoming lots
+   * that don't have one yet: lots listed before the reminder existed, or a
+   * job lost from Redis. Only lots more than a day out, so it can never fire
+   * twice (once sent, the lot is inside the window). Returns how many it added.
+   */
+  async ensureClosingDayJobs(): Promise<number> {
+    const now = Date.now();
+    const rows = await this.auctionRepository.find({
+      where: {
+        status: In([AuctionStatus.ACTIVE, AuctionStatus.SCHEDULED]),
+        endsAt: MoreThan(new Date(now + CLOSING_DAY_MIN_LEAD_MS)),
+      },
+      select: ['id', 'title', 'endsAt'],
+    });
+    let added = 0;
+    for (const a of rows) {
+      if (!a.title) continue; // legacy shop auctions
+      const jobId = closingDayJobId(a.id);
+      if (await this.auctionQueue.getJob(jobId)) continue;
+      await this.auctionQueue.add(
+        AUCTION_CLOSING_DAY_JOB,
+        { auctionId: a.id },
+        {
+          jobId,
+          delay: a.endsAt.getTime() - CLOSING_DAY_BEFORE_MS - now,
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        },
+      );
+      added++;
+    }
+    if (added) {
+      this.logger.log(`Scheduled 24h watcher reminders for ${added} lot(s)`);
+    }
+    return added;
   }
 
   private async enqueueReconcile(
