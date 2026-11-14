@@ -15,6 +15,7 @@ import { UsersService } from '../users/users.service';
 import { WalletsService } from '../wallets/wallets.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
+import { sanitizeSignupAttribution } from '../users/signup-attribution';
 import { ConfigService } from '@nestjs/config';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -89,6 +90,7 @@ export class AuthService {
         redirect,
         promoCode,
         refLink,
+        attribution,
       } = registerDto;
       if (!tosAccepted) {
         throw new BadRequestException(
@@ -129,6 +131,7 @@ export class AuthService {
         dateOfBirth: dob,
         promoCode,
         refLink,
+        signupAttribution: sanitizeSignupAttribution(attribution),
       });
 
       // Create wallet for the user
@@ -433,12 +436,17 @@ export class AuthService {
   }
 
   // Method for Google OAuth validation - will be expanded later
-  async validateOAuthUser(
-    profile: GoogleProfile,
-  ): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+  async validateOAuthUser(profile: GoogleProfile): Promise<{
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+    /** True when this sign-in created the account (web fires its signup events). */
+    isNewUser: boolean;
+  }> {
     const { email, name, profileImageUrl } = profile;
 
     let user = await this.usersService.findByEmail(email);
+    const isNewUser = !user;
 
     // Sign-ups are open again for Hermes Auctions bidders. New accounts are
     // always plain users — the analytics dashboard stays admin-only.
@@ -475,7 +483,25 @@ export class AuthService {
     const accessToken = this.generateToken(user);
     const refreshToken = await this.generateRefreshToken(user);
     await this.usersService.update(user.id, { lastLogin: new Date() });
-    return { user, accessToken, refreshToken };
+    return { user, accessToken, refreshToken, isNewUser };
+  }
+
+  /**
+   * Google sign-ups can't carry the ad attribution through OAuth, so the web
+   * app posts it right after the callback. Saved only on a fresh account
+   * that has none yet (see UsersService.setSignupAttributionIfFresh).
+   */
+  async saveSignupAttribution(
+    userId: string,
+    raw: unknown,
+  ): Promise<{ saved: boolean }> {
+    const attribution = sanitizeSignupAttribution(raw);
+    if (!attribution) return { saved: false };
+    const saved = await this.usersService.setSignupAttributionIfFresh(
+      userId,
+      attribution,
+    );
+    return { saved };
   }
 
   async usernameExists(username: string) {

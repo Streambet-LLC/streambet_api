@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsIP,
   IsDate,
+  IsObject,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -148,6 +149,34 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   refLink?: string;
+
+  @ApiProperty({
+    description:
+      'First-touch ad attribution captured by the web app (utm_*, fbclid, landing_path, captured_at). Unknown keys are dropped server-side.',
+    example: {
+      utm_source: 'meta',
+      utm_medium: 'paid',
+      utm_campaign: 'tyranitar',
+    },
+    required: false,
+  })
+  @IsOptional()
+  @IsObject()
+  attribution?: Record<string, unknown>;
+}
+
+/** Body of POST /auth/signup-attribution (Google sign-ups, right after the callback). */
+export class SignupAttributionDto {
+  @ApiProperty({
+    description: 'Same shape as RegisterDto.attribution.',
+    example: {
+      utm_source: 'meta',
+      utm_medium: 'paid',
+      utm_campaign: 'tyranitar',
+    },
+  })
+  @IsObject()
+  attribution: Record<string, unknown>;
 }
 
 export class UserRegistrationResponseDto {

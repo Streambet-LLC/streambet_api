@@ -2,11 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Request,
   UseGuards,
@@ -117,6 +119,14 @@ export class AuctionsController {
     return { data: await this.auctions.listMine(req.user.id) };
   }
 
+  /** The signed-in user's watchlist (declared before `:id`). */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('watchlist')
+  async watchlist(@Request() req: RequestWithUser) {
+    return { data: await this.auctions.listWatchlist(req.user.id) };
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me/payment-methods')
@@ -153,6 +163,26 @@ export class AuctionsController {
   @Get(':id/bids')
   async bids(@Param('id', ParseUUIDPipe) id: string) {
     return { data: await this.auctions.getPublicBids(id) };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Put(':id/watch')
+  async watch(
+    @Request() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return { data: await this.auctions.watch(req.user.id, id) };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/watch')
+  async unwatch(
+    @Request() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return { data: await this.auctions.unwatch(req.user.id, id) };
   }
 
   @ApiBearerAuth()

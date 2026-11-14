@@ -311,8 +311,20 @@
       "accounts": [
         {
           "name": "payer",
+          "docs": [
+            "Must be the program's upgrade authority. Without this, anyone could",
+            "call `initialize` between deploy and init and pick the treasury that",
+            "every settlement pays into."
+          ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "program",
+          "address": "BNHMW9ZTzqRsRsKi9DUt8i5T4PFDFGRevPcHCQpvkuTu"
+        },
+        {
+          "name": "program_data"
         },
         {
           "name": "config",
@@ -1304,6 +1316,11 @@
       "code": 6012,
       "name": "AuctionMismatch",
       "msg": "Escrow does not belong to this auction."
+    },
+    {
+      "code": 6013,
+      "name": "NotUpgradeAuthority",
+      "msg": "Only the program's upgrade authority can initialize it."
     }
   ],
   "types": [

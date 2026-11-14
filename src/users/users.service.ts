@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, IsNull, Not, Or, Repository } from 'typeorm';
+import { ILike, IsNull, MoreThan, Not, Or, Repository } from 'typeorm';
+import type { SignupAttribution } from './signup-attribution';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
 import {
@@ -246,6 +247,27 @@ export class UsersService {
   async update(id: string, userData: Partial<User>): Promise<UserResponseDto> {
     await this.usersRepository.update({ id }, userData);
     return this.findOne(id);
+  }
+
+  /**
+   * Saves first-touch ad attribution on an account that was just created
+   * (Google sign-ups send it right after the OAuth callback). First write
+   * wins, and only within a day of signup, so later ad clicks never retag an
+   * existing account. Returns whether anything was saved.
+   */
+  async setSignupAttributionIfFresh(
+    userId: string,
+    attribution: SignupAttribution,
+  ): Promise<boolean> {
+    const res = await this.usersRepository.update(
+      {
+        id: userId,
+        signupAttribution: IsNull(),
+        createdAt: MoreThan(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+      },
+      { signupAttribution: attribution },
+    );
+    return (res.affected ?? 0) > 0;
   }
 
   async profileUpdate(
@@ -641,6 +663,8 @@ export class UsersService {
               : null,
         solanaWallet: item.solanaWallet ?? null,
         cryptoPaymentsEnabled: !!item.cryptoPaymentsEnabled,
+        // First-touch ad params from signup (Meta ads), null if untagged.
+        signupAttribution: item.signupAttribution ?? null,
         cryptoOverrideFeeBps:
           item.cryptoOverrideFeeBps !== null &&
           item.cryptoOverrideFeeBps !== undefined

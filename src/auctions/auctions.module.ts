@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Auction } from '../prize/entities/auction.entity';
 import { AuctionBid } from '../prize/entities/auction-bid.entity';
 import { AuctionCryptoDeposit } from '../prize/entities/auction-crypto-deposit.entity';
+import { AuctionWatcher } from '../prize/entities/auction-watcher.entity';
 import { User } from '../users/entities/user.entity';
 import { AuctionsService } from './auctions.service';
 import { AuctionsPaymentsService } from './auctions-payments.service';
@@ -41,7 +42,13 @@ import { AUCTION_QUEUE } from '../common/constants/queue.constants';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Auction, AuctionBid, AuctionCryptoDeposit, User]),
+    TypeOrmModule.forFeature([
+      Auction,
+      AuctionBid,
+      AuctionCryptoDeposit,
+      AuctionWatcher,
+      User,
+    ]),
     BullModule.registerQueueAsync({
       name: AUCTION_QUEUE,
       imports: [ConfigModule],

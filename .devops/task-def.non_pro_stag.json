@@ -24,6 +24,7 @@
         { "name": "REFRESH_TOKEN_EXPIRES_IN", "value": "30d" },
         { "name": "FILE_DRIVER", "value": "s3" },
         { "name": "AWS_SMTP_PORT", "value": "465" },
+        { "name": "HERMES_TREASURY_ATA", "value": "A3MHpXX9F1kd51mng84b93eJDUgsD4GGavF4anQ21Xve" },
         { "name": "MAIL_DEFAULT_NAME", "value": "CardCade" },
         { "name": "MAIL_SECURE", "value": "true" },
         { "name": "MAIL_REQUIRE_TLS", "value": "true" },

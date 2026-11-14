@@ -3,6 +3,7 @@ import { Entity, Column, OneToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Wallet } from '../../wallets/entities/wallet.entity';
 import { UserRole } from 'src/enums/user-role.enum';
+import type { SignupAttribution } from '../signup-attribution';
 
 export class NotificationPreference {
   emailNotification: boolean;
@@ -173,6 +174,13 @@ export class User extends BaseEntity {
 
   @Column({ length: 255, type: 'varchar', nullable: true, name: 'promo_code' })
   promoCode: string;
+
+  /**
+   * First-touch ad params (utm_*, fbclid, landing path) the account signed up
+   * with, for Meta ads attribution. See `users/signup-attribution.ts`.
+   */
+  @Column({ type: 'jsonb', nullable: true, name: 'signup_attribution' })
+  signupAttribution: SignupAttribution | null;
 
   @Column({
     length: 255,
