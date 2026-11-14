@@ -45,6 +45,50 @@ export interface HermesCryptoConfig {
   authority: string | null;
 }
 
+/**
+ * Why the on-chain config can't be used yet (empty = ready). The treasury
+ * check matters because `initialize` used to be first-come: someone could
+ * have initialized with our (public) authority and mint but their own
+ * treasury, and every settlement would pay them. Mainnet requires an
+ * expected treasury; devnet/custom only check it when one is configured.
+ */
+export function escrowConfigProblems(
+  cfg: {
+    authority: PublicKey;
+    paymentMint: PublicKey;
+    treasury: PublicKey;
+  } | null,
+  expected: {
+    authority: PublicKey;
+    mint: PublicKey;
+    treasury: PublicKey | null;
+    cluster: HermesCryptoConfig['cluster'];
+  },
+): string[] {
+  if (!cfg) return ['config missing'];
+  const problems: string[] = [];
+  if (!cfg.authority.equals(expected.authority)) {
+    problems.push(
+      `authority ${cfg.authority.toBase58()} is not ours (${expected.authority.toBase58()})`,
+    );
+  }
+  if (!cfg.paymentMint.equals(expected.mint)) {
+    problems.push(
+      `mint ${cfg.paymentMint.toBase58()} is not ${expected.mint.toBase58()}`,
+    );
+  }
+  if (expected.treasury) {
+    if (!cfg.treasury.equals(expected.treasury)) {
+      problems.push(
+        `treasury ${cfg.treasury.toBase58()} is not HERMES_TREASURY_ATA (${expected.treasury.toBase58()})`,
+      );
+    }
+  } else if (expected.cluster === 'mainnet-beta') {
+    problems.push('HERMES_TREASURY_ATA is not set (required on mainnet)');
+  }
+  return problems;
+}
+
 export interface DepositQuote {
   /** Base64 legacy transaction; the bidder's wallet signs + sends it. */
   transaction: string;
@@ -74,6 +118,8 @@ export class AuctionsCryptoService implements OnModuleInit {
   private program: anchor.Program | null = null;
   private programId: PublicKey | null = null;
   private mint: PublicKey | null = null;
+  /** HERMES_TREASURY_ATA: where settlements must pay (see escrowConfigProblems). */
+  private expectedTreasury: PublicKey | null = null;
   private cluster: HermesCryptoConfig['cluster'] = 'custom';
   private memoSecret = '';
 
@@ -100,6 +146,8 @@ export class AuctionsCryptoService implements OnModuleInit {
       this.connection = new Connection(rpcUrl, 'confirmed');
       this.programId = new PublicKey(programId);
       this.mint = new PublicKey(mint);
+      const treasury = this.config.get<string>('solana.hermesTreasuryAta');
+      this.expectedTreasury = treasury ? new PublicKey(treasury) : null;
       this.cluster = /devnet/i.test(rpcUrl)
         ? 'devnet'
         : /mainnet/i.test(rpcUrl)
@@ -115,7 +163,7 @@ export class AuctionsCryptoService implements OnModuleInit {
         provider,
       );
       this.logger.log(
-        `Hermes escrow client: program=${this.programId.toBase58()} cluster=${this.cluster} authority=${this.authority.publicKey.toBase58()}`,
+        `Hermes escrow client: program=${this.programId.toBase58()} cluster=${this.cluster} authority=${this.authority.publicKey.toBase58()} treasury=${this.expectedTreasury?.toBase58() ?? 'unset'}`,
       );
       void this.refreshReadiness();
     } catch (err) {
@@ -127,11 +175,13 @@ export class AuctionsCryptoService implements OnModuleInit {
   }
 
   /**
-   * USDC bidding is only offered once the program's config exists and names
-   * this backend as its authority — otherwise refunds/settles would fail.
+   * USDC bidding is only offered once the program's config exists, names
+   * this backend as its authority, uses our mint, and pays the treasury we
+   * expect (see escrowConfigProblems).
    */
   private ready = false;
   private readyCheckedAt = 0;
+  private lastProblems = '';
 
   private async refreshReadiness(): Promise<boolean> {
     if (!this.program) return false;
@@ -140,15 +190,22 @@ export class AuctionsCryptoService implements OnModuleInit {
       const cfg = await this.accounts().hermesConfig.fetchNullable(
         this.configPda(),
       );
-      const ok =
-        !!cfg &&
-        (cfg.authority as PublicKey).equals(this.authority.publicKey) &&
-        (cfg.paymentMint as PublicKey).equals(this.mint);
-      if (ok !== this.ready) {
-        this.logger.log(
-          `Hermes escrow ${ok ? 'READY' : 'not ready'} (config ${cfg ? 'found' : 'missing'})`,
-        );
+      const problems = escrowConfigProblems(cfg, {
+        authority: this.authority.publicKey,
+        mint: this.mint,
+        treasury: this.expectedTreasury,
+        cluster: this.cluster,
+      });
+      const ok = problems.length === 0;
+      const summary = problems.join('; ');
+      if (ok !== this.ready || summary !== this.lastProblems) {
+        if (ok) this.logger.log('Hermes escrow READY');
+        else if (problems.some((p) => p.startsWith('treasury'))) {
+          // Someone else's treasury on our config: never settle into it.
+          this.logger.error(`Hermes escrow NOT ready: ${summary}`);
+        } else this.logger.log(`Hermes escrow not ready: ${summary}`);
       }
+      this.lastProblems = summary;
       this.ready = ok;
     } catch (err) {
       this.logger.warn(
@@ -298,9 +355,21 @@ export class AuctionsCryptoService implements OnModuleInit {
     return pda.toBase58();
   }
 
+  /** The settle destination, re-checked against HERMES_TREASURY_ATA every time. */
   private async treasury(): Promise<PublicKey> {
     const cfg = await this.accounts().hermesConfig.fetch(this.configPda());
-    return cfg.treasury as PublicKey;
+    const treasury = cfg.treasury as PublicKey;
+    const expected = this.expectedTreasury;
+    if (
+      (expected && !treasury.equals(expected)) ||
+      (!expected && this.cluster === 'mainnet-beta')
+    ) {
+      this.ready = false;
+      throw new Error(
+        `Refusing to settle: on-chain treasury ${treasury.toBase58()} is not HERMES_TREASURY_ATA (${expected?.toBase58() ?? 'unset'}).`,
+      );
+    }
+    return treasury;
   }
 
   /** Current escrow balance in USD (floored to the cent); null if closed. */

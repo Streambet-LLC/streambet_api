@@ -18,6 +18,12 @@ export default registerAs('solana', () => ({
     process.env.CARDCADE_USDC_MINT ||
     '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   treasuryAta: process.env.CARDCADE_TREASURY_ATA || '',
+  /**
+   * Hermes escrow: the USDC token account settlements must pay into. The API
+   * only enables USDC bidding when the on-chain config's treasury matches it.
+   * Required on mainnet (USDC stays off without it); optional on devnet.
+   */
+  hermesTreasuryAta: process.env.HERMES_TREASURY_ATA || '',
   authoritySecretBase58: process.env.CARDCADE_AUTHORITY_SECRET_BASE58 || '',
   /**
    * Optional. If unset, the authority key is reused as the treasury signer
