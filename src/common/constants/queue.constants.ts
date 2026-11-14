@@ -15,6 +15,8 @@ export const QUEUE_COINFLOW_WEBHOOK = 'queue-coinflow-webhook';
 export const AUCTION_QUEUE = `${prefix}AUCTION`;
 export const AUCTION_CLOSE_JOB = 'auction-close';
 export const AUCTION_CLOSING_SOON_JOB = 'auction-closing-soon';
+/** 24 hours before close: watcher reminder. */
+export const AUCTION_CLOSING_DAY_JOB = 'auction-closing-day';
 export const AUCTION_AUTOPAY_RETRY_JOB = 'auction-autopay-retry';
 export const AUCTION_PAYMENT_REMINDER_JOB = 'auction-payment-reminder';
 export const AUCTION_ACTIVATE_JOB = 'auction-activate';
