@@ -1054,9 +1054,29 @@ export class AuctionsService implements OnModuleInit {
     const deposits = await this.depositRepository.find({
       where: { auctionId: id },
     });
-    const watcherCount = await this.watcherRepository.count({
-      where: { auctionId: id },
-    });
+    // Who's watching (Nick, 2026-11-15), newest first, with whether each
+    // watcher has bid yet (a watcher who hasn't bid is a lead to follow up).
+    const watchers = await this.watcherRepository
+      .createQueryBuilder('w')
+      .leftJoin(User, 'u', 'u.id = w.user_id')
+      .select([
+        'w.user_id AS "userId"',
+        'u.username AS username',
+        'u.email AS email',
+        'w.created_at AS "watchingSince"',
+        `EXISTS (SELECT 1 FROM auction_bids b
+                  WHERE b.auction_id = w.auction_id AND b.user_id = w.user_id) AS "hasBid"`,
+      ])
+      .where('w.auction_id = :id', { id })
+      .orderBy('w.created_at', 'DESC')
+      .getRawMany<{
+        userId: string;
+        username: string | null;
+        email: string | null;
+        watchingSince: Date;
+        hasBid: boolean;
+      }>();
+    const watcherCount = watchers.length;
     const winner = a.winnerUserId
       ? await this.userRepository.findOne({
           where: { id: a.winnerUserId },
@@ -1096,6 +1116,11 @@ export class AuctionsService implements OnModuleInit {
         amountUsd: Number(b.amountUsd),
         proxyMaxUsd: Number(b.proxyMaxUsd),
         createdAt: new Date(b.createdAt).toISOString(),
+      })),
+      watchers: watchers.map((w) => ({
+        ...w,
+        hasBid: w.hasBid === true || String(w.hasBid) === 'true',
+        watchingSince: new Date(w.watchingSince).toISOString(),
       })),
       deposits: deposits.map((d) => ({
         id: d.id,
