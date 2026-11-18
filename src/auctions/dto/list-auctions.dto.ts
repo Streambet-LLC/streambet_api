@@ -16,6 +16,7 @@ export const PUBLIC_BUCKETS = ['live', 'upcoming', 'ended'] as const;
 export type PublicBucket = (typeof PUBLIC_BUCKETS)[number];
 
 export const AUCTION_SORTS = [
+  'featured',
   'ending',
   'newest',
   'price_asc',
@@ -43,8 +44,12 @@ export class ListAuctionsQueryDto {
   @MaxLength(120)
   q?: string;
 
-  /** `ending` = soonest first (live), soonest to open (upcoming), latest (ended). */
-  @ApiPropertyOptional({ enum: AUCTION_SORTS, default: 'ending' })
+  /**
+   * `featured` = featured lots first, then the admin's order, then `ending`
+   * (ended lots ignore featuring and the order). `ending` = soonest first
+   * (live), soonest to open (upcoming), latest (ended). Omitted = `featured`.
+   */
+  @ApiPropertyOptional({ enum: AUCTION_SORTS, default: 'featured' })
   @IsOptional()
   @IsIn(AUCTION_SORTS)
   sort?: AuctionSort;

@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Request,
   UploadedFile,
@@ -17,7 +18,16 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsIn,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { diskStorage } from 'multer';
 import { tmpdir } from 'os';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -43,6 +53,16 @@ import type { AuctionBucket } from './hermes.types';
 
 interface RequestWithUser extends Request {
   user: User;
+}
+
+class ReorderAuctionsDto {
+  @IsIn(['live', 'upcoming'])
+  bucket: 'live' | 'upcoming';
+
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID('all', { each: true })
+  ids: string[];
 }
 
 class ValueSubjectDto {
@@ -78,12 +98,34 @@ export class AdminAuctionsController {
   async list(
     @Request() req: RequestWithUser,
     @Query('bucket') bucket = 'live',
+    @Query('order') order = 'time',
   ) {
     this.ensureAdmin(req.user);
     if (!['live', 'upcoming', 'settled'].includes(bucket)) {
       throw new BadRequestException('bucket must be live, upcoming or settled');
     }
-    return { data: await this.auctions.listAdmin(bucket as AuctionBucket) };
+    if (order !== 'time' && order !== 'marketplace') {
+      throw new BadRequestException('order must be time or marketplace');
+    }
+    return {
+      data: await this.auctions.listAdmin(bucket as AuctionBucket, order),
+    };
+  }
+
+  /** Marketplace order for one tab, top to bottom (the Reorder dialog). */
+  @Put('order')
+  async reorder(
+    @Request() req: RequestWithUser,
+    @Body() dto: ReorderAuctionsDto,
+  ) {
+    this.ensureAdmin(req.user);
+    return {
+      data: await this.auctions.reorderMarketplace(
+        req.user.id,
+        dto.bucket,
+        dto.ids,
+      ),
+    };
   }
 
   @Post()

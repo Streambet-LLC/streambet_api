@@ -16,6 +16,7 @@ import {
   LessThanOrEqual,
   MoreThan,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 import Stripe from 'stripe';
 import { Auction } from '../prize/entities/auction.entity';
@@ -698,7 +699,7 @@ export class AuctionsService implements OnModuleInit {
         rails: [params.payment, 'both'],
       });
 
-    switch (params.sort ?? 'ending') {
+    switch (params.sort ?? 'featured') {
       case 'newest':
         qb.orderBy('a.createdAt', 'DESC');
         break;
@@ -711,9 +712,14 @@ export class AuctionsService implements OnModuleInit {
       case 'bids':
         qb.orderBy('a.bidCount', 'DESC');
         break;
+      case 'ending':
+        this.orderByTime(qb, params.bucket);
+        break;
       default:
-        if (params.bucket === 'upcoming') qb.orderBy('a.startsAt', 'ASC');
-        else qb.orderBy('a.endsAt', params.bucket === 'ended' ? 'DESC' : 'ASC');
+        // Same order in "All categories" and in each category: a category
+        // filter only drops rows (Nick, 2026-11-17: featured lots lead both).
+        if (params.bucket === 'ended') this.orderByTime(qb, 'ended');
+        else this.orderForMarketplace(qb, params.bucket);
     }
     qb.addOrderBy('a.id', 'ASC') // stable pages
       .skip(params.offset ?? 0)
@@ -723,7 +729,37 @@ export class AuctionsService implements OnModuleInit {
     return { rows: await this.toPublicMany(rows, params.viewerId), total };
   }
 
-  /** Landing-page rail: featured first, then live soonest-ending, then upcoming. */
+  /** Soonest to close (live), soonest to open (upcoming), latest (ended). */
+  private orderByTime(
+    qb: SelectQueryBuilder<Auction>,
+    bucket: PublicBucket | AuctionBucket,
+  ) {
+    if (bucket === 'upcoming') qb.addOrderBy('a.startsAt', 'ASC');
+    else
+      qb.addOrderBy(
+        'a.endsAt',
+        bucket === 'ended' || bucket === 'settled' ? 'DESC' : 'ASC',
+      );
+  }
+
+  /**
+   * The marketplace's default ("Featured") order for live / upcoming lots:
+   * featured lots first, then the order set in the admin Reorder dialog, then
+   * lots never placed there by time.
+   */
+  private orderForMarketplace(
+    qb: SelectQueryBuilder<Auction>,
+    bucket: 'live' | 'upcoming',
+  ) {
+    qb.addOrderBy('a.isFeatured', 'DESC').addOrderBy(
+      'a.displayOrder',
+      'ASC',
+      'NULLS LAST',
+    );
+    this.orderByTime(qb, bucket);
+  }
+
+  /** Landing-page rail: featured first, then live before upcoming, each in marketplace order. */
   async listFeatured(limit = 6, viewerId?: string) {
     const rows = await this.auctionRepository
       .createQueryBuilder('a')
@@ -733,6 +769,7 @@ export class AuctionsService implements OnModuleInit {
       })
       .orderBy('a.isFeatured', 'DESC')
       .addOrderBy(`CASE WHEN a.status = 'active' THEN 0 ELSE 1 END`, 'ASC')
+      .addOrderBy('a.displayOrder', 'ASC', 'NULLS LAST')
       .addOrderBy('a.endsAt', 'ASC')
       .take(Math.min(limit, 12))
       .getMany();
@@ -956,19 +993,21 @@ export class AuctionsService implements OnModuleInit {
 
   // Admin listing / detail ──────────────────────────────────────────────
 
-  async listAdmin(bucket: AuctionBucket) {
-    const rows = await this.auctionRepository
+  /**
+   * `order: 'marketplace'` (live / upcoming only) returns the rows in the
+   * order bidders see by default; otherwise by time.
+   */
+  async listAdmin(bucket: AuctionBucket, order: 'time' | 'marketplace' = 'time') {
+    const qb = this.auctionRepository
       .createQueryBuilder('a')
       .where(this.hermesOnly())
       .andWhere('a.status IN (:...statuses)', {
         statuses: BUCKET_STATUSES[bucket],
-      })
-      .orderBy(
-        bucket === 'upcoming' ? 'a.startsAt' : 'a.endsAt',
-        bucket === 'settled' ? 'DESC' : 'ASC',
-      )
-      .take(200)
-      .getMany();
+      });
+    if (order === 'marketplace' && bucket !== 'settled')
+      this.orderForMarketplace(qb, bucket);
+    else this.orderByTime(qb, bucket);
+    const rows = await qb.addOrderBy('a.id', 'ASC').take(200).getMany();
     const userIds = [
       ...new Set(
         rows
@@ -1012,6 +1051,7 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       fulfillmentStatus: a.fulfillmentStatus,
       isFeatured: a.isFeatured,
+      displayOrder: a.displayOrder,
       showEstValue: a.showEstValue !== false,
       sellerName: a.sellerName || HOUSE_SELLER_NAME,
       acceptedPayments: a.acceptedPayments ?? 'both',
@@ -1020,6 +1060,53 @@ export class AuctionsService implements OnModuleInit {
           a.status === AuctionStatus.SCHEDULED) &&
         a.endsAt.getTime() < now,
     }));
+  }
+
+  /**
+   * Saves the admin's marketplace order for one tab (Nick, 2026-11-17). `ids`
+   * is the tab's lots top to bottom; lots it leaves out (e.g. one that opened
+   * while the dialog was up) keep their place after them, and ids that aren't
+   * in the tab any more are ignored. Every live and upcoming lot is renumbered
+   * in one pass, live first, so an upcoming lot opens below the live ones in
+   * the order it had in Upcoming. Featured lots still lead whatever the
+   * numbers say.
+   */
+  async reorderMarketplace(
+    adminId: string,
+    bucket: 'live' | 'upcoming',
+    ids: string[],
+  ) {
+    const idsIn = async (b: 'live' | 'upcoming') => {
+      const qb = this.auctionRepository
+        .createQueryBuilder('a')
+        .where(this.hermesOnly())
+        .andWhere('a.status IN (:...statuses)', {
+          statuses: BUCKET_STATUSES[b],
+        });
+      this.orderForMarketplace(qb, b);
+      return (await qb.addOrderBy('a.id', 'ASC').getMany()).map((a) => a.id);
+    };
+    const [live, upcoming] = await Promise.all([
+      idsIn('live'),
+      idsIn('upcoming'),
+    ]);
+    const current = bucket === 'live' ? live : upcoming;
+    const inTab = new Set(current);
+    const placed = [...new Set(ids)].filter((id) => inTab.has(id));
+    const placedSet = new Set(placed);
+    const next = [...placed, ...current.filter((id) => !placedSet.has(id))];
+    const all = bucket === 'live' ? [...next, ...upcoming] : [...live, ...next];
+    if (all.length) {
+      await this.auctionRepository.query(
+        `UPDATE "auctions" SET "display_order" = array_position($1::uuid[], "id")
+          WHERE "id" = ANY($1::uuid[])`,
+        [all],
+      );
+    }
+    this.logger.log(
+      `Hermes ${bucket} marketplace order saved by ${adminId} (${next.length} lot(s))`,
+    );
+    return this.listAdmin(bucket, 'marketplace');
   }
 
   async getAdminDetail(id: string) {
