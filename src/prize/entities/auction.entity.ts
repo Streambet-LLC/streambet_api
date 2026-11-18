@@ -218,6 +218,14 @@ export class Auction extends BaseEntity {
   @Column({ type: 'boolean', name: 'is_featured', default: false })
   isFeatured: boolean;
 
+  /**
+   * Position in the marketplace's default ("Featured") sort, set from the admin
+   * Reorder dialog. Lower comes first; featured lots still lead. Null = never
+   * placed, which sorts after placed lots.
+   */
+  @Column({ type: 'integer', name: 'display_order', nullable: true })
+  displayOrder: number | null;
+
   /** Payment rails bidders may use: fiat (card + ACH), crypto (USDC) or both. */
   @Column({
     type: 'varchar',

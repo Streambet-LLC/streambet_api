@@ -16,6 +16,7 @@ import {
   LessThanOrEqual,
   MoreThan,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 import Stripe from 'stripe';
 import { Auction } from '../prize/entities/auction.entity';
@@ -501,21 +502,28 @@ export class AuctionsService implements OnModuleInit {
     if (dto.category !== undefined) a.category = dto.category;
 
     // Terms that bidders rely on are frozen once bidding opens.
-    const termsTouched =
+    const priceTouched =
       dto.startingPriceUsd !== undefined ||
       dto.reservePriceUsd !== undefined ||
       dto.shippingUsd !== undefined ||
-      dto.acceptedPayments !== undefined ||
+      dto.acceptedPayments !== undefined;
+    const timingTouched =
       dto.startsAt !== undefined ||
       dto.lengthPreset !== undefined ||
       dto.endsAt !== undefined;
+    const termsTouched = priceTouched || timingTouched;
     let reschedule = false;
-    if (termsTouched) {
-      if (a.status !== AuctionStatus.SCHEDULED) {
+    if (termsTouched && a.status !== AuctionStatus.SCHEDULED) {
+      if (priceTouched) {
         throw new BadRequestException(
-          'Price, reserve, shipping, payment options and timing are locked once an auction is live.',
+          'Price, reserve, shipping and payment options are locked once an auction is live.',
         );
       }
+      // A live lot nobody has bid on can still move its end (Nick,
+      // 2026-11-17: Tyranitar from Dec 1 to Dec 5).
+      await this.moveLiveEnd(a, dto);
+      reschedule = true;
+    } else if (termsTouched) {
       if (dto.acceptedPayments !== undefined) {
         this.assertPaymentsAvailable(dto.acceptedPayments);
         a.acceptedPayments = dto.acceptedPayments;
@@ -565,6 +573,78 @@ export class AuctionsService implements OnModuleInit {
     });
     this.logger.log(`Hermes auction ${id} updated by ${adminId}`);
     return saved;
+  }
+
+  /**
+   * New end time for a live lot with no bids. The start stays put (bidding
+   * already opened); a 7/14/21 preset counts from it. The lot must stay open
+   * at least another hour. Written with a conditional update, so a bid that
+   * lands while the admin is editing wins and the move is refused.
+   */
+  private async moveLiveEnd(a: Auction, dto: UpdateAuctionDto): Promise<void> {
+    if (a.status !== AuctionStatus.ACTIVE) {
+      throw new BadRequestException(
+        'The timing of a closed auction can no longer change.',
+      );
+    }
+    if (a.bidCount > 0) {
+      throw new BadRequestException(
+        'Someone has bid, so the end time is locked.',
+      );
+    }
+    if (
+      dto.startsAt !== undefined &&
+      Math.abs(new Date(dto.startsAt).getTime() - a.startsAt.getTime()) > 60_000
+    ) {
+      throw new BadRequestException(
+        "Bidding has opened, so the start can't change. Only the end can move.",
+      );
+    }
+    const preset = dto.lengthPreset ?? 'custom';
+    let end: Date;
+    let durationDays: number | null = null;
+    if (preset === 'custom') {
+      if (!dto.endsAt) {
+        throw new BadRequestException('Pick the new end date and time.');
+      }
+      end = new Date(dto.endsAt);
+      if (Number.isNaN(end.getTime())) {
+        throw new BadRequestException('Invalid end date.');
+      }
+    } else {
+      durationDays = Number(preset);
+      end = new Date(a.startsAt.getTime() + durationDays * DAY_MS);
+    }
+    if (end.getTime() < Date.now() + MIN_LENGTH_MS) {
+      throw new BadRequestException(
+        'A live auction has to stay open at least another hour.',
+      );
+    }
+    if (end.getTime() - a.startsAt.getTime() > MAX_LENGTH_MS) {
+      throw new BadRequestException('Auctions can run at most 60 days.');
+    }
+
+    const res = await this.auctionRepository
+      .createQueryBuilder()
+      .update(Auction)
+      .set({ endsAt: end, lengthPreset: preset, durationDays })
+      .where('id = :id AND status = :s AND bid_count = 0', {
+        id: a.id,
+        s: AuctionStatus.ACTIVE,
+      })
+      .execute();
+    if (!res.affected) {
+      throw new BadRequestException(
+        'Someone just bid, so the end time is locked now. Nothing was saved.',
+      );
+    }
+    this.logger.log(
+      `Hermes auction ${a.id}: end moved ${a.endsAt.toISOString()} → ${end.toISOString()}`,
+    );
+    // Keep the entity in step so the save that follows doesn't undo it.
+    a.endsAt = end;
+    a.lengthPreset = preset;
+    a.durationDays = durationDays;
   }
 
   async cancelAuction(adminId: string, id: string): Promise<Auction> {
@@ -698,7 +778,7 @@ export class AuctionsService implements OnModuleInit {
         rails: [params.payment, 'both'],
       });
 
-    switch (params.sort ?? 'ending') {
+    switch (params.sort ?? 'featured') {
       case 'newest':
         qb.orderBy('a.createdAt', 'DESC');
         break;
@@ -711,9 +791,14 @@ export class AuctionsService implements OnModuleInit {
       case 'bids':
         qb.orderBy('a.bidCount', 'DESC');
         break;
+      case 'ending':
+        this.orderByTime(qb, params.bucket);
+        break;
       default:
-        if (params.bucket === 'upcoming') qb.orderBy('a.startsAt', 'ASC');
-        else qb.orderBy('a.endsAt', params.bucket === 'ended' ? 'DESC' : 'ASC');
+        // Same order in "All categories" and in each category: a category
+        // filter only drops rows (Nick, 2026-11-17: featured lots lead both).
+        if (params.bucket === 'ended') this.orderByTime(qb, 'ended');
+        else this.orderForMarketplace(qb, params.bucket);
     }
     qb.addOrderBy('a.id', 'ASC') // stable pages
       .skip(params.offset ?? 0)
@@ -723,7 +808,37 @@ export class AuctionsService implements OnModuleInit {
     return { rows: await this.toPublicMany(rows, params.viewerId), total };
   }
 
-  /** Landing-page rail: featured first, then live soonest-ending, then upcoming. */
+  /** Soonest to close (live), soonest to open (upcoming), latest (ended). */
+  private orderByTime(
+    qb: SelectQueryBuilder<Auction>,
+    bucket: PublicBucket | AuctionBucket,
+  ) {
+    if (bucket === 'upcoming') qb.addOrderBy('a.startsAt', 'ASC');
+    else
+      qb.addOrderBy(
+        'a.endsAt',
+        bucket === 'ended' || bucket === 'settled' ? 'DESC' : 'ASC',
+      );
+  }
+
+  /**
+   * The marketplace's default ("Featured") order for live / upcoming lots:
+   * featured lots first, then the order set in the admin Reorder dialog, then
+   * lots never placed there by time.
+   */
+  private orderForMarketplace(
+    qb: SelectQueryBuilder<Auction>,
+    bucket: 'live' | 'upcoming',
+  ) {
+    qb.addOrderBy('a.isFeatured', 'DESC').addOrderBy(
+      'a.displayOrder',
+      'ASC',
+      'NULLS LAST',
+    );
+    this.orderByTime(qb, bucket);
+  }
+
+  /** Landing-page rail: featured first, then live before upcoming, each in marketplace order. */
   async listFeatured(limit = 6, viewerId?: string) {
     const rows = await this.auctionRepository
       .createQueryBuilder('a')
@@ -733,6 +848,7 @@ export class AuctionsService implements OnModuleInit {
       })
       .orderBy('a.isFeatured', 'DESC')
       .addOrderBy(`CASE WHEN a.status = 'active' THEN 0 ELSE 1 END`, 'ASC')
+      .addOrderBy('a.displayOrder', 'ASC', 'NULLS LAST')
       .addOrderBy('a.endsAt', 'ASC')
       .take(Math.min(limit, 12))
       .getMany();
@@ -956,19 +1072,24 @@ export class AuctionsService implements OnModuleInit {
 
   // Admin listing / detail ──────────────────────────────────────────────
 
-  async listAdmin(bucket: AuctionBucket) {
-    const rows = await this.auctionRepository
+  /**
+   * `order: 'marketplace'` (live / upcoming only) returns the rows in the
+   * order bidders see by default; otherwise by time.
+   */
+  async listAdmin(
+    bucket: AuctionBucket,
+    order: 'time' | 'marketplace' = 'time',
+  ) {
+    const qb = this.auctionRepository
       .createQueryBuilder('a')
       .where(this.hermesOnly())
       .andWhere('a.status IN (:...statuses)', {
         statuses: BUCKET_STATUSES[bucket],
-      })
-      .orderBy(
-        bucket === 'upcoming' ? 'a.startsAt' : 'a.endsAt',
-        bucket === 'settled' ? 'DESC' : 'ASC',
-      )
-      .take(200)
-      .getMany();
+      });
+    if (order === 'marketplace' && bucket !== 'settled')
+      this.orderForMarketplace(qb, bucket);
+    else this.orderByTime(qb, bucket);
+    const rows = await qb.addOrderBy('a.id', 'ASC').take(200).getMany();
     const userIds = [
       ...new Set(
         rows
@@ -1012,6 +1133,7 @@ export class AuctionsService implements OnModuleInit {
       paymentMethod: a.paymentMethod,
       fulfillmentStatus: a.fulfillmentStatus,
       isFeatured: a.isFeatured,
+      displayOrder: a.displayOrder,
       showEstValue: a.showEstValue !== false,
       sellerName: a.sellerName || HOUSE_SELLER_NAME,
       acceptedPayments: a.acceptedPayments ?? 'both',
@@ -1020,6 +1142,53 @@ export class AuctionsService implements OnModuleInit {
           a.status === AuctionStatus.SCHEDULED) &&
         a.endsAt.getTime() < now,
     }));
+  }
+
+  /**
+   * Saves the admin's marketplace order for one tab (Nick, 2026-11-17). `ids`
+   * is the tab's lots top to bottom; lots it leaves out (e.g. one that opened
+   * while the dialog was up) keep their place after them, and ids that aren't
+   * in the tab any more are ignored. Every live and upcoming lot is renumbered
+   * in one pass, live first, so an upcoming lot opens below the live ones in
+   * the order it had in Upcoming. Featured lots still lead whatever the
+   * numbers say.
+   */
+  async reorderMarketplace(
+    adminId: string,
+    bucket: 'live' | 'upcoming',
+    ids: string[],
+  ) {
+    const idsIn = async (b: 'live' | 'upcoming') => {
+      const qb = this.auctionRepository
+        .createQueryBuilder('a')
+        .where(this.hermesOnly())
+        .andWhere('a.status IN (:...statuses)', {
+          statuses: BUCKET_STATUSES[b],
+        });
+      this.orderForMarketplace(qb, b);
+      return (await qb.addOrderBy('a.id', 'ASC').getMany()).map((a) => a.id);
+    };
+    const [live, upcoming] = await Promise.all([
+      idsIn('live'),
+      idsIn('upcoming'),
+    ]);
+    const current = bucket === 'live' ? live : upcoming;
+    const inTab = new Set(current);
+    const placed = [...new Set(ids)].filter((id) => inTab.has(id));
+    const placedSet = new Set(placed);
+    const next = [...placed, ...current.filter((id) => !placedSet.has(id))];
+    const all = bucket === 'live' ? [...next, ...upcoming] : [...live, ...next];
+    if (all.length) {
+      await this.auctionRepository.query(
+        `UPDATE "auctions" SET "display_order" = array_position($1::uuid[], "id")
+          WHERE "id" = ANY($1::uuid[])`,
+        [all],
+      );
+    }
+    this.logger.log(
+      `Hermes ${bucket} marketplace order saved by ${adminId} (${next.length} lot(s))`,
+    );
+    return this.listAdmin(bucket, 'marketplace');
   }
 
   async getAdminDetail(id: string) {
@@ -1611,15 +1780,20 @@ export class AuctionsService implements OnModuleInit {
   /**
    * Close at `endsAt`. Claims the auction (ACTIVE/SCHEDULED → ENDED) with a
    * conditional update, so only one worker ever settles it.
+   *
+   * If the end has moved later (e.g. edited in the DB), the other jobs are
+   * rescheduled and the new end is returned: the running close job can't
+   * re-add itself under its own id (BullMQ drops the duplicate), so the
+   * processor pushes this same job back to that time instead.
    */
-  async runCloseJob(auctionId: string): Promise<void> {
+  async runCloseJob(auctionId: string): Promise<Date | void> {
     const auction = await this.auctionRepository.findOne({
       where: { id: auctionId },
     });
     if (!auction) return;
     if (auction.endsAt.getTime() > Date.now() + 5_000) {
       await this.scheduleAuctionJobs(auctionId, auction.endsAt);
-      return;
+      return auction.endsAt;
     }
     if (
       auction.status !== AuctionStatus.ACTIVE &&
