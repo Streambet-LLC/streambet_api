@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { DelayedError, Job } from 'bullmq';
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   AUCTION_AUTOPAY_RETRY_JOB,
@@ -37,7 +37,7 @@ export class AuctionJobsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<AuctionJobData>): Promise<void> {
+  async process(job: Job<AuctionJobData>, token?: string): Promise<void> {
     const { name, data } = job;
     const auctionId = data?.auctionId;
     if (!auctionId) {
@@ -53,9 +53,15 @@ export class AuctionJobsProcessor extends WorkerHost {
         case AUCTION_CLOSING_DAY_JOB:
           await this.notifications.notifyWatchersClosingDay(auctionId);
           return;
-        case AUCTION_CLOSE_JOB:
-          await this.auctionsService.runCloseJob(auctionId);
+        case AUCTION_CLOSE_JOB: {
+          const later = await this.auctionsService.runCloseJob(auctionId);
+          if (later && token) {
+            // The end moved later: run this same job again at the new end.
+            await job.moveToDelayed(later.getTime(), token);
+            throw new DelayedError();
+          }
           return;
+        }
         case AUCTION_ACTIVATE_JOB:
           await this.auctionsService.runActivateJob(auctionId);
           return;
@@ -75,6 +81,7 @@ export class AuctionJobsProcessor extends WorkerHost {
           this.logger.warn(`Unknown auction job name: ${name}`);
       }
     } catch (err) {
+      if (err instanceof DelayedError) throw err; // rescheduled, not a failure
       this.logger.error(
         `Auction job ${name} for ${auctionId} failed: ${(err as Error).message}`,
         (err as Error).stack,

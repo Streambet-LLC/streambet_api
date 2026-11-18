@@ -1780,15 +1780,20 @@ export class AuctionsService implements OnModuleInit {
   /**
    * Close at `endsAt`. Claims the auction (ACTIVE/SCHEDULED → ENDED) with a
    * conditional update, so only one worker ever settles it.
+   *
+   * If the end has moved later (e.g. edited in the DB), the other jobs are
+   * rescheduled and the new end is returned: the running close job can't
+   * re-add itself under its own id (BullMQ drops the duplicate), so the
+   * processor pushes this same job back to that time instead.
    */
-  async runCloseJob(auctionId: string): Promise<void> {
+  async runCloseJob(auctionId: string): Promise<Date | void> {
     const auction = await this.auctionRepository.findOne({
       where: { id: auctionId },
     });
     if (!auction) return;
     if (auction.endsAt.getTime() > Date.now() + 5_000) {
       await this.scheduleAuctionJobs(auctionId, auction.endsAt);
-      return;
+      return auction.endsAt;
     }
     if (
       auction.status !== AuctionStatus.ACTIVE &&
