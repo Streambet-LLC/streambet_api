@@ -460,6 +460,15 @@ export class AuctionsNotificationsService {
     });
     if (!a || a.endsAt.getTime() < Date.now()) return;
     if (a.status !== AuctionStatus.ACTIVE) return;
+    // A job queued for an older end time (the end was moved, or edited in the
+    // DB) would otherwise say "closing in 1 hour" days early. The job runs
+    // 60 min out; the slack covers a slow queue.
+    if (a.endsAt.getTime() - Date.now() > 75 * 60 * 1000) {
+      this.logger.log(
+        `Skipped "closing in 1 hour" for ${auctionId}: it ends ${a.endsAt.toISOString()}`,
+      );
+      return;
+    }
     const ids = await this.bidderIds(auctionId);
     const users = ids.length
       ? await this.userRepository.find({ where: { id: In(ids) } })

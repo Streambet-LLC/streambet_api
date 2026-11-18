@@ -502,21 +502,28 @@ export class AuctionsService implements OnModuleInit {
     if (dto.category !== undefined) a.category = dto.category;
 
     // Terms that bidders rely on are frozen once bidding opens.
-    const termsTouched =
+    const priceTouched =
       dto.startingPriceUsd !== undefined ||
       dto.reservePriceUsd !== undefined ||
       dto.shippingUsd !== undefined ||
-      dto.acceptedPayments !== undefined ||
+      dto.acceptedPayments !== undefined;
+    const timingTouched =
       dto.startsAt !== undefined ||
       dto.lengthPreset !== undefined ||
       dto.endsAt !== undefined;
+    const termsTouched = priceTouched || timingTouched;
     let reschedule = false;
-    if (termsTouched) {
-      if (a.status !== AuctionStatus.SCHEDULED) {
+    if (termsTouched && a.status !== AuctionStatus.SCHEDULED) {
+      if (priceTouched) {
         throw new BadRequestException(
-          'Price, reserve, shipping, payment options and timing are locked once an auction is live.',
+          'Price, reserve, shipping and payment options are locked once an auction is live.',
         );
       }
+      // A live lot nobody has bid on can still move its end (Nick,
+      // 2026-11-17: Tyranitar from Dec 1 to Dec 5).
+      await this.moveLiveEnd(a, dto);
+      reschedule = true;
+    } else if (termsTouched) {
       if (dto.acceptedPayments !== undefined) {
         this.assertPaymentsAvailable(dto.acceptedPayments);
         a.acceptedPayments = dto.acceptedPayments;
@@ -566,6 +573,78 @@ export class AuctionsService implements OnModuleInit {
     });
     this.logger.log(`Hermes auction ${id} updated by ${adminId}`);
     return saved;
+  }
+
+  /**
+   * New end time for a live lot with no bids. The start stays put (bidding
+   * already opened); a 7/14/21 preset counts from it. The lot must stay open
+   * at least another hour. Written with a conditional update, so a bid that
+   * lands while the admin is editing wins and the move is refused.
+   */
+  private async moveLiveEnd(a: Auction, dto: UpdateAuctionDto): Promise<void> {
+    if (a.status !== AuctionStatus.ACTIVE) {
+      throw new BadRequestException(
+        'The timing of a closed auction can no longer change.',
+      );
+    }
+    if (a.bidCount > 0) {
+      throw new BadRequestException(
+        'Someone has bid, so the end time is locked.',
+      );
+    }
+    if (
+      dto.startsAt !== undefined &&
+      Math.abs(new Date(dto.startsAt).getTime() - a.startsAt.getTime()) > 60_000
+    ) {
+      throw new BadRequestException(
+        "Bidding has opened, so the start can't change. Only the end can move.",
+      );
+    }
+    const preset = dto.lengthPreset ?? 'custom';
+    let end: Date;
+    let durationDays: number | null = null;
+    if (preset === 'custom') {
+      if (!dto.endsAt) {
+        throw new BadRequestException('Pick the new end date and time.');
+      }
+      end = new Date(dto.endsAt);
+      if (Number.isNaN(end.getTime())) {
+        throw new BadRequestException('Invalid end date.');
+      }
+    } else {
+      durationDays = Number(preset);
+      end = new Date(a.startsAt.getTime() + durationDays * DAY_MS);
+    }
+    if (end.getTime() < Date.now() + MIN_LENGTH_MS) {
+      throw new BadRequestException(
+        'A live auction has to stay open at least another hour.',
+      );
+    }
+    if (end.getTime() - a.startsAt.getTime() > MAX_LENGTH_MS) {
+      throw new BadRequestException('Auctions can run at most 60 days.');
+    }
+
+    const res = await this.auctionRepository
+      .createQueryBuilder()
+      .update(Auction)
+      .set({ endsAt: end, lengthPreset: preset, durationDays })
+      .where('id = :id AND status = :s AND bid_count = 0', {
+        id: a.id,
+        s: AuctionStatus.ACTIVE,
+      })
+      .execute();
+    if (!res.affected) {
+      throw new BadRequestException(
+        'Someone just bid, so the end time is locked now. Nothing was saved.',
+      );
+    }
+    this.logger.log(
+      `Hermes auction ${a.id}: end moved ${a.endsAt.toISOString()} → ${end.toISOString()}`,
+    );
+    // Keep the entity in step so the save that follows doesn't undo it.
+    a.endsAt = end;
+    a.lengthPreset = preset;
+    a.durationDays = durationDays;
   }
 
   async cancelAuction(adminId: string, id: string): Promise<Auction> {
@@ -997,7 +1076,10 @@ export class AuctionsService implements OnModuleInit {
    * `order: 'marketplace'` (live / upcoming only) returns the rows in the
    * order bidders see by default; otherwise by time.
    */
-  async listAdmin(bucket: AuctionBucket, order: 'time' | 'marketplace' = 'time') {
+  async listAdmin(
+    bucket: AuctionBucket,
+    order: 'time' | 'marketplace' = 'time',
+  ) {
     const qb = this.auctionRepository
       .createQueryBuilder('a')
       .where(this.hermesOnly())

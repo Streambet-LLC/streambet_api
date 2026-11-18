@@ -7,7 +7,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * no position by the usual time order. Null for every lot until someone
  * reorders.
  */
-export class AddAuctionDisplayOrder20261117120000 implements MigrationInterface {
+export class AddAuctionDisplayOrder20261117120000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `ALTER TABLE "auctions" ADD COLUMN IF NOT EXISTS "display_order" integer NULL`,
