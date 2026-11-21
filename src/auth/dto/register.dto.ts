@@ -111,7 +111,13 @@ export class RegisterDto {
 
   @ApiProperty({
     description: 'Last known IP address for geolocation',
+    required: false,
   })
+  // The web sign-up form used to send lastKnownIp: '' and @IsOptional only
+  // skips null/undefined, so blank values must count as "not sent".
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  )
   @IsOptional()
   @IsIP()
   lastKnownIp?: string;
