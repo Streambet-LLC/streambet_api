@@ -906,6 +906,29 @@ export class AuctionsService implements OnModuleInit {
     return new Map(rows.map((r) => [r.auctionId, Number(r.n)]));
   }
 
+  /**
+   * The current leader's max bid per auction (auctions without bids are
+   * absent). Admin only: never put this in a public payload. Read from the
+   * leader's own bids because `auctions.proxy_max_usd` keeps the first
+   * leader's max when an unpaid win passes to the runner-up.
+   */
+  private async leaderMaxes(ids: string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.bidRepository
+      .createQueryBuilder('b')
+      .innerJoin(
+        Auction,
+        'a',
+        'a.id = b.auction_id AND a.current_leader_user_id = b.user_id',
+      )
+      .select('b.auction_id', 'auctionId')
+      .addSelect('MAX(b.proxy_max_usd)', 'max')
+      .where('b.auction_id IN (:...ids)', { ids })
+      .groupBy('b.auction_id')
+      .getRawMany<{ auctionId: string; max: string }>();
+    return new Map(rows.map((r) => [r.auctionId, Number(r.max)]));
+  }
+
   private async toPublicMany(rows: Auction[], viewerId?: string) {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
@@ -1104,7 +1127,9 @@ export class AuctionsService implements OnModuleInit {
         })
       : [];
     const name = new Map(users.map((u) => [u.id, u.username]));
-    const watchers = await this.watcherCounts(rows.map((r) => r.id));
+    const ids = rows.map((r) => r.id);
+    const watchers = await this.watcherCounts(ids);
+    const leaderMax = await this.leaderMaxes(ids);
     const now = Date.now();
     return rows.map((a) => ({
       id: a.id,
@@ -1127,6 +1152,7 @@ export class AuctionsService implements OnModuleInit {
       leader: a.currentLeaderUserId
         ? (name.get(a.currentLeaderUserId) ?? null)
         : null,
+      leaderMaxUsd: leaderMax.get(a.id) ?? null,
       winner: a.winnerUserId ? (name.get(a.winnerUserId) ?? null) : null,
       winningAmountUsd:
         a.winningAmountUsd != null ? Number(a.winningAmountUsd) : null,
